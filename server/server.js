@@ -237,15 +237,27 @@ app.post('/register', async (req, res) => {
         const existing = await User.findOne({ email });
         if (existing) return res.status(400).send('এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
 
-        const newUser = new User({ name, email, password, role, phone, classLevel });
+        const isSuperAdminEmail = process.env.SUPER_ADMIN_EMAIL && email.toLowerCase() === process.env.SUPER_ADMIN_EMAIL.toLowerCase();
+
+        const newUser = new User({
+            name,
+            email,
+            password,
+            role: isSuperAdminEmail ? 'superadmin' : role,
+            phone,
+            classLevel
+        });
         await newUser.save();
 
         const userObj = newUser.toObject();
         req.session.user = userObj;
         req.session.userId = userObj._id;
 
-        if (role === 'teacher') return res.redirect('/admin');
-        if (role === 'parent') return res.redirect('/parent/dashboard');
+        const currentRole = userObj.role;
+        if (currentRole === 'superadmin' || currentRole === 'admin' || currentRole === 'teacher') {
+            return res.redirect('/admin');
+        }
+        if (currentRole === 'parent') return res.redirect('/parent/dashboard');
         res.redirect('/dashboard');
     } catch (err) {
         console.error('Registration Critical Error:', err);
