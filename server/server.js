@@ -701,9 +701,11 @@ app.post('/admin/qa-answer/:id', adminProtect, async (req, res) => {
 app.get('*', (req, res) => res.status(404).render('404'));
 
 if (require.main === module) {
-    app.listen(PORT, async () => {
-        console.log(`🚀 Server running at http://localhost:${PORT}`);
+    (async () => {
         await connectDB();
-    });
+        app.listen(PORT, () => {
+            console.log(`🚀 Server running at http://localhost:${PORT}`);
+        });
+    })();
 }
 module.exports = app;
