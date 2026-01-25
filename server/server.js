@@ -206,7 +206,7 @@ app.post('/login', async (req, res) => {
                 user.role = 'superadmin';
                 await user.save();
             }
-            req.session.user = user;
+            req.session.user = user.toObject();
             if (user.role === 'teacher' || user.role === 'admin' || user.role === 'superadmin') return res.redirect('/admin');
             if (user.role === 'parent') return res.redirect('/parent/dashboard');
             res.redirect('/dashboard');
@@ -221,14 +221,19 @@ app.post('/login', async (req, res) => {
 app.post('/register', async (req, res) => {
     try {
         const { name, email, password, role, phone, classLevel } = req.body;
+        const existing = await User.findOne({ email });
+        if (existing) return res.status(400).send('এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
+
         const newUser = new User({ name, email, password, role, phone, classLevel });
         await newUser.save();
-        req.session.user = newUser;
+        req.session.user = newUser.toObject();
+
         if (role === 'teacher') return res.redirect('/admin/teacher');
         if (role === 'parent') return res.redirect('/parent/dashboard');
         res.redirect('/dashboard');
     } catch (err) {
-        res.status(500).send('Registration Error');
+        console.error('Registration Error:', err);
+        res.status(500).send('কিছু একটা ভুল হয়েছে। দয়া করে আবার চেষ্টা করুন।');
     }
 });
 
