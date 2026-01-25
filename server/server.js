@@ -116,13 +116,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// Connect DB on Request
-app.use(async (req, res, next) => {
-    // Don't await strictly to prevent hanging? Better to await but handle error.
-    await connectDB().catch(e => console.error("DB Middleware Error:", e.message));
-    next();
-});
-
 app.use((req, res, next) => {
     res.locals.user = req.session.user || null;
     next();
