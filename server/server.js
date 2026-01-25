@@ -39,21 +39,23 @@ if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
     clientPath = path.join(__dirname, '../client');
 }
 console.log('✅ Resolved Client Path:', clientPath);
+mongoose.set('strictQuery', false);
 
 // --- DATABASE CONNECTION ---
 const connectDB = async () => {
     try {
-        mongoose.set('strictQuery', false);
-        mongoose.set('bufferCommands', false); // Disable buffering to catch errors early
+        mongoose.connection.on('connecting', () => console.log('⏳ Connecting to MongoDB...'));
+        mongoose.connection.on('connected', () => console.log('✅ MongoDB Connected'));
+        mongoose.connection.on('error', (err) => console.error('❌ MongoDB Error:', err.message));
 
         await mongoose.connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 15000, // Increase timeout for slow networks
+            serverSelectionTimeoutMS: 20000,
             socketTimeoutMS: 45000,
+            heartbeatFrequencyMS: 10000
         });
-        console.log('✅ MongoDB Connected Successfully');
     } catch (err) {
-        console.error('❌ Database connection error:', err.message);
-        console.log('💡 Tip: check if your IP is whitelisted in MongoDB Atlas.');
+        console.error('❌ Database connection failure:', err.message);
+        console.log('💡 IMPORTANT: Please check if your IP address is whitelisted in MongoDB Atlas (Network Access). This is the most common cause of timeouts.');
     }
 };
 
