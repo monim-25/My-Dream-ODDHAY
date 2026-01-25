@@ -57,9 +57,6 @@ const connectDB = async () => {
     }
 };
 
-// Start connection
-connectDB();
-
 // --- MIDDLEWARE SETUP ---
 
 // Session Store with Fallback
