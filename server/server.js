@@ -14,6 +14,9 @@ const User = require('./models/User');
 const Quiz = require('./models/Quiz');
 const Book = require('./models/Book');
 const Question = require('./models/Question');
+const Note = require('./models/Note');
+const QuestionBank = require('./models/QuestionBank');
+const QA = require('./models/QA');
 
 const app = express();
 const PORT = process.env.PORT || 3005;
@@ -271,13 +274,75 @@ app.get('/courses', async (req, res) => {
         const courses = await Course.find(query);
         const categories = await Course.distinct('category');
         const classes = ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'];
-        res.render('courses', { courses, categories, classes, search, activeCategory: category, activeClass: classLevel });
+        res.render('courses', { courses, categories, classes, search, activeCategory: category, activeClass: classLevel, user: req.session.userId ? await User.findById(req.session.userId) : null });
     } catch (err) {
         // Graceful fallback: show empty courses page
         const classes = ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'];
-        res.render('courses', { courses: [], categories: [], classes, search: '', activeCategory: 'all', activeClass: 'all' });
+        res.render('courses', { courses: [], categories: [], classes, search: '', activeCategory: 'all', activeClass: 'all', user: null });
     }
 });
+
+// --- New Service Routes ---
+
+app.get('/notes', async (req, res) => {
+    try {
+        const { search, subject, classLevel } = req.query;
+        let query = {};
+        if (search) query.title = { $regex: search, $options: 'i' };
+        if (subject && subject !== 'all') query.subject = subject;
+        if (classLevel && classLevel !== 'all') query.classLevel = classLevel;
+
+        const notes = await Note.find(query).sort({ createdAt: -1 });
+        const subjects = await Note.distinct('subject');
+        const classes = ['Class 9', 'Class 10', 'Class 11', 'Class 12', 'HSC'];
+        res.render('notes', { notes, subjects, classes, search, activeSubject: subject, activeClass: classLevel, user: req.session.userId ? await User.findById(req.session.userId) : null });
+    } catch (err) {
+        res.render('notes', { notes: [], subjects: [], classes: [], search: '', activeSubject: 'all', activeClass: 'all', user: null });
+    }
+});
+
+app.get('/question-bank', async (req, res) => {
+    try {
+        const { search, board, subject } = req.query;
+        let query = {};
+        if (search) query.subject = { $regex: search, $options: 'i' };
+        if (board && board !== 'all') query.board = board;
+        if (subject && subject !== 'all') query.subject = subject;
+
+        const questions = await QuestionBank.find(query).sort({ year: -1 });
+        const boards = await QuestionBank.distinct('board');
+        const subjects = await QuestionBank.distinct('subject');
+        res.render('question-bank', { questions, boards, subjects, search, activeBoard: board, activeSubject: subject, user: req.session.userId ? await User.findById(req.session.userId) : null });
+    } catch (err) {
+        res.render('question-bank', { questions: [], boards: [], subjects: [], search: '', activeBoard: 'all', activeSubject: 'all', user: null });
+    }
+});
+
+app.get('/qa', async (req, res) => {
+    try {
+        const qas = await QA.find().populate('askedBy answeredBy').sort({ createdAt: -1 });
+        res.render('qa', { qas, user: req.session.userId ? await User.findById(req.session.userId) : null });
+    } catch (err) {
+        res.render('qa', { qas: [], user: null });
+    }
+});
+
+app.post('/qa-ask', async (req, res) => {
+    try {
+        if (!req.session.userId) return res.redirect('/login');
+        const { question } = req.body;
+        const newQA = new QA({
+            question,
+            askedBy: req.session.userId,
+            status: 'open'
+        });
+        await newQA.save();
+        res.redirect('/qa');
+    } catch (err) {
+        res.redirect('/qa');
+    }
+});
+
 
 app.get('/course-details/:id', protect, async (req, res) => {
     try {
@@ -516,14 +581,49 @@ app.post('/admin/course/:cid/chapter/:chid/add-note', adminProtect, upload.singl
     await Course.updateOne({ _id: req.params.cid, "chapters._id": req.params.chid }, { $push: { "chapters.$.notes": { title: req.body.title, filePath } } });
     res.redirect(`/admin/course/${req.params.cid}`);
 });
-app.get('/admin/quizzes', async (req, res) => {
+app.get('/admin/quizzes', adminProtect, async (req, res) => {
     const quizzes = await Quiz.find().populate('course');
     const courses = await Course.find();
     res.render('admin-quizzes', { quizzes, courses });
 });
-app.post('/admin/add-quiz', async (req, res) => {
+app.post('/admin/add-quiz', adminProtect, async (req, res) => {
     await new Quiz({ title: req.body.title, course: req.body.courseId, duration: req.body.duration, questions: [] }).save();
     res.redirect('/admin/quizzes');
+});
+
+// --- Admin Notes Management ---
+app.get('/admin/notes', adminProtect, async (req, res) => {
+    const notes = await Note.find();
+    res.render('admin-notes', { notes });
+});
+app.post('/admin/add-note', adminProtect, upload.single('note'), async (req, res) => {
+    const { title, subject, classLevel, description } = req.body;
+    const fileUrl = req.file ? `/uploads/notes/${req.file.filename}` : null;
+    await new Note({ title, subject, classLevel, description, fileUrl }).save();
+    res.redirect('/admin/notes');
+});
+
+// --- Admin QuestionBank Management ---
+app.get('/admin/question-bank', adminProtect, async (req, res) => {
+    const questions = await QuestionBank.find();
+    res.render('admin-question-bank', { questions });
+});
+app.post('/admin/add-question-bank', adminProtect, upload.single('question'), async (req, res) => {
+    const { year, board, subject, classLevel } = req.body;
+    const fileUrl = req.file ? `/uploads/questions/${req.file.filename}` : null;
+    await new QuestionBank({ year, board, subject, classLevel, fileUrl }).save();
+    res.redirect('/admin/question-bank');
+});
+
+// --- Admin QA Management ---
+app.get('/admin/qas', adminProtect, async (req, res) => {
+    const qas = await QA.find().populate('askedBy');
+    res.render('admin-qas', { qas });
+});
+app.post('/admin/qa-answer/:id', adminProtect, async (req, res) => {
+    const { answer } = req.body;
+    await QA.findByIdAndUpdate(req.params.id, { answer, status: 'resolved', answeredBy: req.session.userId });
+    res.redirect('/admin/qas');
 });
 
 app.get('*', (req, res) => res.status(404).render('404'));
