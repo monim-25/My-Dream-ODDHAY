@@ -143,8 +143,13 @@ const protect = (req, res, next) => {
     else res.redirect('/login');
 };
 const adminProtect = (req, res, next) => {
-    if (req.session.user && req.session.user.role === 'teacher') next();
-    else res.status(403).send('Access Denied');
+    const roles = ['teacher', 'admin', 'superadmin'];
+    if (req.session.user && roles.includes(req.session.user.role)) next();
+    else res.status(403).send('Access Denied: Admin level required');
+};
+const superAdminProtect = (req, res, next) => {
+    if (req.session.user && req.session.user.role === 'superadmin') next();
+    else res.status(403).send('Access Denied: Super Admin level required');
 };
 const parentProtect = (req, res, next) => {
     if (req.session.user && req.session.user.role === 'parent') next();
@@ -196,8 +201,13 @@ app.post('/login', async (req, res) => {
         const { email, password } = req.body;
         const user = await User.findOne({ email });
         if (user && await user.comparePassword(password)) {
+            // Super Admin Auto-Promotion
+            if (process.env.SUPER_ADMIN_EMAIL && user.email === process.env.SUPER_ADMIN_EMAIL && user.role !== 'superadmin') {
+                user.role = 'superadmin';
+                await user.save();
+            }
             req.session.user = user;
-            if (user.role === 'teacher') return res.redirect('/admin/teacher');
+            if (user.role === 'teacher' || user.role === 'admin' || user.role === 'superadmin') return res.redirect('/admin');
             if (user.role === 'parent') return res.redirect('/parent/dashboard');
             res.redirect('/dashboard');
         } else {
@@ -295,7 +305,7 @@ app.get('/notes', async (req, res) => {
         const notes = await Note.find(query).sort({ createdAt: -1 });
         const subjects = await Note.distinct('subject');
         const classes = ['Class 9', 'Class 10', 'Class 11', 'Class 12', 'HSC'];
-        res.render('notes', { notes, subjects, classes, search, activeSubject: subject, activeClass: classLevel, user: req.session.userId ? await User.findById(req.session.userId) : null });
+        res.render('notes', { notes, subjects, classes, search, activeSubject: subject, activeClass: classLevel, user: req.session.user || null });
     } catch (err) {
         res.render('notes', { notes: [], subjects: [], classes: [], search: '', activeSubject: 'all', activeClass: 'all', user: null });
     }
@@ -312,7 +322,7 @@ app.get('/question-bank', async (req, res) => {
         const questions = await QuestionBank.find(query).sort({ year: -1 });
         const boards = await QuestionBank.distinct('board');
         const subjects = await QuestionBank.distinct('subject');
-        res.render('question-bank', { questions, boards, subjects, search, activeBoard: board, activeSubject: subject, user: req.session.userId ? await User.findById(req.session.userId) : null });
+        res.render('question-bank', { questions, boards, subjects, search, activeBoard: board, activeSubject: subject, user: req.session.user || null });
     } catch (err) {
         res.render('question-bank', { questions: [], boards: [], subjects: [], search: '', activeBoard: 'all', activeSubject: 'all', user: null });
     }
@@ -321,19 +331,28 @@ app.get('/question-bank', async (req, res) => {
 app.get('/qa', async (req, res) => {
     try {
         const qas = await QA.find().populate('askedBy answeredBy').sort({ createdAt: -1 });
-        res.render('qa', { qas, user: req.session.userId ? await User.findById(req.session.userId) : null });
+        res.render('qa', { qas, user: req.session.user || null });
     } catch (err) {
         res.render('qa', { qas: [], user: null });
     }
 });
 
+app.get('/mock-tests', async (req, res) => {
+    res.render('mock-tests', { user: req.session.user });
+});
+
+app.get('/analytics', async (req, res) => {
+    res.render('analytics', { user: req.session.user });
+});
+
+
 app.post('/qa-ask', async (req, res) => {
     try {
-        if (!req.session.userId) return res.redirect('/login');
+        if (!req.session.user) return res.redirect('/login');
         const { question } = req.body;
         const newQA = new QA({
             question,
-            askedBy: req.session.userId,
+            askedBy: req.session.user._id,
             status: 'open'
         });
         await newQA.save();
@@ -541,9 +560,31 @@ app.get('/admin', adminProtect, async (req, res) => {
         const studentCount = await User.countDocuments({ role: 'student' });
         const courseCount = await Course.countDocuments();
         const openQas = await QA.countDocuments({ status: 'open' });
-        res.render('admin/dashboard', { studentCount, courseCount, openQas });
+        const allUsersCount = await User.countDocuments();
+        res.render('admin/dashboard', { studentCount, courseCount, openQas, allUsersCount, user: req.session.user });
     } catch (err) {
         res.status(500).send('Error');
+    }
+});
+
+// --- Super Admin: User Management ---
+app.get('/admin/users', superAdminProtect, async (req, res) => {
+    try {
+        const users = await User.find().sort({ createdAt: -1 });
+        res.render('admin/users', { users, user: req.session.user });
+    } catch (err) {
+        res.status(500).send('Error loading users');
+    }
+});
+
+app.post('/admin/update-role/:id', superAdminProtect, async (req, res) => {
+    try {
+        const { role } = req.body;
+        if (role === 'superadmin' && req.session.user.role !== 'superadmin') return res.status(403).send('Unauthorized');
+        await User.findByIdAndUpdate(req.params.id, { role });
+        res.redirect('/admin/users');
+    } catch (err) {
+        res.status(500).send('Error updating role');
     }
 });
 
