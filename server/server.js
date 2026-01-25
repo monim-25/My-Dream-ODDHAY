@@ -118,6 +118,18 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
+// --- DATABASE CONNECTION ---
+// Call connectDB immediately for serverless/Vercel support
+connectDB();
+
+app.use(async (req, res, next) => {
+    // If not connected, try to connect again
+    if (mongoose.connection.readyState === 0) {
+        await connectDB();
+    }
+    next();
+});
+
 app.use((req, res, next) => {
     res.locals.user = req.session.user || null;
     next();
@@ -709,11 +721,8 @@ app.post('/admin/qa-answer/:id', adminProtect, async (req, res) => {
 app.get('*', (req, res) => res.status(404).render('404'));
 
 if (require.main === module) {
-    (async () => {
-        await connectDB();
-        app.listen(PORT, () => {
-            console.log(`🚀 Server running at http://localhost:${PORT}`);
-        });
-    })();
+    app.listen(PORT, () => {
+        console.log(`🚀 Server running at http://localhost:${PORT}`);
+    });
 }
 module.exports = app;
