@@ -19,10 +19,25 @@ const app = express();
 const PORT = process.env.PORT || 3005;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/oddhay_db';
 
+// --- PATH RESOLUTION ---
+// Improve path resolution for Vercel
+const possibleClientPaths = [
+    path.join(__dirname, '../client'), // Local dev standard
+    path.join(process.cwd(), 'client'), // Vercel root
+    path.join(__dirname, 'client') // Flattened bundle
+];
+let clientPath = possibleClientPaths.find(p => fs.existsSync(p)) || path.join(__dirname, '../client');
+console.log('✅ Resolved Client Path For Vercel:', clientPath);
+
 // --- DATABASE CONNECTION (Optimized for Serverless) ---
 let isConnected = false;
 const connectDB = async () => {
     if (isConnected) return;
+    // Graceful skip if no production URI
+    if (process.env.NODE_ENV === 'production' && (!process.env.MONGODB_URI || process.env.MONGODB_URI.includes('localhost'))) {
+        console.warn('⚠️ No Production MongoDB URI found. Skipping DB connection.');
+        return;
+    }
     try {
         await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
         isConnected = true;
@@ -34,15 +49,25 @@ const connectDB = async () => {
 
 // --- MIDDLEWARES ---
 
-// Sessions setup
+// Sessions setup with Fallback
+let sessionStore;
+// Use MemoryStore if DB URI is missing in production to prevent crash
+if (process.env.NODE_ENV === 'production' && (!process.env.MONGODB_URI || process.env.MONGODB_URI.includes('localhost'))) {
+    console.warn('⚠️ Using MemoryStore for sessions. Data will not persist.');
+    sessionStore = new session.MemoryStore();
+} else {
+    // Attempt standard MongoStore
+    sessionStore = MongoStore.create({
+        mongoUrl: MONGODB_URI,
+        ttl: 14 * 24 * 60 * 60
+    });
+}
+
 app.use(session({
     secret: 'oddhay_secret_key',
     resave: false,
     saveUninitialized: false,
-    store: MongoStore.create({
-        mongoUrl: MONGODB_URI,
-        ttl: 14 * 24 * 60 * 60 // 14 days
-    }),
+    store: sessionStore,
     cookie: { maxAge: 1000 * 60 * 60 * 24 }
 }));
 
@@ -51,7 +76,7 @@ const storage = multer.diskStorage({
     destination: (req, file, cb) => {
         let dest = '/tmp/uploads/';
         if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-            dest = path.join(__dirname, '../client/public/uploads/');
+            dest = path.join(clientPath, 'public/uploads/');
         }
 
         if (file.fieldname === 'thumbnail') dest += 'thumbnails/';
@@ -81,15 +106,13 @@ app.use((req, res, next) => {
 });
 
 app.set('view engine', 'ejs');
-// Debugging paths for Vercel
-console.log('__dirname:', __dirname);
-console.log('Views path:', path.join(__dirname, '../client/views'));
-app.set('views', path.join(__dirname, '../client/views'));
+// Use the robust resolved path
+app.set('views', path.join(clientPath, 'views'));
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-// Serve static files
-app.use(express.static(path.join(__dirname, '../client/public')));
+// Serve static files from resolved path
+app.use(express.static(path.join(clientPath, 'public')));
 
 // Auth Middlewares
 const protect = (req, res, next) => {
@@ -119,8 +142,8 @@ app.get('/', async (req, res) => {
     }
 });
 
-app.get('/pricing', (req, res) => res.sendFile(path.join(__dirname, '../client/public', 'pricing.html')));
-app.get('/ai-tutor', (req, res) => res.sendFile(path.join(__dirname, '../client/public', 'ai-tutor.html')));
+app.get('/pricing', (req, res) => res.sendFile(path.join(clientPath, 'public', 'pricing.html')));
+app.get('/ai-tutor', (req, res) => res.sendFile(path.join(clientPath, 'public', 'ai-tutor.html')));
 app.get('/about', (req, res) => res.render('about'));
 app.get('/contact', (req, res) => res.render('contact'));
 app.post('/contact-submit', (req, res) => res.redirect('/?contact=success'));
