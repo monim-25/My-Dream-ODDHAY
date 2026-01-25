@@ -41,20 +41,24 @@ if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
 console.log('✅ Resolved Client Path:', clientPath);
 
 // --- DATABASE CONNECTION ---
-let isConnected = false;
 const connectDB = async () => {
-    if (isConnected) return;
     try {
+        mongoose.set('strictQuery', false);
+        mongoose.set('bufferCommands', false); // Disable buffering to catch errors early
+
         await mongoose.connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 5000,
-            connectTimeoutMS: 10000
+            serverSelectionTimeoutMS: 15000, // Increase timeout for slow networks
+            socketTimeoutMS: 45000,
         });
-        isConnected = true;
-        console.log('✅ MongoDB Connected');
+        console.log('✅ MongoDB Connected Successfully');
     } catch (err) {
-        console.error('❌ Database connection error (Non-Fatal):', err.message);
+        console.error('❌ Database connection error:', err.message);
+        console.log('💡 Tip: check if your IP is whitelisted in MongoDB Atlas.');
     }
 };
+
+// Start connection
+connectDB();
 
 // --- MIDDLEWARE SETUP ---
 
