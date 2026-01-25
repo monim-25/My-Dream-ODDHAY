@@ -273,7 +273,9 @@ app.get('/courses', async (req, res) => {
         const classes = ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'];
         res.render('courses', { courses, categories, classes, search, activeCategory: category, activeClass: classLevel });
     } catch (err) {
-        res.status(500).send('Error fetching courses');
+        // Graceful fallback: show empty courses page
+        const classes = ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'];
+        res.render('courses', { courses: [], categories: [], classes, search: '', activeCategory: 'all', activeClass: 'all' });
     }
 });
 
