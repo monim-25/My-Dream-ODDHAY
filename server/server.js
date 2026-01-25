@@ -536,6 +536,17 @@ app.post('/student/approve-parent/:parentId', protect, async (req, res) => {
     } catch (err) { res.status(500).send('Error'); }
 });
 
+app.get('/admin', adminProtect, async (req, res) => {
+    try {
+        const studentCount = await User.countDocuments({ role: 'student' });
+        const courseCount = await Course.countDocuments();
+        const openQas = await QA.countDocuments({ status: 'open' });
+        res.render('admin/dashboard', { studentCount, courseCount, openQas });
+    } catch (err) {
+        res.status(500).send('Error');
+    }
+});
+
 app.get('/admin/teacher', adminProtect, async (req, res) => {
     try {
         const courses = await Course.find();
