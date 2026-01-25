@@ -81,9 +81,14 @@ app.use((req, res, next) => {
 });
 
 app.set('view engine', 'ejs');
+// Debugging paths for Vercel
+console.log('__dirname:', __dirname);
+console.log('Views path:', path.join(__dirname, '../client/views'));
 app.set('views', path.join(__dirname, '../client/views'));
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+// Serve static files
 app.use(express.static(path.join(__dirname, '../client/public')));
 
 // Auth Middlewares
