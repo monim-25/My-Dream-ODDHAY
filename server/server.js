@@ -19,48 +19,61 @@ const app = express();
 const PORT = process.env.PORT || 3005;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/oddhay_db';
 
-// --- PATH RESOLUTION ---
-// Improve path resolution for Vercel
-const possibleClientPaths = [
-    path.join(__dirname, '../client'), // Local dev standard
-    path.join(process.cwd(), 'client'), // Vercel root
-    path.join(__dirname, 'client') // Flattened bundle
-];
-let clientPath = possibleClientPaths.find(p => fs.existsSync(p)) || path.join(__dirname, '../client');
-console.log('✅ Resolved Client Path For Vercel:', clientPath);
+// --- PATH RESOLUTION (SIMPLIFIED) ---
+let clientPath;
+// Vercel / Production Check
+if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    // In Vercel, paths are often flattened or at root depending on build
+    // We try to find 'client/views'
+    if (fs.existsSync(path.join(process.cwd(), 'client'))) {
+        clientPath = path.join(process.cwd(), 'client');
+    } else {
+        // Fallback to standard
+        clientPath = path.join(__dirname, '../client');
+    }
+} else {
+    // Local development
+    clientPath = path.join(__dirname, '../client');
+}
+console.log('✅ Resolved Client Path:', clientPath);
 
-// --- DATABASE CONNECTION (Optimized for Serverless) ---
+// --- DATABASE CONNECTION ---
 let isConnected = false;
 const connectDB = async () => {
     if (isConnected) return;
-    // Graceful skip if no production URI
-    if (process.env.NODE_ENV === 'production' && (!process.env.MONGODB_URI || process.env.MONGODB_URI.includes('localhost'))) {
-        console.warn('⚠️ No Production MongoDB URI found. Skipping DB connection.');
-        return;
-    }
     try {
-        await mongoose.connect(MONGODB_URI, { serverSelectionTimeoutMS: 5000 });
+        await mongoose.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000,
+            connectTimeoutMS: 10000
+        });
         isConnected = true;
         console.log('✅ MongoDB Connected');
     } catch (err) {
-        console.error('❌ Database connection error:', err.message);
+        console.error('❌ Database connection error (Non-Fatal):', err.message);
     }
 };
 
-// --- MIDDLEWARES ---
+// --- MIDDLEWARE SETUP ---
 
-// Sessions setup with Fallback
+// Session Store with Fallback
 let sessionStore;
-// Use MemoryStore if DB URI is missing in production to prevent crash
-if (process.env.NODE_ENV === 'production' && (!process.env.MONGODB_URI || process.env.MONGODB_URI.includes('localhost'))) {
-    console.warn('⚠️ Using MemoryStore for sessions. Data will not persist.');
-    sessionStore = new session.MemoryStore();
-} else {
-    // Attempt standard MongoStore
+try {
+    // Only attempt MongoStore if URI looks valid (not localhost in production)
+    const isProduction = process.env.NODE_ENV === 'production';
+    const isLocalDB = MONGODB_URI.includes('localhost');
+
+    if (isProduction && isLocalDB) {
+        throw new Error("Production environment but Localhost DB URI detected.");
+    }
+
     sessionStore = MongoStore.create({
         mongoUrl: MONGODB_URI,
-        ttl: 14 * 24 * 60 * 60
+        ttl: 14 * 24 * 60 * 60,
+        autoRemove: 'native'
     });
+} catch (err) {
+    console.warn('⚠️ Session Warning: Using MemoryStore.', err.message);
+    sessionStore = new session.MemoryStore();
 }
 
 app.use(session({
@@ -71,12 +84,18 @@ app.use(session({
     cookie: { maxAge: 1000 * 60 * 60 * 24 }
 }));
 
-// File Upload Config (Handling Vercel /tmp)
+// Robust Multer Config
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        let dest = '/tmp/uploads/';
-        if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
-            dest = path.join(clientPath, 'public/uploads/');
+        let dest = '/tmp/uploads/'; // Always safe for serverless
+        // Try local if explicitly local dev
+        if (!process.env.VERCEL && process.env.NODE_ENV !== 'production') {
+            try {
+                const localDest = path.join(clientPath, 'public/uploads/');
+                if (fs.existsSync(path.join(clientPath, 'public'))) {
+                    dest = localDest;
+                }
+            } catch (e) { /* ignore */ }
         }
 
         if (file.fieldname === 'thumbnail') dest += 'thumbnails/';
@@ -84,7 +103,7 @@ const storage = multer.diskStorage({
         else if (file.fieldname === 'note') dest += 'notes/';
         else if (file.fieldname === 'book') dest += 'books/';
 
-        if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+        fs.mkdirSync(dest, { recursive: true });
         cb(null, dest);
     },
     filename: (req, file, cb) => {
@@ -93,38 +112,37 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage: storage });
 
-// Database Connection Middleware
+// Connect DB on Request
 app.use(async (req, res, next) => {
-    await connectDB();
+    // Don't await strictly to prevent hanging? Better to await but handle error.
+    await connectDB().catch(e => console.error("DB Middleware Error:", e.message));
     next();
 });
 
-// User Local Variables
 app.use((req, res, next) => {
     res.locals.user = req.session.user || null;
     next();
 });
 
+// View Engine
 app.set('view engine', 'ejs');
-// Use the robust resolved path
 app.set('views', path.join(clientPath, 'views'));
-
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-// Serve static files from resolved path
+// Serve Static with explicit path and fallbacks
 app.use(express.static(path.join(clientPath, 'public')));
+// Also serve from standard public just in case
+app.use(express.static(path.join(process.cwd(), 'public')));
 
 // Auth Middlewares
 const protect = (req, res, next) => {
     if (req.session.user) next();
     else res.redirect('/login');
 };
-
 const adminProtect = (req, res, next) => {
     if (req.session.user && req.session.user.role === 'teacher') next();
     else res.status(403).send('Access Denied');
 };
-
 const parentProtect = (req, res, next) => {
     if (req.session.user && req.session.user.role === 'parent') next();
     else res.redirect('/login');
@@ -137,7 +155,8 @@ app.get('/health', (req, res) => {
         status: 'ok',
         env: process.env.NODE_ENV,
         db: isConnected ? 'connected' : 'disconnected',
-        clientPath: clientPath
+        clientPath: clientPath,
+        cwd: process.cwd()
     });
 });
 
@@ -147,27 +166,14 @@ app.get('/', async (req, res) => {
         const categories = await Course.distinct('category');
         res.render('index', { courses, categories });
     } catch (err) {
-        console.error('Home Page Render Error:', err);
-        // Fallback: If view rendering fails (e.g., file not found), don't try to render again.
-        // Send a plain text response or a debug message.
-        if (err.message.includes('Failed to lookup view')) {
-            res.status(500).send(`
-                <h1>Deployment Error</h1>
-                <p>Could not find the 'index.ejs' view file.</p>
-                <p><b>Debug Info:</b></p>
-                <pre>
-                Resolved Client Path: ${clientPath}
-                Error Details: ${err.message}
-                Current Dir: ${__dirname}
-                </pre>
-            `);
+        console.error('Home Render Error:', err);
+        // Fallback for View Error vs DB Error
+        if (err.message.includes('lookup view')) {
+            res.status(500).send(`View Error: ${err.message}. Path: ${clientPath}`);
         } else {
-            // If it's just a DB error, try rendering with empty data
-            try {
-                res.render('index', { courses: [], categories: [] });
-            } catch (renderErr) {
-                res.status(500).send("Critical Error: " + renderErr.message);
-            }
+            // Try rendering without data
+            try { res.render('index', { courses: [], categories: [] }); }
+            catch (e) { res.status(500).send("Critical App Error: " + e.message); }
         }
     }
 });
@@ -178,7 +184,6 @@ app.get('/about', (req, res) => res.render('about'));
 app.get('/contact', (req, res) => res.render('contact'));
 app.post('/contact-submit', (req, res) => res.redirect('/?contact=success'));
 
-// Auth Routes
 app.get('/login', (req, res) => res.render('login'));
 app.get('/register', (req, res) => res.render('register'));
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
@@ -214,7 +219,6 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// Dashboard & Profile
 app.get('/dashboard', protect, async (req, res) => {
     try {
         const user = await User.findById(req.session.user._id)
@@ -256,7 +260,6 @@ app.post('/profile/update', protect, async (req, res) => {
     }
 });
 
-// Features
 app.get('/courses', async (req, res) => {
     try {
         const { search, category, classLevel } = req.query;
@@ -297,19 +300,8 @@ app.get('/course-details/:id', protect, async (req, res) => {
                 }
             }
         }
-
-        const lessons = [];
-        const allNotes = [];
-        if (course.chapters) {
-            course.chapters.forEach(chapter => {
-                if (chapter.recordedClasses) chapter.recordedClasses.forEach(cls => lessons.push({ ...cls.toObject(), chapterTitle: chapter.title, videoUrl: cls.videoPath }));
-                if (chapter.notes) chapter.notes.forEach(note => allNotes.push({ title: note.title, fileUrl: note.filePath }));
-            });
-        }
-
-        res.render('lesson-player', { course: { ...course.toObject(), lessons, notes: allNotes }, similarCourses: [], hasAccess, trialExpired, subscriptionExpired, user });
+        res.render('lesson-player', { course: course.toObject(), similarCourses: [], hasAccess, trialExpired, subscriptionExpired, user });
     } catch (err) {
-        console.error(err);
         res.status(500).send('Error loading course');
     }
 });
@@ -317,10 +309,8 @@ app.get('/course-details/:id', protect, async (req, res) => {
 app.post('/api/progress', protect, async (req, res) => {
     try {
         const user = await User.findById(req.session.user._id);
-        if (!user.completedLessons.includes(req.body.lessonId)) {
-            user.completedLessons.push(req.body.lessonId);
-            await user.save();
-        }
+        if (!user.completedLessons.includes(req.body.lessonId)) user.completedLessons.push(req.body.lessonId);
+        await user.save();
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: 'Failed' });
@@ -345,7 +335,7 @@ app.get('/checkout/:id', protect, async (req, res) => {
         const course = await Course.findById(req.params.id);
         res.render('checkout', { course });
     } catch (err) {
-        res.status(500).send('Checkout Error');
+        res.status(500).send('Error');
     }
 });
 
@@ -366,7 +356,7 @@ app.post('/buy-course/:id', protect, async (req, res) => {
         await user.save();
         res.redirect(`/course-details/${req.params.id}`);
     } catch (err) {
-        res.status(500).send('Error purchasing course');
+        res.status(500).send('Error');
     }
 });
 
@@ -375,7 +365,7 @@ app.get('/library', protect, async (req, res) => {
         const books = await Book.find();
         res.render('library', { books });
     } catch (err) {
-        res.status(500).send('Library Error');
+        res.status(500).send('Error');
     }
 });
 
@@ -384,7 +374,7 @@ app.get('/feature/:type', protect, async (req, res) => {
         const subjects = await Course.distinct('subject', { classLevel: req.session.user.classLevel || 'Class 10' });
         res.render('feature-subjects', { type: req.params.type, subjects });
     } catch (err) {
-        res.status(500).send('Error loading features');
+        res.status(500).send('Error');
     }
 });
 
@@ -393,11 +383,10 @@ app.get('/feature/:type/:subject', protect, async (req, res) => {
         const courses = await Course.find({ subject: req.params.subject, classLevel: req.session.user.classLevel || 'Class 10' });
         res.render('feature-chapters', { type: req.params.type, subject: req.params.subject, courses });
     } catch (err) {
-        res.status(500).send('Error loading chapters');
+        res.status(500).send('Error');
     }
 });
 
-// Quiz System
 app.get('/create-self-quiz', protect, async (req, res) => {
     try {
         const subjects = await Question.distinct('subject');
@@ -411,16 +400,9 @@ app.get('/create-self-quiz', protect, async (req, res) => {
 app.post('/api/generate-quiz', protect, async (req, res) => {
     try {
         const { subject, classLevel, count } = req.body;
-        const questions = await Question.aggregate([
-            { $match: { subject, classLevel } },
-            { $sample: { size: parseInt(count) || 10 } }
-        ]);
-        if (!questions.length) return res.status(404).json({ message: 'No questions found' });
-        req.session.tempQuiz = {
-            title: `Custom ${subject} Quiz`,
-            questions: questions.map(q => ({ questionText: q.questionText, options: q.options, correctAnswerIndex: q.correctAnswerIndex })),
-            duration: 10
-        };
+        const questions = await Question.aggregate([{ $match: { subject, classLevel } }, { $sample: { size: parseInt(count) || 10 } }]);
+        if (!questions.length) return res.status(404).json({ message: 'No questions' });
+        req.session.tempQuiz = { title: `Custom ${subject} Quiz`, questions: questions.map(q => ({ questionText: q.questionText, options: q.options, correctAnswerIndex: q.correctAnswerIndex })), duration: 10 };
         res.json({ success: true, redirect: '/take-temp-quiz' });
     } catch (err) {
         res.status(500).json({ message: 'Error' });
@@ -445,9 +427,7 @@ app.post('/submit-quiz/:id', protect, async (req, res) => {
     try {
         const quiz = await Quiz.findById(req.params.id);
         let score = 0;
-        quiz.questions.forEach((q, index) => {
-            if (parseInt(req.body[`question_${index}`]) === q.correctAnswerIndex) score++;
-        });
+        quiz.questions.forEach((q, index) => { if (parseInt(req.body[`question_${index}`]) === q.correctAnswerIndex) score++; });
         const student = await User.findById(req.session.user._id);
         student.quizResults.push({ quiz: quiz._id, score, total: quiz.questions.length });
         await student.save();
@@ -457,7 +437,6 @@ app.post('/submit-quiz/:id', protect, async (req, res) => {
     }
 });
 
-// --- PARENT PORTAL ---
 app.get('/parent/dashboard', parentProtect, async (req, res) => {
     try {
         const parent = await User.findById(req.session.user._id);
@@ -471,8 +450,8 @@ app.get('/parent/dashboard', parentProtect, async (req, res) => {
 app.post('/parent/add-child', parentProtect, async (req, res) => {
     try {
         const student = await User.findOne({ email: req.body.childEmail, role: 'student' });
-        if (!student) return res.send("শিক্ষার্থী পাওয়া যায়নি।");
-        if (student.parentRequests.find(r => r.parent.toString() === req.session.user._id)) return res.send("রিকোয়েস্ট ইতিমধ্যে পাঠানো হয়েছে।");
+        if (!student) return res.send("Not Found");
+        if (student.parentRequests.find(r => r.parent.toString() === req.session.user._id)) return res.send("Already Requested");
         student.parentRequests.push({ parent: req.session.user._id, status: 'pending' });
         await student.save();
         res.redirect('/parent/dashboard');
@@ -487,36 +466,28 @@ app.post('/student/approve-parent/:parentId', protect, async (req, res) => {
         const reqs = student.parentRequests.find(r => r.parent.toString() === req.params.parentId);
         if (reqs) { reqs.status = 'accepted'; await student.save(); }
         res.redirect('/dashboard');
-    } catch (err) {
-        res.status(500).send('Error');
-    }
+    } catch (err) { res.status(500).send('Error'); }
 });
 
-// --- ADMIN ROUTES ---
 app.get('/admin/teacher', adminProtect, async (req, res) => {
     try {
         const courses = await Course.find();
         const studentCount = await User.countDocuments({ role: 'student' });
         res.render('teacher-dashboard', { courses, studentCount });
-    } catch (err) {
-        res.status(500).send('Error');
-    }
+    } catch (err) { res.status(500).send('Error'); }
 });
 
 app.get('/admin/course/:id', adminProtect, async (req, res) => {
     try {
         const course = await Course.findById(req.params.id);
         res.render('admin-course-details', { course });
-    } catch (err) {
-        res.status(404).send('Course not found');
-    }
+    } catch (err) { res.status(404).send('Not Found'); }
 });
 
 app.post('/admin/add-course', adminProtect, upload.single('thumbnail'), async (req, res) => {
     try {
         const { title, subject, category, classLevel, description, accessType, planNames, planDurations, planPrices, trialPeriod, featuredForClasses } = req.body;
         const thumbnail = req.file ? `/uploads/thumbnails/${req.file.filename}` : null;
-
         let plans = [];
         if (accessType === 'paid' || accessType === 'trial') {
             const names = Array.isArray(planNames) ? planNames : [planNames];
@@ -524,45 +495,30 @@ app.post('/admin/add-course', adminProtect, upload.single('thumbnail'), async (r
             const prices = Array.isArray(planPrices) ? planPrices : [planPrices];
             plans = names.map((name, i) => ({ name, durationDays: parseInt(durations[i]) || 0, price: parseInt(prices[i]) || 0 })).filter(p => p.name);
         }
-
-        const newCourse = new Course({
-            title, subject, category, classLevel, description, thumbnail,
-            accessType: accessType || 'free',
-            plans,
-            trialPeriod: trialPeriod || 0,
-            featuredForClasses: Array.isArray(featuredForClasses) ? featuredForClasses : (featuredForClasses ? [featuredForClasses] : [])
-        });
-        await newCourse.save();
+        await new Course({ title, subject, category, classLevel, description, thumbnail, accessType: accessType || 'free', plans, trialPeriod: trialPeriod || 0, featuredForClasses: Array.isArray(featuredForClasses) ? featuredForClasses : (featuredForClasses ? [featuredForClasses] : []) }).save();
         res.redirect('/admin/teacher');
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Error adding course');
-    }
+    } catch (err) { res.status(500).send('Error'); }
 });
 
 app.post('/admin/course/:id/add-chapter', adminProtect, async (req, res) => {
     await Course.findByIdAndUpdate(req.params.id, { $push: { chapters: { title: req.body.title, recordedClasses: [], liveClasses: [], notes: [] } } });
     res.redirect(`/admin/course/${req.params.id}`);
 });
-
-app.post('/admin/course/:courseId/chapter/:chapterId/add-recorded', adminProtect, upload.single('video'), async (req, res) => {
+app.post('/admin/course/:cid/chapter/:chid/add-recorded', adminProtect, upload.single('video'), async (req, res) => {
     const videoPath = req.file ? `/uploads/videos/${req.file.filename}` : null;
-    await Course.updateOne({ _id: req.params.courseId, "chapters._id": req.params.chapterId }, { $push: { "chapters.$.recordedClasses": { title: req.body.title, videoPath, duration: req.body.duration } } });
-    res.redirect(`/admin/course/${req.params.courseId}`);
+    await Course.updateOne({ _id: req.params.cid, "chapters._id": req.params.chid }, { $push: { "chapters.$.recordedClasses": { title: req.body.title, videoPath, duration: req.body.duration } } });
+    res.redirect(`/admin/course/${req.params.cid}`);
 });
-
-app.post('/admin/course/:courseId/chapter/:chapterId/add-note', adminProtect, upload.single('note'), async (req, res) => {
+app.post('/admin/course/:cid/chapter/:chid/add-note', adminProtect, upload.single('note'), async (req, res) => {
     const filePath = req.file ? `/uploads/notes/${req.file.filename}` : null;
-    await Course.updateOne({ _id: req.params.courseId, "chapters._id": req.params.chapterId }, { $push: { "chapters.$.notes": { title: req.body.title, filePath } } });
-    res.redirect(`/admin/course/${req.params.courseId}`);
+    await Course.updateOne({ _id: req.params.cid, "chapters._id": req.params.chid }, { $push: { "chapters.$.notes": { title: req.body.title, filePath } } });
+    res.redirect(`/admin/course/${req.params.cid}`);
 });
-
 app.get('/admin/quizzes', async (req, res) => {
     const quizzes = await Quiz.find().populate('course');
     const courses = await Course.find();
     res.render('admin-quizzes', { quizzes, courses });
 });
-
 app.post('/admin/add-quiz', async (req, res) => {
     await new Quiz({ title: req.body.title, course: req.body.courseId, duration: req.body.duration, questions: [] }).save();
     res.redirect('/admin/quizzes');
@@ -570,13 +526,10 @@ app.post('/admin/add-quiz', async (req, res) => {
 
 app.get('*', (req, res) => res.status(404).render('404'));
 
-// LOCAL DEVELOPMENT: Start server
 if (require.main === module) {
     app.listen(PORT, async () => {
-        console.log(`🚀 ODDHAY server running at http://localhost:${PORT}`);
+        console.log(`🚀 Server running at http://localhost:${PORT}`);
         await connectDB();
     });
 }
-
-// VERCEL: Export the app
 module.exports = app;
