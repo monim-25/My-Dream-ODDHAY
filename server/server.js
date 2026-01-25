@@ -132,13 +132,43 @@ const parentProtect = (req, res, next) => {
 
 // --- ROUTES ---
 
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        env: process.env.NODE_ENV,
+        db: isConnected ? 'connected' : 'disconnected',
+        clientPath: clientPath
+    });
+});
+
 app.get('/', async (req, res) => {
     try {
         const courses = await Course.find().limit(6);
         const categories = await Course.distinct('category');
         res.render('index', { courses, categories });
     } catch (err) {
-        res.render('index', { courses: [], categories: [] });
+        console.error('Home Page Render Error:', err);
+        // Fallback: If view rendering fails (e.g., file not found), don't try to render again.
+        // Send a plain text response or a debug message.
+        if (err.message.includes('Failed to lookup view')) {
+            res.status(500).send(`
+                <h1>Deployment Error</h1>
+                <p>Could not find the 'index.ejs' view file.</p>
+                <p><b>Debug Info:</b></p>
+                <pre>
+                Resolved Client Path: ${clientPath}
+                Error Details: ${err.message}
+                Current Dir: ${__dirname}
+                </pre>
+            `);
+        } else {
+            // If it's just a DB error, try rendering with empty data
+            try {
+                res.render('index', { courses: [], categories: [] });
+            } catch (renderErr) {
+                res.status(500).send("Critical Error: " + renderErr.message);
+            }
+        }
     }
 });
 
