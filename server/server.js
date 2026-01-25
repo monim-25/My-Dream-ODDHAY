@@ -224,10 +224,14 @@ app.post('/login', async (req, res) => {
 
 app.post('/register', async (req, res) => {
     try {
-        const { name, email, password, role, phone, classLevel } = req.body;
+        const { name, email, password, confirmPassword, role, phone, classLevel } = req.body;
 
         if (!name || !email || !password) {
             return res.status(400).send('দয়া করে সব তথ্য পূরণ করুন।');
+        }
+
+        if (password !== confirmPassword) {
+            return res.status(400).send('পাসওয়ার্ড দুটি মিলছে না।');
         }
 
         const existing = await User.findOne({ email });
