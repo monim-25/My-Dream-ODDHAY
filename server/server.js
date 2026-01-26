@@ -245,8 +245,7 @@ app.post('/register', async (req, res) => {
     try {
         const { name, identifier, password, confirmPassword, role, classLevel } = req.body;
 
-        // 1. Basic Field Validation
-        if (!name || !identifier || !password || !confirmPassword) {
+        if (!name || !identifier || !password) {
             return res.status(400).send('দয়া করে নাম, ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।');
         }
 
@@ -257,85 +256,50 @@ app.post('/register', async (req, res) => {
         let email = null;
         let phone = null;
 
-        // identifier parsing
         if (identifier.includes('@')) {
             email = identifier.trim();
         } else {
             phone = identifier.trim();
         }
 
-        // 2. Pre-check for existing users (Concurrency safety)
+        // Duplicate check
         if (email) {
             const existingEmail = await User.findOne({ email });
-            if (existingEmail) return res.status(400).send(`এই ইমেইলটি ( ${email} ) ইতিপূর্বে ব্যবহৃত হয়েছে।`);
+            if (existingEmail) return res.status(400).send('এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
         }
         if (phone) {
             const existingPhone = await User.findOne({ phone });
-            if (existingPhone) return res.status(400).send(`এই ফোন নম্বরটি ( ${phone} ) ইতিপূর্বে ব্যবহৃত হয়েছে।`);
+            if (existingPhone) return res.status(400).send('এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
         }
 
         const isSuperAdminEmail = email && process.env.SUPER_ADMIN_EMAIL && email === process.env.SUPER_ADMIN_EMAIL;
 
-        const userData = {
+        const newUser = new User({
             name,
             password,
             role: isSuperAdminEmail ? 'superadmin' : (role || 'student'),
             classLevel: role === 'parent' ? undefined : classLevel
-        };
-
-        if (email) userData.email = email;
-        if (phone) userData.phone = phone;
-
-        // 3. Create instance and trigger manual validation before hitting DB
-        const newUser = new User(userData);
-
-        // 4. Save to DB
-        await newUser.save();
-        console.log(`✅ User created: ${newUser.name} (${newUser._id})`);
-
-        // 5. Create a CLEAN, SIMPLE session object (Safe for all session stores)
-        const sessionUser = {
-            _id: newUser._id.toString(),
-            name: newUser.name,
-            role: newUser.role,
-            classLevel: newUser.classLevel
-        };
-
-        req.session.user = sessionUser;
-        req.session.userId = sessionUser._id;
-
-        // Force session save
-        req.session.save((err) => {
-            if (err) {
-                console.error('❌ Session Save Error:', err);
-                return res.status(500).send('নিবন্ধন সফল হয়েছে কিন্তু সেশন সেভ করতে সমস্যা হয়েছে। দয়া করে লগইন করুন।');
-            }
-
-            console.log(`🚀 Redirecting user ${sessionUser.name} to dashboard...`);
-            try {
-                const currentRole = sessionUser.role;
-                if (currentRole === 'superadmin' || currentRole === 'admin' || currentRole === 'teacher') {
-                    return res.redirect('/admin');
-                }
-                if (currentRole === 'parent') return res.redirect('/parent/dashboard');
-                return res.redirect('/dashboard');
-            } catch (redirErr) {
-                console.error('❌ Redirect Error:', redirErr);
-                res.status(500).send('রিডাইরেক্ট করার সময় সমস্যা হয়েছে।');
-            }
         });
 
+        if (email) newUser.email = email;
+        if (phone) newUser.phone = phone;
+
+        await newUser.save();
+
+        // Standard session assignment
+        const userObj = newUser.toObject();
+        req.session.user = userObj;
+        req.session.userId = userObj._id.toString();
+
+        if (userObj.role === 'superadmin' || userObj.role === 'admin' || userObj.role === 'teacher') {
+            return res.redirect('/admin');
+        }
+        if (userObj.role === 'parent') return res.redirect('/parent/dashboard');
+        res.redirect('/dashboard');
+
     } catch (err) {
-        console.error('❌ Registration Critical Error:', err);
-
-        if (err.name === 'ValidationError') {
-            return res.status(400).send(`ভুল তথ্য: ${Object.values(err.errors).map(e => e.message).join(', ')}`);
-        }
-        if (err.code === 11000) {
-            return res.status(400).send('এই ইমেইল বা ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
-        }
-
-        res.status(500).send(`সার্ভার ত্রুটি: ${err.message}`);
+        console.error('Registration Error:', err);
+        res.status(500).send(`নিবন্ধন ত্রুটি: ${err.message}`);
     }
 });
 
