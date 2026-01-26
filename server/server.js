@@ -289,44 +289,53 @@ app.post('/register', async (req, res) => {
         // 3. Create instance and trigger manual validation before hitting DB
         const newUser = new User(userData);
 
-        // 4. Save to DB (Actual storage only happens here)
+        // 4. Save to DB
         await newUser.save();
+        console.log(`✅ User created: ${newUser.name} (${newUser._id})`);
 
-        // 5. Prepare a clean POJO for session (Crucial to avoid serialization errors)
-        const userObj = JSON.parse(JSON.stringify(newUser));
+        // 5. Create a CLEAN, SIMPLE session object (Safe for all session stores)
+        const sessionUser = {
+            _id: newUser._id.toString(),
+            name: newUser.name,
+            role: newUser.role,
+            classLevel: newUser.classLevel
+        };
 
-        req.session.user = userObj;
-        req.session.userId = userObj._id;
+        req.session.user = sessionUser;
+        req.session.userId = sessionUser._id;
 
-        // Force session save before redirect to prevent race conditions
+        // Force session save
         req.session.save((err) => {
             if (err) {
-                console.error('Session Save Error:', err);
-                return res.status(500).send('অ্যাকাউন্ট তৈরি হয়েছে কিন্তু সেশন সেভ করতে সমস্যা হয়েছে। দয়া করে লগইন করুন।');
+                console.error('❌ Session Save Error:', err);
+                return res.status(500).send('নিবন্ধন সফল হয়েছে কিন্তু সেশন সেভ করতে সমস্যা হয়েছে। দয়া করে লগইন করুন।');
             }
 
-            const currentRole = userObj.role;
-            if (currentRole === 'superadmin' || currentRole === 'admin' || currentRole === 'teacher') {
-                return res.redirect('/admin');
+            console.log(`🚀 Redirecting user ${sessionUser.name} to dashboard...`);
+            try {
+                const currentRole = sessionUser.role;
+                if (currentRole === 'superadmin' || currentRole === 'admin' || currentRole === 'teacher') {
+                    return res.redirect('/admin');
+                }
+                if (currentRole === 'parent') return res.redirect('/parent/dashboard');
+                return res.redirect('/dashboard');
+            } catch (redirErr) {
+                console.error('❌ Redirect Error:', redirErr);
+                res.status(500).send('রিডাইরেক্ট করার সময় সমস্যা হয়েছে।');
             }
-            if (currentRole === 'parent') return res.redirect('/parent/dashboard');
-            res.redirect('/dashboard');
         });
 
     } catch (err) {
-        console.error('Registration Critical Error:', err);
+        console.error('❌ Registration Critical Error:', err);
 
-        // Detailed error reporting
         if (err.name === 'ValidationError') {
-            return res.status(400).send(`ভুল তথ্য প্রদান করা হয়েছে: ${Object.values(err.errors).map(e => e.message).join(', ')}`);
+            return res.status(400).send(`ভুল তথ্য: ${Object.values(err.errors).map(e => e.message).join(', ')}`);
         }
         if (err.code === 11000) {
-            const field = err.keyPattern ? Object.keys(err.keyPattern)[0] : 'data';
-            const message = field === 'email' ? 'এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।' : 'এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
-            return res.status(400).send(message);
+            return res.status(400).send('এই ইমেইল বা ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
         }
 
-        res.status(500).send(`নিবন্ধন সম্পন্ন করা সম্ভব হয়নি: ${err.message}`);
+        res.status(500).send(`সার্ভার ত্রুটি: ${err.message}`);
     }
 });
 
