@@ -242,106 +242,69 @@ app.post('/login', async (req, res) => {
 });
 
 app.post('/register', async (req, res) => {
-    // Determine request type for error reporting
     const isAjax = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));
 
     try {
         const { name, identifier, password, confirmPassword, role, classLevel } = req.body;
 
-        // 1. Validation
+        // Validation
         if (!name || !identifier || !password) {
-            return res.status(400).json({ error: 'দয়া করে নাম, ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।' });
+            return res.status(400).json({ error: 'নাম, পরিচয় এবং পাসওয়ার্ড আবশ্যক।' });
         }
-
         if (password !== confirmPassword) {
             return res.status(400).json({ error: 'পাসওয়ার্ড দুটি মিলছে না।' });
         }
 
-        let email = null;
-        let phone = null;
-        const cleanIdentifier = identifier.trim();
-        if (cleanIdentifier.includes('@')) {
-            email = cleanIdentifier;
-        } else {
-            phone = cleanIdentifier;
+        const cleanId = identifier.trim();
+        const email = cleanId.includes('@') ? cleanId : null;
+        const phone = cleanId.includes('@') ? null : cleanId;
+
+        // Duplicate Check
+        const existing = await User.findOne({ $or: [{ email: email || '___never___' }, { phone: phone || '___never___' }] });
+        if (existing) {
+            return res.status(400).json({ error: 'এই ইমেইল বা ফোন নম্বরটি ইতিমধ্যে ব্যবহৃত হয়েছে।' });
         }
 
-        // 2. Manual duplicate check with logging
-        if (email) {
-            const exists = await User.findOne({ email });
-            if (exists) return res.status(400).json({ error: 'এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।' });
-        }
-        if (phone) {
-            const exists = await User.findOne({ phone });
-            if (exists) return res.status(400).json({ error: 'এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।' });
-        }
-
-        // 3. Admin Check
+        // Create User
         const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || '').trim();
-        const isSuperAdmin = email && superAdminEmail && email === superAdminEmail;
+        const isSuperAdmin = email && email === superAdminEmail;
 
-        // 4. Create User Document
-        const userData = {
+        const newUser = new User({
             name: name.trim(),
-            password: password,
+            password,
             role: isSuperAdmin ? 'superadmin' : (role || 'student'),
             classLevel: (role === 'parent' || isSuperAdmin) ? undefined : classLevel,
-        };
+            email: email || undefined,
+            phone: phone || undefined
+        });
 
-        if (email) userData.email = email;
-        if (phone) userData.phone = phone;
-
-        const newUser = new User(userData);
         await newUser.save();
-        console.log(`✅ User saved: ${newUser._id}`);
+        console.log(`✅ Registration Successful: ${newUser.name}`);
 
-        // 5. Session Setup
-        if (!req.session) {
-            console.error('❌ Session middleware missing!');
-            return res.status(500).json({ error: 'সার্ভার সেশন ইরর।' });
-        }
-
-        // Use a clean POJO for session safety
-        const sessionUser = {
+        // Set Session
+        const sessionPayload = {
             _id: newUser._id.toString(),
             name: newUser.name,
             role: newUser.role,
             classLevel: newUser.classLevel
         };
+        req.session.user = sessionPayload;
+        req.session.userId = sessionPayload._id;
 
-        req.session.user = sessionUser;
-        req.session.userId = sessionUser._id;
+        // Redirect logic
+        let redirectUrl = '/dashboard';
+        if (sessionPayload.role === 'superadmin' || sessionPayload.role === 'admin' || sessionPayload.role === 'teacher') redirectUrl = '/admin';
+        else if (sessionPayload.role === 'parent') redirectUrl = '/parent/dashboard';
 
-        // 6. Force session SAVE before returning to AJAX
-        // This prevents race conditions where /dashboard loads before session is persisted
-        req.session.save((err) => {
-            if (err) {
-                console.error('❌ Session Save Error:', err);
-                return res.status(500).json({ error: 'সেশন সেভ করতে সমস্যা হয়েছে। দয়া করে লগইন করুন।' });
-            }
-
-            let redirectUrl = '/dashboard';
-            if (sessionUser.role === 'superadmin' || sessionUser.role === 'admin' || sessionUser.role === 'teacher') {
-                redirectUrl = '/admin';
-            } else if (sessionUser.role === 'parent') {
-                redirectUrl = '/parent/dashboard';
-            }
-
+        // Explicitly save session but don't block forever if it's slow
+        req.session.save(() => {
             return res.json({ success: true, redirect: redirectUrl });
         });
 
     } catch (err) {
-        console.error('🔥 Registration FAIL:', err);
-
-        // Handle MongoDB duplicate key errors
-        if (err.code === 11000) {
-            const field = Object.keys(err.keyPattern || {})[0];
-            const msg = field === 'phone' ? 'এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।' : 'এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
-            return res.status(400).json({ error: msg });
-        }
-
-        const msg = err.name === 'ValidationError' ? 'প্রদত্ত তথ্যগুলো সঠিক নয়।' : 'নিবন্ধন সম্পন্ন করা সম্ভব হয়নি।';
-        return res.status(500).json({ error: msg, details: err.message });
+        console.error('❌ Registration Error:', err);
+        const msg = err.code === 11000 ? 'এই তথ্যটি ইতিমধ্যে ব্যবহৃত হয়েছে।' : 'সার্ভারে সমস্যা হয়েছে। দয়া করে আবার চেষ্টা করুন।';
+        return res.status(500).json({ error: msg });
     }
 });
 
