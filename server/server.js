@@ -242,97 +242,93 @@ app.post('/login', async (req, res) => {
 });
 
 app.post('/register', async (req, res) => {
+    // Determine request type for error reporting
+    const isAjax = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));
+
     try {
         const { name, identifier, password, confirmPassword, role, classLevel } = req.body;
-        // Robust Ajax check
-        const isAjax = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));
 
+        // 1. Validation
         if (!name || !identifier || !password) {
-            const msg = 'দয়া করে নাম, ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।';
-            return isAjax ? res.status(400).json({ error: msg }) : res.status(400).send(msg);
+            return res.status(400).json({ error: 'দয়া করে নাম, ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।' });
         }
 
         if (password !== confirmPassword) {
-            const msg = 'পাসওয়ার্ড দুটি মিলছে না।';
-            return isAjax ? res.status(400).json({ error: msg }) : res.status(400).send(msg);
+            return res.status(400).json({ error: 'পাসওয়ার্ড দুটি মিলছে না।' });
         }
 
         let email = null;
         let phone = null;
-        if (identifier.includes('@')) email = identifier.trim();
-        else phone = identifier.trim();
+        const cleanIdentifier = identifier.trim();
+        if (cleanIdentifier.includes('@')) {
+            email = cleanIdentifier;
+        } else {
+            phone = cleanIdentifier;
+        }
 
-        // 1. Precise Duplicate Checks
+        // 2. Manual duplicate check with logging
         if (email) {
-            const existing = await User.findOne({ email });
-            if (existing) {
-                const msg = 'এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
-                return isAjax ? res.status(400).json({ error: msg }) : res.status(400).send(msg);
-            }
+            const exists = await User.findOne({ email });
+            if (exists) return res.status(400).json({ error: 'এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।' });
         }
         if (phone) {
-            const existing = await User.findOne({ phone });
-            if (existing) {
-                const msg = 'এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
-                return isAjax ? res.status(400).json({ error: msg }) : res.status(400).send(msg);
-            }
+            const exists = await User.findOne({ phone });
+            if (exists) return res.status(400).json({ error: 'এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।' });
         }
 
-        const isSuperAdminEmail = email && process.env.SUPER_ADMIN_EMAIL && email === process.env.SUPER_ADMIN_EMAIL;
+        // 3. Admin Check
+        const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || '').trim();
+        const isSuperAdmin = email && superAdminEmail && email === superAdminEmail;
 
-        // 2. Atomic Save
-        const newUser = new User({
-            name,
-            password,
-            role: isSuperAdminEmail ? 'superadmin' : (role || 'student'),
-            classLevel: (role === 'parent' || isSuperAdminEmail) ? undefined : classLevel,
-            email: email || undefined,
-            phone: phone || undefined
-        });
+        // 4. Create User Document
+        const userData = {
+            name: name.trim(),
+            password: password,
+            role: isSuperAdmin ? 'superadmin' : (role || 'student'),
+            classLevel: (role === 'parent' || isSuperAdmin) ? undefined : classLevel,
+        };
 
+        if (email) userData.email = email;
+        if (phone) userData.phone = phone;
+
+        const newUser = new User(userData);
         await newUser.save();
+        console.log(`✅ User saved: ${newUser._id}`);
 
-        // 3. Simple & Safe Session Object
-        const sessionUser = {
+        // 5. Session Setup
+        if (!req.session) {
+            console.error('❌ Session middleware missing!');
+            return res.status(500).json({ error: 'সার্ভার সেশন ইরর।' });
+        }
+
+        req.session.user = {
             _id: newUser._id.toString(),
             name: newUser.name,
             role: newUser.role,
             classLevel: newUser.classLevel
         };
+        req.session.userId = newUser._id.toString();
 
-        if (!req.session) {
-            console.error('Session middleware not found!');
-            throw new Error('Server session error');
-        }
+        // 6. Respond immediately (let session-save happen in background)
+        // Most stores handle this fine. If ISE persists, the issue is likely session store write.
+        let redirectUrl = '/dashboard';
+        if (newUser.role === 'superadmin' || newUser.role === 'admin' || newUser.role === 'teacher') redirectUrl = '/admin';
+        else if (newUser.role === 'parent') redirectUrl = '/parent/dashboard';
 
-        req.session.user = sessionUser;
-        req.session.userId = sessionUser._id;
-
-        // 4. Force Session Persistence
-        req.session.save((err) => {
-            if (err) {
-                console.error('Session Save Error:', err);
-                const msg = 'নিবন্ধন সফল, কিন্তু সেশন শুরু করা যায়নি। দয়া করে লগইন করুন।';
-                return isAjax ? res.status(500).json({ error: msg }) : res.status(500).send(msg);
-            }
-
-            let redirectUrl = '/dashboard';
-            if (sessionUser.role === 'superadmin' || sessionUser.role === 'admin' || sessionUser.role === 'teacher') redirectUrl = '/admin';
-            else if (sessionUser.role === 'parent') redirectUrl = '/parent/dashboard';
-
-            if (isAjax) {
-                return res.json({ success: true, redirect: redirectUrl });
-            } else {
-                return res.redirect(redirectUrl);
-            }
-        });
+        return res.json({ success: true, redirect: redirectUrl });
 
     } catch (err) {
-        console.error('Critical Registration Error:', err);
-        const isAjax = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));
-        const errorMsg = `সার্ভার ত্রুটি: ${err.message}`;
-        if (isAjax) return res.status(500).json({ error: errorMsg });
-        res.status(500).send(errorMsg);
+        console.error('🔥 Registration FAIL:', err);
+
+        let msg = 'নিবন্ধন সম্পন্ন করা সম্ভব হয়নি।';
+        if (err.code === 11000) msg = 'এই ইমেইল বা ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
+        else if (err.name === 'ValidationError') msg = 'প্রদত্ত তথ্যগুলো সঠিক নয়।';
+
+        if (isAjax) {
+            return res.status(500).json({ error: msg, details: err.message });
+        } else {
+            return res.status(500).send(`${msg} (${err.message})`);
+        }
     }
 });
 
