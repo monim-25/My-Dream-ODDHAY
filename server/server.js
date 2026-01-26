@@ -244,7 +244,8 @@ app.post('/login', async (req, res) => {
 app.post('/register', async (req, res) => {
     try {
         const { name, identifier, password, confirmPassword, role, classLevel } = req.body;
-        const isAjax = req.xhr || req.headers.accept.indexOf('json') > -1;
+        // Robust Ajax check
+        const isAjax = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));
 
         if (!name || !identifier || !password) {
             const msg = 'দয়া করে নাম, ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।';
@@ -258,12 +259,8 @@ app.post('/register', async (req, res) => {
 
         let email = null;
         let phone = null;
-
-        if (identifier.includes('@')) {
-            email = identifier.trim();
-        } else {
-            phone = identifier.trim();
-        }
+        if (identifier.includes('@')) email = identifier.trim();
+        else phone = identifier.trim();
 
         // 1. Precise Duplicate Checks
         if (email) {
@@ -288,46 +285,54 @@ app.post('/register', async (req, res) => {
             name,
             password,
             role: isSuperAdminEmail ? 'superadmin' : (role || 'student'),
-            classLevel: role === 'parent' ? undefined : classLevel,
+            classLevel: (role === 'parent' || isSuperAdminEmail) ? undefined : classLevel,
             email: email || undefined,
             phone: phone || undefined
         });
 
         await newUser.save();
 
-        // 3. Clean Session
-        const userObj = newUser.toObject();
-        const sessionData = {
-            _id: userObj._id.toString(),
-            name: userObj.name,
-            role: userObj.role,
-            classLevel: userObj.classLevel
+        // 3. Simple & Safe Session Object
+        const sessionUser = {
+            _id: newUser._id.toString(),
+            name: newUser.name,
+            role: newUser.role,
+            classLevel: newUser.classLevel
         };
 
-        req.session.user = sessionData;
-        req.session.userId = sessionData._id;
-
-        // 4. Final Response
-        let redirectUrl = '/dashboard';
-        if (sessionData.role === 'superadmin' || sessionData.role === 'admin' || sessionData.role === 'teacher') redirectUrl = '/admin';
-        else if (sessionData.role === 'parent') redirectUrl = '/parent/dashboard';
-
-        if (isAjax) {
-            return res.json({ success: true, redirect: redirectUrl });
-        } else {
-            return res.redirect(redirectUrl);
+        if (!req.session) {
+            console.error('Session middleware not found!');
+            throw new Error('Server session error');
         }
+
+        req.session.user = sessionUser;
+        req.session.userId = sessionUser._id;
+
+        // 4. Force Session Persistence
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session Save Error:', err);
+                const msg = 'নিবন্ধন সফল, কিন্তু সেশন শুরু করা যায়নি। দয়া করে লগইন করুন।';
+                return isAjax ? res.status(500).json({ error: msg }) : res.status(500).send(msg);
+            }
+
+            let redirectUrl = '/dashboard';
+            if (sessionUser.role === 'superadmin' || sessionUser.role === 'admin' || sessionUser.role === 'teacher') redirectUrl = '/admin';
+            else if (sessionUser.role === 'parent') redirectUrl = '/parent/dashboard';
+
+            if (isAjax) {
+                return res.json({ success: true, redirect: redirectUrl });
+            } else {
+                return res.redirect(redirectUrl);
+            }
+        });
 
     } catch (err) {
-        console.error('Registration Critical Error:', err);
-        const isAjax = req.xhr || req.headers.accept.indexOf('json') > -1;
-        const errorMsg = `নিবন্ধন ত্রুটি: ${err.message}`;
-
-        if (isAjax) {
-            return res.status(500).json({ error: errorMsg });
-        } else {
-            return res.status(500).send(errorMsg);
-        }
+        console.error('Critical Registration Error:', err);
+        const isAjax = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'));
+        const errorMsg = `সার্ভার ত্রুটি: ${err.message}`;
+        if (isAjax) return res.status(500).json({ error: errorMsg });
+        res.status(500).send(errorMsg);
     }
 });
 
