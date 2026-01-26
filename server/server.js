@@ -252,8 +252,8 @@ app.post('/register', async (req, res) => {
     try {
         const { name, identifier, password, confirmPassword, role, classLevel } = req.body;
 
-        if (!name || !identifier || !password) {
-            return res.status(400).json({ error: 'সবগুলো ঘর পূরণ করুন।' });
+        if (!name || !identifier || !password || !confirmPassword) {
+            return res.status(400).json({ error: 'দয়া করে সবগুলো তথ্য প্রদান করুন।' });
         }
         if (password !== confirmPassword) {
             return res.status(400).json({ error: 'পাসওয়ার্ড দুটি মিলছে না।' });
@@ -263,104 +263,70 @@ app.post('/register', async (req, res) => {
         const email = cleanId.includes('@') ? cleanId : null;
         const phone = cleanId.includes('@') ? null : cleanId;
 
-        // Manual check for existing user
-        const existing = await User.findOne({ $or: [{ email: email || '___none___' }, { phone: phone || '___none___' }] });
-        if (existing) {
-            return res.status(400).json({ error: 'এই ইমেইল বা ফোন নম্বরটি ইতিমধ্যে ব্যবহৃত হয়েছে।' });
-        }
-
-        const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || '').trim();
-        const isSuperAdmin = email && email === superAdminEmail;
-
-        const newUser = new User({
+        // Atomic check and save attempt
+        const userData = {
             name: name.trim(),
             password,
-            role: isSuperAdmin ? 'superadmin' : (role || 'student'),
-            classLevel: (role === 'parent' || isSuperAdmin) ? 'N/A' : (classLevel || 'Class 10'),
+            role: role || 'student',
+            classLevel: classLevel || 'Class 10',
             email: email || undefined,
             phone: phone || undefined
-        });
+        };
 
+        const newUser = new User(userData);
         await newUser.save();
-        console.log(`✅ User Registered: ${newUser.name}`);
 
-        // Set Session (Avoid 'undefined' values for JSON safety)
+        console.log(`✅ Registration Successful: ${newUser.name} (${newUser._id})`);
+
+        // Prepare session
         req.session.userId = newUser._id.toString();
         req.session.user = {
             _id: newUser._id.toString(),
             name: newUser.name,
             role: newUser.role,
-            classLevel: newUser.classLevel || 'N/A'
+            classLevel: newUser.classLevel
         };
 
-        let redirectUrl = '/dashboard';
-        if (newUser.role === 'superadmin' || newUser.role === 'admin' || newUser.role === 'teacher') redirectUrl = '/admin';
-        else if (newUser.role === 'parent') redirectUrl = '/parent/dashboard';
+        const redirectUrl = newUser.role === 'parent' ? '/parent/dashboard' : (['admin', 'superadmin', 'teacher'].includes(newUser.role) ? '/admin' : '/dashboard');
 
-        req.session.save((err) => {
-            if (err) console.error('⚠️ Session Save Error (Non-Fatal):', err);
+        req.session.save(() => {
             return res.json({ success: true, redirect: redirectUrl });
         });
 
     } catch (err) {
-        console.error('🔥 Registration Critical Error:', err);
-        return res.status(500).json({ error: 'সার্ভারে অভ্যন্তরীণ ত্রুটি হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।' });
+        console.error('🔥 Registration FAIL:', err);
+
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern || {})[0];
+            const msg = field === 'phone' ? 'এই ফোন নম্বরটি ইতিমধ্যে ব্যবহৃত হয়েছে।' : 'এই ইমেইলটি ইতিমধ্যে ব্যবহৃত হয়েছে।';
+            return res.status(400).json({ error: msg });
+        }
+
+        return res.status(500).json({ error: `সার্ভার ত্রুটি: ${err.message}` });
     }
 });
 
+// Unified Safe Dashboard
 app.get('/dashboard', protect, async (req, res) => {
     try {
-        if (!req.session.user || !req.session.user._id) {
-            console.warn('❌ Session user ID missing in dashboard');
-            return res.redirect('/login');
-        }
-
-        const user = await User.findById(req.session.user._id)
-            .populate('quizResults.quiz')
-            .populate('parentRequests.parent')
-            .populate('enrolledCourses.course');
-
-        if (!user) {
-            console.warn('⚠️ User not found in DB during dashboard load. This might be a DB lag.');
-            // Try to use session data if user document is missing for now
-            return res.render('student-dashboard', {
-                user: req.session.user,
-                promotedCourses: [],
-                leaderboard: []
-            });
-        }
-
-        const enrolledIds = (user.enrolledCourses || []).map(e => e.course ? e.course._id : null).filter(id => id);
-        const promotedCourses = await Course.find({
-            featuredForClasses: user.classLevel || 'Class 10',
-            _id: { $nin: enrolledIds }
-        }).limit(3);
-
-        // Robust Leaderboard Aggregation
-        let leaderboard = [];
+        // Find user by ID but fall back to session if DB is laggy
+        let user = null;
         try {
-            leaderboard = await User.aggregate([
-                { $match: { role: 'student', 'quizResults.0': { $exists: true } } },
-                { $unwind: '$quizResults' },
-                {
-                    $group: {
-                        _id: '$_id',
-                        name: { $first: '$name' },
-                        classLevel: { $first: '$classLevel' },
-                        totalScore: { $sum: '$quizResults.score' }
-                    }
-                },
-                { $sort: { totalScore: -1 } },
-                { $limit: 5 }
-            ]);
-        } catch (aggErr) {
-            console.error('Leaderboard Aggregation Error:', aggErr);
+            user = await User.findById(req.session.userId).lean();
+        } catch (dbErr) {
+            console.warn('⚠️ Dashboard DB Fetch Failed, using session fallback.');
         }
 
-        res.render('student-dashboard', { user, promotedCourses, leaderboard });
+        const displayUser = user || req.session.user;
+
+        // Pass minimal data, avoid complex aggregations on first render
+        res.render('dashboard-unified', {
+            user: displayUser,
+            leaderboard: [] // Safe default
+        });
     } catch (err) {
-        console.error('Dashboard Critical Error:', err);
-        res.status(500).send('ড্যাশবোর্ড লোড করতে সমস্যা হয়েছে। দয়া করে আবার চেষ্টা করুন।');
+        console.error('Dashboard Crash:', err);
+        res.status(500).send('ড্যাশবোর্ড লোড করার সময় সমস্যা হয়েছে। দয়া করে পেজটি রিফ্রেশ করুন।');
     }
 });
 
