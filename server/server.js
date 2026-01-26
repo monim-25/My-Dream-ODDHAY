@@ -690,11 +690,28 @@ app.get('/parent/dashboard', parentProtect, async (req, res) => {
         }).populate({
             path: 'quizResults.quiz',
             populate: { path: 'course' }
-        }).populate('enrolledCourses.course');
+        })
+            .populate('enrolledCourses.course')
+            .populate('lastWatchedLesson.course');
+
+        // Fetch QA (Messages) for each child
+        const childIds = students.map(s => s._id);
+        const childMessages = await require('./models/QA').find({ askedBy: { $in: childIds } })
+            .populate('answeredBy', 'name')
+            .sort({ createdAt: -1 });
+
+        // Mock events for Shared Calendar (since we don't have an Event model yet)
+        const mockEvents = [
+            { title: 'সাপ্তাহিক মূল্যায়ন পরীক্ষা', date: new Date(Date.now() + 86400000 * 2), type: 'exam' },
+            { title: 'লাইভ ক্লাস: গণিত', date: new Date(Date.now() + 86400000 * 1), type: 'class' },
+            { title: 'ফলাফল প্রকাশ', date: new Date(Date.now() - 86400000 * 1), type: 'result' }
+        ];
 
         res.render('parent-dashboard', {
             user: parent,
-            confirmedChildren: students || []
+            confirmedChildren: students || [],
+            messages: childMessages || [],
+            events: mockEvents
         });
     } catch (err) {
         console.error('Parent Dashboard Error:', err);
