@@ -436,6 +436,18 @@ app.get('/analytics', async (req, res) => {
     res.render('analytics', { user: req.session.user });
 });
 
+app.get('/messages', protect, (req, res) => {
+    res.render('messages', { user: req.session.user });
+});
+
+app.get('/notifications', protect, (req, res) => {
+    res.render('notifications', { user: req.session.user });
+});
+
+app.get('/settings', protect, (req, res) => {
+    res.render('profile', { user: req.session.user, success: null }); // Reuse profile for settings
+});
+
 
 app.post('/qa-ask', async (req, res) => {
     try {
