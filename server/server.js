@@ -301,68 +301,103 @@ app.post('/register', async (req, res) => {
             return res.status(500).json({ error: 'সার্ভার সেশন ইরর।' });
         }
 
-        req.session.user = {
+        // Use a clean POJO for session safety
+        const sessionUser = {
             _id: newUser._id.toString(),
             name: newUser.name,
             role: newUser.role,
             classLevel: newUser.classLevel
         };
-        req.session.userId = newUser._id.toString();
 
-        // 6. Respond immediately (let session-save happen in background)
-        // Most stores handle this fine. If ISE persists, the issue is likely session store write.
-        let redirectUrl = '/dashboard';
-        if (newUser.role === 'superadmin' || newUser.role === 'admin' || newUser.role === 'teacher') redirectUrl = '/admin';
-        else if (newUser.role === 'parent') redirectUrl = '/parent/dashboard';
+        req.session.user = sessionUser;
+        req.session.userId = sessionUser._id;
 
-        return res.json({ success: true, redirect: redirectUrl });
+        // 6. Force session SAVE before returning to AJAX
+        // This prevents race conditions where /dashboard loads before session is persisted
+        req.session.save((err) => {
+            if (err) {
+                console.error('❌ Session Save Error:', err);
+                return res.status(500).json({ error: 'সেশন সেভ করতে সমস্যা হয়েছে। দয়া করে লগইন করুন।' });
+            }
+
+            let redirectUrl = '/dashboard';
+            if (sessionUser.role === 'superadmin' || sessionUser.role === 'admin' || sessionUser.role === 'teacher') {
+                redirectUrl = '/admin';
+            } else if (sessionUser.role === 'parent') {
+                redirectUrl = '/parent/dashboard';
+            }
+
+            return res.json({ success: true, redirect: redirectUrl });
+        });
 
     } catch (err) {
         console.error('🔥 Registration FAIL:', err);
 
-        let msg = 'নিবন্ধন সম্পন্ন করা সম্ভব হয়নি।';
-        if (err.code === 11000) msg = 'এই ইমেইল বা ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
-        else if (err.name === 'ValidationError') msg = 'প্রদত্ত তথ্যগুলো সঠিক নয়।';
-
-        if (isAjax) {
-            return res.status(500).json({ error: msg, details: err.message });
-        } else {
-            return res.status(500).send(`${msg} (${err.message})`);
+        // Handle MongoDB duplicate key errors
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern || {})[0];
+            const msg = field === 'phone' ? 'এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।' : 'এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
+            return res.status(400).json({ error: msg });
         }
+
+        const msg = err.name === 'ValidationError' ? 'প্রদত্ত তথ্যগুলো সঠিক নয়।' : 'নিবন্ধন সম্পন্ন করা সম্ভব হয়নি।';
+        return res.status(500).json({ error: msg, details: err.message });
     }
 });
 
 app.get('/dashboard', protect, async (req, res) => {
     try {
+        if (!req.session.user || !req.session.user._id) {
+            console.warn('❌ Session user ID missing in dashboard');
+            return res.redirect('/login');
+        }
+
         const user = await User.findById(req.session.user._id)
             .populate('quizResults.quiz')
             .populate('parentRequests.parent')
             .populate('enrolledCourses.course');
-        const enrolledIds = user.enrolledCourses.map(e => e.course ? e.course._id : null).filter(id => id);
+
+        if (!user) {
+            console.warn('⚠️ User not found in DB during dashboard load. This might be a DB lag.');
+            // Try to use session data if user document is missing for now
+            return res.render('student-dashboard', {
+                user: req.session.user,
+                promotedCourses: [],
+                leaderboard: []
+            });
+        }
+
+        const enrolledIds = (user.enrolledCourses || []).map(e => e.course ? e.course._id : null).filter(id => id);
         const promotedCourses = await Course.find({
-            featuredForClasses: user.classLevel,
+            featuredForClasses: user.classLevel || 'Class 10',
             _id: { $nin: enrolledIds }
         }).limit(3);
 
-        // Calculate Leaderboard
-        const leaderboard = await User.aggregate([
-            { $match: { role: 'student' } },
-            { $unwind: { path: '$quizResults', preserveNullAndEmptyArrays: false } },
-            {
-                $group: {
-                    _id: '$_id',
-                    name: { $first: '$name' },
-                    classLevel: { $first: '$classLevel' },
-                    totalScore: { $sum: '$quizResults.score' }
-                }
-            },
-            { $sort: { totalScore: -1 } },
-            { $limit: 5 }
-        ]);
+        // Robust Leaderboard Aggregation
+        let leaderboard = [];
+        try {
+            leaderboard = await User.aggregate([
+                { $match: { role: 'student', 'quizResults.0': { $exists: true } } },
+                { $unwind: '$quizResults' },
+                {
+                    $group: {
+                        _id: '$_id',
+                        name: { $first: '$name' },
+                        classLevel: { $first: '$classLevel' },
+                        totalScore: { $sum: '$quizResults.score' }
+                    }
+                },
+                { $sort: { totalScore: -1 } },
+                { $limit: 5 }
+            ]);
+        } catch (aggErr) {
+            console.error('Leaderboard Aggregation Error:', aggErr);
+        }
 
         res.render('student-dashboard', { user, promotedCourses, leaderboard });
     } catch (err) {
-        res.status(500).send('Dashboard Error');
+        console.error('Dashboard Critical Error:', err);
+        res.status(500).send('ড্যাশবোর্ড লোড করতে সমস্যা হয়েছে। দয়া করে আবার চেষ্টা করুন।');
     }
 });
 
@@ -667,15 +702,30 @@ app.post('/submit-quiz/:id', protect, async (req, res) => {
 
 app.get('/parent/dashboard', parentProtect, async (req, res) => {
     try {
-        const parent = await User.findById(req.session.user._id);
-        const students = await User.find({ 'parentRequests': { $elemMatch: { parent: parent._id, status: 'accepted' } } })
-            .populate({
-                path: 'quizResults.quiz',
-                populate: { path: 'course' }
-            });
-        res.render('parent-dashboard', { user: parent, confirmedChildren: students });
+        if (!req.session.userId) return res.redirect('/login');
+
+        const parent = await User.findById(req.session.userId);
+        if (!parent) {
+            console.warn('⚠️ Parent not found in DB');
+            return res.redirect('/login');
+        }
+
+        const students = await User.find({
+            'parentRequests': {
+                $elemMatch: { parent: parent._id, status: 'accepted' }
+            }
+        }).populate({
+            path: 'quizResults.quiz',
+            populate: { path: 'course' }
+        });
+
+        res.render('parent-dashboard', {
+            user: parent,
+            confirmedChildren: students || []
+        });
     } catch (err) {
-        res.status(500).send('Error');
+        console.error('Parent Dashboard Error:', err);
+        res.status(500).send('প্যারেন্ট ড্যাশবোর্ড লোড করতে সমস্যা হয়েছে।');
     }
 });
 
@@ -716,9 +766,16 @@ app.get('/admin', adminProtect, async (req, res) => {
         const courseCount = await Course.countDocuments();
         const openQas = await QA.countDocuments({ status: 'open' });
         const allUsersCount = await User.countDocuments();
-        res.render('admin/dashboard', { studentCount, courseCount, openQas, allUsersCount, user: req.session.user });
+        res.render('admin/dashboard', {
+            studentCount,
+            courseCount,
+            openQas,
+            allUsersCount,
+            user: req.session.user || { role: 'admin', name: 'এডমিন' }
+        });
     } catch (err) {
-        res.status(500).send('Error');
+        console.error('Admin Dashboard Error:', err);
+        res.status(500).send('এডমিন ড্যাশবোর্ড লোড করতে সমস্যা হয়েছে।');
     }
 });
 
