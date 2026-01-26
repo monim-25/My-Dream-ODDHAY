@@ -123,11 +123,16 @@ const upload = multer({ storage: storage });
 connectDB();
 
 app.use(async (req, res, next) => {
-    // If not connected, try to connect again
-    if (mongoose.connection.readyState === 0) {
-        await connectDB();
+    try {
+        // If not connected, try to connect again
+        if (mongoose.connection.readyState !== 1) {
+            await connectDB();
+        }
+        next();
+    } catch (err) {
+        console.error('❌ Database Connection Middleware Error:', err);
+        next(); // Still proceed, routes will handle missing DB
     }
-    next();
 });
 
 app.use((req, res, next) => {
@@ -247,9 +252,8 @@ app.post('/register', async (req, res) => {
     try {
         const { name, identifier, password, confirmPassword, role, classLevel } = req.body;
 
-        // Validation
         if (!name || !identifier || !password) {
-            return res.status(400).json({ error: 'নাম, পরিচয় এবং পাসওয়ার্ড আবশ্যক।' });
+            return res.status(400).json({ error: 'সবগুলো ঘর পূরণ করুন।' });
         }
         if (password !== confirmPassword) {
             return res.status(400).json({ error: 'পাসওয়ার্ড দুটি মিলছে না।' });
@@ -259,13 +263,12 @@ app.post('/register', async (req, res) => {
         const email = cleanId.includes('@') ? cleanId : null;
         const phone = cleanId.includes('@') ? null : cleanId;
 
-        // Duplicate Check
-        const existing = await User.findOne({ $or: [{ email: email || '___never___' }, { phone: phone || '___never___' }] });
+        // Manual check for existing user
+        const existing = await User.findOne({ $or: [{ email: email || '___none___' }, { phone: phone || '___none___' }] });
         if (existing) {
             return res.status(400).json({ error: 'এই ইমেইল বা ফোন নম্বরটি ইতিমধ্যে ব্যবহৃত হয়েছে।' });
         }
 
-        // Create User
         const superAdminEmail = (process.env.SUPER_ADMIN_EMAIL || '').trim();
         const isSuperAdmin = email && email === superAdminEmail;
 
@@ -273,38 +276,35 @@ app.post('/register', async (req, res) => {
             name: name.trim(),
             password,
             role: isSuperAdmin ? 'superadmin' : (role || 'student'),
-            classLevel: (role === 'parent' || isSuperAdmin) ? undefined : classLevel,
+            classLevel: (role === 'parent' || isSuperAdmin) ? 'N/A' : (classLevel || 'Class 10'),
             email: email || undefined,
             phone: phone || undefined
         });
 
         await newUser.save();
-        console.log(`✅ Registration Successful: ${newUser.name}`);
+        console.log(`✅ User Registered: ${newUser.name}`);
 
-        // Set Session
-        const sessionPayload = {
+        // Set Session (Avoid 'undefined' values for JSON safety)
+        req.session.userId = newUser._id.toString();
+        req.session.user = {
             _id: newUser._id.toString(),
             name: newUser.name,
             role: newUser.role,
-            classLevel: newUser.classLevel
+            classLevel: newUser.classLevel || 'N/A'
         };
-        req.session.user = sessionPayload;
-        req.session.userId = sessionPayload._id;
 
-        // Redirect logic
         let redirectUrl = '/dashboard';
-        if (sessionPayload.role === 'superadmin' || sessionPayload.role === 'admin' || sessionPayload.role === 'teacher') redirectUrl = '/admin';
-        else if (sessionPayload.role === 'parent') redirectUrl = '/parent/dashboard';
+        if (newUser.role === 'superadmin' || newUser.role === 'admin' || newUser.role === 'teacher') redirectUrl = '/admin';
+        else if (newUser.role === 'parent') redirectUrl = '/parent/dashboard';
 
-        // Explicitly save session but don't block forever if it's slow
-        req.session.save(() => {
+        req.session.save((err) => {
+            if (err) console.error('⚠️ Session Save Error (Non-Fatal):', err);
             return res.json({ success: true, redirect: redirectUrl });
         });
 
     } catch (err) {
-        console.error('❌ Registration Error:', err);
-        const msg = err.code === 11000 ? 'এই তথ্যটি ইতিমধ্যে ব্যবহৃত হয়েছে।' : 'সার্ভারে সমস্যা হয়েছে। দয়া করে আবার চেষ্টা করুন।';
-        return res.status(500).json({ error: msg });
+        console.error('🔥 Registration Critical Error:', err);
+        return res.status(500).json({ error: 'সার্ভারে অভ্যন্তরীণ ত্রুটি হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।' });
     }
 });
 
