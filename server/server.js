@@ -207,7 +207,14 @@ app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 app.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
-        const user = await User.findOne({ email });
+        // Search by email or phone
+        const user = await User.findOne({
+            $or: [
+                { email: email },
+                { phone: email }
+            ]
+        });
+
         if (user && await user.comparePassword(password)) {
             // Super Admin Auto-Promotion
             if (process.env.SUPER_ADMIN_EMAIL && user.email === process.env.SUPER_ADMIN_EMAIL && user.role !== 'superadmin') {
@@ -222,7 +229,7 @@ app.post('/login', async (req, res) => {
             if (user.role === 'parent') return res.redirect('/parent/dashboard');
             res.redirect('/dashboard');
         } else {
-            res.status(401).send('ইমেইল বা পাসওয়ার্ড ভুল।');
+            res.status(401).send('ইমেইল/ফোন বা পাসওয়ার্ড ভুল।');
         }
     } catch (err) {
         res.status(500).send('Login Error');
@@ -233,25 +240,38 @@ app.post('/register', async (req, res) => {
     try {
         const { name, email, password, confirmPassword, role, phone, classLevel } = req.body;
 
-        if (!name || !email || !password) {
-            return res.status(400).send('দয়া করে সব তথ্য পূরণ করুন।');
+        if (!name || !password) {
+            return res.status(400).send('দয়া করে নাম এবং পাসওয়ার্ড প্রদান করুন।');
+        }
+
+        if (!email && !phone) {
+            return res.status(400).send('দয়া করে ইমেইল অথবা ফোন নম্বর প্রদান করুন।');
         }
 
         if (password !== confirmPassword) {
             return res.status(400).send('পাসওয়ার্ড দুটি মিলছে না।');
         }
 
-        const existing = await User.findOne({ email });
-        if (existing) return res.status(400).send('এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
+        // Check if email already exists
+        if (email) {
+            const existingEmail = await User.findOne({ email });
+            if (existingEmail) return res.status(400).send('এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
+        }
 
-        const isSuperAdminEmail = process.env.SUPER_ADMIN_EMAIL && email.toLowerCase() === process.env.SUPER_ADMIN_EMAIL.toLowerCase();
+        // Check if phone already exists
+        if (phone) {
+            const existingPhone = await User.findOne({ phone });
+            if (existingPhone) return res.status(400).send('এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
+        }
+
+        const isSuperAdminEmail = email && process.env.SUPER_ADMIN_EMAIL && email.toLowerCase() === process.env.SUPER_ADMIN_EMAIL.toLowerCase();
 
         const newUser = new User({
             name,
-            email,
+            email: email || undefined,
             password,
             role: isSuperAdminEmail ? 'superadmin' : role,
-            phone,
+            phone: phone || undefined,
             classLevel
         });
         await newUser.save();

@@ -3,11 +3,11 @@ const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
     name: { type: String, required: true },
-    email: { type: String, required: true, unique: true },
+    email: { type: String, unique: true, sparse: true },
     password: { type: String, required: true },
     role: { type: String, enum: ['student', 'teacher', 'parent', 'admin', 'superadmin'], default: 'student' },
     classLevel: { type: String }, // e.g., Class 6, Class 10
-    phone: { type: String },
+    phone: { type: String, unique: true, sparse: true },
     enrolledCourses: [{
         course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
         expiresAt: { type: Date } // null for forever
