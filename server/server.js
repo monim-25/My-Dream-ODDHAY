@@ -272,14 +272,17 @@ app.post('/register', async (req, res) => {
 
         const isSuperAdminEmail = email && process.env.SUPER_ADMIN_EMAIL && email.toLowerCase() === process.env.SUPER_ADMIN_EMAIL.toLowerCase();
 
-        const newUser = new User({
+        const userData = {
             name,
-            email: email || undefined,
             password,
             role: isSuperAdminEmail ? 'superadmin' : role,
-            phone: phone || undefined,
             classLevel
-        });
+        };
+
+        if (email) userData.email = email;
+        if (phone) userData.phone = phone;
+
+        const newUser = new User(userData);
         await newUser.save();
 
         const userObj = newUser.toObject();
