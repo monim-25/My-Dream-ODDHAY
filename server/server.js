@@ -170,7 +170,7 @@ app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
         env: process.env.NODE_ENV,
-        db: isConnected ? 'connected' : 'disconnected',
+        db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
         clientPath: clientPath,
         cwd: process.cwd()
     });
@@ -227,7 +227,7 @@ app.post('/login', async (req, res) => {
             }
             const userObj = user.toObject();
             req.session.user = userObj;
-            req.session.userId = userObj._id;
+            req.session.userId = userObj._id.toString();
 
             if (user.role === 'teacher' || user.role === 'admin' || user.role === 'superadmin') return res.redirect('/admin');
             if (user.role === 'parent') return res.redirect('/parent/dashboard');
@@ -292,7 +292,7 @@ app.post('/register', async (req, res) => {
 
         const userObj = newUser.toObject();
         req.session.user = userObj;
-        req.session.userId = userObj._id;
+        req.session.userId = userObj._id.toString();
 
         const currentRole = userObj.role;
         if (currentRole === 'superadmin' || currentRole === 'admin' || currentRole === 'teacher') {
@@ -302,6 +302,12 @@ app.post('/register', async (req, res) => {
         res.redirect('/dashboard');
     } catch (err) {
         console.error('Registration Critical Error:', err);
+        if (err.name === 'ValidationError') {
+            return res.status(400).send(`Validation Error: ${Object.values(err.errors).map(e => e.message).join(', ')}`);
+        }
+        if (err.code === 11000) {
+            return res.status(400).send('এই ইমেইল বা ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে। (Duplicate Key)');
+        }
         res.status(500).send(`নিবন্ধন ত্রুটি: ${err.message}`);
     }
 });
