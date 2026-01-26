@@ -260,13 +260,13 @@ app.post('/register', async (req, res) => {
 
         // Check if email already exists
         if (email) {
-            const existingEmail = await User.findOne({ email });
+            const existingEmail = await User.findOne({ email: email.trim().toLowerCase() });
             if (existingEmail) return res.status(400).send('এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
         }
 
         // Check if phone already exists
         if (phone) {
-            const existingPhone = await User.findOne({ phone });
+            const existingPhone = await User.findOne({ phone: phone.trim() });
             if (existingPhone) return res.status(400).send('এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
         }
 
