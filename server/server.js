@@ -238,18 +238,24 @@ app.post('/login', async (req, res) => {
 
 app.post('/register', async (req, res) => {
     try {
-        const { name, email, password, confirmPassword, role, phone, classLevel } = req.body;
+        const { name, identifier, password, confirmPassword, role, classLevel } = req.body;
 
-        if (!name || !password) {
-            return res.status(400).send('দয়া করে নাম এবং পাসওয়ার্ড প্রদান করুন।');
-        }
-
-        if (!email && !phone) {
-            return res.status(400).send('দয়া করে ইমেইল অথবা ফোন নম্বর প্রদান করুন।');
+        if (!name || !identifier || !password) {
+            return res.status(400).send('দয়া করে নাম, ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।');
         }
 
         if (password !== confirmPassword) {
             return res.status(400).send('পাসওয়ার্ড দুটি মিলছে না।');
+        }
+
+        let email = null;
+        let phone = null;
+
+        // Simple check: if it contains '@', assume email, otherwise phone
+        if (identifier.includes('@')) {
+            email = identifier.toLowerCase().trim();
+        } else {
+            phone = identifier.trim();
         }
 
         // Check if email already exists
