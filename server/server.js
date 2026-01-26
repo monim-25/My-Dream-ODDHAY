@@ -214,14 +214,14 @@ app.post('/login', async (req, res) => {
         }
 
         const searchCriteria = identifier.includes('@')
-            ? { email: identifier.toLowerCase() }
+            ? { email: identifier }
             : { phone: identifier };
 
         const user = await User.findOne(searchCriteria);
 
         if (user && await user.comparePassword(password)) {
             // Super Admin Auto-Promotion
-            if (process.env.SUPER_ADMIN_EMAIL && user.email === process.env.SUPER_ADMIN_EMAIL.toLowerCase() && user.role !== 'superadmin') {
+            if (process.env.SUPER_ADMIN_EMAIL && user.email === process.env.SUPER_ADMIN_EMAIL && user.role !== 'superadmin') {
                 user.role = 'superadmin';
                 await user.save();
             }
@@ -258,14 +258,14 @@ app.post('/register', async (req, res) => {
 
         // Simple check: if it contains '@', assume email, otherwise phone
         if (identifier.includes('@')) {
-            email = identifier.toLowerCase().trim();
+            email = identifier.trim();
         } else {
             phone = identifier.trim();
         }
 
         // Check if email already exists
         if (email) {
-            const existingEmail = await User.findOne({ email: email.trim().toLowerCase() });
+            const existingEmail = await User.findOne({ email: email.trim() });
             if (existingEmail) return res.status(400).send('এই ইমেইলটি ( ' + email + ' ) ইতিপূর্বে ব্যবহৃত হয়েছে।');
         }
 
