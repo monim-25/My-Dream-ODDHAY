@@ -206,18 +206,22 @@ app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
 app.post('/login', async (req, res) => {
     try {
-        const { email, password } = req.body;
-        // Search by email or phone
-        const user = await User.findOne({
-            $or: [
-                { email: email },
-                { phone: email }
-            ]
-        });
+        const identifier = req.body.email ? req.body.email.trim() : '';
+        const password = req.body.password;
+
+        if (!identifier || !password) {
+            return res.status(400).send('ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।');
+        }
+
+        const searchCriteria = identifier.includes('@')
+            ? { email: identifier.toLowerCase() }
+            : { phone: identifier };
+
+        const user = await User.findOne(searchCriteria);
 
         if (user && await user.comparePassword(password)) {
             // Super Admin Auto-Promotion
-            if (process.env.SUPER_ADMIN_EMAIL && user.email === process.env.SUPER_ADMIN_EMAIL && user.role !== 'superadmin') {
+            if (process.env.SUPER_ADMIN_EMAIL && user.email === process.env.SUPER_ADMIN_EMAIL.toLowerCase() && user.role !== 'superadmin') {
                 user.role = 'superadmin';
                 await user.save();
             }
@@ -232,7 +236,8 @@ app.post('/login', async (req, res) => {
             res.status(401).send('ইমেইল/ফোন বা পাসওয়ার্ড ভুল।');
         }
     } catch (err) {
-        res.status(500).send('Login Error');
+        console.error('Login Error:', err);
+        res.status(500).send('লগইন করার সময় একটি সমস্যা হয়েছে।');
     }
 });
 
@@ -261,13 +266,13 @@ app.post('/register', async (req, res) => {
         // Check if email already exists
         if (email) {
             const existingEmail = await User.findOne({ email: email.trim().toLowerCase() });
-            if (existingEmail) return res.status(400).send('এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
+            if (existingEmail) return res.status(400).send('এই ইমেইলটি ( ' + email + ' ) ইতিপূর্বে ব্যবহৃত হয়েছে।');
         }
 
         // Check if phone already exists
         if (phone) {
             const existingPhone = await User.findOne({ phone: phone.trim() });
-            if (existingPhone) return res.status(400).send('এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
+            if (existingPhone) return res.status(400).send('এই ফোন নম্বরটি ( ' + phone + ' ) ইতিপূর্বে ব্যবহৃত হয়েছে।');
         }
 
         const isSuperAdminEmail = email && process.env.SUPER_ADMIN_EMAIL && email.toLowerCase() === process.env.SUPER_ADMIN_EMAIL.toLowerCase();
