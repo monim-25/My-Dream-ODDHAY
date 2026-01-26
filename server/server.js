@@ -84,10 +84,13 @@ try {
 
 app.use(session({
     secret: 'oddhay_secret_key',
-    resave: false,
+    resave: true, // Force session to save back to store even if not modified
     saveUninitialized: false,
     store: sessionStore,
-    cookie: { maxAge: 1000 * 60 * 60 * 24 }
+    cookie: {
+        maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+        secure: false // Set to false for local testing support
+    }
 }));
 
 // Robust Multer Config
@@ -346,18 +349,40 @@ app.get('/profile', protect, async (req, res) => {
     }
 });
 
+app.get('/profile/edit', protect, async (req, res) => {
+    try {
+        const user = await User.findById(req.session.userId);
+        res.render('parent-profile-edit', { user, success: req.query.success, error: req.query.error });
+    } catch (err) {
+        res.status(500).send('Error loading edit page');
+    }
+});
+
 app.post('/profile/update', protect, async (req, res) => {
     try {
-        const { name, password, classLevel } = req.body;
-        const user = await User.findById(req.session.user._id);
+        const { name, oldPassword, password, email, phone } = req.body;
+        const user = await User.findById(req.session.userId);
+
         if (name) user.name = name;
-        if (classLevel) user.classLevel = classLevel;
-        if (password && password.trim() !== '') user.password = password;
+
+        // Handle Email/Phone update if they were missing
+        if (email && !user.email) user.email = email;
+        if (phone && !user.phone) user.phone = phone;
+
+        // Password change logic
+        if (password && password.trim() !== '') {
+            if (!oldPassword) return res.redirect('/profile/edit?error=old_password_required');
+            const isMatch = await user.comparePassword(oldPassword);
+            if (!isMatch) return res.redirect('/profile/edit?error=wrong_old_password');
+            user.password = password;
+        }
+
         await user.save();
-        req.session.user = user;
+        req.session.user.name = user.name; // Keep session synced
         res.redirect('/profile?success=true');
     } catch (err) {
-        res.status(500).send('Error updating profile');
+        console.error('Update Error:', err);
+        res.redirect('/profile/edit?error=update_failed');
     }
 });
 
