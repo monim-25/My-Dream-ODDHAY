@@ -244,13 +244,16 @@ app.post('/login', async (req, res) => {
 app.post('/register', async (req, res) => {
     try {
         const { name, identifier, password, confirmPassword, role, classLevel } = req.body;
+        const isAjax = req.xhr || req.headers.accept.indexOf('json') > -1;
 
         if (!name || !identifier || !password) {
-            return res.status(400).send('দয়া করে নাম, ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।');
+            const msg = 'দয়া করে নাম, ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।';
+            return isAjax ? res.status(400).json({ error: msg }) : res.status(400).send(msg);
         }
 
         if (password !== confirmPassword) {
-            return res.status(400).send('পাসওয়ার্ড দুটি মিলছে না।');
+            const msg = 'পাসওয়ার্ড দুটি মিলছে না।';
+            return isAjax ? res.status(400).json({ error: msg }) : res.status(400).send(msg);
         }
 
         let email = null;
@@ -262,44 +265,69 @@ app.post('/register', async (req, res) => {
             phone = identifier.trim();
         }
 
-        // Duplicate check
+        // 1. Precise Duplicate Checks
         if (email) {
-            const existingEmail = await User.findOne({ email });
-            if (existingEmail) return res.status(400).send('এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
+            const existing = await User.findOne({ email });
+            if (existing) {
+                const msg = 'এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
+                return isAjax ? res.status(400).json({ error: msg }) : res.status(400).send(msg);
+            }
         }
         if (phone) {
-            const existingPhone = await User.findOne({ phone });
-            if (existingPhone) return res.status(400).send('এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
+            const existing = await User.findOne({ phone });
+            if (existing) {
+                const msg = 'এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
+                return isAjax ? res.status(400).json({ error: msg }) : res.status(400).send(msg);
+            }
         }
 
         const isSuperAdminEmail = email && process.env.SUPER_ADMIN_EMAIL && email === process.env.SUPER_ADMIN_EMAIL;
 
+        // 2. Atomic Save
         const newUser = new User({
             name,
             password,
             role: isSuperAdminEmail ? 'superadmin' : (role || 'student'),
-            classLevel: role === 'parent' ? undefined : classLevel
+            classLevel: role === 'parent' ? undefined : classLevel,
+            email: email || undefined,
+            phone: phone || undefined
         });
-
-        if (email) newUser.email = email;
-        if (phone) newUser.phone = phone;
 
         await newUser.save();
 
-        // Standard session assignment
+        // 3. Clean Session
         const userObj = newUser.toObject();
-        req.session.user = userObj;
-        req.session.userId = userObj._id.toString();
+        const sessionData = {
+            _id: userObj._id.toString(),
+            name: userObj.name,
+            role: userObj.role,
+            classLevel: userObj.classLevel
+        };
 
-        if (userObj.role === 'superadmin' || userObj.role === 'admin' || userObj.role === 'teacher') {
-            return res.redirect('/admin');
+        req.session.user = sessionData;
+        req.session.userId = sessionData._id;
+
+        // 4. Final Response
+        let redirectUrl = '/dashboard';
+        if (sessionData.role === 'superadmin' || sessionData.role === 'admin' || sessionData.role === 'teacher') redirectUrl = '/admin';
+        else if (sessionData.role === 'parent') redirectUrl = '/parent/dashboard';
+
+        if (isAjax) {
+            return res.json({ success: true, redirect: redirectUrl });
+        } else {
+            return res.redirect(redirectUrl);
         }
-        if (userObj.role === 'parent') return res.redirect('/parent/dashboard');
-        res.redirect('/dashboard');
 
     } catch (err) {
-        console.error('Registration Error:', err);
-        res.status(500).send(`নিবন্ধন ত্রুটি: ${err.message}`);
+        console.error('Registration Critical Error:', err);
+        const isAjax = req.xhr || req.headers.accept.indexOf('json') > -1;
+        const errorMsg = `নিবন্ধন ত্রুটি: ${err.message}`;
+
+        if (isAjax) {
+            return res.status(500).json({ error: errorMsg });
+        } else {
+            return res.status(500).send(errorMsg);
+        }
     }
 });
 
