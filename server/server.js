@@ -275,8 +275,8 @@ app.post('/register', async (req, res) => {
         const userData = {
             name,
             password,
-            role: isSuperAdminEmail ? 'superadmin' : role,
-            classLevel
+            role: isSuperAdminEmail ? 'superadmin' : (role || 'student'),
+            classLevel: role === 'parent' ? undefined : classLevel
         };
 
         if (email) userData.email = email;
@@ -650,14 +650,23 @@ app.get('/parent/dashboard', parentProtect, async (req, res) => {
 
 app.post('/parent/add-child', parentProtect, async (req, res) => {
     try {
-        const student = await User.findOne({ email: req.body.childEmail, role: 'student' });
-        if (!student) return res.send("Not Found");
-        if (student.parentRequests.find(r => r.parent.toString() === req.session.user._id)) return res.send("Already Requested");
-        student.parentRequests.push({ parent: req.session.user._id, status: 'pending' });
+        const identifier = req.body.childIdentifier.trim();
+        const student = await User.findOne({
+            $or: [{ email: identifier }, { phone: identifier }],
+            role: 'student'
+        });
+
+        if (!student) return res.send("এই ইমেইল বা ফোন নম্বর দিয়ে কোনো শিক্ষার্থী পাওয়া যায়নি।");
+
+        // Check if already connected or requested
+        const alreadyRequested = student.parentRequests.some(r => r.parent.toString() === req.session.userId);
+        if (alreadyRequested) return res.send("ইতিমধ্যে একটি অনুরোধ পাঠানো হয়েছে।");
+
+        student.parentRequests.push({ parent: req.session.userId, status: 'pending' });
         await student.save();
-        res.redirect('/parent/dashboard');
+        res.redirect('/parent/dashboard?success=requested');
     } catch (err) {
-        res.status(500).send('Error');
+        res.status(500).send('Error connecting child');
     }
 });
 
