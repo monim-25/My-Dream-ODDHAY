@@ -245,7 +245,8 @@ app.post('/register', async (req, res) => {
     try {
         const { name, identifier, password, confirmPassword, role, classLevel } = req.body;
 
-        if (!name || !identifier || !password) {
+        // 1. Basic Field Validation
+        if (!name || !identifier || !password || !confirmPassword) {
             return res.status(400).send('দয়া করে নাম, ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।');
         }
 
@@ -256,26 +257,24 @@ app.post('/register', async (req, res) => {
         let email = null;
         let phone = null;
 
-        // Simple check: if it contains '@', assume email, otherwise phone
+        // identifier parsing
         if (identifier.includes('@')) {
             email = identifier.trim();
         } else {
             phone = identifier.trim();
         }
 
-        // Check if email already exists
+        // 2. Pre-check for existing users (Concurrency safety)
         if (email) {
-            const existingEmail = await User.findOne({ email: email.trim() });
-            if (existingEmail) return res.status(400).send('এই ইমেইলটি ( ' + email + ' ) ইতিপূর্বে ব্যবহৃত হয়েছে।');
+            const existingEmail = await User.findOne({ email });
+            if (existingEmail) return res.status(400).send(`এই ইমেইলটি ( ${email} ) ইতিপূর্বে ব্যবহৃত হয়েছে।`);
         }
-
-        // Check if phone already exists
         if (phone) {
-            const existingPhone = await User.findOne({ phone: phone.trim() });
-            if (existingPhone) return res.status(400).send('এই ফোন নম্বরটি ( ' + phone + ' ) ইতিপূর্বে ব্যবহৃত হয়েছে।');
+            const existingPhone = await User.findOne({ phone });
+            if (existingPhone) return res.status(400).send(`এই ফোন নম্বরটি ( ${phone} ) ইতিপূর্বে ব্যবহৃত হয়েছে।`);
         }
 
-        const isSuperAdminEmail = email && process.env.SUPER_ADMIN_EMAIL && email.toLowerCase() === process.env.SUPER_ADMIN_EMAIL.toLowerCase();
+        const isSuperAdminEmail = email && process.env.SUPER_ADMIN_EMAIL && email === process.env.SUPER_ADMIN_EMAIL;
 
         const userData = {
             name,
@@ -287,7 +286,13 @@ app.post('/register', async (req, res) => {
         if (email) userData.email = email;
         if (phone) userData.phone = phone;
 
+        // 3. Create instance and trigger manual validation before hitting DB
         const newUser = new User(userData);
+
+        // validate() is a Mongoose built-in that checks schema constraints without saving
+        await newUser.validate();
+
+        // 4. Save to DB (Actual storage only happens here)
         await newUser.save();
 
         const userObj = newUser.toObject();
@@ -300,15 +305,19 @@ app.post('/register', async (req, res) => {
         }
         if (currentRole === 'parent') return res.redirect('/parent/dashboard');
         res.redirect('/dashboard');
+
     } catch (err) {
         console.error('Registration Critical Error:', err);
+
+        // Detailed error reporting back to user
         if (err.name === 'ValidationError') {
-            return res.status(400).send(`Validation Error: ${Object.values(err.errors).map(e => e.message).join(', ')}`);
+            return res.status(400).send(`ভুল তথ্য প্রদান করা হয়েছে: ${Object.values(err.errors).map(e => e.message).join(', ')}`);
         }
         if (err.code === 11000) {
-            return res.status(400).send('এই ইমেইল বা ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে। (Duplicate Key)');
+            return res.status(400).send('এই ইমেইল বা ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
         }
-        res.status(500).send(`নিবন্ধন ত্রুটি: ${err.message}`);
+
+        res.status(500).send(`নিবন্ধন সম্পন্ন করা সম্ভব হয়নি: ${err.message}`);
     }
 });
 
