@@ -646,7 +646,7 @@ app.get('/parent/dashboard', parentProtect, async (req, res) => {
         }).populate({
             path: 'quizResults.quiz',
             populate: { path: 'course' }
-        });
+        }).populate('enrolledCourses.course');
 
         res.render('parent-dashboard', {
             user: parent,
