@@ -289,25 +289,20 @@ app.post('/register', async (req, res) => {
         // 3. Create instance and trigger manual validation before hitting DB
         const newUser = new User(userData);
 
-        // validate() is a Mongoose built-in that checks schema constraints without saving
-        await newUser.validate();
-
         // 4. Save to DB (Actual storage only happens here)
         await newUser.save();
 
-        const userObj = newUser.toObject();
-        // Ensure ID is a string for session safety
-        userObj._id = userObj._id.toString();
+        // 5. Prepare a clean POJO for session (Crucial to avoid serialization errors)
+        const userObj = JSON.parse(JSON.stringify(newUser));
 
         req.session.user = userObj;
         req.session.userId = userObj._id;
 
-        // Force session save before redirect to prevent race conditions or partial failures
+        // Force session save before redirect to prevent race conditions
         req.session.save((err) => {
             if (err) {
-                console.error('Session Save Error during Registration:', err);
-                // Even though user is saved, if session fails, we better inform them
-                return res.status(500).send('অ্যাকাউন্ট তৈরি হয়েছে কিন্তু লগইন সেশন শুরু করতে সমস্যা হয়েছে। দয়া করে লগইন করুন।');
+                console.error('Session Save Error:', err);
+                return res.status(500).send('অ্যাকাউন্ট তৈরি হয়েছে কিন্তু সেশন সেভ করতে সমস্যা হয়েছে। দয়া করে লগইন করুন।');
             }
 
             const currentRole = userObj.role;
@@ -321,15 +316,14 @@ app.post('/register', async (req, res) => {
     } catch (err) {
         console.error('Registration Critical Error:', err);
 
-        // Handle Duplicate Key specifically (code 11000)
-        if (err.code === 11000) {
-            const field = Object.keys(err.keyPattern)[0];
-            const message = field === 'email' ? 'এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।' : 'এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
-            return res.status(400).send(message);
-        }
-
+        // Detailed error reporting
         if (err.name === 'ValidationError') {
             return res.status(400).send(`ভুল তথ্য প্রদান করা হয়েছে: ${Object.values(err.errors).map(e => e.message).join(', ')}`);
+        }
+        if (err.code === 11000) {
+            const field = err.keyPattern ? Object.keys(err.keyPattern)[0] : 'data';
+            const message = field === 'email' ? 'এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।' : 'এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
+            return res.status(400).send(message);
         }
 
         res.status(500).send(`নিবন্ধন সম্পন্ন করা সম্ভব হয়নি: ${err.message}`);
