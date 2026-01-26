@@ -296,25 +296,40 @@ app.post('/register', async (req, res) => {
         await newUser.save();
 
         const userObj = newUser.toObject();
-        req.session.user = userObj;
-        req.session.userId = userObj._id.toString();
+        // Ensure ID is a string for session safety
+        userObj._id = userObj._id.toString();
 
-        const currentRole = userObj.role;
-        if (currentRole === 'superadmin' || currentRole === 'admin' || currentRole === 'teacher') {
-            return res.redirect('/admin');
-        }
-        if (currentRole === 'parent') return res.redirect('/parent/dashboard');
-        res.redirect('/dashboard');
+        req.session.user = userObj;
+        req.session.userId = userObj._id;
+
+        // Force session save before redirect to prevent race conditions or partial failures
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session Save Error during Registration:', err);
+                // Even though user is saved, if session fails, we better inform them
+                return res.status(500).send('অ্যাকাউন্ট তৈরি হয়েছে কিন্তু লগইন সেশন শুরু করতে সমস্যা হয়েছে। দয়া করে লগইন করুন।');
+            }
+
+            const currentRole = userObj.role;
+            if (currentRole === 'superadmin' || currentRole === 'admin' || currentRole === 'teacher') {
+                return res.redirect('/admin');
+            }
+            if (currentRole === 'parent') return res.redirect('/parent/dashboard');
+            res.redirect('/dashboard');
+        });
 
     } catch (err) {
         console.error('Registration Critical Error:', err);
 
-        // Detailed error reporting back to user
+        // Handle Duplicate Key specifically (code 11000)
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyPattern)[0];
+            const message = field === 'email' ? 'এই ইমেইলটি ইতিপূর্বে ব্যবহৃত হয়েছে।' : 'এই ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।';
+            return res.status(400).send(message);
+        }
+
         if (err.name === 'ValidationError') {
             return res.status(400).send(`ভুল তথ্য প্রদান করা হয়েছে: ${Object.values(err.errors).map(e => e.message).join(', ')}`);
-        }
-        if (err.code === 11000) {
-            return res.status(400).send('এই ইমেইল বা ফোন নম্বরটি ইতিপূর্বে ব্যবহৃত হয়েছে।');
         }
 
         res.status(500).send(`নিবন্ধন সম্পন্ন করা সম্ভব হয়নি: ${err.message}`);
