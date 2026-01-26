@@ -332,9 +332,16 @@ app.get('/dashboard', protect, async (req, res) => {
 
 app.get('/profile', protect, async (req, res) => {
     try {
-        const user = await User.findById(req.session.user._id).populate('quizResults.quiz');
-        res.render('profile', { user, success: req.query.success });
+        const user = await User.findById(req.session.userId).populate('quizResults.quiz');
+        if (!user) return res.redirect('/login');
+
+        if (user.role === 'parent') {
+            res.render('parent-profile', { user, success: req.query.success });
+        } else {
+            res.render('profile', { user, success: req.query.success });
+        }
     } catch (err) {
+        console.error('Profile Route Error:', err);
         res.status(500).send('Profile Error');
     }
 });
