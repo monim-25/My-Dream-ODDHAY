@@ -55,147 +55,287 @@
             </div>
         </header>
 
-        <!-- Tool Bar -->
-        <section class="mb-10 flex flex-wrap gap-4 items-center justify-between reveal delay-100">
-            <div class="flex flex-wrap gap-3">
-                <% if(confirmedChildren && confirmedChildren.length> 0) { %>
-                    <% confirmedChildren.forEach((child, index)=> { %>
-                        <div
-                            class="px-6 py-2.5 rounded-2xl <%= index === 0 ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white dark:bg-slate-800 text-slate-500 border border-slate-100 dark:border-slate-800' %> font-black text-xs uppercase tracking-widest cursor-pointer hover:scale-105 transition-all">
-                            <%= child.name %>
-                        </div>
-                        <% }); %>
-                            <% } %>
-            </div>
-            <button onclick="document.getElementById('add-child-modal').classList.remove('hidden')"
-                class="px-6 py-3 rounded-2xl bg-white dark:bg-slate-800 border-2 border-dashed border-primary/30 text-primary font-black text-xs uppercase tracking-widest hover:border-primary hover:bg-primary/5 transition-all flex items-center gap-2">
-                <span class="material-symbols-outlined">person_add</span> সন্তান যোগ করুন
-            </button>
-        </section>
+        <!-- Alerts Section -->
+        <% let allAlerts=[]; if (confirmedChildren) { confirmedChildren.forEach(child=> {
+            // Quiz alerts
+            child.quizResults.forEach(res => {
+            allAlerts.push({
+            student: child.name,
+            type: 'quiz',
+            title: res.quiz ? res.quiz.title : 'পরীক্ষা',
+            description: `${res.score}/${res.total} নম্বর পেয়েছে।`,
+            date: res.date,
+            icon: 'quiz',
+            color: 'amber'
+            });
+            });
+            // Course enrollment alerts (mocked from enrolledCourses for now)
+            if (child.enrolledCourses) {
+            child.enrolledCourses.forEach(en => {
+            allAlerts.push({
+            student: child.name,
+            type: 'course',
+            title: en.course ? en.course.title : 'নতুন কোর্স',
+            description: `নতুন কোর্সে এনরোল করেছে।`,
+            date: en.enrolledAt || new Date(), // fallback if enrolledAt missing
+            icon: 'auto_stories',
+            color: 'primary'
+            });
+            });
+            }
+            });
+            }
+            allAlerts.sort((a, b) => new Date(b.date) - new Date(a.date));
+            const recentAlerts = allAlerts.slice(0, 5);
+            %>
 
-        <!-- Progress Overview -->
-        <% if(confirmedChildren && confirmedChildren.length> 0) { %>
-            <% confirmedChildren.forEach((child, cIdx)=> { %>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16 reveal delay-200">
-                    <div class="lg:col-span-2 space-y-8">
-                        <div class="card-smart">
-                            <h3 class="text-xl font-black mb-10 flex items-center justify-between">
-                                <span>পড়াশোনার প্রগ্রেস - <%= child.name %></span>
-                                <span class="text-xs font-black text-primary bg-primary/10 px-4 py-1.5 rounded-full">
-                                    <%= child.completedLessons.length %> টি লেসন সম্পন্ন
-                                </span>
-                            </h3>
-                            <div class="relative h-64">
-                                <canvas id="chart-<%= cIdx %>"></canvas>
+            <% if (recentAlerts.length> 0) { %>
+                <section class="mb-12 reveal">
+                    <h3 class="text-xl font-black mb-6 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">notifications_active</span> রিয়েল-টাইম
+                        এলার্ট
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <% recentAlerts.forEach(alert=> { %>
+                            <div
+                                class="p-5 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex items-start gap-4">
+                                <div
+                                    class="size-12 rounded-2xl bg-<%= alert.color %>-500/10 text-<%= alert.color %>-500 flex items-center justify-center shrink-0">
+                                    <span class="material-symbols-outlined">
+                                        <%= alert.icon %>
+                                    </span>
+                                </div>
+                                <div>
+                                    <h4 class="font-black text-sm italic">
+                                        <%= alert.student %>
+                                    </h4>
+                                    <p class="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                        <%= alert.title %>
+                                    </p>
+                                    <p class="text-[10px] text-slate-500 font-bold">
+                                        <%= alert.description %>
+                                    </p>
+                                    <p class="text-[9px] text-slate-400 font-black uppercase mt-2">
+                                        <%= new Date(alert.date).toLocaleString('bn-BD', { hour: '2-digit' ,
+                                            minute: '2-digit' , day: 'numeric' , month: 'short' }) %>
+                                    </p>
+                                </div>
                             </div>
-                        </div>
+                            <% }); %>
+                    </div>
+                </section>
+                <% } %>
 
-                        <div class="card-smart">
-                            <h3 class="text-xl font-black mb-8">সাম্প্রতিক কুইজ ফলাফল</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <% if(child.quizResults && child.quizResults.length> 0) { %>
-                                    <% child.quizResults.reverse().slice(0, 4).forEach(result=> { %>
-                                        <div
-                                            class="flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 group hover:border-primary transition-all">
-                                            <div class="flex items-center gap-4">
-                                                <div
-                                                    class="size-12 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-black">
-                                                    <%= (result.score/result.total * 100).toFixed(0) %>%
-                                                </div>
-                                                <div>
-                                                    <p class="font-black text-sm truncate max-w-[120px]">
-                                                        <%= result.quiz ? result.quiz.title : 'Quiz' %>
-                                                    </p>
-                                                    <p
-                                                        class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                                                        <%= new Date(result.date).toLocaleDateString('bn-BD') %>
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div class="text-right">
-                                                <p class="font-black text-primary text-lg">
-                                                    <%= result.score %>/<%= result.total %>
-                                                </p>
+                    <!-- Tool Bar -->
+                    <section class="mb-10 flex flex-wrap gap-4 items-center justify-between reveal delay-100">
+                        <div class="flex flex-wrap gap-3">
+                            <% if(confirmedChildren && confirmedChildren.length> 0) { %>
+                                <% confirmedChildren.forEach((child, index)=> { %>
+                                    <div
+                                        class="px-6 py-2.5 rounded-2xl <%= index === 0 ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-white dark:bg-slate-800 text-slate-500 border border-slate-100 dark:border-slate-800' %> font-black text-xs uppercase tracking-widest cursor-pointer hover:scale-105 transition-all">
+                                        <%= child.name %>
+                                    </div>
+                                    <% }); %>
+                                        <% } %>
+                        </div>
+                        <button onclick="document.getElementById('add-child-modal').classList.remove('hidden')"
+                            class="px-6 py-3 rounded-2xl bg-white dark:bg-slate-800 border-2 border-dashed border-primary/30 text-primary font-black text-xs uppercase tracking-widest hover:border-primary hover:bg-primary/5 transition-all flex items-center gap-2">
+                            <span class="material-symbols-outlined">person_add</span> সন্তান যোগ করুন
+                        </button>
+                    </section>
+
+                    <!-- Progress Overview -->
+                    <% if(confirmedChildren && confirmedChildren.length> 0) { %>
+                        <% confirmedChildren.forEach((child, cIdx)=> { %>
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16 reveal delay-200">
+                                <div class="lg:col-span-2 space-y-8">
+                                    <div class="card-smart">
+                                        <h3 class="text-xl font-black mb-10 flex items-center justify-between">
+                                            <span>পড়াশোনার প্রগ্রেস - <%= child.name %></span>
+                                            <span
+                                                class="text-xs font-black text-primary bg-primary/10 px-4 py-1.5 rounded-full">
+                                                <%= child.completedLessons.length %> টি লেসন সম্পন্ন
+                                            </span>
+                                        </h3>
+                                        <div class="relative h-64">
+                                            <canvas id="chart-<%= cIdx %>"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                        <div class="card-smart">
+                                            <h3 class="text-lg font-black mb-6 flex items-center gap-2">
+                                                <span
+                                                    class="material-symbols-outlined text-emerald-500">trending_up</span>
+                                                সবল দিক (Strengths)
+                                            </h3>
+                                            <div class="space-y-4">
+                                                <% const strengths=child.quizResults.filter(r=> (r.score/r.total) >=
+                                                    0.8).slice(0, 3);
+                                                    if (strengths.length > 0) {
+                                                    strengths.forEach(s => { %>
+                                                    <div
+                                                        class="flex items-center justify-between p-4 bg-emerald-50 dark:bg-emerald-500/5 rounded-2xl border border-emerald-100 dark:border-emerald-500/20">
+                                                        <span
+                                                            class="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                                                            <%= s.quiz ? s.quiz.title : 'Quiz' %>
+                                                        </span>
+                                                        <span
+                                                            class="text-[10px] font-black bg-emerald-500 text-white px-3 py-1 rounded-full">
+                                                            <%= ((s.score/s.total)*100).toFixed(0) %>%
+                                                        </span>
+                                                    </div>
+                                                    <% }); } else { %>
+                                                        <p class="text-xs text-slate-400 font-bold italic">পর্যপ্ত তথ্য
+                                                            নেই।</p>
+                                                        <% } %>
                                             </div>
                                         </div>
-                                        <% }); %>
-                                            <% } else { %>
-                                                <div
-                                                    class="col-span-full py-10 text-center border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-3xl">
-                                                    <p class="text-slate-400 font-bold text-sm italic">এখনো কোনো পরীক্ষা
-                                                        দেওয়া হয়নি।</p>
-                                                </div>
-                                                <% } %>
-                            </div>
-                        </div>
-                    </div>
 
-                    <div class="lg:col-span-1">
-                        <div class="card-smart bg-primary !text-white !p-10 sticky top-28 overflow-hidden group">
-                            <div
-                                class="absolute -right-10 -bottom-10 size-40 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-all duration-700">
-                            </div>
-                            <h3 class="text-2xl font-black mb-6">টিচার ফিডব্যাক</h3>
-                            <div class="space-y-6 relative z-10">
-                                <div class="p-6 bg-white/10 rounded-2xl border border-white/20 backdrop-blur-md">
-                                    <p class="text-sm italic font-medium leading-relaxed">"<%= child.name %> গত সপ্তাহে
-                                            খুব ভালো করেছে, বিশেষ করে বিজ্ঞান ও গণিত তার প্রগ্রেস চোখে পড়ার মতো।"</p>
-                                    <p class="text-[10px] font-black mt-4 opacity-60 uppercase tracking-widest">— মেন্টর
-                                        টিশার্ট প্যানেল</p>
+                                        <div class="card-smart">
+                                            <h3 class="text-lg font-black mb-6 flex items-center gap-2">
+                                                <span class="material-symbols-outlined text-red-500">warning</span>
+                                                দুর্বল দিক (Weaknesses)
+                                            </h3>
+                                            <div class="space-y-4">
+                                                <% const weaknesses=child.quizResults.filter(r=> (r.score/r.total) <
+                                                        0.6).slice(0, 3); if (weaknesses.length> 0) {
+                                                        weaknesses.forEach(w => { %>
+                                                        <div
+                                                            class="flex items-center justify-between p-4 bg-red-50 dark:bg-red-500/5 rounded-2xl border border-red-100 dark:border-red-500/20">
+                                                            <span
+                                                                class="text-xs font-bold text-red-700 dark:text-red-400">
+                                                                <%= w.quiz ? w.quiz.title : 'Quiz' %>
+                                                            </span>
+                                                            <span
+                                                                class="text-[10px] font-black bg-red-500 text-white px-3 py-1 rounded-full">
+                                                                <%= ((w.score/w.total)*100).toFixed(0) %>%
+                                                            </span>
+                                                        </div>
+                                                        <% }); } else { %>
+                                                            <p class="text-xs text-slate-400 font-bold italic">অসাধারণ!
+                                                                কোনো দুর্বলতা পাওয়া যায়নি।</p>
+                                                            <% } %>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="card-smart">
+                                        <h3 class="text-xl font-black mb-8">সাম্প্রতিক কুইজ ফলাফল</h3>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <% if(child.quizResults && child.quizResults.length> 0) { %>
+                                                <% child.quizResults.reverse().slice(0, 4).forEach(result=> { %>
+                                                    <div
+                                                        class="flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 group hover:border-primary transition-all">
+                                                        <div class="flex items-center gap-4">
+                                                            <div
+                                                                class="size-12 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-black">
+                                                                <%= (result.score/result.total * 100).toFixed(0) %>%
+                                                            </div>
+                                                            <div>
+                                                                <p class="font-black text-sm truncate max-w-[120px]">
+                                                                    <%= result.quiz ? result.quiz.title : 'Quiz' %>
+                                                                </p>
+                                                                <p
+                                                                    class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">
+                                                                    <%= new
+                                                                        Date(result.date).toLocaleDateString('bn-BD') %>
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div class="text-right">
+                                                            <p class="font-black text-primary text-lg">
+                                                                <%= result.score %>/<%= result.total %>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <% }); %>
+                                                        <% } else { %>
+                                                            <div
+                                                                class="col-span-full py-10 text-center border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-3xl">
+                                                                <p class="text-slate-400 font-bold text-sm italic">এখনো
+                                                                    কোনো পরীক্ষা
+                                                                    দেওয়া হয়নি।</p>
+                                                            </div>
+                                                            <% } %>
+                                        </div>
+                                    </div>
                                 </div>
-                                <button
-                                    class="w-full py-4 bg-white text-primary rounded-2xl font-black text-sm shadow-xl hover:scale-[1.02] transition-all">শিক্ষককে
-                                    বার্তা পাঠান</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
-                <script>
-                    const ctx<%= cIdx %> = document.getElementById('chart-<%= cIdx %>').getContext('2d');
-                    new Chart(ctx <%= cIdx %>, {
-                        type: 'line',
-                        data: {
-                            labels: ['শনিবার', 'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার'],
-                            datasets: [{
-                                label: 'পড়াশোনার সময় (ঘণ্টা)',
-                                data: [2, 3, 2.5, 4, 3, 5, 4],
-                                borderColor: '#137fec',
-                                backgroundColor: 'rgba(19, 127, 236, 0.1)',
-                                fill: true,
-                                tension: 0.4,
-                                borderWidth: 4,
-                                pointRadius: 5,
-                                pointBackgroundColor: '#fff',
-                                pointBorderColor: '#137fec',
-                                pointBorderWidth: 2
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: { legend: { display: false } },
-                            scales: {
-                                y: { beginAtZero: true, grid: { display: false }, ticks: {} },
-                                x: { grid: { display: false }, ticks: {} }
-                            }
-                        }
-                    });
-                </script>
-                <% }); %>
-                    <% } else { %>
-                        <div class="py-24 text-center card-smart border-dashed border-2 reveal delay-200">
-                            <div
-                                class="size-24 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-8 text-slate-300">
-                                <span class="material-symbols-outlined text-6xl">family_restroom</span>
+                                <div class="lg:col-span-1">
+                                    <div
+                                        class="card-smart bg-primary !text-white !p-10 sticky top-28 overflow-hidden group">
+                                        <div
+                                            class="absolute -right-10 -bottom-10 size-40 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-all duration-700">
+                                        </div>
+                                        <h3 class="text-2xl font-black mb-6">টিচার ফিডব্যাক</h3>
+                                        <div class="space-y-6 relative z-10">
+                                            <div
+                                                class="p-6 bg-white/10 rounded-2xl border border-white/20 backdrop-blur-md">
+                                                <p class="text-sm italic font-medium leading-relaxed">"<%= child.name %>
+                                                        গত সপ্তাহে
+                                                        খুব ভালো করেছে, বিশেষ করে বিজ্ঞান ও গণিত তার প্রগ্রেস চোখে পড়ার
+                                                        মতো।"</p>
+                                                <p
+                                                    class="text-[10px] font-black mt-4 opacity-60 uppercase tracking-widest">
+                                                    — মেন্টর
+                                                    টিশার্ট প্যানেল</p>
+                                            </div>
+                                            <button
+                                                class="w-full py-4 bg-white text-primary rounded-2xl font-black text-sm shadow-xl hover:scale-[1.02] transition-all">শিক্ষককে
+                                                বার্তা পাঠান</button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <h3 class="text-2xl font-black mb-4">কোনো সন্তান কানেক্ট করা নেই</h3>
-                            <p class="text-slate-500 font-bold max-w-sm mx-auto mb-10">আপনার সন্তানের অধ্যায় (অধ্যায়)
-                                ইমেইল দিয়ে তাকে আপনার প্রোফাইলের সাথে যোগ করুন।</p>
-                            <button onclick="document.getElementById('add-child-modal').classList.remove('hidden')"
-                                class="btn-primary">লিংক করুন এখনই</button>
-                        </div>
-                        <% } %>
+
+                            <script>
+                                const ctx<%= cIdx %> = document.getElementById('chart-<%= cIdx %>').getContext('2d');
+                                new Chart(ctx <%= cIdx %>, {
+                                    type: 'line',
+                                    data: {
+                                        labels: ['শনিবার', 'রবিবার', 'সোমবার', 'মঙ্গলবার', 'বুধবার', 'বৃহস্পতিবার', 'শুক্রবার'],
+                                        datasets: [{
+                                            label: 'পড়াশোনার সময় (ঘণ্টা)',
+                                            data: [2, 3, 2.5, 4, 3, 5, 4],
+                                            borderColor: '#137fec',
+                                            backgroundColor: 'rgba(19, 127, 236, 0.1)',
+                                            fill: true,
+                                            tension: 0.4,
+                                            borderWidth: 4,
+                                            pointRadius: 5,
+                                            pointBackgroundColor: '#fff',
+                                            pointBorderColor: '#137fec',
+                                            pointBorderWidth: 2
+                                        }]
+                                    },
+                                    options: {
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: { legend: { display: false } },
+                                        scales: {
+                                            y: { beginAtZero: true, grid: { display: false }, ticks: {} },
+                                            x: { grid: { display: false }, ticks: {} }
+                                        }
+                                    }
+                                });
+                            </script>
+                            <% }); %>
+                                <% } else { %>
+                                    <div class="py-24 text-center card-smart border-dashed border-2 reveal delay-200">
+                                        <div
+                                            class="size-24 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-8 text-slate-300">
+                                            <span class="material-symbols-outlined text-6xl">family_restroom</span>
+                                        </div>
+                                        <h3 class="text-2xl font-black mb-4">কোনো সন্তান কানেক্ট করা নেই</h3>
+                                        <p class="text-slate-500 font-bold max-w-sm mx-auto mb-10">আপনার সন্তানের অধ্যায়
+                                            (অধ্যায়)
+                                            ইমেইল দিয়ে তাকে আপনার প্রোফাইলের সাথে যোগ করুন।</p>
+                                        <button
+                                            onclick="document.getElementById('add-child-modal').classList.remove('hidden')"
+                                            class="btn-primary">লিংক করুন এখনই</button>
+                                    </div>
+                                    <% } %>
     </main>
 
     <!-- Add Child Modal -->

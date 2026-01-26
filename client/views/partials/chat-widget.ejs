@@ -1,0 +1,107 @@
+<div id="live-chat-widget" class="fixed bottom-8 right-8 z-[1000]">
+    <!-- Toggle Button -->
+    <button onclick="toggleChat()"
+        class="size-16 rounded-full bg-primary text-white shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group">
+        <span id="chat-icon" class="material-symbols-outlined text-3xl">chat</span>
+        <span id="chat-close" class="material-symbols-outlined text-3xl hidden">close</span>
+        <div class="absolute -top-1 -right-1 size-4 bg-red-500 rounded-full border-2 border-white animate-pulse"></div>
+    </button>
+
+    <!-- Chat Box -->
+    <div id="chat-box"
+        class="absolute bottom-20 right-0 w-80 md:w-96 bg-white dark:bg-slate-900 rounded-[2rem] shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col overflow-hidden transition-all duration-300 scale-0 opacity-0 origin-bottom-right">
+        <!-- Header -->
+        <div class="p-6 bg-primary text-white">
+            <h4 class="font-black text-lg">সাপোর্ট চ্যাট লাইভ</h4>
+            <p class="text-xs font-bold opacity-80">সাধারণত ১ ঘণ্টার মধ্যে রিপ্লাই দেওয়া হয়।</p>
+        </div>
+
+        <!-- Messages Area -->
+        <div id="chat-messages" class="flex-1 p-6 h-80 overflow-y-auto space-y-4 bg-slate-50 dark:bg-slate-900/50">
+            <div class="flex gap-3">
+                <div class="size-8 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined text-sm">support_agent</span>
+                </div>
+                <div
+                    class="p-4 rounded-2xl bg-white dark:bg-slate-800 shadow-sm border border-slate-100 dark:border-slate-700">
+                    <p class="text-xs font-bold leading-relaxed">আসসালামু আলাইকুম! আপনাকে কীভাবে সাহায্য করতে পারি?
+                        প্রশ্নটি এখানে লিখুন।</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+            <form id="chat-form" class="flex gap-2">
+                <input type="text" id="chat-input" placeholder="আপনার প্রশ্নটি লিখুন..."
+                    class="flex-1 bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold focus:ring-1 focus:ring-primary">
+                <button type="submit"
+                    class="size-11 rounded-xl bg-primary text-white flex items-center justify-center hover:opacity-90">
+                    <span class="material-symbols-outlined">send</span>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    function toggleChat() {
+        const box = document.getElementById('chat-box');
+        const icon = document.getElementById('chat-icon');
+        const close = document.getElementById('chat-close');
+
+        if (box.classList.contains('scale-0')) {
+            box.classList.remove('scale-0', 'opacity-0');
+            box.classList.add('scale-100', 'opacity-100');
+            icon.classList.add('hidden');
+            close.classList.remove('hidden');
+        } else {
+            box.classList.add('scale-0', 'opacity-0');
+            box.classList.remove('scale-100', 'opacity-100');
+            icon.classList.remove('hidden');
+            close.classList.add('hidden');
+        }
+    }
+
+    document.getElementById('chat-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const input = document.getElementById('chat-input');
+        const text = input.value.trim();
+        if (!text) return;
+
+        // Append student message
+        appendMessage('student', text);
+        input.value = '';
+
+        // Auto-reply logic (as a placeholder)
+        setTimeout(() => {
+            appendMessage('support', 'আপনার প্রশ্নটি আমরা পেয়েছি। একজন মেন্টর শীঘ্রই যোগাযোগ করবেন। ধন্যবাদ!');
+        }, 1000);
+
+        // Optionally send to backend
+        try {
+            await fetch('/qa-ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `question=${encodeURIComponent(text)}`
+            });
+        } catch (err) { console.error(err); }
+    });
+
+    function appendMessage(sender, text) {
+        const container = document.getElementById('chat-messages');
+        const div = document.createElement('div');
+        div.className = 'flex gap-3 ' + (sender === 'student' ? 'flex-row-reverse' : '');
+
+        div.innerHTML = `
+            <div class="size-8 rounded-full ${sender === 'support' ? 'bg-primary/10 text-primary' : 'bg-slate-200 text-slate-500'} flex items-center justify-center shrink-0">
+                <span class="material-symbols-outlined text-sm">${sender === 'support' ? 'support_agent' : 'person'}</span>
+            </div>
+            <div class="p-4 rounded-2xl ${sender === 'support' ? 'bg-white dark:bg-slate-800' : 'bg-primary text-white'} shadow-sm border border-slate-100 dark:border-slate-700">
+                <p class="text-xs font-bold leading-relaxed">${text}</p>
+            </div>
+        `;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+</script>

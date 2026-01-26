@@ -304,12 +304,29 @@ app.get('/dashboard', protect, async (req, res) => {
             .populate('quizResults.quiz')
             .populate('parentRequests.parent')
             .populate('enrolledCourses.course');
-        const enrolledIds = user.enrolledCourses.map(e => e.course._id);
+        const enrolledIds = user.enrolledCourses.map(e => e.course ? e.course._id : null).filter(id => id);
         const promotedCourses = await Course.find({
             featuredForClasses: user.classLevel,
             _id: { $nin: enrolledIds }
         }).limit(3);
-        res.render('student-dashboard', { user, promotedCourses });
+
+        // Calculate Leaderboard
+        const leaderboard = await User.aggregate([
+            { $match: { role: 'student' } },
+            { $unwind: { path: '$quizResults', preserveNullAndEmptyArrays: false } },
+            {
+                $group: {
+                    _id: '$_id',
+                    name: { $first: '$name' },
+                    classLevel: { $first: '$classLevel' },
+                    totalScore: { $sum: '$quizResults.score' }
+                }
+            },
+            { $sort: { totalScore: -1 } },
+            { $limit: 5 }
+        ]);
+
+        res.render('student-dashboard', { user, promotedCourses, leaderboard });
     } catch (err) {
         res.status(500).send('Dashboard Error');
     }
@@ -359,6 +376,16 @@ app.get('/courses', async (req, res) => {
 });
 
 // --- New Service Routes ---
+
+app.get('/note/:id', async (req, res) => {
+    try {
+        const note = await Note.findById(req.params.id);
+        if (!note) return res.status(404).render('404');
+        res.render('note-viewer', { note, user: req.session.user || null });
+    } catch (err) {
+        res.status(500).send('Error loading note');
+    }
+});
 
 app.get('/notes', async (req, res) => {
     try {
@@ -458,10 +485,25 @@ app.get('/course-details/:id', protect, async (req, res) => {
     }
 });
 
+
 app.post('/api/progress', protect, async (req, res) => {
     try {
+        const { lessonId, courseId, lessonTitle } = req.body;
         const user = await User.findById(req.session.user._id);
-        if (!user.completedLessons.includes(req.body.lessonId)) user.completedLessons.push(req.body.lessonId);
+
+        // Mark lesson as completed
+        if (!user.completedLessons.includes(lessonId)) {
+            user.completedLessons.push(lessonId);
+        }
+
+        // Update last watched lesson
+        user.lastWatchedLesson = {
+            course: courseId,
+            lessonId: lessonId,
+            lessonTitle: lessonTitle,
+            watchedAt: new Date()
+        };
+
         await user.save();
         res.json({ success: true });
     } catch (err) {
@@ -592,7 +634,11 @@ app.post('/submit-quiz/:id', protect, async (req, res) => {
 app.get('/parent/dashboard', parentProtect, async (req, res) => {
     try {
         const parent = await User.findById(req.session.user._id);
-        const students = await User.find({ 'parentRequests': { $elemMatch: { parent: parent._id, status: 'accepted' } } }).populate('quizResults.quiz');
+        const students = await User.find({ 'parentRequests': { $elemMatch: { parent: parent._id, status: 'accepted' } } })
+            .populate({
+                path: 'quizResults.quiz',
+                populate: { path: 'course' }
+            });
         res.render('parent-dashboard', { user: parent, confirmedChildren: students });
     } catch (err) {
         res.status(500).send('Error');

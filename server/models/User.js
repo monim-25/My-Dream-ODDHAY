@@ -28,6 +28,12 @@ const userSchema = new mongoose.Schema({
         course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
         startedAt: { type: Date, default: Date.now }
     }],
+    lastWatchedLesson: {
+        course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
+        lessonId: { type: String },
+        lessonTitle: { type: String },
+        watchedAt: { type: Date, default: Date.now }
+    },
     createdAt: { type: Date, default: Date.now }
 });
 

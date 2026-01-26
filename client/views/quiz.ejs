@@ -32,41 +32,83 @@
         body {
             font-family: 'Lexend', 'Noto Sans Bengali', sans-serif;
         }
+
+        .reveal {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
     </style>
 </head>
 
 <body class="bg-background-light dark:bg-background-dark text-[#0d141b] dark:text-slate-100 min-h-screen">
     <header
         class="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md px-6 py-4 sticky top-0 z-50">
-        <div class="max-w-4xl mx-auto flex items-center justify-between">
-            <h1 class="text-xl font-bold flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary">timer</span>
-                <%= quiz.title %>
-            </h1>
-            <div id="timer" class="bg-primary/10 text-primary px-4 py-2 rounded-xl font-black text-lg">
-                00:00
+        <div class="max-w-4xl mx-auto flex items-center justify-between gap-6">
+            <div class="flex items-center gap-3">
+                <a href="/dashboard"
+                    class="size-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-red-500 transition-all">
+                    <span class="material-symbols-outlined">close</span>
+                </a>
+                <h1 class="text-xl font-black truncate max-w-[200px] md:max-w-md">
+                    <%= quiz.title %>
+                </h1>
+            </div>
+
+            <div class="flex flex-col items-end gap-1 flex-1 max-w-[200px]">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary text-xl animate-pulse">timer</span>
+                    <span id="timer" class="font-black text-2xl tabular-nums tracking-tighter text-primary">00:00</span>
+                </div>
+                <div class="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div id="timer-progress" class="h-full bg-primary transition-all duration-1000 ease-linear"
+                        style="width: 100%"></div>
+                </div>
             </div>
         </div>
     </header>
 
     <main class="max-w-3xl mx-auto p-6 py-12">
-        <form id="quiz-form" action="/submit-quiz/<%= quiz._id %>" method="POST" class="space-y-10">
+        <div
+            class="mb-12 p-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-3xl reveal flex items-start gap-4">
+            <span class="material-symbols-outlined text-amber-600 mt-1">info</span>
+            <p class="text-sm font-bold text-amber-800 dark:text-amber-400 leading-relaxed">
+                সময় শেষ হওয়ার আগেই উত্তর দিন। সময় শেষ হলে আপনার দেওয়া উত্তরগুলো অটোমেটিক সাবমিট হয়ে যাবে। যেকোনো একটি
+                অপশন সিলেক্ট করা বাধ্যতামূলক।
+            </p>
+        </div>
+
+        <form id="quiz-form" action="/submit-quiz/<%= quiz._id || 'temp' %>" method="POST" class="space-y-10">
             <% quiz.questions.forEach((q, index)=> { %>
                 <div
-                    class="bg-white dark:bg-slate-900 p-8 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <p class="text-xs font-bold text-primary uppercase tracking-widest mb-4">প্রশ্ন <%= index + 1 %>
-                    </p>
-                    <h3 class="text-xl font-bold mb-6 italic leading-relaxed">
+                    class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none reveal">
+                    <div class="flex items-center justify-between mb-8">
+                        <span
+                            class="px-4 py-1.5 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase tracking-widest">প্রশ্ন
+                            <%= index + 1 %> / <%= quiz.questions.length %></span>
+                    </div>
+
+                    <h3 class="text-2xl font-black mb-10 leading-relaxed">
                         <%= q.questionText %>
                     </h3>
 
-                    <div class="space-y-3">
+                    <div class="grid grid-cols-1 gap-4">
                         <% q.options.forEach((opt, optIndex)=> { %>
                             <label
-                                class="flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-50 dark:border-slate-800 hover:border-primary/30 hover:bg-primary/5 cursor-pointer transition-all group">
+                                class="relative flex items-center p-6 rounded-3xl border-2 border-slate-100 dark:border-slate-800 cursor-pointer transition-all hover:bg-slate-50 dark:hover:bg-slate-800/50 group has-[:checked]:border-primary has-[:checked]:bg-primary/5">
                                 <input type="radio" name="question_<%= index %>" value="<%= optIndex %>"
-                                    class="form-radio text-primary focus:ring-primary size-5" required>
-                                <span class="text-sm font-medium group-hover:text-primary">
+                                    class="hidden peer" required>
+                                <div
+                                    class="size-6 rounded-full border-2 border-slate-300 dark:border-slate-600 peer-checked:border-primary peer-checked:bg-primary flex items-center justify-center transition-all mr-4">
+                                    <div class="size-2 bg-white rounded-full opacity-0 peer-checked:opacity-100"></div>
+                                </div>
+                                <span
+                                    class="text-base font-bold text-slate-700 dark:text-slate-300 group-hover:text-primary transition-colors">
                                     <%= opt %>
                                 </span>
                             </label>
@@ -75,32 +117,66 @@
                 </div>
                 <% }); %>
 
-                    <button type="submit"
-                        class="w-full py-5 bg-primary text-white rounded-2xl font-black text-xl shadow-xl shadow-primary/30 hover:scale-[1.02] transition-transform">
-                        পরীক্ষা শেষ করুন
-                    </button>
+                    <div class="pt-10 pb-20">
+                        <button type="submit"
+                            class="w-full h-20 bg-primary text-white rounded-3xl font-black text-xl shadow-2xl shadow-primary/30 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3">
+                            পরীক্ষা সম্পন্ন করুন
+                            <span class="material-symbols-outlined">check_circle</span>
+                        </button>
+                    </div>
         </form>
     </main>
 
     <script>
-        // Simple Timer logic
-        let timeLeft = parseInt("<%= quiz.duration * 60 %>");
+        // Enhanced Timer logic
+        const duration = parseInt("<%= quiz.duration %>") || 10;
+        let totalSeconds = duration * 60;
+        let timeLeft = totalSeconds;
+
         const timerDisplay = document.getElementById('timer');
+        const timerProgress = document.getElementById('timer-progress');
+        const quizForm = document.getElementById('quiz-form');
 
         function updateTimer() {
             const minutes = Math.floor(timeLeft / 60);
             const seconds = timeLeft % 60;
+
+            // Update Text
             timerDisplay.innerText = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
-            if (timeLeft === 0) {
-                document.getElementById('quiz-form').submit();
+            // Update Progress Bar
+            const percentage = (timeLeft / totalSeconds) * 100;
+            timerProgress.style.width = `${percentage}%`;
+
+            // Color feedback
+            if (timeLeft <= 60) {
+                timerDisplay.classList.remove('text-primary');
+                timerDisplay.classList.add('text-red-500');
+                timerProgress.classList.remove('bg-primary');
+                timerProgress.classList.add('bg-red-500');
+            }
+
+            if (timeLeft <= 0) {
+                clearInterval(timerInterval);
+                // Remove required attribute before auto-submit to avoid validation blocking
+                const inputs = quizForm.querySelectorAll('input[type="radio"]');
+                inputs.forEach(input => input.removeAttribute('required'));
+
+                // Final submission
+                quizForm.submit();
             } else {
                 timeLeft--;
             }
         }
 
-        setInterval(updateTimer, 1000);
+        const timerInterval = setInterval(updateTimer, 1000);
         updateTimer();
+
+        // Reveal animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => entry.isIntersecting && entry.target.classList.add('active'));
+        }, { threshold: 0.1 });
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     </script>
 </body>
 
