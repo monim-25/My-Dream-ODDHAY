@@ -306,13 +306,21 @@ app.post('/register', async (req, res) => {
 // Unified Safe Dashboard
 app.get('/dashboard', protect, async (req, res) => {
     try {
+        console.log('Dashboard Request: Started');
         const userId = req.session.userId;
-        const dbUser = await User.findById(userId).populate('enrolledCourses.course').populate('lastWatchedLesson.course').lean();
+        const dbUser = await User.findById(userId)
+            .populate('enrolledCourses.course')
+            .populate('lastWatchedLesson.course')
+            .lean();
 
-        if (!dbUser) return res.redirect('/login');
+        if (!dbUser) {
+            console.log('Dashboard: User not found in DB');
+            return res.redirect('/login');
+        }
         if (dbUser.role === 'parent') return res.redirect('/parent/dashboard');
 
         // Parallel Data Fetching with Failure Handling
+        console.log('Dashboard: Fetching data...');
         const [recommendations, pendingParents, leaderboard, notifications, routineTasks] = await Promise.all([
             // Recommendations
             require('./models/Course').find({
@@ -344,19 +352,30 @@ app.get('/dashboard', protect, async (req, res) => {
                 .catch(e => { console.error('Routine Error:', e); return []; })
         ]);
 
-        res.render('dashboard-unified', {
-            user: dbUser,
-            recommendations,
-            parentRequests: pendingParents,
-            leaderboard,
-            notifications,
-            routineTasks
-        });
+        console.log('Dashboard: Data fetched. Rendering view...');
+        try {
+            res.render('dashboard-unified', {
+                user: dbUser,
+                recommendations,
+                parentRequests: pendingParents,
+                leaderboard,
+                notifications,
+                routineTasks
+            });
+        } catch (viewErr) {
+            console.error('View Render Error:', viewErr);
+            throw new Error(`View Render Failed: ${viewErr.message}`);
+        }
+
     } catch (err) {
         console.error('Dashboard Critical Crash:', err);
-        // Fallback simple render if everything fails? 
-        // Better to show error but maybe user session is corrupted?
-        res.status(500).send('ড্যাশবোর্ড লোড করতে সমস্যা হয়েছে। অনুগ্রহ করে লগআউট করে আবার চেষ্টা করুন।');
+        res.status(500).send(`
+            <h1>Internal Server Error</h1>
+            <p><strong>Error Message:</strong> ${err.message}</p>
+            <p><strong>Stack:</strong> ${process.env.NODE_ENV === 'development' ? err.stack : 'Hidden in production'}</p>
+            <p><strong>Client Path:</strong> ${clientPath}</p>
+            <p>Please report this to the support team.</p>
+        `);
     }
 });
 
