@@ -204,6 +204,7 @@ app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 
 app.post('/login', async (req, res) => {
     try {
+        console.log('Login Request: Started');
         const identifier = req.body.email ? req.body.email.trim() : '';
         const password = req.body.password;
 
@@ -215,9 +216,19 @@ app.post('/login', async (req, res) => {
             ? { email: identifier }
             : { phone: identifier };
 
+        console.log('Login: Finding user...', searchCriteria);
         const user = await User.findOne(searchCriteria);
 
-        if (user && await user.comparePassword(password)) {
+        if (!user) {
+            console.log('Login: User not found');
+            return res.status(401).send('ইমেইল/ফোন বা পাসওয়ার্ড ভুল।');
+        }
+
+        console.log('Login: Verifying password...');
+        const isMatch = await user.comparePassword(password);
+
+        if (isMatch) {
+            console.log('Login: Password verified. Setting up session...');
             // Super Admin Auto-Promotion
             if (process.env.SUPER_ADMIN_EMAIL && user.email === process.env.SUPER_ADMIN_EMAIL && user.role !== 'superadmin') {
                 user.role = 'superadmin';
@@ -227,18 +238,29 @@ app.post('/login', async (req, res) => {
             req.session.user = userObj;
             req.session.userId = userObj._id.toString();
 
-            req.session.save(() => {
+            console.log('Login: Saving session...');
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Session Save Error:', err);
+                    return res.status(500).send(`Session Error: ${err.message}`);
+                }
+                console.log('Login: Session saved. Redirecting...');
                 if (user.role === 'teacher') return res.redirect('/teacher/dashboard');
                 if (user.role === 'admin' || user.role === 'superadmin') return res.redirect('/admin');
                 if (user.role === 'parent') return res.redirect('/parent/dashboard');
                 res.redirect('/dashboard');
             });
         } else {
+            console.log('Login: Password mismatch');
             res.status(401).send('ইমেইল/ফোন বা পাসওয়ার্ড ভুল।');
         }
     } catch (err) {
-        console.error('Login Error:', err);
-        res.status(500).send('লগইন করার সময় একটি সমস্যা হয়েছে।');
+        console.error('Login Critical Error:', err);
+        res.status(500).send(`
+            <h1>Login Failed (Debug Mode)</h1>
+            <p><strong>Error:</strong> ${err.message}</p>
+            <pre>${process.env.NODE_ENV === 'development' ? err.stack : 'Hidden'}</pre>
+        `);
     }
 });
 
