@@ -380,62 +380,77 @@ app.get('/dashboard', protect, async (req, res) => {
         }
         if (dbUser.role === 'parent') return res.redirect('/parent/dashboard');
 
-        // Parallel Data Fetching with Failure Handling
-        console.log('Dashboard: Fetching data...');
-        const [recommendations, pendingParents, leaderboard, notifications, routineTasks] = await Promise.all([
-            // Recommendations
-            require('./models/Course').find({
-                classLevel: dbUser.classLevel,
-                _id: { $nin: (dbUser.enrolledCourses || []).map(e => e.course ? e.course._id : null) }
-            }).limit(3).lean().catch(e => { console.error('Rec Error:', e); return []; }),
+        // Fail-Safe Data Fetching
+        const data = {
+            recommendations: [],
+            pendingParents: [],
+            leaderboard: [],
+            notifications: [],
+            routineTasks: []
+        };
 
-            // Pending Parents (fetch users)
-            (async () => {
-                const pRequests = (dbUser.parentRequests || []).filter(r => r.status === 'pending');
-                if (pRequests.length === 0) return [];
-                return User.find({ _id: { $in: pRequests.map(p => p.parent) } }).select('name email phone').lean();
-            })().catch(e => { console.error('Parent Req Error:', e); return []; }),
+        try {
+            console.log('Dashboard: Fetching auxiliary data...');
+            const results = await Promise.all([
+                require('./models/Course').find({
+                    classLevel: dbUser.classLevel,
+                    _id: { $nin: (dbUser.enrolledCourses || []).map(e => e.course ? e.course._id : null) }
+                }).limit(3).lean().catch(e => { console.error('Rec Fail:', e.message); return []; }),
 
-            // Leaderboard
-            User.find({ role: 'student' }).limit(5).select('name classLevel quizResults').lean()
-                .then(users => users.map(l => ({
-                    ...l,
-                    totalScore: (l.quizResults || []).reduce((acc, curr) => acc + (curr.score || 0), 0)
-                })).sort((a, b) => b.totalScore - a.totalScore))
-                .catch(e => { console.error('Leaderboard Error:', e); return []; }),
+                (async () => {
+                    const pRequests = (dbUser.parentRequests || []).filter(r => r.status === 'pending');
+                    if (pRequests.length === 0) return [];
+                    return User.find({ _id: { $in: pRequests.map(p => p.parent) } }).select('name email phone').lean();
+                })().catch(e => { console.error('Parent Fail:', e.message); return []; }),
 
-            // Notifications
-            Notification.find({ user: userId }).sort({ createdAt: -1 }).limit(5).lean()
-                .catch(e => { console.error('Notif Error:', e); return []; }),
+                User.find({ role: 'student' }).limit(5).select('name classLevel quizResults').lean()
+                    .then(users => users.map(l => ({
+                        ...l,
+                        totalScore: (l.quizResults || []).reduce((acc, curr) => acc + (curr.score || 0), 0)
+                    })).sort((a, b) => b.totalScore - a.totalScore))
+                    .catch(e => { console.error('Leaderboard Fail:', e.message); return []; }),
 
-            // Routine Tasks
-            RoutineTask.find({ user: userId, isCompleted: false }).sort({ date: 1 }).limit(5).lean()
-                .catch(e => { console.error('Routine Error:', e); return []; })
-        ]);
+                Notification.find({ user: userId }).sort({ createdAt: -1 }).limit(5).lean()
+                    .catch(e => { console.error('Note Fail:', e.message); return []; }),
 
-        console.log('Dashboard: Data fetched. Rendering view...');
+                RoutineTask.find({ user: userId, isCompleted: false }).sort({ date: 1 }).limit(5).lean()
+                    .catch(e => { console.error('Routine Fail:', e.message); return []; })
+            ]);
+
+            data.recommendations = results[0] || [];
+            data.pendingParents = results[1] || [];
+            data.leaderboard = results[2] || [];
+            data.notifications = results[3] || [];
+            data.routineTasks = results[4] || [];
+
+        } catch (fetchErr) {
+            console.error('Dashboard: Data fetching partial failure (non-critical):', fetchErr);
+            // Continue with empty data arrays
+        }
+
+        console.log('Dashboard: Rendering view...');
         try {
             res.render('dashboard-unified', {
                 user: dbUser,
-                recommendations,
-                parentRequests: pendingParents,
-                leaderboard,
-                notifications,
-                routineTasks
+                ...data
             });
         } catch (viewErr) {
             console.error('View Render Error:', viewErr);
             throw new Error(`View Render Failed: ${viewErr.message}`);
         }
-
     } catch (err) {
         console.error('Dashboard Critical Crash:', err);
         res.status(500).send(`
-            <h1>Internal Server Error</h1>
-            <p><strong>Error Message:</strong> ${err.message}</p>
-            <p><strong>Stack:</strong> ${process.env.NODE_ENV === 'development' ? err.stack : 'Hidden in production'}</p>
-            <p><strong>Client Path:</strong> ${clientPath}</p>
-            <p>Please report this to the support team.</p>
+            <div style="font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; text-align: center;">
+                <h1 style="color: #e11d48;">Internal Server Error</h1>
+                <p>We are sorry, but something went wrong.</p>
+                <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; text-align: left; overflow: auto; margin-top: 20px;">
+                    <p><strong>Error:</strong> ${err.message}</p>
+                    <p><strong>Path:</strong> ${clientPath}</p>
+                </div>
+                <button onclick="window.location.reload()" style="margin-top: 20px; padding: 10px 20px; background: #0f172a; color: white; border: none; border-radius: 6px; cursor: pointer;">Retry</button>
+                <a href="/logout" style="display: block; margin-top: 15px; color: #64748b;">Logout & Try Again</a>
+            </div>
         `);
     }
 });
