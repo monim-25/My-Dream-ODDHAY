@@ -24,69 +24,34 @@ const app = express();
 const PORT = process.env.PORT || 3005;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/oddhay_db';
 
-// --- PATH RESOLUTION (SIMPLIFIED) ---
-let clientPath;
-// Vercel / Production Check
-if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
-    // In Vercel, paths are often flattened or at root depending on build
-    // We try to find 'client/views'
-    if (fs.existsSync(path.join(process.cwd(), 'client'))) {
-        clientPath = path.join(process.cwd(), 'client');
-    } else {
-        // Fallback to standard
-        clientPath = path.join(__dirname, '../client');
-    }
-} else {
-    // Local development
-    clientPath = path.join(__dirname, '../client');
-}
-console.log('✅ Resolved Client Path:', clientPath);
+// --- PATH RESOLUTION ---
+const clientPath = path.join(__dirname, '../client');
+console.log('✅ Client Path:', clientPath);
+
 mongoose.set('strictQuery', false);
 
 // --- DATABASE CONNECTION ---
 const connectDB = async () => {
     try {
-        mongoose.connection.on('connecting', () => console.log('⏳ Connecting to MongoDB...'));
-        mongoose.connection.on('connected', () => console.log('✅ MongoDB Connected'));
-        mongoose.connection.on('error', (err) => console.error('❌ MongoDB Error:', err.message));
-
-        await mongoose.connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 20000,
-            socketTimeoutMS: 45000,
-            heartbeatFrequencyMS: 10000
-        });
+        await mongoose.connect(MONGODB_URI);
+        console.log('✅ MongoDB Connected');
     } catch (err) {
         console.error('❌ Database connection failure:', err.message);
-        console.log('💡 IMPORTANT: Please check if your IP address is whitelisted in MongoDB Atlas (Network Access). This is the most common cause of timeouts.');
     }
 };
 
 // --- MIDDLEWARE SETUP ---
 
-// Session Store with Fallback
-let sessionStore;
-try {
-    // Only attempt MongoStore if URI looks valid (not localhost in production)
-    const isProduction = process.env.NODE_ENV === 'production';
-    const isLocalDB = MONGODB_URI.includes('localhost');
-
-    if (isProduction && isLocalDB) {
-        throw new Error("Production environment but Localhost DB URI detected.");
-    }
-
-    sessionStore = MongoStore.create({
-        mongoUrl: MONGODB_URI,
-        ttl: 14 * 24 * 60 * 60,
-        autoRemove: 'native'
-    });
-} catch (err) {
-    console.warn('⚠️ Session Warning: Using MemoryStore.', err.message);
-    sessionStore = new session.MemoryStore();
-}
+// Session Store
+const sessionStore = MongoStore.create({
+    mongoUrl: MONGODB_URI,
+    ttl: 14 * 24 * 60 * 60,
+    autoRemove: 'native'
+});
 
 app.use(session({
     secret: 'oddhay_secret_key',
-    resave: true, // Force session to save back to store even if not modified
+    resave: false,
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
@@ -98,16 +63,7 @@ app.use(session({
 // Robust Multer Config
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        let dest = '/tmp/uploads/'; // Always safe for serverless
-        // Try local if explicitly local dev
-        if (!process.env.VERCEL && process.env.NODE_ENV !== 'production') {
-            try {
-                const localDest = path.join(clientPath, 'public/uploads/');
-                if (fs.existsSync(path.join(clientPath, 'public'))) {
-                    dest = localDest;
-                }
-            } catch (e) { /* ignore */ }
-        }
+        let dest = path.join(clientPath, 'public/uploads/');
 
         if (file.fieldname === 'thumbnail') dest += 'thumbnails/';
         else if (file.fieldname === 'video') dest += 'videos/';
@@ -124,21 +80,8 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // --- DATABASE CONNECTION ---
-// Call connectDB immediately for serverless/Vercel support
 connectDB();
 
-app.use(async (req, res, next) => {
-    try {
-        // If not connected, try to connect again
-        if (mongoose.connection.readyState !== 1) {
-            await connectDB();
-        }
-        next();
-    } catch (err) {
-        console.error('❌ Database Connection Middleware Error:', err);
-        next(); // Still proceed, routes will handle missing DB
-    }
-});
 
 app.use((req, res, next) => {
     res.locals.user = req.session.user || null;
