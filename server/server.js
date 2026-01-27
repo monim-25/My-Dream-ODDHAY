@@ -107,8 +107,8 @@ app.use(session({
     store: sessionStore,
     cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-        secure: process.env.NODE_ENV === 'production', // true on Vercel
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // Cross-site cookie fix for some browsers if needed, or just default 'lax'
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
     }
 }));
 
@@ -167,8 +167,13 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 
 // Auth Middlewares
 const protect = (req, res, next) => {
-    if (req.session.userId || req.session.user) next();
-    else res.redirect('/login');
+    console.log(`[Auth] Checking protection for ${req.path}. SessionID: ${req.sessionID}, UserID: ${req.session.userId}`);
+    if (req.session.userId || req.session.user) {
+        next();
+    } else {
+        console.warn(`[Auth] No session found for ${req.path}. Redirecting to /login`);
+        res.redirect('/login');
+    }
 };
 const adminProtect = (req, res, next) => {
     const roles = ['teacher', 'admin', 'superadmin'];
@@ -448,8 +453,19 @@ app.get('/dashboard', protect, async (req, res) => {
 
 app.get('/profile', protect, async (req, res) => {
     try {
-        const user = await User.findById(req.session.userId).populate('quizResults.quiz');
-        if (!user) return res.redirect('/login');
+        const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
+        console.log(`[Profile] Fetching profile for UID: ${userId}`);
+
+        if (!userId) {
+            console.error('[Profile] No UserID in session despite protection.');
+            return res.redirect('/login');
+        }
+
+        const user = await User.findById(userId).populate('quizResults.quiz');
+        if (!user) {
+            console.error(`[Profile] User not found in database for ID: ${userId}`);
+            return res.redirect('/login');
+        }
 
         if (user.role === 'parent') {
             res.render('parent-profile', { user, success: req.query.success });
