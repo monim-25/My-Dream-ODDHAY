@@ -61,17 +61,65 @@
 
                         <!-- Profile Picture -->
                         <div
-                            class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 mb-4 text-center">
-                            <div
-                                class="size-24 rounded-2xl bg-primary/10 border-2 border-primary/20 mx-auto mb-4 flex items-center justify-center overflow-hidden">
-                                <% if(user.profilePicture) { %>
-                                    <img src="<%= user.profilePicture %>" class="w-full h-full object-cover">
-                                    <% } else { %>
-                                        <span class="material-symbols-outlined text-primary text-5xl">person</span>
-                                        <% } %>
+                            class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 mb-6 text-center shadow-lg relative overflow-hidden">
+                            <div class="relative inline-block">
+                                <div
+                                    class="size-32 rounded-[2.5rem] bg-slate-100 dark:bg-slate-800 border-4 border-white dark:border-slate-800 shadow-xl overflow-hidden flex items-center justify-center mx-auto mb-4">
+                                    <% if(user.profilePicture) { %>
+                                        <img src="<%= user.profilePicture %>" class="w-full h-full object-cover"
+                                            id="profile-preview">
+                                        <% } else { %>
+                                            <span class="material-symbols-outlined text-slate-300 text-6xl"
+                                                id="profile-placeholder">person</span>
+                                            <% } %>
+                                </div>
+                                <label for="profile-upload"
+                                    class="absolute bottom-4 -right-2 size-10 bg-primary text-white rounded-2xl flex items-center justify-center border-4 border-white dark:border-slate-900 cursor-pointer hover:scale-110 transition-transform shadow-lg">
+                                    <span class="material-symbols-outlined text-xl">add_a_photo</span>
+                                </label>
+                                <input type="file" id="profile-upload" class="hidden" accept="image/*"
+                                    onchange="previewImage(this)">
                             </div>
-                            <p class="text-sm font-bold text-slate-500">প্রোফাইল ছবি</p>
+                            <p class="text-xs font-black text-slate-400 uppercase tracking-widest mt-2">প্রোফাইল ছবি
+                                পরিবর্তন করুন</p>
                         </div>
+
+                        <script>
+                            function previewImage(input) {
+                                if (input.files && input.files[0]) {
+                                    const reader = new FileReader();
+                                    reader.onload = function (e) {
+                                        const preview = document.getElementById('profile-preview');
+                                        const placeholder = document.getElementById('profile-placeholder');
+                                        if (preview) {
+                                            preview.src = e.target.result;
+                                        } else if (placeholder) {
+                                            const img = document.createElement('img');
+                                            img.id = 'profile-preview';
+                                            img.src = e.target.result;
+                                            img.className = 'w-full h-full object-cover';
+                                            placeholder.parentNode.replaceChild(img, placeholder);
+                                        }
+
+                                        // Auto-upload
+                                        const formData = new FormData();
+                                        formData.append('profilePicture', input.files[0]);
+                                        fetch('/profile/upload-picture', {
+                                            method: 'POST',
+                                            body: formData
+                                        })
+                                            .then(res => res.json())
+                                            .then(data => {
+                                                if (data.success) {
+                                                    console.log('Upload success');
+                                                }
+                                            })
+                                            .catch(err => console.error(err));
+                                    }
+                                    reader.readAsDataURL(input.files[0]);
+                                }
+                            }
+                        </script>
 
                         <!-- Edit Form -->
                         <form action="/profile/update" method="POST"

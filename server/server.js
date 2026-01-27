@@ -582,7 +582,35 @@ app.get('/profile/id-card', protect, async (req, res) => {
     }
 });
 
-// My Courses
+// Profile Picture Upload
+app.post('/profile/upload-picture', protect, upload.single('profilePicture'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
+
+        let filePath = req.file.path;
+        if (filePath.includes('public')) {
+            filePath = filePath.split('public')[1].replace(/\\/g, '/');
+        } else {
+            // Fallback for /tmp/ on Vercel
+            filePath = `/uploads/${req.file.filename}`;
+        }
+
+        await User.findByIdAndUpdate(req.session.userId, {
+            profilePicture: filePath,
+            profileImage: filePath
+        });
+
+        // Update session user object too
+        const updatedUser = await User.findById(req.session.userId).lean();
+        req.session.user = updatedUser;
+
+        res.json({ success: true, filePath });
+    } catch (err) {
+        console.error('Upload Error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.get('/my-courses', protect, async (req, res) => {
     try {
         const user = await User.findById(req.session.userId).populate('enrolledCourses.course');
