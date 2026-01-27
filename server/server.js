@@ -570,7 +570,80 @@ app.get('/profile/report-card/:studentId?', protect, async (req, res) => {
         });
     } catch (err) {
         console.error('Report Card Error:', err);
-        res.status(500).send('রিপোর্ট কার্ড লোড করতে সমস্যা হয়েছে।');
+        res.status(500).send('রিপোর্ট কার্ড লোড করতে সমস্যা হয়েছে।');
+    }
+});
+
+// --- Q&A Forum Routes ---
+app.get('/qa-forum', protect, async (req, res) => {
+    try {
+        const filter = req.query.filter;
+        let query = {};
+
+        if (filter === 'my') {
+            query.askedBy = req.session.userId;
+        } else if (filter === 'solved') {
+            query.status = 'resolved';
+        }
+
+        const questions = await QA.find(query).sort({ createdAt: -1 }).limit(50).lean();
+        res.render('qa-forum', { questions });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error loading Q&A');
+    }
+});
+
+app.post('/qa-forum/ask', protect, async (req, res) => {
+    try {
+        const { question } = req.body;
+        const user = await User.findById(req.session.userId);
+
+        const newQA = new QA({
+            question,
+            askedBy: user._id,
+            askedByName: user.name
+        });
+
+        await newQA.save();
+        res.redirect('/qa-forum');
+    } catch (err) {
+        console.error(err);
+        res.redirect('/qa-forum?error=Failed to post');
+    }
+});
+
+// --- Question Bank Routes ---
+app.get('/question-bank', protect, async (req, res) => {
+    try {
+        const questions = await QuestionBank.find().sort({ year: -1 }).limit(20).lean();
+        res.render('question-bank', { questions });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error loading Question Bank');
+    }
+});
+
+// --- Exam Routes ---
+app.get('/exams', protect, async (req, res) => {
+    try {
+        const user = await User.findById(req.session.userId);
+
+        // Find quizzes that match user's class level or course
+        // For simplicity, fetching all for now or filtering by class if possible
+        // Assuming quizzes might not have class level directly but courses do.
+        // Let's fetch quizzes linked to courses the user is enrolled in OR generic ones.
+
+        // Fetch all quizzes for now to populate the page
+        const allQuizzes = await Quiz.find().populate('course').lean();
+
+        const liveExams = allQuizzes.filter(q => q.duration > 0); // Placeholder logic for live
+        const practiceExams = allQuizzes;
+
+        res.render('exams', { liveExams, practiceExams });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error loading Exams');
     }
 });
 
