@@ -44,22 +44,65 @@ console.log('✅ Resolved Client Path:', clientPath);
 
 mongoose.set('strictQuery', false);
 
-// --- DATABASE CONNECTION ---
+// --- DATABASE CONNECTION (Serverless Optimized) ---
+let cached = global.mongoose;
+
+if (!cached) {
+    cached = global.mongoose = { conn: null, promise: null };
+}
+
 const connectDB = async () => {
-    try {
-        if (mongoose.connection.readyState === 1) {
-            return;
-        }
-        await mongoose.connect(MONGODB_URI, {
-            serverSelectionTimeoutMS: 5000 // Fail faster on serverless
-        });
-        console.log('✅ MongoDB Connected');
-    } catch (err) {
-        console.error('❌ Database connection failure:', err.message);
+    if (cached.conn) {
+        return cached.conn;
     }
+
+    if (!cached.promise) {
+        const opts = {
+            bufferCommands: false, // Disable mongoose buffering to fail fast
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000
+        };
+
+        console.log('⏳ Initializing MongoDB Connection...');
+        cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongoose) => {
+            console.log('✅ MongoDB Connected');
+            return mongoose;
+        }).catch(err => {
+            console.error('❌ MongoDB Connection Init Error:', err);
+            throw err;
+        });
+    }
+
+    try {
+        cached.conn = await cached.promise;
+    } catch (e) {
+        cached.promise = null;
+        console.error('❌ MongoDB Connection Await Error:', e);
+        throw e;
+    }
+
+    return cached.conn;
 };
 
 // --- MIDDLEWARE SETUP ---
+// Ensure DB is connected for every request
+app.use(async (req, res, next) => {
+    // Skip for static assets to save time
+    if (req.path.startsWith('/images') || req.path.startsWith('/css') || req.path.startsWith('/js')) {
+        return next();
+    }
+
+    try {
+        await connectDB();
+        next();
+    } catch (err) {
+        console.error('❌ DB Middleware Failed:', err);
+        // Continue? Or fail? If DB is down, likely fail.
+        // But for login page rendering (GET /login), maybe we don't need DB? 
+        // Session store might need it though.
+        next();
+    }
+});
 
 // Session Store with Fallback
 let sessionStore;
@@ -123,10 +166,6 @@ const storage = multer.diskStorage({
     }
 });
 const upload = multer({ storage: storage });
-
-// --- DATABASE CONNECTION ---
-connectDB();
-
 
 app.use((req, res, next) => {
     res.locals.user = req.session.user || null;
