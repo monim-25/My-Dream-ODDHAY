@@ -81,9 +81,14 @@ app.use(session({
     store: sessionStore,
     cookie: {
         maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
-        secure: false // Set to false for local testing support
+        secure: process.env.NODE_ENV === 'production', // true on Vercel
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // Cross-site cookie fix for some browsers if needed, or just default 'lax'
     }
 }));
+
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1); // Trust Vercel proxy
+}
 
 // Robust Multer Config
 const storage = multer.diskStorage({
