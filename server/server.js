@@ -313,6 +313,7 @@ app.post('/register', async (req, res) => {
 });
 
 // Unified Safe Dashboard
+// Unified Safe Dashboard
 app.get('/dashboard', protect, async (req, res) => {
     try {
         const userId = req.session.userId;
@@ -321,36 +322,51 @@ app.get('/dashboard', protect, async (req, res) => {
         if (!dbUser) return res.redirect('/login');
         if (dbUser.role === 'parent') return res.redirect('/parent/dashboard');
 
-        const recommendations = await require('./models/Course').find({
-            classLevel: dbUser.classLevel,
-            _id: { $nin: (dbUser.enrolledCourses || []).map(e => e.course ? e.course._id : null) }
-        }).limit(3).lean();
+        // Parallel Data Fetching with Failure Handling
+        const [recommendations, pendingParents, leaderboard, notifications, routineTasks] = await Promise.all([
+            // Recommendations
+            require('./models/Course').find({
+                classLevel: dbUser.classLevel,
+                _id: { $nin: (dbUser.enrolledCourses || []).map(e => e.course ? e.course._id : null) }
+            }).limit(3).lean().catch(e => { console.error('Rec Error:', e); return []; }),
 
-        const pendingParents = (dbUser.parentRequests || []).filter(r => r.status === 'pending');
-        const parents = await User.find({ _id: { $in: pendingParents.map(p => p.parent) } }).select('name email phone').lean();
+            // Pending Parents (fetch users)
+            (async () => {
+                const pRequests = (dbUser.parentRequests || []).filter(r => r.status === 'pending');
+                if (pRequests.length === 0) return [];
+                return User.find({ _id: { $in: pRequests.map(p => p.parent) } }).select('name email phone').lean();
+            })().catch(e => { console.error('Parent Req Error:', e); return []; }),
 
-        const leaderboard = await User.find({ role: 'student' }).limit(5).select('name classLevel quizResults').lean();
-        const sortedLeaderboard = leaderboard.map(l => ({
-            ...l,
-            totalScore: (l.quizResults || []).reduce((acc, curr) => acc + (curr.score || 0), 0)
-        })).sort((a, b) => b.totalScore - a.totalScore);
+            // Leaderboard
+            User.find({ role: 'student' }).limit(5).select('name classLevel quizResults').lean()
+                .then(users => users.map(l => ({
+                    ...l,
+                    totalScore: (l.quizResults || []).reduce((acc, curr) => acc + (curr.score || 0), 0)
+                })).sort((a, b) => b.totalScore - a.totalScore))
+                .catch(e => { console.error('Leaderboard Error:', e); return []; }),
 
-        const notifications = await Notification.find({ user: userId }).sort({ createdAt: -1 }).limit(5).lean();
+            // Notifications
+            Notification.find({ user: userId }).sort({ createdAt: -1 }).limit(5).lean()
+                .catch(e => { console.error('Notif Error:', e); return []; }),
 
-        // Fetch routine tasks for the student
-        const routineTasks = await RoutineTask.find({ user: userId, isCompleted: false }).sort({ date: 1 }).limit(5).lean();
+            // Routine Tasks
+            RoutineTask.find({ user: userId, isCompleted: false }).sort({ date: 1 }).limit(5).lean()
+                .catch(e => { console.error('Routine Error:', e); return []; })
+        ]);
 
         res.render('dashboard-unified', {
             user: dbUser,
             recommendations,
-            parentRequests: parents,
-            leaderboard: sortedLeaderboard,
+            parentRequests: pendingParents,
+            leaderboard,
             notifications,
             routineTasks
         });
     } catch (err) {
-        console.error('Dashboard Crash:', err);
-        res.status(500).send('ড্যাশবোর্ড লোড করতে সমস্যা হয়েছে।');
+        console.error('Dashboard Critical Crash:', err);
+        // Fallback simple render if everything fails? 
+        // Better to show error but maybe user session is corrupted?
+        res.status(500).send('ড্যাশবোর্ড লোড করতে সমস্যা হয়েছে। অনুগ্রহ করে লগআউট করে আবার চেষ্টা করুন।');
     }
 });
 
