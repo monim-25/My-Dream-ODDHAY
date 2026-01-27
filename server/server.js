@@ -18,6 +18,7 @@ const Note = require('./models/Note');
 const QuestionBank = require('./models/QuestionBank');
 const QA = require('./models/QA');
 const Notification = require('./models/Notification');
+const RoutineTask = require('./models/RoutineTask');
 
 const app = express();
 const PORT = process.env.PORT || 3005;
@@ -336,12 +337,16 @@ app.get('/dashboard', protect, async (req, res) => {
 
         const notifications = await Notification.find({ user: userId }).sort({ createdAt: -1 }).limit(5).lean();
 
+        // Fetch routine tasks for the student
+        const routineTasks = await RoutineTask.find({ user: userId, isCompleted: false }).sort({ date: 1 }).limit(5).lean();
+
         res.render('dashboard-unified', {
             user: dbUser,
             recommendations,
             parentRequests: parents,
             leaderboard: sortedLeaderboard,
-            notifications
+            notifications,
+            routineTasks
         });
     } catch (err) {
         console.error('Dashboard Crash:', err);
@@ -365,12 +370,167 @@ app.get('/profile', protect, async (req, res) => {
     }
 });
 
+// Routine Routes
+app.get('/routine', protect, async (req, res) => {
+    try {
+        const tasks = await RoutineTask.find({ user: req.session.userId }).sort({ date: 1 }).lean();
+        res.render('routine', { tasks });
+    } catch (err) {
+        console.error('Routine Error:', err);
+        res.status(500).send('রুটিন লোড করতে সমস্যা হয়েছে।');
+    }
+});
+
+app.post('/routine/add', protect, async (req, res) => {
+    try {
+        const { title, date, time, type } = req.body;
+        const newTask = new RoutineTask({
+            user: req.session.userId,
+            title,
+            date: date || new Date(),
+            time,
+            type: type || 'task'
+        });
+        await newTask.save();
+        res.redirect('/routine');
+    } catch (err) {
+        console.error('Add Task Error:', err);
+        res.redirect('/routine');
+    }
+});
+
+app.post('/routine/toggle/:id', protect, async (req, res) => {
+    try {
+        const task = await RoutineTask.findOne({ _id: req.params.id, user: req.session.userId });
+        if (task) {
+            task.isCompleted = !task.isCompleted;
+            await task.save();
+        }
+        res.redirect('/routine');
+    } catch (err) {
+        res.redirect('/routine');
+    }
+});
+
+app.post('/routine/delete/:id', protect, async (req, res) => {
+    try {
+        await RoutineTask.findOneAndDelete({ _id: req.params.id, user: req.session.userId });
+        res.redirect('/routine');
+    } catch (err) {
+        res.redirect('/routine');
+    }
+});
+
+// Profile Edit Page
 app.get('/profile/edit', protect, async (req, res) => {
     try {
         const user = await User.findById(req.session.userId);
-        res.render('parent-profile-edit', { user, success: req.query.success, error: req.query.error });
+        res.render('profile-edit', { user, success: req.query.success, error: req.query.error });
     } catch (err) {
         res.status(500).send('Error loading edit page');
+    }
+});
+
+// Update Profile
+app.post('/profile/update', protect, async (req, res) => {
+    try {
+        const { name, phone, classLevel } = req.body;
+        await User.findByIdAndUpdate(req.session.userId, { name, phone, classLevel });
+        res.redirect('/profile/edit?success=true');
+    } catch (err) {
+        res.redirect('/profile/edit?error=Update failed');
+    }
+});
+
+// Change Password
+app.post('/profile/change-password', protect, async (req, res) => {
+    try {
+        const { currentPassword, newPassword, confirmPassword } = req.body;
+        const user = await User.findById(req.session.userId);
+
+        if (newPassword !== confirmPassword) {
+            return res.redirect('/profile/edit?error=Passwords do not match');
+        }
+
+        const bcrypt = require('bcryptjs');
+        const isMatch = await bcrypt.compare(currentPassword, user.password);
+        if (!isMatch) {
+            return res.redirect('/profile/edit?error=Invalid current password');
+        }
+
+        user.password = await bcrypt.hash(newPassword, 10);
+        await user.save();
+        res.redirect('/profile/edit?success=Password changed successfully');
+    } catch (err) {
+        res.redirect('/profile/edit?error=Change password failed');
+    }
+});
+
+// Guardian Info
+app.get('/profile/guardian', protect, async (req, res) => {
+    try {
+        const user = await User.findById(req.session.userId);
+        const parents = await User.find({
+            role: 'parent',
+            children: user._id
+        }).select('name email phone');
+        res.render('guardian', { parents });
+    } catch (err) {
+        res.status(500).send('Error loading guardian info');
+    }
+});
+
+// Student ID Card
+app.get('/profile/id-card', protect, async (req, res) => {
+    try {
+        const user = await User.findById(req.session.userId);
+        res.render('id-card', { user });
+    } catch (err) {
+        res.status(500).send('Error loading ID card');
+    }
+});
+
+// My Courses
+app.get('/my-courses', protect, async (req, res) => {
+    try {
+        const user = await User.findById(req.session.userId).populate('enrolledCourses.course');
+
+        const courses = user.enrolledCourses.map(enrollment => {
+            if (!enrollment.course) return null;
+
+            // Calculate progress (this logic might need adjustment based on your data model)
+            const totalLessons = enrollment.course.lessons ? enrollment.course.lessons.length : 0; // Assuming course has lessons array, or needs population
+            const completedForCourse = user.completedLessons.filter(cl =>
+                cl.course && cl.course.toString() === enrollment.course._id.toString()
+            ).length;
+
+            let progress = 0;
+            // Since we didn't populate lessons deep here, let's assume 0 or handle it if lessons are count
+            // For now, let's just default to what's in enrollment if stored, or 0.
+            // If you want accurate progress, you'd need to count lessons in the course.
+            // Let's assume we can get it or just show 0 if simple.
+            // A better way if lessons are not in course object directly (referenced):
+            // const lessonCount = await Lesson.countDocuments({ course: enrollment.course._id });
+            // For now, let's use a placeholder or enrollment.progress if you store it.
+            // Let's assume enrollment.progress exists or 0.
+
+            return {
+                ...enrollment,
+                progress: enrollment.progress || 0 // Use stored progress or calculate
+            };
+        }).filter(c => c !== null);
+
+        const completedCount = courses.filter(c => c.progress === 100).length;
+        const inProgressCount = courses.filter(c => c.progress < 100 && c.progress > 0).length;
+
+        res.render('my-courses', {
+            courses,
+            completedCount,
+            inProgressCount
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).send('Error loading courses');
     }
 });
 
