@@ -60,7 +60,9 @@ const connectDB = async () => {
         const opts = {
             bufferCommands: false, // Disable mongoose buffering to fail fast
             serverSelectionTimeoutMS: 5000,
-            socketTimeoutMS: 45000
+            socketTimeoutMS: 45000,
+            family: 4, // Force IPv4 to avoid repetitive DNS lookups
+            maxPoolSize: 10 // Limit pool size for serverless
         };
 
         console.log('⏳ Initializing MongoDB Connection...');
@@ -85,25 +87,6 @@ const connectDB = async () => {
 };
 
 // --- MIDDLEWARE SETUP ---
-// Ensure DB is connected for every request
-app.use(async (req, res, next) => {
-    // Skip for static assets to save time
-    if (req.path.startsWith('/images') || req.path.startsWith('/css') || req.path.startsWith('/js')) {
-        return next();
-    }
-
-    try {
-        await connectDB();
-        next();
-    } catch (err) {
-        console.error('❌ DB Middleware Failed:', err);
-        // Continue? Or fail? If DB is down, likely fail.
-        // But for login page rendering (GET /login), maybe we don't need DB? 
-        // Session store might need it though.
-        next();
-    }
-});
-
 // Session Store with Fallback
 let sessionStore;
 try {
@@ -244,6 +227,7 @@ app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 app.post('/login', async (req, res) => {
     try {
         console.log('Login Request: Started');
+        await connectDB();
         const identifier = req.body.email ? req.body.email.trim() : '';
         const password = req.body.password;
 
@@ -368,6 +352,7 @@ app.post('/register', async (req, res) => {
 app.get('/dashboard', protect, async (req, res) => {
     try {
         console.log('Dashboard Request: Started');
+        await connectDB();
         const userId = req.session.userId;
         const dbUser = await User.findById(userId)
             .populate('enrolledCourses.course')
