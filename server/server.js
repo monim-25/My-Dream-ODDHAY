@@ -239,10 +239,12 @@ app.post('/login', async (req, res) => {
             req.session.user = userObj;
             req.session.userId = userObj._id.toString();
 
-            if (user.role === 'teacher') return res.redirect('/teacher/dashboard');
-            if (user.role === 'admin' || user.role === 'superadmin') return res.redirect('/admin');
-            if (user.role === 'parent') return res.redirect('/parent/dashboard');
-            res.redirect('/dashboard');
+            req.session.save(() => {
+                if (user.role === 'teacher') return res.redirect('/teacher/dashboard');
+                if (user.role === 'admin' || user.role === 'superadmin') return res.redirect('/admin');
+                if (user.role === 'parent') return res.redirect('/parent/dashboard');
+                res.redirect('/dashboard');
+            });
         } else {
             res.status(401).send('ইমেইল/ফোন বা পাসওয়ার্ড ভুল।');
         }
