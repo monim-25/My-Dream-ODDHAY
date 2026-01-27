@@ -15,6 +15,7 @@ const courseSchema = new mongoose.Schema({
     }],
     featuredForClasses: [{ type: String }], // Array of class levels to show this as an "Ad"
     trialPeriod: { type: Number, default: 0 }, // in days
+    instructor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now },
     chapters: [{
         title: { type: String, required: true },

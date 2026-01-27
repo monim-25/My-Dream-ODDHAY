@@ -17,6 +17,7 @@ const Question = require('./models/Question');
 const Note = require('./models/Note');
 const QuestionBank = require('./models/QuestionBank');
 const QA = require('./models/QA');
+const Notification = require('./models/Notification');
 
 const app = express();
 const PORT = process.env.PORT || 3005;
@@ -237,7 +238,8 @@ app.post('/login', async (req, res) => {
             req.session.user = userObj;
             req.session.userId = userObj._id.toString();
 
-            if (user.role === 'teacher' || user.role === 'admin' || user.role === 'superadmin') return res.redirect('/admin');
+            if (user.role === 'teacher') return res.redirect('/teacher/dashboard');
+            if (user.role === 'admin' || user.role === 'superadmin') return res.redirect('/admin');
             if (user.role === 'parent') return res.redirect('/parent/dashboard');
             res.redirect('/dashboard');
         } else {
@@ -312,24 +314,38 @@ app.post('/register', async (req, res) => {
 // Unified Safe Dashboard
 app.get('/dashboard', protect, async (req, res) => {
     try {
-        // Find user by ID but fall back to session if DB is laggy
-        let user = null;
-        try {
-            user = await User.findById(req.session.userId).lean();
-        } catch (dbErr) {
-            console.warn('⚠️ Dashboard DB Fetch Failed, using session fallback.');
-        }
+        const userId = req.session.userId;
+        const dbUser = await User.findById(userId).populate('enrolledCourses.course').populate('lastWatchedLesson.course').lean();
 
-        const displayUser = user || req.session.user;
+        if (!dbUser) return res.redirect('/login');
+        if (dbUser.role === 'parent') return res.redirect('/parent/dashboard');
 
-        // Pass minimal data, avoid complex aggregations on first render
+        const recommendations = await require('./models/Course').find({
+            classLevel: dbUser.classLevel,
+            _id: { $nin: (dbUser.enrolledCourses || []).map(e => e.course ? e.course._id : null) }
+        }).limit(3).lean();
+
+        const pendingParents = (dbUser.parentRequests || []).filter(r => r.status === 'pending');
+        const parents = await User.find({ _id: { $in: pendingParents.map(p => p.parent) } }).select('name email phone').lean();
+
+        const leaderboard = await User.find({ role: 'student' }).limit(5).select('name classLevel quizResults').lean();
+        const sortedLeaderboard = leaderboard.map(l => ({
+            ...l,
+            totalScore: (l.quizResults || []).reduce((acc, curr) => acc + (curr.score || 0), 0)
+        })).sort((a, b) => b.totalScore - a.totalScore);
+
+        const notifications = await Notification.find({ user: userId }).sort({ createdAt: -1 }).limit(5).lean();
+
         res.render('dashboard-unified', {
-            user: displayUser,
-            leaderboard: [] // Safe default
+            user: dbUser,
+            recommendations,
+            parentRequests: parents,
+            leaderboard: sortedLeaderboard,
+            notifications
         });
     } catch (err) {
         console.error('Dashboard Crash:', err);
-        res.status(500).send('ড্যাশবোর্ড লোড করার সময় সমস্যা হয়েছে। দয়া করে পেজটি রিফ্রেশ করুন।');
+        res.status(500).send('ড্যাশবোর্ড লোড করতে সমস্যা হয়েছে।');
     }
 });
 
@@ -355,6 +371,46 @@ app.get('/profile/edit', protect, async (req, res) => {
         res.render('parent-profile-edit', { user, success: req.query.success, error: req.query.error });
     } catch (err) {
         res.status(500).send('Error loading edit page');
+    }
+});
+
+app.get('/profile/report-card/:studentId?', protect, async (req, res) => {
+    try {
+        let studentId = req.params.studentId || req.session.userId;
+
+        // If parent, verify they have access to this student
+        if (req.session.user.role === 'parent') {
+            const parent = await User.findById(req.session.userId);
+            if (!parent.children.includes(studentId)) {
+                return res.status(403).send('আপনার এই শিক্ষার্থীর তথ্যে প্রবেশাধিকার নেই।');
+            }
+        }
+
+        const user = await User.findById(studentId).populate('enrolledCourses.course').populate('quizResults.quiz');
+        if (!user) return res.redirect('/login');
+
+        // Calculate stats
+        const totalQuizzes = user.quizResults.length;
+        const avgScore = totalQuizzes > 0
+            ? (user.quizResults.reduce((acc, curr) => acc + (curr.score / curr.total), 0) / totalQuizzes * 100).toFixed(1)
+            : 0;
+
+        const completedCourses = (user.enrolledCourses || []).filter(c => {
+            return user.completedLessons.length > 0;
+        }).length;
+
+        res.render('report-card', {
+            user,
+            stats: {
+                totalQuizzes,
+                avgScore,
+                completedCourses,
+                learningHours: (user.completedLessons.length * 0.5).toFixed(1)
+            }
+        });
+    } catch (err) {
+        console.error('Report Card Error:', err);
+        res.status(500).send('রিপোর্ট কার্ড লোড করতে সমস্যা হয়েছে।');
     }
 });
 
@@ -414,6 +470,26 @@ app.get('/note/:id', async (req, res) => {
         res.render('note-viewer', { note, user: req.session.user || null });
     } catch (err) {
         res.status(500).send('Error loading note');
+    }
+});
+
+app.get('/api/search', async (req, res) => {
+    try {
+        const query = req.query.q;
+        if (!query || query.length < 2) return res.json({ courses: [], notes: [] });
+
+        const searchRegex = new RegExp(query, 'i');
+        const courses = await Course.find({
+            $or: [{ title: searchRegex }, { subject: searchRegex }]
+        }).limit(5).select('title thumbnail subject').lean();
+
+        const notes = await Note.find({
+            title: searchRegex
+        }).limit(5).select('title').lean();
+
+        res.json({ courses, notes });
+    } catch (err) {
+        res.status(500).json({ error: 'Search failed' });
     }
 });
 
@@ -743,11 +819,68 @@ app.post('/parent/add-child', parentProtect, async (req, res) => {
 
 app.post('/student/approve-parent/:parentId', protect, async (req, res) => {
     try {
-        const student = await User.findById(req.session.user._id);
-        const reqs = student.parentRequests.find(r => r.parent.toString() === req.params.parentId);
-        if (reqs) { reqs.status = 'accepted'; await student.save(); }
-        res.redirect('/dashboard');
-    } catch (err) { res.status(500).send('Error'); }
+        const userId = req.session.userId;
+        const student = await User.findById(userId);
+        if (!student) return res.redirect('/login');
+
+        const request = student.parentRequests.find(r => r.parent.toString() === req.params.parentId);
+        if (request) {
+            request.status = 'accepted';
+            await student.save();
+        }
+        res.redirect('/dashboard?success=parent_approved');
+    } catch (err) {
+        console.error('Approve Parent Error:', err);
+        res.status(500).send('অনুরোধটি গ্রহণ করা সম্ভব হয়নি।');
+    }
+});
+
+app.post('/student/reject-parent/:parentId', protect, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const student = await User.findById(userId);
+        if (!student) return res.redirect('/login');
+
+        // Remove the request instead of just changing status to 'rejected' for cleaner data
+        student.parentRequests = student.parentRequests.filter(r => r.parent.toString() !== req.params.parentId);
+        await student.save();
+
+        res.redirect('/dashboard?success=parent_rejected');
+    } catch (err) {
+        console.error('Reject Parent Error:', err);
+        res.status(500).send('অনুরোধটি বাতিল করা সম্ভব হয়নি।');
+    }
+});
+
+app.get('/teacher/dashboard', adminProtect, async (req, res) => {
+    try {
+        const teacherId = req.session.userId;
+        const myCourses = await Course.find({ instructor: teacherId }).lean();
+
+        // Fetch students enrolled in teacher's courses
+        const totalStudents = await User.countDocuments({
+            'enrolledCourses.course': { $in: myCourses.map(c => c._id) }
+        });
+
+        const openQas = await QA.find({
+            status: 'open',
+            // In a real app, we'd filter by subject or course here
+        }).limit(5).populate('user').lean();
+
+        res.render('teacher-dashboard', {
+            user: req.session.user,
+            courses: myCourses,
+            stats: {
+                totalStudents,
+                totalCourses: myCourses.length,
+                pendingQuestions: openQas.length
+            },
+            recentQuestions: openQas
+        });
+    } catch (err) {
+        console.error('Teacher Dashboard Error:', err);
+        res.status(500).send('টিচার ড্যাশবোর্ড লোড করতে সমস্যা হয়েছে।');
+    }
 });
 
 app.get('/admin', adminProtect, async (req, res) => {
