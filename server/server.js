@@ -167,7 +167,7 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 
 // Auth Middlewares
 const protect = (req, res, next) => {
-    if (req.session.user) next();
+    if (req.session.userId || req.session.user) next();
     else res.redirect('/login');
 };
 const adminProtect = (req, res, next) => {
@@ -260,6 +260,7 @@ app.post('/login', async (req, res) => {
             const userObj = user.toObject();
             req.session.user = userObj;
             req.session.userId = userObj._id.toString();
+            req.session.isFirstLogin = true; // Set first login flag
 
             console.log('Login: Saving session...');
             req.session.save((err) => {
@@ -365,6 +366,10 @@ app.get('/dashboard', protect, async (req, res) => {
         }
         if (dbUser.role === 'parent') return res.redirect('/parent/dashboard');
 
+        // Check for first login flag
+        const isFirstLogin = req.session.isFirstLogin;
+        if (isFirstLogin) req.session.isFirstLogin = false;
+
         // Fail-Safe Data Fetching
         const data = {
             recommendations: [],
@@ -417,6 +422,7 @@ app.get('/dashboard', protect, async (req, res) => {
         try {
             res.render('dashboard-unified', {
                 user: dbUser,
+                isFirstLogin, // Pass the flag
                 ...data
             });
         } catch (viewErr) {
@@ -635,15 +641,17 @@ app.get('/profile/report-card/:studentId?', protect, async (req, res) => {
         const user = await User.findById(studentId).populate('enrolledCourses.course').populate('quizResults.quiz');
         if (!user) return res.redirect('/login');
 
+        // Calculate Days Learning Streak
+        const diffTime = Math.abs(new Date() - new Date(user.createdAt));
+        const daysLearning = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
         // Calculate stats
         const totalQuizzes = user.quizResults.length;
         const avgScore = totalQuizzes > 0
             ? (user.quizResults.reduce((acc, curr) => acc + (curr.score / curr.total), 0) / totalQuizzes * 100).toFixed(1)
             : 0;
 
-        const completedCourses = (user.enrolledCourses || []).filter(c => {
-            return user.completedLessons.length > 0;
-        }).length;
+        const completedCourses = (user.enrolledCourses || []).length;
 
         res.render('report-card', {
             user,
@@ -651,7 +659,8 @@ app.get('/profile/report-card/:studentId?', protect, async (req, res) => {
                 totalQuizzes,
                 avgScore,
                 completedCourses,
-                learningHours: (user.completedLessons.length * 0.5).toFixed(1)
+                learningHours: (user.completedLessons.length * 0.5).toFixed(1),
+                daysLearning: daysLearning // Pass streak
             }
         });
     } catch (err) {
