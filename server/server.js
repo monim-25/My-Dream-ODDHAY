@@ -25,15 +25,34 @@ const PORT = process.env.PORT || 3005;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/oddhay_db';
 
 // --- PATH RESOLUTION ---
-const clientPath = path.join(__dirname, '../client');
-console.log('✅ Client Path:', clientPath);
+let clientPath;
+// Vercel / Production Check
+if (process.env.VERCEL || process.env.NODE_ENV === 'production') {
+    // In Vercel, paths are often flattened or at root depending on build
+    // We try to find 'client/views'
+    if (fs.existsSync(path.join(process.cwd(), 'client'))) {
+        clientPath = path.join(process.cwd(), 'client');
+    } else {
+        // Fallback to standard
+        clientPath = path.join(__dirname, '../client');
+    }
+} else {
+    // Local development
+    clientPath = path.join(__dirname, '../client');
+}
+console.log('✅ Resolved Client Path:', clientPath);
 
 mongoose.set('strictQuery', false);
 
 // --- DATABASE CONNECTION ---
 const connectDB = async () => {
     try {
-        await mongoose.connect(MONGODB_URI);
+        if (mongoose.connection.readyState === 1) {
+            return;
+        }
+        await mongoose.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 5000 // Fail faster on serverless
+        });
         console.log('✅ MongoDB Connected');
     } catch (err) {
         console.error('❌ Database connection failure:', err.message);
@@ -42,12 +61,18 @@ const connectDB = async () => {
 
 // --- MIDDLEWARE SETUP ---
 
-// Session Store
-const sessionStore = MongoStore.create({
-    mongoUrl: MONGODB_URI,
-    ttl: 14 * 24 * 60 * 60,
-    autoRemove: 'native'
-});
+// Session Store with Fallback
+let sessionStore;
+try {
+    sessionStore = MongoStore.create({
+        mongoUrl: MONGODB_URI,
+        ttl: 14 * 24 * 60 * 60,
+        autoRemove: 'native'
+    });
+} catch (err) {
+    console.warn('⚠️ Session Warning: Using MemoryStore due to error:', err.message);
+    sessionStore = new session.MemoryStore();
+}
 
 app.use(session({
     secret: 'oddhay_secret_key',
@@ -63,15 +88,30 @@ app.use(session({
 // Robust Multer Config
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        let dest = path.join(clientPath, 'public/uploads/');
+        let dest = '/tmp/uploads/'; // Always safe for serverless/Vercel
+
+        // Try local if explicitly local dev (not Vercel)
+        if (!process.env.VERCEL && process.env.NODE_ENV !== 'production') {
+            try {
+                const localDest = path.join(clientPath, 'public/uploads/');
+                if (fs.existsSync(path.join(clientPath, 'public'))) {
+                    dest = localDest;
+                }
+            } catch (e) { /* ignore */ }
+        }
 
         if (file.fieldname === 'thumbnail') dest += 'thumbnails/';
         else if (file.fieldname === 'video') dest += 'videos/';
         else if (file.fieldname === 'note') dest += 'notes/';
         else if (file.fieldname === 'book') dest += 'books/';
 
-        fs.mkdirSync(dest, { recursive: true });
-        cb(null, dest);
+        try {
+            fs.mkdirSync(dest, { recursive: true });
+            cb(null, dest);
+        } catch (err) {
+            console.error('Multer MKDIR Error:', err);
+            cb(err, '/tmp/');
+        }
     },
     filename: (req, file, cb) => {
         cb(null, Date.now() + '-' + file.originalname);
