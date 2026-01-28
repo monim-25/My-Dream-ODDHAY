@@ -398,7 +398,7 @@ app.get('/dashboard', protect, async (req, res) => {
                     return User.find({ _id: { $in: pRequests.map(p => p.parent) } }).select('name email phone').lean();
                 })().catch(e => { console.error('Parent Fail:', e.message); return []; }),
 
-                User.find({ role: 'student' }).limit(5).select('name classLevel quizResults').lean()
+                User.find({ role: 'student', classLevel: dbUser.classLevel }).limit(5).select('name classLevel quizResults').lean()
                     .then(users => users.map(l => ({
                         ...l,
                         totalScore: (l.quizResults || []).reduce((acc, curr) => acc + (curr.score || 0), 0)
