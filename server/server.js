@@ -167,8 +167,9 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 
 // Auth Middlewares
 const protect = (req, res, next) => {
-    console.log(`[Auth] Checking protection for ${req.path}. SessionID: ${req.sessionID}, UserID: ${req.session.userId}`);
-    if (req.session.userId || req.session.user) {
+    const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
+    if (userId) {
+        if (!req.session.userId) req.session.userId = userId; // Sync if missing
         next();
     } else {
         console.warn(`[Auth] No session found for ${req.path}. Redirecting to /login`);
@@ -265,6 +266,10 @@ app.post('/login', async (req, res) => {
             const userObj = user.toObject();
             req.session.user = userObj;
             req.session.userId = userObj._id.toString();
+            // Normalize classLevel
+            if (user.classLevel && !user.classLevel.toLowerCase().includes('class') && !user.classLevel.includes('HSC')) {
+                user.classLevel = `Class ${user.classLevel}`;
+            }
             req.session.isFirstLogin = true; // Set first login flag
 
             console.log('Login: Saving session...');
@@ -532,10 +537,36 @@ app.post('/routine/delete/:id', protect, async (req, res) => {
 // Profile Edit Page
 app.get('/profile/edit', protect, async (req, res) => {
     try {
-        const user = await User.findById(req.session.userId);
+        const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
+        const user = await User.findById(userId);
         res.render('profile-edit', { user, success: req.query.success, error: req.query.error });
     } catch (err) {
         res.status(500).send('Error loading edit page');
+    }
+});
+
+// Profile Picture Upload
+app.post('/profile/upload-picture', protect, upload.single('profilePicture'), async (req, res) => {
+    try {
+        const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
+        if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+        const profilePicPath = `/uploads/${req.file.filename}`;
+        await User.findByIdAndUpdate(userId, {
+            profilePicture: profilePicPath,
+            profileImage: profilePicPath
+        });
+
+        // Update session
+        if (req.session.user) {
+            req.session.user.profilePicture = profilePicPath;
+            req.session.user.profileImage = profilePicPath;
+        }
+
+        res.json({ success: true, path: profilePicPath });
+    } catch (err) {
+        console.error('Upload Error:', err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

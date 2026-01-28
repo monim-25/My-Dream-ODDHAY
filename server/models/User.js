@@ -8,6 +8,9 @@ const userSchema = new mongoose.Schema({
     role: { type: String, enum: ['student', 'teacher', 'parent', 'admin', 'superadmin'], default: 'student' },
     classLevel: { type: String }, // e.g., Class 6, Class 10
     phone: { type: String, unique: true, sparse: true },
+    profilePicture: { type: String },
+    profileImage: { type: String },
+    address: { type: String },
     enrolledCourses: [{
         course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
         expiresAt: { type: Date } // null for forever
