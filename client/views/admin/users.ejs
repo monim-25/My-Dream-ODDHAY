@@ -2,129 +2,211 @@
 <html class="light" lang="bn">
 
 <head>
-    <title>User Management | ODDHAY Admin</title>
+    <title>ইউজার ম্যানেজমেন্ট | ODDHAY Admin</title>
     <%- include('../partials/head') %>
         <style>
+            :root {
+                --admin-sidebar-width: 280px;
+            }
+
             .admin-sidebar {
-                width: 280px;
+                width: var(--admin-sidebar-width);
                 height: 100vh;
                 position: fixed;
                 left: 0;
                 top: 0;
-                background: #fff;
-                border-right: 1px solid #eee;
                 z-index: 100;
             }
 
-            .dark .admin-sidebar {
-                background: #101922;
-                border-right: 1px solid #222;
-            }
-
             .admin-main {
-                margin-left: 280px;
-                padding: 40px;
+                margin-left: var(--admin-sidebar-width);
+                min-height: 100vh;
             }
 
             @media (max-width: 1024px) {
                 .admin-sidebar {
-                    display: none;
+                    transform: translateX(-100%);
                 }
 
                 .admin-main {
                     margin-left: 0;
                 }
+
+                .admin-sidebar.active {
+                    transform: translateX(0);
+                }
             }
         </style>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100">
-    <aside class="admin-sidebar p-8 overflow-y-auto">
+<body class="bg-[#f8fafc] dark:bg-[#0b1120] text-slate-900 dark:text-slate-100 font-sans">
+
+    <!-- Mobile Header -->
+    <header
+        class="lg:hidden h-16 bg-white dark:bg-[#0f172a] border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-6 sticky top-0 z-[110]">
+        <h1 class="font-black text-xl tracking-tighter">ODDHAY</h1>
+        <button onclick="toggleAdminSidebar()"
+            class="size-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800">
+            <span class="material-symbols-outlined">menu</span>
+        </button>
+    </header>
+
+    <aside id="adminSidebar"
+        class="admin-sidebar bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 overflow-y-auto transition-transform duration-300">
         <%- include('sidebar_content', { active: 'users' }) %>
     </aside>
 
     <main class="admin-main">
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
-            <div>
-                <h1 class="text-3xl font-black mb-2 uppercase tracking-tighter">ইউজার <span
-                        class="text-primary">ম্যানেজমেন্ট</span></h1>
-                <p class="text-slate-500 font-bold text-xs">প্ল্যাটফর্মের সকল ব্যবহারকারীর রোল এবং তথ্য নিয়ন্ত্রণ করুন।
-                </p>
+        <!-- Top Navigation -->
+        <nav
+            class="h-20 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-10 sticky top-0 z-50">
+            <div class="flex items-center gap-6 w-1/3">
+                <div class="relative w-full max-w-xs group">
+                    <span
+                        class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors text-[20px]">search</span>
+                    <input type="text" id="userSearch" placeholder="নাম, ইমেইল বা ফোন দিয়ে খুঁজুন..."
+                        class="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl pl-11 pr-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all">
+                </div>
             </div>
 
-            <div class="relative w-full md:w-96">
-                <span
-                    class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">search</span>
-                <input type="text" id="userSearch" placeholder="নাম, ইমেইল বা ফোন দিয়ে খুঁজুন..."
-                    class="w-full pl-12 pr-6 py-4 rounded-2xl bg-white dark:bg-slate-900 border-none shadow-lg focus:ring-2 focus:ring-primary transition-all font-bold text-sm">
-            </div>
-        </div>
+            <div class="flex items-center gap-6">
+                <button onclick="document.documentElement.classList.toggle('dark')"
+                    class="size-11 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-primary transition-all shadow-sm">
+                    <span class="material-symbols-outlined dark:hidden">dark_mode</span>
+                    <span class="material-symbols-outlined hidden dark:block text-amber-400">light_mode</span>
+                </button>
 
-        <div
-            class="bg-white dark:bg-slate-900 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-slate-50 dark:bg-slate-800/50">
-                            <th class="p-6 text-xs font-black uppercase tracking-widest text-slate-400">নাম ও ইমেইল</th>
-                            <th class="p-6 text-xs font-black uppercase tracking-widest text-slate-400">বর্তমান রোল</th>
-                            <th class="p-6 text-xs font-black uppercase tracking-widest text-slate-400">রোল পরিবর্তন
-                            </th>
-                            <th class="p-6 text-xs font-black uppercase tracking-widest text-slate-400">যোগদানের তারিখ
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                        <% users.forEach(u=> { %>
-                            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/20 transition-colors">
-                                <td class="p-6">
-                                    <p class="font-black text-sm">
-                                        <%= u.name %>
-                                    </p>
-                                    <p class="text-xs text-slate-400 font-bold">
-                                        <%= u.email %>
-                                    </p>
-                                </td>
-                                <td class="p-6">
-                                    <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest 
-                                        <%= u.role === 'superadmin' ? 'bg-purple-100 text-purple-600' : 
-                                            u.role === 'admin' ? 'bg-red-100 text-red-600' : 
-                                            u.role === 'teacher' ? 'bg-amber-100 text-amber-600' : 
-                                            u.role === 'parent' ? 'bg-emerald-100 text-emerald-600' : 
-                                            'bg-slate-100 text-slate-600' %>">
-                                        <%= u.role %>
-                                    </span>
-                                </td>
-                                <td class="p-6">
-                                    <% if (u.role !=='superadmin' && user.role==='superadmin' ) { %>
-                                        <form action="/admin/update-role/<%= u._id %>" method="POST" class="flex gap-2">
-                                            <select name="role"
-                                                class="bg-slate-50 dark:bg-slate-800 border-none rounded-lg text-xs font-bold focus:ring-1 focus:ring-primary h-9">
-                                                <option value="student" <%=u.role==='student' ? 'selected' : '' %>
-                                                    >Student</option>
-                                                <option value="admin" <%=u.role==='admin' ? 'selected' : '' %>>Admin
-                                                </option>
-                                                <option value="parent" <%=u.role==='parent' ? 'selected' : '' %>>Parent
-                                                </option>
-                                            </select>
-                                            <button type="submit"
-                                                class="h-9 px-3 bg-primary text-white rounded-lg text-xs font-bold hover:scale-105 active:scale-95 transition-all">আপডেট</button>
-                                        </form>
-                                        <% } else { %>
-                                            <span class="text-[10px] font-bold text-slate-400">অপরিবর্তনীয়</span>
-                                            <% } %>
-                                </td>
-                                <td class="p-6 text-xs font-bold text-slate-400">
-                                    <%= u.createdAt.toLocaleDateString() %>
-                                </td>
+                <div class="flex items-center gap-4">
+                    <div class="text-right hidden sm:block">
+                        <p class="text-xs font-black leading-none mb-1 capitalize">
+                            <%= user.name %>
+                        </p>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            <%= user.role %>
+                        </p>
+                    </div>
+                    <div
+                        class="size-11 rounded-2xl bg-primary text-white flex items-center justify-center font-black shadow-lg shadow-primary/20 uppercase">
+                        <%= user.name[0] %>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <section class="p-10 max-w-[1600px] mx-auto">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+                <div>
+                    <h1 class="text-4xl font-black tracking-tighter mb-2">ইউজার <span
+                            class="text-primary">ম্যানেজমেন্ট</span></h1>
+                    <p class="text-slate-500 dark:text-slate-400 font-bold text-sm">প্ল্যাটফর্মের সকল ইউজার এবং তাদের
+                        রোল নিয়ন্ত্রণ করুন।</p>
+                </div>
+                <div class="flex gap-3">
+                    <div class="flex bg-slate-50 dark:bg-slate-800 p-1 rounded-2xl">
+                        <button
+                            class="px-6 py-2.5 bg-white dark:bg-slate-700 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-sm">সবাই</button>
+                        <button
+                            class="px-6 py-2.5 font-black text-[10px] uppercase tracking-widest text-slate-400">অ্যাডমিন</button>
+                        <button
+                            class="px-6 py-2.5 font-black text-[10px] uppercase tracking-widest text-slate-400">শিক্ষার্থী</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Table Card -->
+            <div
+                class="bg-white dark:bg-[#0f172a] rounded-[3rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-800/50">
+                                <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
+                                    ব্যবহারকারী</th>
+                                <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">বর্তমান
+                                    রোল</th>
+                                <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">রোল
+                                    পরিবর্তন করুন</th>
+                                <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">অ্যাকশন
+                                </th>
                             </tr>
-                            <% }) %>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            <% users.forEach(u=> { %>
+                                <tr class="hover:bg-slate-50/30 dark:hover:bg-slate-800/10 transition-colors group">
+                                    <td class="p-8">
+                                        <div class="flex items-center gap-5">
+                                            <div
+                                                class="size-12 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center font-black text-slate-400 text-lg group-hover:bg-primary/10 group-hover:text-primary transition-all uppercase">
+                                                <%= u.name[0] %>
+                                            </div>
+                                            <div>
+                                                <p class="font-black text-sm uppercase tracking-tighter mb-0.5">
+                                                    <%= u.name %>
+                                                </p>
+                                                <p class="text-xs font-bold text-slate-400">
+                                                    <%= u.email || u.phone %>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="p-8">
+                                        <span class="px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest 
+                                        <%= u.role === 'superadmin' ? 'bg-indigo-500/10 text-indigo-500' : 
+                                            u.role === 'admin' ? 'bg-amber-500/10 text-amber-500' : 
+                                            u.role === 'parent' ? 'bg-emerald-500/10 text-emerald-500' : 
+                                            'bg-slate-500/10 text-slate-500' %>">
+                                            <%= u.role==='admin' ? 'SYSTEM ADMIN' : u.role.toUpperCase() %>
+                                        </span>
+                                    </td>
+                                    <td class="p-8">
+                                        <% if (u.role !=='superadmin' && user.role==='superadmin' ) { %>
+                                            <form action="/admin/update-role/<%= u._id %>" method="POST"
+                                                class="flex gap-2">
+                                                <select name="role"
+                                                    class="bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-xs font-bold px-4 h-11 focus:ring-1 focus:ring-primary min-w-[140px]">
+                                                    <option value="student" <%=u.role==='student' ? 'selected' : '' %>
+                                                        >STUDENT</option>
+                                                    <option value="admin" <%=u.role==='admin' ? 'selected' : '' %>>ADMIN
+                                                    </option>
+                                                    <option value="parent" <%=u.role==='parent' ? 'selected' : '' %>
+                                                        >PARENT</option>
+                                                </select>
+                                                <button type="submit"
+                                                    class="h-11 px-6 bg-primary text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-primary/20">আপডেট</button>
+                                            </form>
+                                            <% } else { %>
+                                                <div class="flex items-center gap-2 text-slate-400">
+                                                    <span class="material-symbols-outlined text-[18px]">lock</span>
+                                                    <span
+                                                        class="text-[10px] font-black uppercase tracking-widest">রেস্ট্রিক্টেড</span>
+                                                </div>
+                                                <% } %>
+                                    </td>
+                                    <td class="p-8">
+                                        <div
+                                            class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button
+                                                class="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-primary transition-all"><span
+                                                    class="material-symbols-outlined">edit</span></button>
+                                            <button
+                                                class="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-rose-500 transition-all"><span
+                                                    class="material-symbols-outlined">delete</span></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <% }) %>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
+        </section>
     </main>
+
     <script>
+        function toggleAdminSidebar() {
+            document.getElementById('adminSidebar').classList.toggle('active');
+        }
+
         document.getElementById('userSearch').addEventListener('keyup', function () {
             const query = this.value.toLowerCase();
             const rows = document.querySelectorAll('tbody tr');

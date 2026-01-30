@@ -2,163 +2,376 @@
 <html class="light" lang="bn">
 
 <head>
-    <title>অ্যাডমিন ড্যানশবোর্ড | ODDHAY</title>
+    <title>সুপার অ্যাডমিন ড্যাশবোর্ড | ODDHAY Management</title>
     <%- include('../partials/head') %>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <style>
+            :root {
+                --admin-sidebar-width: 280px;
+            }
+
             .admin-sidebar {
-                width: 280px;
+                width: var(--admin-sidebar-width);
                 height: 100vh;
                 position: fixed;
                 left: 0;
                 top: 0;
-                background: #fff;
-                border-right: 1px solid rgba(0, 0, 0, 0.03);
                 z-index: 100;
             }
 
-            .dark .admin-sidebar {
-                background: #1e293b;
-                border-right: 1px solid rgba(255, 255, 255, 0.03);
+            .admin-main {
+                margin-left: var(--admin-sidebar-width);
+                min-height: 100vh;
             }
 
-            .admin-main {
-                margin-left: 280px;
-                padding: 48px;
-                min-height: 100vh;
+            .glass-card {
+                background: rgba(255, 255, 255, 0.8);
+                backdrop-filter: blur(12px);
+                border: 1px solid rgba(255, 255, 255, 0.3);
+            }
+
+            .dark .glass-card {
+                background: rgba(30, 41, 59, 0.7);
+                border: 1px solid rgba(255, 255, 255, 0.05);
+            }
+
+            .stat-card-gradient {
+                background: linear-gradient(135deg, var(--tw-gradient-from), var(--tw-gradient-to));
             }
 
             @media (max-width: 1024px) {
                 .admin-sidebar {
-                    display: none;
+                    transform: translateX(-100%);
                 }
 
                 .admin-main {
                     margin-left: 0;
-                    padding: 24px;
                 }
+
+                .admin-sidebar.active {
+                    transform: translateX(0);
+                }
+            }
+
+            /* Custom Scrollbar for Sidebar */
+            .admin-sidebar::-webkit-scrollbar {
+                width: 4px;
+            }
+
+            .admin-sidebar::-webkit-scrollbar-thumb {
+                background: rgba(0, 0, 0, 0.1);
+                border-radius: 10px;
             }
         </style>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100">
+<body class="bg-[#f8fafc] dark:bg-[#0b1120] text-slate-900 dark:text-slate-100 font-sans selection:bg-primary/10">
 
-    <aside class="admin-sidebar hidden lg:flex flex-col">
+    <!-- Mobile Header -->
+    <header
+        class="lg:hidden h-16 bg-white dark:bg-[#0f172a] border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-6 sticky top-0 z-[110]">
+        <h1 class="font-black text-xl tracking-tighter">ODDHAY</h1>
+        <button onclick="toggleAdminSidebar()"
+            class="size-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-slate-800">
+            <span class="material-symbols-outlined">menu</span>
+        </button>
+    </header>
+
+    <aside id="adminSidebar"
+        class="admin-sidebar bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 overflow-y-auto transition-transform duration-300">
         <%- include('sidebar_content', { active: 'dashboard' }) %>
     </aside>
 
-    <main class="admin-main max-w-7xl mx-auto">
-        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12 reveal">
-            <div>
-                <p class="text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2">সুইচবোর্ড</p>
-                <h1 class="text-3xl font-black">সিস্টেম <span class="text-primary">ওভারভিউ</span></h1>
+    <main class="admin-main">
+        <!-- Top Navigation -->
+        <nav
+            class="h-20 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-10 sticky top-0 z-50">
+            <div class="flex items-center gap-6 w-1/3">
+                <div class="relative w-full max-w-xs group">
+                    <span
+                        class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors text-[20px]">search</span>
+                    <input type="text" placeholder="ইউজার বা কোর্স খুঁজুন..."
+                        class="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl pl-11 pr-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all">
+                </div>
             </div>
-            <div class="flex items-center gap-4">
-                <button
-                    class="size-12 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center text-slate-500 hover:text-primary transition-all"
-                    onclick="document.documentElement.classList.toggle('dark')">
-                    <span class="material-symbols-outlined block dark:hidden">dark_mode</span>
+
+            <div class="flex items-center gap-6">
+                <!-- Theme Toggle -->
+                <button onclick="document.documentElement.classList.toggle('dark')"
+                    class="size-11 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-primary transition-all active:scale-95 shadow-sm">
+                    <span class="material-symbols-outlined dark:hidden">dark_mode</span>
                     <span class="material-symbols-outlined hidden dark:block text-amber-400">light_mode</span>
                 </button>
-            </div>
-        </header>
 
-        <!-- Stats Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16 reveal delay-100">
-            <div class="card-smart !p-8 group hover:translate-y-[-8px]">
-                <div class="size-14 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center mb-6">
-                    <span class="material-symbols-outlined text-3xl">groups</span>
+                <!-- Notifications -->
+                <div class="relative group">
+                    <button
+                        class="size-11 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-500 hover:text-primary transition-all shadow-sm">
+                        <span class="material-symbols-outlined">notifications</span>
+                        <span
+                            class="absolute top-2.5 right-2.5 size-2 bg-rose-500 rounded-full border-2 border-white dark:border-slate-800"></span>
+                    </button>
                 </div>
-                <h3 class="text-4xl font-black mb-1">
-                    <%= allUsersCount %>
-                </h3>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">মোট ইউজার</p>
+
+                <div class="h-10 w-px bg-slate-100 dark:bg-slate-800 mx-2"></div>
+
+                <!-- User Profile -->
+                <div class="flex items-center gap-4">
+                    <div class="text-right hidden sm:block">
+                        <p class="text-xs font-black leading-none mb-1 capitalize">
+                            <%= user.name %>
+                        </p>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            <%= user.role %>
+                        </p>
+                    </div>
+                    <div
+                        class="size-11 rounded-2xl bg-primary text-white flex items-center justify-center font-black shadow-lg shadow-primary/20 cursor-pointer hover:scale-105 active:scale-95 transition-all uppercase">
+                        <%= user.name[0] %>
+                    </div>
+                </div>
             </div>
-            <div class="card-smart !p-8 group hover:translate-y-[-8px]">
+        </nav>
+
+        <section class="p-10 max-w-[1600px] mx-auto">
+            <!-- Header Section -->
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+                <div>
+                    <h1 class="text-4xl font-black tracking-tighter mb-2">সিস্টেম <span
+                            class="text-primary">সুইচবোর্ড</span></h1>
+                    <p class="text-slate-500 dark:text-slate-400 font-bold text-sm">অধ্যায় প্ল্যাটফর্মের সকল কার্যক্রম
+                        এখান থেকেই নিয়ন্ত্রিত হয়।</p>
+                </div>
+                <div class="flex gap-3">
+                    <button
+                        class="px-6 py-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">file_export</span> রিপোর্ট ডাম্প
+                    </button>
+                    <button
+                        class="px-6 py-3 bg-primary text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-primary-dark transition-all shadow-lg shadow-primary/20 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">add</span> নতুন কোর্স
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+                <!-- Students Stat -->
                 <div
-                    class="size-14 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center mb-6">
-                    <span class="material-symbols-outlined text-3xl">school</span>
+                    class="p-8 rounded-[2.5rem] bg-white dark:bg-[#0f172a] border border-slate-100 dark:border-slate-800 shadow-sm group hover:shadow-xl hover:shadow-primary/5 transition-all duration-500">
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="size-14 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-[32px]">groups</span>
+                        </div>
+                        <span
+                            class="text-emerald-500 font-black text-xs bg-emerald-500/10 px-3 py-1 rounded-full">+১২%</span>
+                    </div>
+                    <h3 class="text-4xl font-black mb-1">
+                        <%= studentCount %>
+                    </h3>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">মোট
+                        শিক্ষার্থী</p>
+                    <div class="mt-6 h-1 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div class="h-full bg-blue-500 rounded-full" style="width: 75%"></div>
+                    </div>
                 </div>
-                <h3 class="text-4xl font-black mb-1">
-                    <%= studentCount %>
-                </h3>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">শিক্ষার্থী</p>
-            </div>
-            <div class="card-smart !p-8 group hover:translate-y-[-8px]">
-                <div class="size-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mb-6">
-                    <span class="material-symbols-outlined text-3xl">book_5</span>
-                </div>
-                <h3 class="text-4xl font-black mb-1">
-                    <%= courseCount %>
-                </h3>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">মোট কোর্স</p>
-            </div>
-            <div class="card-smart !p-8 group hover:translate-y-[-8px]">
-                <div class="size-14 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mb-6">
-                    <span class="material-symbols-outlined text-3xl">mark_chat_unread</span>
-                </div>
-                <h3 class="text-4xl font-black mb-1">
-                    <%= openQas %>
-                </h3>
-                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">পেন্ডিং সাপোর্ট
-                </p>
-            </div>
-        </div>
 
-        <!-- Quick Links / Recent Activity -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 reveal delay-200">
-            <div class="lg:col-span-2 card-smart">
-                <h3 class="text-xl font-black mb-8 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-primary">analytics</span> সাম্প্রতিক পরিস্থিতি
-                </h3>
-                <div class="space-y-6">
-                    <% [1,2,3].forEach(i=> { %>
+                <!-- Courses Stat -->
+                <div
+                    class="p-8 rounded-[2.5rem] bg-white dark:bg-[#0f172a] border border-slate-100 dark:border-slate-800 shadow-sm group hover:shadow-xl hover:shadow-amber-500/5 transition-all duration-500">
+                    <div class="flex justify-between items-start mb-6">
                         <div
-                            class="flex items-center justify-between p-5 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 group hover:border-primary transition-colors">
-                            <div class="flex items-center gap-4">
-                                <div
-                                    class="size-10 rounded-xl bg-white dark:bg-slate-900 shadow-sm flex items-center justify-center text-primary">
-                                    <span class="material-symbols-outlined">person_add</span>
+                            class="size-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-[32px]">school</span>
+                        </div>
+                        <span
+                            class="text-amber-500 font-black text-xs bg-amber-500/10 px-3 py-1 rounded-full">সক্রিয়</span>
+                    </div>
+                    <h3 class="text-4xl font-black mb-1">
+                        <%= courseCount %>
+                    </h3>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">সক্রিয় কোর্স
+                    </p>
+                    <div class="mt-6 h-1 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div class="h-full bg-amber-500 rounded-full" style="width: 45%"></div>
+                    </div>
+                </div>
+
+                <!-- Revenue Stat -->
+                <div
+                    class="p-8 rounded-[2.5rem] bg-slate-900 border border-slate-800 shadow-2xl shadow-indigo-500/20 text-white relative overflow-hidden group">
+                    <div
+                        class="absolute -right-6 -top-6 size-32 bg-primary/20 rounded-full blur-3xl group-hover:scale-150 transition-all duration-1000">
+                    </div>
+                    <div class="flex justify-between items-start mb-6 relative z-10">
+                        <div
+                            class="size-14 rounded-2xl bg-white/10 text-primary flex items-center justify-center backdrop-blur-md">
+                            <span class="material-symbols-outlined text-[32px]">payments</span>
+                        </div>
+                        <span class="text-white/40 font-bold text-[10px] uppercase tracking-tighter">মাসিক
+                            টার্গেট</span>
+                    </div>
+                    <h3 class="text-4xl font-black mb-1 relative z-10">৳<%= (revenue.monthly / 1000).toFixed(1) %>K</h3>
+                    <p
+                        class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none relative z-10">
+                        মাসিক রেভিনিউ</p>
+                    <div class="mt-6 h-1 w-full bg-white/10 rounded-full overflow-hidden relative z-10">
+                        <div class="h-full bg-primary rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)]"
+                            style="width: 85%"></div>
+                    </div>
+                </div>
+
+                <!-- Active Users Stat -->
+                <div
+                    class="p-8 rounded-[2.5rem] bg-white dark:bg-[#0f172a] border border-slate-100 dark:border-slate-800 shadow-sm group hover:shadow-xl hover:shadow-rose-500/5 transition-all duration-500">
+                    <div class="flex justify-between items-start mb-6">
+                        <div class="size-14 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
+                            <span class="material-symbols-outlined text-[32px]">bolt</span>
+                        </div>
+                        <span class="text-rose-500 font-black text-xs bg-rose-500/10 px-3 py-1 rounded-full">পেন্ডিং:
+                            <%= openQas %></span>
+                    </div>
+                    <h3 class="text-4xl font-black mb-1">
+                        <%= allUsersCount %>
+                    </h3>
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">মোট ইউজার
+                        বেস</p>
+                    <div class="mt-6 h-1 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div class="h-full bg-rose-500 rounded-full" style="width: 60%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Body -->
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                <!-- Growth Chart -->
+                <div
+                    class="xl:col-span-2 p-10 rounded-[3rem] bg-white dark:bg-[#0f172a] border border-slate-100 dark:border-slate-800 shadow-sm">
+                    <div class="flex justify-between items-center mb-10">
+                        <div>
+                            <h4 class="text-xl font-black flex items-center gap-2">
+                                <span class="material-symbols-outlined text-primary">analytics</span> ইউজার গ্রোথ
+                                অ্যানালিটিক্স
+                            </h4>
+                            <p class="text-xs font-bold text-slate-400">গত ৬ মাসের ইউজার এনরোলমেন্টের রিপোর্ট</p>
+                        </div>
+                        <select
+                            class="bg-slate-50 dark:bg-slate-800 border-none rounded-xl text-xs font-bold px-4 py-2 focus:ring-1 focus:ring-primary">
+                            <option>গত ৬ মাস</option>
+                            <option>গত ১ বছর</option>
+                        </select>
+                    </div>
+                    <div class="h-[400px]">
+                        <canvas id="growthChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recent Users List -->
+                <div
+                    class="p-10 rounded-[3rem] bg-white dark:bg-[#0f172a] border border-slate-100 dark:border-slate-800 shadow-sm">
+                    <div class="flex justify-between items-center mb-10">
+                        <h4 class="text-xl font-black">সাম্প্রতিক ইউজার</h4>
+                        <a href="/admin/users" class="text-xs font-black text-primary uppercase hover:underline">সবগুলো
+                            দেখুন</a>
+                    </div>
+                    <div class="space-y-6">
+                        <% recentUsers.forEach(u=> { %>
+                            <div class="flex items-center justify-between group">
+                                <div class="flex items-center gap-4">
+                                    <div
+                                        class="size-12 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center font-black text-slate-400 group-hover:bg-primary group-hover:text-white transition-all uppercase">
+                                        <%= u.name[0] %>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="font-black text-sm truncate uppercase tracking-tighter">
+                                            <%= u.name %>
+                                        </p>
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                                            <%= u.role %>
+                                        </p>
+                                    </div>
                                 </div>
-                                <div>
-                                    <p class="text-sm font-black">নতুন শিক্ষার্থী যোগ হয়েছে</p>
-                                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">২ মিনিট আগে
+                                <div class="text-right">
+                                    <p class="text-[10px] font-black uppercase text-slate-400">
+                                        <%= u.createdAt.toLocaleDateString() %>
                                     </p>
                                 </div>
                             </div>
-                            <span
-                                class="material-symbols-outlined text-slate-200 group-hover:text-primary transition-colors">east</span>
-                        </div>
-                        <% }) %>
-                </div>
-            </div>
+                            <% }) %>
+                    </div>
 
-            <div class="card-smart bg-primary !text-white !p-10 relative overflow-hidden group">
-                <div
-                    class="absolute -right-10 -bottom-10 size-48 bg-white/10 rounded-full blur-3xl group-hover:scale-150 transition-all duration-700">
-                </div>
-                <h3 class="text-2xl font-black mb-6">সুপার অ্যাডমিন <br> অ্যাকশন</h3>
-                <div class="space-y-4 relative z-10">
-                    <a href="/admin/users"
-                        class="flex items-center justify-between p-4 bg-white/10 hover:bg-white/20 rounded-2xl border border-white/20 transition-all backdrop-blur-sm">
-                        <span class="text-sm font-bold">ইউজার ম্যানেজ করুন</span>
-                        <span class="material-symbols-outlined">groups</span>
-                    </a>
-                    <a href="/admin/teacher"
-                        class="flex items-center justify-between p-4 bg-white/10 hover:bg-white/20 rounded-2xl border border-white/20 transition-all backdrop-blur-sm">
-                        <span class="text-sm font-bold">নতুন কোর্স এড করুন</span>
-                        <span class="material-symbols-outlined">add_circle</span>
-                    </a>
+                    <!-- Platform Health Status -->
+                    <div class="mt-12 pt-10 border-t border-slate-100 dark:border-slate-800">
+                        <h5 class="text-xs font-black uppercase tracking-widest mb-6 text-slate-400">প্ল্যাটফর্ম হেলথ্
+                        </h5>
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold">সার্ভার লেটেন্সি</span>
+                                <span class="text-xs font-black text-emerald-500">২৪ এমএস</span>
+                            </div>
+                            <div class="w-full h-1.5 bg-slate-50 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div class="h-full bg-emerald-500" style="width: 95%"></div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold">ডাটাবেস কানেকশন</span>
+                                <span class="text-xs font-black text-emerald-500">১০০%</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
+        </section>
     </main>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => entry.isIntersecting && entry.target.classList.add('active'));
-            }, { threshold: 0.1 });
-            document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+        // Sidebar Toggle
+        function toggleAdminSidebar() {
+            document.getElementById('adminSidebar').classList.toggle('active');
+        }
+
+        // Initialize Growth Chart
+        const ctx = document.getElementById('growthChart').getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(79, 70, 229, 0.4)');
+        gradient.addColorStop(1, 'rgba(79, 70, 229, 0)');
+
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['জানুয়ারি', 'ফেব্রুয়ারি', 'মার্চ', 'এপ্রিল', 'মে', 'জুন'],
+                datasets: [{
+                    label: 'শিক্ষার্থী গ্রোথ',
+                    data: [1200, 1900, 3000, 5000, 7500, 10000],
+                    borderColor: '#4f46e5',
+                    borderWidth: 4,
+                    fill: true,
+                    backgroundColor: gradient,
+                    tension: 0.4,
+                    pointBackgroundColor: '#4f46e5',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2,
+                    pointRadius: 6,
+                    pointHoverRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { display: false },
+                        ticks: { font: { weight: 'bold' } }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { weight: 'bold' } }
+                    }
+                }
+            }
         });
     </script>
 </body>

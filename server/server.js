@@ -1291,14 +1291,27 @@ app.get('/teacher/dashboard', adminProtect, async (req, res) => {
 app.get('/admin', adminProtect, async (req, res) => {
     try {
         const studentCount = await User.countDocuments({ role: 'student' });
+        const adminCount = await User.countDocuments({ role: 'admin' });
         const courseCount = await Course.countDocuments();
         const openQas = await QA.countDocuments({ status: 'open' });
         const allUsersCount = await User.countDocuments();
+        const recentUsers = await User.find().sort({ createdAt: -1 }).limit(5).select('name email role createdAt');
+
+        // Mock Financial Data (To be replaced with actual Transaction model later)
+        const revenue = {
+            today: 12500,
+            monthly: 450000,
+            total: 2850000
+        };
+
         res.render('admin/dashboard', {
             studentCount,
+            adminCount,
             courseCount,
             openQas,
             allUsersCount,
+            recentUsers,
+            revenue,
             user: req.session.user || { role: 'admin', name: 'এডমিন' }
         });
     } catch (err) {
@@ -1416,6 +1429,14 @@ app.post('/admin/qa-answer/:id', adminProtect, async (req, res) => {
     const { answer } = req.body;
     await QA.findByIdAndUpdate(req.params.id, { answer, status: 'resolved', answeredBy: req.session.userId });
     res.redirect('/admin/qas');
+});
+
+app.get('/admin/payments', superAdminProtect, (req, res) => {
+    res.render('admin/dashboard', { user: req.session.user, studentCount: 0, adminCount: 0, courseCount: 0, openQas: 0, allUsersCount: 0, recentUsers: [], revenue: { today: 0, monthly: 0, total: 0 } });
+});
+
+app.get('/admin/settings', superAdminProtect, (req, res) => {
+    res.render('admin/settings', { user: req.session.user });
 });
 
 app.get('*', (req, res) => res.status(404).render('404'));
