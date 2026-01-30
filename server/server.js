@@ -53,6 +53,9 @@ if (!cached) {
 
 const connectDB = async () => {
     if (cached.conn) {
+        // Migration: Ensure teacher role is migrated to admin
+        const User = require('./models/User');
+        User.updateMany({ role: 'teacher' }, { role: 'admin' }).catch(err => console.error('Migration error:', err));
         return cached.conn;
     }
 
@@ -177,7 +180,7 @@ const protect = (req, res, next) => {
     }
 };
 const adminProtect = (req, res, next) => {
-    const roles = ['teacher', 'admin', 'superadmin'];
+    const roles = ['admin', 'superadmin'];
     if (req.session.user && roles.includes(req.session.user.role)) next();
     else res.status(403).send('Access Denied: Admin level required');
 };
@@ -279,7 +282,6 @@ app.post('/login', async (req, res) => {
                     return res.status(500).send(`Session Error: ${err.message}`);
                 }
                 console.log('Login: Session saved. Redirecting...');
-                if (user.role === 'teacher') return res.redirect('/teacher/dashboard');
                 if (user.role === 'admin' || user.role === 'superadmin') return res.redirect('/admin');
                 if (user.role === 'parent') return res.redirect('/parent/dashboard');
                 res.redirect('/dashboard');
@@ -1326,11 +1328,11 @@ app.post('/admin/update-role/:id', superAdminProtect, async (req, res) => {
     }
 });
 
-app.get('/admin/teacher', adminProtect, async (req, res) => {
+app.get('/admin/courses', adminProtect, async (req, res) => {
     try {
         const courses = await Course.find();
         const studentCount = await User.countDocuments({ role: 'student' });
-        res.render('teacher-dashboard', { courses, studentCount });
+        res.render('teacher-dashboard', { courses, studentCount, user: req.session.user });
     } catch (err) { res.status(500).send('Error'); }
 });
 
@@ -1353,7 +1355,7 @@ app.post('/admin/add-course', adminProtect, upload.single('thumbnail'), async (r
             plans = names.map((name, i) => ({ name, durationDays: parseInt(durations[i]) || 0, price: parseInt(prices[i]) || 0 })).filter(p => p.name);
         }
         await new Course({ title, subject, category, classLevel, description, thumbnail, accessType: accessType || 'free', plans, trialPeriod: trialPeriod || 0, featuredForClasses: Array.isArray(featuredForClasses) ? featuredForClasses : (featuredForClasses ? [featuredForClasses] : []) }).save();
-        res.redirect('/admin/teacher');
+        res.redirect('/admin/courses');
     } catch (err) { res.status(500).send('Error'); }
 });
 
