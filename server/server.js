@@ -1290,30 +1290,44 @@ app.get('/teacher/dashboard', adminProtect, async (req, res) => {
 
 app.get('/admin', adminProtect, async (req, res) => {
     try {
-        const studentCount = await User.countDocuments({ role: 'student' });
-        const adminCount = await User.countDocuments({ role: 'admin' });
-        const courseCount = await Course.countDocuments();
-        const openQas = await QA.countDocuments({ status: 'open' });
-        const allUsersCount = await User.countDocuments();
-        const recentUsers = await User.find().sort({ createdAt: -1 }).limit(5).select('name email role createdAt');
+        const user = req.session.user;
 
-        // Mock Financial Data (To be replaced with actual Transaction model later)
-        const revenue = {
-            today: 12500,
-            monthly: 450000,
-            total: 2850000
-        };
+        if (user.role === 'superadmin') {
+            const studentCount = await User.countDocuments({ role: 'student' });
+            const adminCount = await User.countDocuments({ role: 'admin' });
+            const courseCount = await Course.countDocuments();
+            const openQas = await QA.countDocuments({ status: 'open' });
+            const allUsersCount = await User.countDocuments();
+            const recentUsers = await User.find().sort({ createdAt: -1 }).limit(5).select('name email role createdAt');
 
-        res.render('admin/dashboard', {
-            studentCount,
-            adminCount,
-            courseCount,
-            openQas,
-            allUsersCount,
-            recentUsers,
-            revenue,
-            user: req.session.user || { role: 'admin', name: 'এডমিন' }
-        });
+            const revenue = { today: 12500, monthly: 450000, total: 2850000 };
+
+            return res.render('admin/dashboard', {
+                studentCount, adminCount, courseCount, openQas,
+                allUsersCount, recentUsers, revenue,
+                user: req.session.user, active: 'dashboard'
+            });
+        } else {
+            // Academic Admin Overview
+            const courses = await Course.find({ instructor: user._id });
+            const totalClasses = courses.reduce((acc, c) => acc + c.chapters.reduce((a, ch) => a + ch.recordedClasses.length, 0), 0);
+            const totalExams = await Quiz.countDocuments({ addedBy: user._id });
+            const totalNotes = await Note.countDocuments({ addedBy: user._id });
+            const totalQuestions = await QuestionBank.countDocuments({ addedBy: user._id });
+
+            const pendingQas = await QA.find({ status: 'open' }).limit(3).populate('askedBy').lean();
+            const mappedQas = pendingQas.map(q => ({ ...q, user: q.askedBy, question: q.question }));
+
+            return res.render('admin/academic-overview', {
+                stats: { totalClasses, totalExams, totalNotes, totalQuestions },
+                recentActivity: [
+                    { icon: 'video_call', text: 'নতুন ক্লাস আপলোড করেছেন', time: '২ ঘণ্টা আগে' },
+                    { icon: 'quiz', text: 'একটি নতুন এক্সাম তৈরি করেছেন', time: '৫ ঘণ্টা আগে' }
+                ],
+                pendingQas: mappedQas,
+                user: req.session.user, active: 'dashboard'
+            });
+        }
     } catch (err) {
         console.error('Admin Dashboard Error:', err);
         res.status(500).send('এডমিন ড্যাশবোর্ড লোড করতে সমস্যা হয়েছে।');
@@ -1343,15 +1357,15 @@ app.post('/admin/update-role/:id', superAdminProtect, async (req, res) => {
 
 app.get('/admin/courses', adminProtect, async (req, res) => {
     try {
-        const courses = await Course.find().populate('instructor');
+        const user = req.session.user;
+        let query = {};
+        if (user.role === 'admin') query = { instructor: user._id };
 
-        // Calculate enrollment counts for each course
+        const courses = await Course.find(query).populate('instructor');
+
         const coursesWithEnrollment = await Promise.all(courses.map(async (course) => {
             const enrollmentCount = await User.countDocuments({ "enrolledCourses.course": course._id });
-            return {
-                ...course.toObject(),
-                studentCount: enrollmentCount
-            };
+            return { ...course.toObject(), studentCount: enrollmentCount };
         }));
 
         res.render('teacher-dashboard', {
@@ -1365,7 +1379,11 @@ app.get('/admin/courses', adminProtect, async (req, res) => {
 
 app.get('/admin/classes', adminProtect, async (req, res) => {
     try {
-        const courses = await Course.find().populate('instructor');
+        const user = req.session.user;
+        let query = {};
+        if (user.role === 'admin') query = { instructor: user._id };
+
+        const courses = await Course.find(query).populate('instructor');
         let allClasses = [];
 
         for (const course of courses) {
@@ -1437,8 +1455,13 @@ app.post('/admin/course/:cid/chapter/:chid/add-note', adminProtect, upload.singl
     res.redirect(`/admin/course/${req.params.cid}`);
 });
 app.get('/admin/quizzes', adminProtect, async (req, res) => {
-    const quizzes = await Quiz.find().populate('course').populate('addedBy');
-    const courses = await Course.find();
+    const user = req.session.user;
+    let query = {};
+    if (user.role === 'admin') {
+        query = { addedBy: user._id };
+    }
+    const quizzes = await Quiz.find(query).populate('course').populate('addedBy');
+    const courses = await Course.find(user.role === 'admin' ? { instructor: user._id } : {});
     res.render('admin/quizzes', { quizzes, courses, user: req.session.user, active: 'quizzes' });
 });
 app.post('/admin/add-quiz', adminProtect, async (req, res) => {
@@ -1454,7 +1477,12 @@ app.post('/admin/add-quiz', adminProtect, async (req, res) => {
 
 // --- Admin Notes Management ---
 app.get('/admin/notes', adminProtect, async (req, res) => {
-    const notes = await Note.find().populate('addedBy');
+    const user = req.session.user;
+    let query = {};
+    if (user.role === 'admin') {
+        query = { addedBy: user._id };
+    }
+    const notes = await Note.find(query).populate('addedBy');
     res.render('admin/notes', { notes, user: req.session.user, active: 'notes' });
 });
 app.post('/admin/add-note', adminProtect, upload.single('note'), async (req, res) => {
@@ -1473,7 +1501,12 @@ app.post('/admin/add-note', adminProtect, upload.single('note'), async (req, res
 
 // --- Admin QuestionBank Management ---
 app.get('/admin/question-bank', adminProtect, async (req, res) => {
-    const questions = await QuestionBank.find().populate('addedBy');
+    const user = req.session.user;
+    let query = {};
+    if (user.role === 'admin') {
+        query = { addedBy: user._id };
+    }
+    const questions = await QuestionBank.find(query).populate('addedBy');
     res.render('admin/question-bank', { questions, user: req.session.user, active: 'questions' });
 });
 app.post('/admin/add-question-bank', adminProtect, upload.single('question'), async (req, res) => {
@@ -1492,8 +1525,12 @@ app.post('/admin/add-question-bank', adminProtect, upload.single('question'), as
 
 // --- Admin QA Management ---
 app.get('/admin/qas', adminProtect, async (req, res) => {
-    const qas = await QA.find().populate('askedBy');
-    res.render('admin-qas', { qas });
+    const user = req.session.user;
+    let query = {};
+    // QA might be open to all academic admins, or filtered by subject/course assignments.
+    // For now, let's show all open QAs that academic admins can answer.
+    const qas = await QA.find(query).populate('askedBy').sort({ createdAt: -1 });
+    res.render('admin/qas', { qas, user: req.session.user, active: 'qas' });
 });
 app.post('/admin/qa-answer/:id', adminProtect, async (req, res) => {
     const { answer } = req.body;
