@@ -10,6 +10,7 @@ const quizSchema = new mongoose.Schema({
         correctAnswerIndex: { type: Number, required: true },
         explanation: { type: String }
     }],
+    addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     createdAt: { type: Date, default: Date.now }
 });
 

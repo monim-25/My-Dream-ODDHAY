@@ -1343,9 +1343,47 @@ app.post('/admin/update-role/:id', superAdminProtect, async (req, res) => {
 
 app.get('/admin/courses', adminProtect, async (req, res) => {
     try {
-        const courses = await Course.find();
-        const studentCount = await User.countDocuments({ role: 'student' });
-        res.render('teacher-dashboard', { courses, studentCount, user: req.session.user });
+        const courses = await Course.find().populate('instructor');
+
+        // Calculate enrollment counts for each course
+        const coursesWithEnrollment = await Promise.all(courses.map(async (course) => {
+            const enrollmentCount = await User.countDocuments({ "enrolledCourses.course": course._id });
+            return {
+                ...course.toObject(),
+                studentCount: enrollmentCount
+            };
+        }));
+
+        res.render('teacher-dashboard', {
+            courses: coursesWithEnrollment,
+            studentCount: await User.countDocuments({ role: 'student' }),
+            user: req.session.user,
+            active: 'courses'
+        });
+    } catch (err) { res.status(500).send('Error'); }
+});
+
+app.get('/admin/classes', adminProtect, async (req, res) => {
+    try {
+        const courses = await Course.find().populate('instructor');
+        let allClasses = [];
+
+        for (const course of courses) {
+            for (const chapter of course.chapters) {
+                for (const rc of chapter.recordedClasses) {
+                    allClasses.push({
+                        ...rc.toObject(),
+                        courseTitle: course.title,
+                        chapterTitle: chapter.title,
+                        instructor: course.instructor ? course.instructor.name : 'অ্যাডমিন',
+                        courseId: course._id,
+                        accessType: course.accessType
+                    });
+                }
+            }
+        }
+
+        res.render('admin/classes', { classes: allClasses, user: req.session.user, active: 'classes' });
     } catch (err) { res.status(500).send('Error'); }
 });
 
@@ -1367,7 +1405,19 @@ app.post('/admin/add-course', adminProtect, upload.single('thumbnail'), async (r
             const prices = Array.isArray(planPrices) ? planPrices : [planPrices];
             plans = names.map((name, i) => ({ name, durationDays: parseInt(durations[i]) || 0, price: parseInt(prices[i]) || 0 })).filter(p => p.name);
         }
-        await new Course({ title, subject, category, classLevel, description, thumbnail, accessType: accessType || 'free', plans, trialPeriod: trialPeriod || 0, featuredForClasses: Array.isArray(featuredForClasses) ? featuredForClasses : (featuredForClasses ? [featuredForClasses] : []) }).save();
+        await new Course({
+            title,
+            subject,
+            category,
+            classLevel,
+            description,
+            thumbnail,
+            accessType: accessType || 'free',
+            plans,
+            trialPeriod: trialPeriod || 0,
+            featuredForClasses: Array.isArray(featuredForClasses) ? featuredForClasses : (featuredForClasses ? [featuredForClasses] : []),
+            instructor: req.session.user._id
+        }).save();
         res.redirect('/admin/courses');
     } catch (err) { res.status(500).send('Error'); }
 });
@@ -1387,36 +1437,56 @@ app.post('/admin/course/:cid/chapter/:chid/add-note', adminProtect, upload.singl
     res.redirect(`/admin/course/${req.params.cid}`);
 });
 app.get('/admin/quizzes', adminProtect, async (req, res) => {
-    const quizzes = await Quiz.find().populate('course');
+    const quizzes = await Quiz.find().populate('course').populate('addedBy');
     const courses = await Course.find();
-    res.render('admin-quizzes', { quizzes, courses });
+    res.render('admin/quizzes', { quizzes, courses, user: req.session.user, active: 'quizzes' });
 });
 app.post('/admin/add-quiz', adminProtect, async (req, res) => {
-    await new Quiz({ title: req.body.title, course: req.body.courseId, duration: req.body.duration, questions: [] }).save();
+    await new Quiz({
+        title: req.body.title,
+        course: req.body.courseId,
+        duration: req.body.duration,
+        questions: [],
+        addedBy: req.session.user._id
+    }).save();
     res.redirect('/admin/quizzes');
 });
 
 // --- Admin Notes Management ---
 app.get('/admin/notes', adminProtect, async (req, res) => {
-    const notes = await Note.find();
-    res.render('admin-notes', { notes });
+    const notes = await Note.find().populate('addedBy');
+    res.render('admin/notes', { notes, user: req.session.user, active: 'notes' });
 });
 app.post('/admin/add-note', adminProtect, upload.single('note'), async (req, res) => {
     const { title, subject, classLevel, description } = req.body;
     const fileUrl = req.file ? `/uploads/notes/${req.file.filename}` : null;
-    await new Note({ title, subject, classLevel, description, fileUrl }).save();
+    await new Note({
+        title,
+        subject,
+        classLevel,
+        description,
+        fileUrl,
+        addedBy: req.session.user._id
+    }).save();
     res.redirect('/admin/notes');
 });
 
 // --- Admin QuestionBank Management ---
 app.get('/admin/question-bank', adminProtect, async (req, res) => {
-    const questions = await QuestionBank.find();
-    res.render('admin-question-bank', { questions });
+    const questions = await QuestionBank.find().populate('addedBy');
+    res.render('admin/question-bank', { questions, user: req.session.user, active: 'questions' });
 });
 app.post('/admin/add-question-bank', adminProtect, upload.single('question'), async (req, res) => {
     const { year, board, subject, classLevel } = req.body;
     const fileUrl = req.file ? `/uploads/questions/${req.file.filename}` : null;
-    await new QuestionBank({ year, board, subject, classLevel, fileUrl }).save();
+    await new QuestionBank({
+        year,
+        board,
+        subject,
+        classLevel,
+        fileUrl,
+        addedBy: req.session.user._id
+    }).save();
     res.redirect('/admin/question-bank');
 });
 
