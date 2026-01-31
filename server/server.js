@@ -19,6 +19,11 @@ const QuestionBank = require('./models/QuestionBank');
 const QA = require('./models/QA');
 const Notification = require('./models/Notification');
 const RoutineTask = require('./models/RoutineTask');
+const PushSubscription = require('./models/PushSubscription');
+const NotificationLog = require('./models/NotificationLog');
+
+// Import Services
+const pushNotificationService = require('./services/pushNotificationService');
 
 const app = express();
 const PORT = process.env.PORT || 3005;
@@ -1544,6 +1549,213 @@ app.get('/admin/payments', superAdminProtect, (req, res) => {
 
 app.get('/admin/settings', superAdminProtect, (req, res) => {
     res.render('admin/settings', { user: req.session.user });
+});
+
+app.get('/admin/notifications', adminProtect, (req, res) => {
+    res.render('admin/notifications', { user: req.session.user, active: 'notifications' });
+});
+
+// --- PUSH NOTIFICATION API ROUTES ---
+
+// Get VAPID public key
+app.get('/api/push/vapid-public-key', (req, res) => {
+    res.json({ publicKey: pushNotificationService.getPublicKey() });
+});
+
+// Subscribe to push notifications
+app.post('/api/push/subscribe', protect, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const subscription = req.body;
+        const userAgent = req.headers['user-agent'] || '';
+
+        await pushNotificationService.saveSubscription(userId, subscription, userAgent);
+
+        res.json({ success: true, message: 'Subscription saved' });
+    } catch (error) {
+        console.error('Subscribe error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Unsubscribe from push notifications
+app.post('/api/push/unsubscribe', protect, async (req, res) => {
+    try {
+        const subscription = req.body;
+        await pushNotificationService.removeSubscription(subscription.endpoint);
+
+        res.json({ success: true, message: 'Subscription removed' });
+    } catch (error) {
+        console.error('Unsubscribe error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Test notification (for current user)
+app.post('/api/push/test', protect, async (req, res) => {
+    try {
+        const userId = req.session.userId;
+        const user = await User.findById(userId);
+
+        const result = await pushNotificationService.sendToUser(userId, {
+            title: 'ODDHAY পরীক্ষা নোটিফিকেশন',
+            body: `হ্যালো ${user.name}! আপনার নোটিফিকেশন সঠিকভাবে কাজ করছে ✅`,
+            icon: '/images/icon-192.png',
+            url: '/dashboard',
+            type: 'system'
+        });
+
+        res.json({ success: true, result });
+    } catch (error) {
+        console.error('Test notification error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Admin: Send notification to specific user
+app.post('/api/push/send-to-user', adminProtect, async (req, res) => {
+    try {
+        const { userId, title, body, url, type, priority } = req.body;
+
+        if (!userId || !title || !body) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        const result = await pushNotificationService.sendToUser(userId, {
+            title,
+            body,
+            url: url || '/dashboard',
+            type: type || 'custom',
+            priority: priority || 'normal',
+            campaign: 'admin-manual'
+        });
+
+        res.json({ success: true, result });
+    } catch (error) {
+        console.error('Send notification error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Admin: Send notification to role
+app.post('/api/push/send-to-role', adminProtect, async (req, res) => {
+    try {
+        const { role, title, body, url, type, priority } = req.body;
+
+        if (!role || !title || !body) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        const result = await pushNotificationService.sendToRole(role, {
+            title,
+            body,
+            url: url || '/dashboard',
+            type: type || 'custom',
+            priority: priority || 'normal',
+            campaign: `admin-role-${role}`
+        });
+
+        res.json({ success: true, result });
+    } catch (error) {
+        console.error('Send to role error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Admin: Send notification to class level
+app.post('/api/push/send-to-class', adminProtect, async (req, res) => {
+    try {
+        const { classLevel, title, body, url, type, priority } = req.body;
+
+        if (!classLevel || !title || !body) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        const result = await pushNotificationService.sendToClassLevel(classLevel, {
+            title,
+            body,
+            url: url || '/dashboard',
+            type: type || 'custom',
+            priority: priority || 'normal',
+            campaign: `admin-class-${classLevel}`
+        });
+
+        res.json({ success: true, result });
+    } catch (error) {
+        console.error('Send to class error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Super Admin: Send notification to all users
+app.post('/api/push/send-to-all', superAdminProtect, async (req, res) => {
+    try {
+        const { title, body, url, type, priority } = req.body;
+
+        if (!title || !body) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        const result = await pushNotificationService.sendToAll({
+            title,
+            body,
+            url: url || '/dashboard',
+            type: type || 'announcement',
+            priority: priority || 'normal',
+            campaign: 'admin-broadcast'
+        });
+
+        res.json({ success: true, result });
+    } catch (error) {
+        console.error('Send to all error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get notification statistics
+app.get('/api/push/stats', protect, async (req, res) => {
+    try {
+        const userId = req.session.user.role === 'student' ? req.session.userId : null;
+        const stats = await pushNotificationService.getStats(userId);
+
+        res.json({ success: true, stats });
+    } catch (error) {
+        console.error('Stats error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Admin: Get all notification logs
+app.get('/api/push/logs', adminProtect, async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 20;
+        const skip = (page - 1) * limit;
+
+        const [logs, total] = await Promise.all([
+            NotificationLog.find()
+                .populate('user', 'name email')
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean(),
+            NotificationLog.countDocuments()
+        ]);
+
+        res.json({
+            success: true,
+            logs,
+            pagination: {
+                page,
+                limit,
+                total,
+                pages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        console.error('Logs error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 app.get('*', (req, res) => res.status(404).render('404'));
