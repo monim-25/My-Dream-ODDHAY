@@ -1,0 +1,373 @@
+<!-- Notification Panel Partial -->
+<div id="notification-panel"
+    class="fixed top-16 right-0 w-full sm:w-96 h-[calc(100vh-4rem)] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl transform translate-x-full transition-transform duration-300 z-[100] overflow-hidden flex flex-col">
+
+    <!-- Header -->
+    <div
+        class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900">
+        <h3 class="text-lg font-black text-slate-800 dark:text-white flex items-center gap-2">
+            <span class="material-symbols-outlined text-blue-500">notifications</span>
+            নোটিফিকেশন
+        </h3>
+        <div class="flex items-center gap-2">
+            <button onclick="markAllAsRead()"
+                class="text-xs font-bold text-blue-500 hover:text-blue-600 transition-colors px-3 py-1 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20">
+                সব পড়া হয়েছে
+            </button>
+            <button onclick="toggleNotificationPanel()"
+                class="size-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <span class="material-symbols-outlined text-slate-500">close</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+        <button onclick="switchNotificationTab('all')" id="tab-all"
+            class="flex-1 px-4 py-3 text-sm font-bold text-blue-500 border-b-2 border-blue-500 transition-colors">
+            সব (<span id="count-all">0</span>)
+        </button>
+        <button onclick="switchNotificationTab('unread')" id="tab-unread"
+            class="flex-1 px-4 py-3 text-sm font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+            না পড়া (<span id="count-unread">0</span>)
+        </button>
+    </div>
+
+    <!-- Notifications List -->
+    <div id="notifications-container" class="flex-1 overflow-y-auto p-4 space-y-3">
+        <!-- Loading State -->
+        <div id="notifications-loading" class="flex flex-col items-center justify-center py-12">
+            <div class="size-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p class="text-sm text-slate-400 font-medium">লোড হচ্ছে...</p>
+        </div>
+
+        <!-- Empty State -->
+        <div id="notifications-empty" class="hidden flex-col items-center justify-center py-12">
+            <span
+                class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-700 mb-4">notifications_off</span>
+            <p class="text-sm text-slate-400 font-medium">কোনো নোটিফিকেশন নেই</p>
+        </div>
+
+        <!-- Notifications will be inserted here -->
+        <div id="notifications-list"></div>
+    </div>
+
+    <!-- Footer Actions -->
+    <div class="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+        <button onclick="clearAllNotifications()"
+            class="w-full py-2.5 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+            সব মুছে ফেলুন
+        </button>
+    </div>
+</div>
+
+<!-- Notification Panel Overlay -->
+<div id="notification-overlay" onclick="toggleNotificationPanel()"
+    class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99] hidden opacity-0 transition-opacity duration-300">
+</div>
+
+<script>
+    // Notification Panel Manager
+    class NotificationPanelManager {
+        constructor() {
+            this.notifications = [];
+            this.currentTab = 'all';
+            this.isOpen = false;
+            this.init();
+        }
+
+        init() {
+            this.setupNotificationBell();
+            this.loadNotifications();
+            // Auto-refresh every 30 seconds
+            setInterval(() => this.loadNotifications(), 30000);
+        }
+
+        setupNotificationBell() {
+            const bellBtn = document.querySelector('button[class*="notifications"]')?.closest('button');
+            if (bellBtn) {
+                bellBtn.onclick = (e) => {
+                    e.preventDefault();
+                    this.togglePanel();
+                };
+            }
+        }
+
+        async loadNotifications() {
+            try {
+                const response = await fetch('/api/notifications');
+                const data = await response.json();
+
+                if (data.success) {
+                    this.notifications = data.notifications;
+                    this.updateCounts();
+                    this.renderNotifications();
+                    this.updateBellBadge();
+                }
+            } catch (error) {
+                console.error('Failed to load notifications:', error);
+            }
+        }
+
+        updateCounts() {
+            const unreadCount = this.notifications.filter(n => !n.isRead).length;
+            document.getElementById('count-all').textContent = this.notifications.length;
+            document.getElementById('count-unread').textContent = unreadCount;
+        }
+
+        updateBellBadge() {
+            const unreadCount = this.notifications.filter(n => !n.isRead).length;
+            const bellBtn = document.querySelector('button[class*="notifications"]')?.closest('button');
+
+            if (bellBtn) {
+                let badge = bellBtn.querySelector('.notification-badge');
+
+                if (unreadCount > 0) {
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'notification-badge absolute top-2 lg:top-2.5 right-2 lg:right-2.5 size-2 lg:size-2.5 bg-red-500 rounded-full border-2 border-white dark:border-slate-900';
+                        bellBtn.appendChild(badge);
+                    }
+                } else {
+                    if (badge) badge.remove();
+                }
+            }
+        }
+
+        renderNotifications() {
+            const container = document.getElementById('notifications-list');
+            const loading = document.getElementById('notifications-loading');
+            const empty = document.getElementById('notifications-empty');
+
+            loading.classList.add('hidden');
+
+            const filteredNotifications = this.currentTab === 'unread'
+                ? this.notifications.filter(n => !n.isRead)
+                : this.notifications;
+
+            if (filteredNotifications.length === 0) {
+                empty.classList.remove('hidden');
+                empty.classList.add('flex');
+                container.innerHTML = '';
+                return;
+            }
+
+            empty.classList.add('hidden');
+            container.innerHTML = filteredNotifications.map(notification => this.createNotificationHTML(notification)).join('');
+        }
+
+        createNotificationHTML(notification) {
+            const timeAgo = this.getTimeAgo(new Date(notification.createdAt));
+            const isUnread = !notification.isRead;
+
+            const typeIcons = {
+                'system': 'info',
+                'course': 'school',
+                'exam': 'edit_document',
+                'message': 'chat_bubble',
+                'announcement': 'campaign',
+                'reminder': 'alarm'
+            };
+
+            const typeColors = {
+                'system': 'blue',
+                'course': 'green',
+                'exam': 'red',
+                'message': 'purple',
+                'announcement': 'orange',
+                'reminder': 'yellow'
+            };
+
+            const icon = typeIcons[notification.type] || 'notifications';
+            const color = typeColors[notification.type] || 'blue';
+
+            return `
+            <div class="notification-item p-4 rounded-2xl border transition-all cursor-pointer hover:shadow-md ${isUnread
+                    ? 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800'
+                    : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
+                }" 
+                 onclick="notificationPanel.handleNotificationClick('${notification._id}', '${notification.link || ''}')">
+                <div class="flex gap-3">
+                    <div class="size-10 rounded-xl bg-${color}-100 dark:bg-${color}-900/30 flex items-center justify-center shrink-0">
+                        <span class="material-symbols-outlined text-${color}-500 text-xl">${icon}</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-start justify-between gap-2 mb-1">
+                            <h4 class="font-bold text-sm text-slate-800 dark:text-white line-clamp-1">
+                                ${notification.title}
+                            </h4>
+                            ${isUnread ? '<span class="size-2 bg-blue-500 rounded-full shrink-0 mt-1.5"></span>' : ''}
+                        </div>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 mb-2">
+                            ${notification.message}
+                        </p>
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase">
+                                ${timeAgo}
+                            </span>
+                            ${notification.link ? '<span class="text-[10px] font-bold text-blue-500">ট্যাপ করে দেখুন →</span>' : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        }
+
+        getTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+
+            if (seconds < 60) return 'এখনই';
+            if (seconds < 3600) return `${Math.floor(seconds / 60)} মিনিট আগে`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)} ঘন্টা আগে`;
+            if (seconds < 604800) return `${Math.floor(seconds / 86400)} দিন আগে`;
+            return new Date(date).toLocaleDateString('bn-BD');
+        }
+
+        async handleNotificationClick(notificationId, link) {
+            // Mark as read
+            await this.markAsRead(notificationId);
+
+            // Navigate to link if exists
+            if (link) {
+                window.location.href = link;
+            }
+        }
+
+        async markAsRead(notificationId) {
+            try {
+                await fetch(`/api/notifications/${notificationId}/read`, { method: 'POST' });
+
+                // Update local state
+                const notification = this.notifications.find(n => n._id === notificationId);
+                if (notification) {
+                    notification.isRead = true;
+                    this.updateCounts();
+                    this.renderNotifications();
+                    this.updateBellBadge();
+                }
+            } catch (error) {
+                console.error('Failed to mark as read:', error);
+            }
+        }
+
+        async markAllAsRead() {
+            try {
+                await fetch('/api/notifications/mark-all-read', { method: 'POST' });
+
+                // Update local state
+                this.notifications.forEach(n => n.isRead = true);
+                this.updateCounts();
+                this.renderNotifications();
+                this.updateBellBadge();
+
+                this.showToast('সব নোটিফিকেশন পড়া হয়েছে চিহ্নিত করা হয়েছে', 'success');
+            } catch (error) {
+                console.error('Failed to mark all as read:', error);
+            }
+        }
+
+        async clearAllNotifications() {
+            if (!confirm('আপনি কি সব নোটিফিকেশন মুছে ফেলতে চান?')) return;
+
+            try {
+                await fetch('/api/notifications/clear-all', { method: 'DELETE' });
+
+                this.notifications = [];
+                this.updateCounts();
+                this.renderNotifications();
+                this.updateBellBadge();
+
+                this.showToast('সব নোটিফিকেশন মুছে ফেলা হয়েছে', 'success');
+            } catch (error) {
+                console.error('Failed to clear notifications:', error);
+            }
+        }
+
+        switchTab(tab) {
+            this.currentTab = tab;
+
+            // Update tab styles
+            document.getElementById('tab-all').className = tab === 'all'
+                ? 'flex-1 px-4 py-3 text-sm font-bold text-blue-500 border-b-2 border-blue-500 transition-colors'
+                : 'flex-1 px-4 py-3 text-sm font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors';
+
+            document.getElementById('tab-unread').className = tab === 'unread'
+                ? 'flex-1 px-4 py-3 text-sm font-bold text-blue-500 border-b-2 border-blue-500 transition-colors'
+                : 'flex-1 px-4 py-3 text-sm font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors';
+
+            this.renderNotifications();
+        }
+
+        togglePanel() {
+            const panel = document.getElementById('notification-panel');
+            const overlay = document.getElementById('notification-overlay');
+
+            this.isOpen = !this.isOpen;
+
+            if (this.isOpen) {
+                panel.classList.remove('translate-x-full');
+                overlay.classList.remove('hidden');
+                setTimeout(() => overlay.classList.remove('opacity-0'), 10);
+                document.body.style.overflow = 'hidden';
+
+                // Reload notifications when opening
+                this.loadNotifications();
+            } else {
+                panel.classList.add('translate-x-full');
+                overlay.classList.add('opacity-0');
+                setTimeout(() => overlay.classList.add('hidden'), 300);
+                document.body.style.overflow = '';
+            }
+        }
+
+        showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `fixed bottom-24 left-1/2 transform -translate-x-1/2 px-6 py-3 rounded-2xl shadow-lg z-[9999] transition-all duration-300 ${type === 'success' ? 'bg-green-500 text-white' :
+                    type === 'error' ? 'bg-red-500 text-white' :
+                        'bg-blue-500 text-white'
+                }`;
+            toast.textContent = message;
+            toast.style.opacity = '0';
+            toast.style.transform = 'translate(-50%, 20px)';
+
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translate(-50%, 0)';
+            }, 10);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translate(-50%, 20px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    }
+
+    // Global functions for onclick handlers
+    function toggleNotificationPanel() {
+        window.notificationPanel.togglePanel();
+    }
+
+    function switchNotificationTab(tab) {
+        window.notificationPanel.switchTab(tab);
+    }
+
+    function markAllAsRead() {
+        window.notificationPanel.markAllAsRead();
+    }
+
+    function clearAllNotifications() {
+        window.notificationPanel.clearAllNotifications();
+    }
+
+    // Initialize notification panel
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.notificationPanel = new NotificationPanelManager();
+        });
+    } else {
+        window.notificationPanel = new NotificationPanelManager();
+    }
+</script>

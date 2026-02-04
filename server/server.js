@@ -1621,6 +1621,16 @@ app.post('/api/push/send-to-user', adminProtect, async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
+        // Create in-app notification
+        await new Notification({
+            user: userId,
+            title,
+            message: body,
+            type: type || 'system',
+            link: url || '/dashboard'
+        }).save();
+
+        // Send push notification (optional)
         const result = await pushNotificationService.sendToUser(userId, {
             title,
             body,
@@ -1646,6 +1656,20 @@ app.post('/api/push/send-to-role', adminProtect, async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
+        // Find all users with this role and create in-app notifications
+        const users = await User.find({ role });
+        const notifications = users.map(user => ({
+            user: user._id,
+            title,
+            message: body,
+            type: type || 'system',
+            link: url || '/dashboard'
+        }));
+        if (notifications.length > 0) {
+            await Notification.insertMany(notifications);
+        }
+
+        // Send push notifications (optional)
         const result = await pushNotificationService.sendToRole(role, {
             title,
             body,
@@ -1671,6 +1695,20 @@ app.post('/api/push/send-to-class', adminProtect, async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
+        // Find all students in this class and create in-app notifications
+        const users = await User.find({ classLevel, role: 'student' });
+        const notifications = users.map(user => ({
+            user: user._id,
+            title,
+            message: body,
+            type: type || 'system',
+            link: url || '/dashboard'
+        }));
+        if (notifications.length > 0) {
+            await Notification.insertMany(notifications);
+        }
+
+        // Send push notifications (optional)
         const result = await pushNotificationService.sendToClassLevel(classLevel, {
             title,
             body,
@@ -1696,6 +1734,20 @@ app.post('/api/push/send-to-all', superAdminProtect, async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
+        // Find all users and create in-app notifications
+        const users = await User.find({});
+        const notifications = users.map(user => ({
+            user: user._id,
+            title,
+            message: body,
+            type: type || 'system',
+            link: url || '/dashboard'
+        }));
+        if (notifications.length > 0) {
+            await Notification.insertMany(notifications);
+        }
+
+        // Send push notifications (optional)
         const result = await pushNotificationService.sendToAll({
             title,
             body,
@@ -1757,6 +1809,92 @@ app.get('/api/push/logs', adminProtect, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// ========================================
+// IN-APP NOTIFICATION API ROUTES
+// ========================================
+
+// Get user's notifications
+app.get('/api/notifications', protect, async (req, res) => {
+    try {
+        const notifications = await Notification.find({ user: req.session.user._id })
+            .sort({ createdAt: -1 })
+            .limit(50);
+
+        res.json({
+            success: true,
+            notifications
+        });
+    } catch (error) {
+        console.error('Get notifications error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Mark notification as read
+app.post('/api/notifications/:id/read', protect, async (req, res) => {
+    try {
+        const notification = await Notification.findOne({
+            _id: req.params.id,
+            user: req.session.user._id
+        });
+
+        if (!notification) {
+            return res.status(404).json({ success: false, error: 'Notification not found' });
+        }
+
+        notification.isRead = true;
+        await notification.save();
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Mark as read error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Mark all notifications as read
+app.post('/api/notifications/mark-all-read', protect, async (req, res) => {
+    try {
+        await Notification.updateMany(
+            { user: req.session.user._id, isRead: false },
+            { isRead: true }
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Mark all as read error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Clear all notifications
+app.delete('/api/notifications/clear-all', protect, async (req, res) => {
+    try {
+        await Notification.deleteMany({ user: req.session.user._id });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Clear all error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get unread count
+app.get('/api/notifications/unread-count', protect, async (req, res) => {
+    try {
+        const count = await Notification.countDocuments({
+            user: req.session.user._id,
+            isRead: false
+        });
+
+        res.json({ success: true, count });
+    } catch (error) {
+        console.error('Unread count error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 
 app.get('*', (req, res) => res.status(404).render('404'));
 
