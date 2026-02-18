@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html class="light" lang="bn">
+
+<head>
+    <title>লাইভ চ্যাট | ODDHAY</title>
+    <%- include('partials/head') %>
+        <style>
+            .chat-sidebar {
+                height: calc(100vh - 7rem);
+            }
+
+            .chat-area {
+                height: calc(100vh - 7rem);
+            }
+
+            .messages-container {
+                height: calc(100% - 8rem);
+            }
+
+            .msg-bubble {
+                max-width: 75%;
+                word-break: break-word;
+            }
+
+            .online-dot {
+                width: 10px;
+                height: 10px;
+            }
+
+            @keyframes fadeInUp {
+                from {
+                    opacity: 0;
+                    transform: translateY(8px);
+                }
+
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+
+            .msg-animate {
+                animation: fadeInUp 0.2s ease;
+            }
+
+            .typing-dots span {
+                animation: blink 1.4s infinite;
+                display: inline-block;
+            }
+
+            .typing-dots span:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+
+            .typing-dots span:nth-child(3) {
+                animation-delay: 0.4s;
+            }
+
+            @keyframes blink {
+
+                0%,
+                80%,
+                100% {
+                    opacity: 0;
+                }
+
+                40% {
+                    opacity: 1;
+                }
+            }
+
+            .user-item.active {
+                background: rgba(var(--color-primary-rgb, 59 130 246), 0.1);
+                border-color: rgba(var(--color-primary-rgb, 59 130 246), 0.3);
+            }
+        </style>
+</head>
+
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100">
+    <%- include('partials/nav') %>
+
+        <div class="pt-16 flex h-screen overflow-hidden">
+
+            <!-- LEFT: User List Sidebar -->
+            <aside
+                class="w-72 flex-shrink-0 border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 flex flex-col chat-sidebar hidden md:flex">
+                <!-- Sidebar Header -->
+                <div class="p-5 border-b border-slate-100 dark:border-slate-800">
+                    <h2 class="font-black text-lg flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">chat</span>
+                        চ্যাট
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-1">রিয়েল-টাইম বার্তা</p>
+                </div>
+
+                <!-- Room Tabs -->
+                <div class="flex border-b border-slate-100 dark:border-slate-800">
+                    <button onclick="switchRoom('global', this)"
+                        class="room-tab flex-1 py-3 text-xs font-black text-primary border-b-2 border-primary transition-all"
+                        data-room="global">
+                        🌐 গ্লোবাল
+                    </button>
+                    <button onclick="switchRoom('private', this)"
+                        class="room-tab flex-1 py-3 text-xs font-bold text-slate-400 border-b-2 border-transparent hover:text-slate-600 transition-all"
+                        data-room="private">
+                        🔒 প্রাইভেট
+                    </button>
+                </div>
+
+                <!-- Global Room Info -->
+                <div id="global-room-info"
+                    class="px-4 py-3 bg-primary/5 border-b border-slate-100 dark:border-slate-800">
+                    <p class="text-xs text-slate-500">সবাই এখানে কথা বলতে পারবেন</p>
+                    <div class="flex items-center gap-1 mt-1">
+                        <div class="online-dot bg-emerald-500 rounded-full animate-pulse"></div>
+                        <span class="text-xs font-bold text-emerald-600" id="online-count">০ জন অনলাইন</span>
+                    </div>
+                </div>
+
+                <!-- User List (for private) -->
+                <div id="user-list" class="flex-1 overflow-y-auto p-3 space-y-1 hidden">
+                    <% if (chatUsers && chatUsers.length> 0) { %>
+                        <% chatUsers.forEach(function(u) { %>
+                            <button onclick="openPrivateChat('<%= u._id %>', '<%= u.name %>')"
+                                class="user-item w-full flex items-center gap-3 p-3 rounded-xl border border-transparent hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-left"
+                                id="user-<%= u._id %>">
+                                <div class="relative">
+                                    <div
+                                        class="size-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-sm flex-shrink-0">
+                                        <%= u.name ? u.name[0].toUpperCase() : '?' %>
+                                    </div>
+                                    <div class="online-dot absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-white bg-slate-300 dark:bg-slate-600"
+                                        id="dot-<%= u._id %>"></div>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <div class="font-bold text-sm truncate">
+                                        <%= u.name %>
+                                    </div>
+                                    <div class="text-xs text-slate-400">
+                                        <%= u.role==='student' ? ('ক্লাস ' + (u.classLevel || ' ?')) : 'শিক্ষক/অ্যাডমিন'
+                                            %>
+                                    </div>
+                                </div>
+                            </button>
+                            <% }); %>
+                                <% } else { %>
+                                    <div class="text-center py-10 text-slate-400 text-sm">
+                                        <span
+                                            class="material-symbols-outlined text-3xl mb-2 block opacity-30">person_off</span>
+                                        কেউ নেই
+                                    </div>
+                                    <% } %>
+                </div>
+
+                <!-- Online Users (for global) -->
+                <div id="online-users-list" class="flex-1 overflow-y-auto p-3 space-y-1">
+                    <p class="text-xs text-slate-400 font-bold px-2 mb-2">অনলাইন ব্যবহারকারী</p>
+                    <div id="online-users-container">
+                        <div class="text-center py-6 text-slate-400 text-xs">লোড হচ্ছে...</div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- RIGHT: Chat Area -->
+            <main class="flex-1 flex flex-col chat-area overflow-hidden">
+                <!-- Chat Header -->
+                <div
+                    class="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 flex items-center justify-between flex-shrink-0">
+                    <div class="flex items-center gap-3">
+                        <!-- Mobile back button -->
+                        <button class="md:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                            onclick="showSidebar()">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <div id="chat-header-avatar"
+                            class="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-black">
+                            🌐
+                        </div>
+                        <div>
+                            <h3 id="chat-header-title" class="font-black">গ্লোবাল চ্যাট</h3>
+                            <p id="chat-header-sub" class="text-xs text-slate-400">সবার জন্য উন্মুক্ত</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="online-dot bg-emerald-500 rounded-full animate-pulse"></div>
+                        <span class="text-xs font-bold text-emerald-600">লাইভ</span>
+                    </div>
+                </div>
+
+                <!-- Messages -->
+                <div id="messages-container"
+                    class="flex-1 overflow-y-auto p-6 space-y-4 messages-container bg-slate-50/50 dark:bg-slate-900/30">
+                    <!-- Load previous global messages -->
+                    <% if (globalMessages && globalMessages.length> 0) { %>
+                        <div class="text-center text-xs text-slate-400 py-2">— পুরনো বার্তা —</div>
+                        <% globalMessages.forEach(function(msg) { %>
+                            <div
+                                class="flex gap-3 msg-animate <%= msg.senderName === user.name ? 'flex-row-reverse' : '' %>">
+                                <div
+                                    class="size-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-xs flex-shrink-0">
+                                    <%= msg.senderName ? msg.senderName[0].toUpperCase() : '?' %>
+                                </div>
+                                <div class="msg-bubble">
+                                    <% if (msg.senderName !==user.name) { %>
+                                        <div class="text-xs text-slate-400 font-bold mb-1 ml-1">
+                                            <%= msg.senderName %>
+                                        </div>
+                                        <% } %>
+                                            <div
+                                                class="px-4 py-3 rounded-2xl text-sm font-medium leading-relaxed
+                                    <%= msg.senderName === user.name ? 'bg-primary text-white rounded-tr-sm' : 'bg-white dark:bg-slate-800 shadow-sm rounded-tl-sm' %>">
+                                                <%= msg.text %>
+                                            </div>
+                                            <div
+                                                class="text-xs text-slate-400 mt-1 <%= msg.senderName === user.name ? 'text-right mr-1' : 'ml-1' %>">
+                                                <%= new Date(msg.createdAt).toLocaleTimeString('bn-BD', {hour: '2-digit'
+                                                    , minute: '2-digit' }) %>
+                                            </div>
+                                </div>
+                            </div>
+                            <% }); %>
+                                <% } else { %>
+                                    <div class="text-center py-20" id="empty-state">
+                                        <span
+                                            class="material-symbols-outlined text-6xl text-primary/20 mb-4 block">chat_bubble</span>
+                                        <p class="text-slate-400 font-bold">প্রথম বার্তা পাঠান!</p>
+                                        <p class="text-slate-400 text-sm mt-1">এখানে সবাই কথা বলতে পারবেন।</p>
+                                    </div>
+                                    <% } %>
+
+                                        <!-- Typing indicator -->
+                                        <div id="typing-indicator" class="hidden flex gap-3">
+                                            <div
+                                                class="size-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                                                <span
+                                                    class="material-symbols-outlined text-sm text-slate-400">person</span>
+                                            </div>
+                                            <div
+                                                class="px-4 py-3 bg-white dark:bg-slate-800 rounded-2xl rounded-tl-sm shadow-sm">
+                                                <div class="typing-dots text-slate-400 text-lg">
+                                                    <span>•</span><span>•</span><span>•</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                </div>
+
+                <!-- Input Area -->
+                <div
+                    class="p-4 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 flex-shrink-0">
+                    <form id="message-form" class="flex gap-3 items-end">
+                        <div class="flex-1 relative">
+                            <textarea id="message-input"
+                                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-3.5 text-sm font-medium focus:ring-2 focus:ring-primary focus:border-transparent resize-none outline-none transition-all"
+                                placeholder="বার্তা লিখুন..." rows="1" maxlength="1000"
+                                oninput="autoResize(this); handleTyping();" onkeydown="handleKeyDown(event)"></textarea>
+                        </div>
+                        <button type="submit" id="send-btn"
+                            class="size-12 rounded-2xl bg-primary text-white flex items-center justify-center hover:opacity-90 active:scale-95 transition-all flex-shrink-0 shadow-lg shadow-primary/30">
+                            <span class="material-symbols-outlined">send</span>
+                        </button>
+                    </form>
+                    <div class="flex justify-between items-center mt-2 px-1">
+                        <span class="text-xs text-slate-400">Enter পাঠান • Shift+Enter নতুন লাইন</span>
+                        <span id="char-count" class="text-xs text-slate-400">০/১০০০</span>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- Socket.io client -->
+        <script src="/socket.io/socket.io.js"></script>
+
+        <script>
+            // Current user info from server
+            const CURRENT_USER = {
+                id: '<%= user._id %>',
+                name: '<%= user.name %>',
+                role: '<%= user.role %>'
+            };
+
+            let socket;
+            let currentRoom = 'global';
+            let currentPrivateUserId = null;
+            let currentPrivateUserName = null;
+            let typingTimer = null;
+            let isTyping = false;
+
+            // =====================
+            // SOCKET INIT
+            // =====================
+            function initSocket() {
+                socket = io({
+                    transports: ['websocket', 'polling']
+                });
+
+                socket.on('connect', () => {
+                    console.log('✅ Connected to chat server');
+                    socket.emit('user:join', {
+                        userId: CURRENT_USER.id,
+                        name: CURRENT_USER.name,
+                        role: CURRENT_USER.role
+                    });
+                });
+
+                socket.on('disconnect', () => {
+                    console.log('❌ Disconnected from chat server');
+                });
+
+                // New message received
+                socket.on('message:new', (msg) => {
+                    if (msg.room === currentRoom) {
+                        appendMessage(msg);
+                        document.getElementById('empty-state')?.remove();
+                    }
+                });
+
+                // Online users update
+                socket.on('users:online', (users) => {
+                    updateOnlineUsers(users);
+                });
+
+                // Typing indicators
+                socket.on('typing:show', ({ name, room }) => {
+                    if (room === currentRoom) showTyping(name);
+                });
+                socket.on('typing:hide', () => {
+                    hideTyping();
+                });
+
+                socket.on('message:error', ({ error }) => {
+                    showToast(error, 'error');
+                });
+            }
+
+            // =====================
+            // SEND MESSAGE
+            // =====================
+            document.getElementById('message-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                sendMessage();
+            });
+
+            function sendMessage() {
+                const input = document.getElementById('message-input');
+                const text = input.value.trim();
+                if (!text) return;
+
+                input.value = '';
+                input.style.height = 'auto';
+                document.getElementById('char-count').textContent = '০/১০০০';
+                stopTyping();
+
+                // Try socket first, fallback to REST API
+                if (socket?.connected) {
+                    socket.emit('message:send', {
+                        room: currentRoom,
+                        text,
+                        receiverId: currentPrivateUserId
+                    });
+                } else {
+                    // REST API fallback (works on Vercel)
+                    sendViaAPI(text);
+                }
+            }
+
+            async function sendViaAPI(text) {
+                try {
+                    const res = await fetch('/api/chat/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            room: currentRoom,
+                            text,
+                            receiverId: currentPrivateUserId
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        appendMessage(data.message);
+                        document.getElementById('empty-state')?.remove();
+                    }
+                } catch (err) {
+                    showToast('বার্তা পাঠাতে সমস্যা হয়েছে', 'error');
+                }
+            }
+
+            // =====================
+            // APPEND MESSAGE TO UI
+            // =====================
+            function appendMessage(msg) {
+                const container = document.getElementById('messages-container');
+                const isMe = msg.sender === CURRENT_USER.id || msg.senderName === CURRENT_USER.name;
+                const time = new Date(msg.createdAt).toLocaleTimeString('bn-BD', { hour: '2-digit', minute: '2-digit' });
+                const initial = msg.senderName ? msg.senderName[0].toUpperCase() : '?';
+
+                const div = document.createElement('div');
+                div.className = `flex gap-3 msg-animate ${isMe ? 'flex-row-reverse' : ''}`;
+                div.innerHTML = `
+                <div class="size-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-xs flex-shrink-0">
+                    ${initial}
+                </div>
+                <div class="msg-bubble">
+                    ${!isMe ? `<div class="text-xs text-slate-400 font-bold mb-1 ml-1">${msg.senderName}</div>` : ''}
+                    <div class="px-4 py-3 rounded-2xl text-sm font-medium leading-relaxed
+                        ${isMe ? 'bg-primary text-white rounded-tr-sm' : 'bg-white dark:bg-slate-800 shadow-sm rounded-tl-sm'}">
+                        ${escapeHtml(msg.text)}
+                    </div>
+                    <div class="text-xs text-slate-400 mt-1 ${isMe ? 'text-right mr-1' : 'ml-1'}">${time}</div>
+                </div>
+            `;
+
+                // Remove typing indicator, add message, scroll
+                const typingEl = document.getElementById('typing-indicator');
+                container.insertBefore(div, typingEl);
+                container.scrollTop = container.scrollHeight;
+            }
+
+            // =====================
+            // ROOM SWITCHING
+            // =====================
+            function switchRoom(type, btn) {
+                document.querySelectorAll('.room-tab').forEach(t => {
+                    t.classList.remove('text-primary', 'border-primary');
+                    t.classList.add('text-slate-400', 'border-transparent');
+                });
+                btn.classList.add('text-primary', 'border-primary');
+                btn.classList.remove('text-slate-400', 'border-transparent');
+
+                if (type === 'global') {
+                    document.getElementById('user-list').classList.add('hidden');
+                    document.getElementById('online-users-list').classList.remove('hidden');
+                    document.getElementById('global-room-info').classList.remove('hidden');
+                    switchToRoom('global', '🌐', 'গ্লোবাল চ্যাট', 'সবার জন্য উন্মুক্ত');
+                } else {
+                    document.getElementById('user-list').classList.remove('hidden');
+                    document.getElementById('online-users-list').classList.add('hidden');
+                    document.getElementById('global-room-info').classList.add('hidden');
+                }
+            }
+
+            function openPrivateChat(userId, userName) {
+                // Create a consistent room ID
+                const ids = [CURRENT_USER.id, userId].sort();
+                const roomId = `private_${ids[0]}_${ids[1]}`;
+
+                // Highlight selected user
+                document.querySelectorAll('.user-item').forEach(el => el.classList.remove('active'));
+                document.getElementById(`user-${userId}`)?.classList.add('active');
+
+                currentPrivateUserId = userId;
+                currentPrivateUserName = userName;
+                switchToRoom(roomId, userName[0].toUpperCase(), userName, 'প্রাইভেট চ্যাট');
+
+                // Join private room and load history
+                socket.emit('room:join', roomId);
+                loadRoomHistory(roomId);
+            }
+
+            function switchToRoom(roomId, avatarContent, title, subtitle) {
+                currentRoom = roomId;
+                document.getElementById('chat-header-avatar').textContent = avatarContent;
+                document.getElementById('chat-header-title').textContent = title;
+                document.getElementById('chat-header-sub').textContent = subtitle;
+
+                // Clear messages
+                const container = document.getElementById('messages-container');
+                container.innerHTML = `
+                <div id="typing-indicator" class="hidden flex gap-3">
+                    <div class="size-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                        <span class="material-symbols-outlined text-sm text-slate-400">person</span>
+                    </div>
+                    <div class="px-4 py-3 bg-white dark:bg-slate-800 rounded-2xl rounded-tl-sm shadow-sm">
+                        <div class="typing-dots text-slate-400 text-lg">
+                            <span>•</span><span>•</span><span>•</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+                if (roomId === 'global') {
+                    loadRoomHistory('global');
+                }
+            }
+
+            async function loadRoomHistory(room) {
+                try {
+                    const res = await fetch(`/api/chat/messages?room=${encodeURIComponent(room)}`);
+                    const data = await res.json();
+                    if (data.success && data.messages.length > 0) {
+                        const container = document.getElementById('messages-container');
+                        const typingEl = document.getElementById('typing-indicator');
+
+                        const divider = document.createElement('div');
+                        divider.className = 'text-center text-xs text-slate-400 py-2';
+                        divider.textContent = '— পুরনো বার্তা —';
+                        container.insertBefore(divider, typingEl);
+
+                        data.messages.forEach(msg => appendMessage(msg));
+                    } else {
+                        const container = document.getElementById('messages-container');
+                        const typingEl = document.getElementById('typing-indicator');
+                        const empty = document.createElement('div');
+                        empty.id = 'empty-state';
+                        empty.className = 'text-center py-20';
+                        empty.innerHTML = `
+                        <span class="material-symbols-outlined text-6xl text-primary/20 mb-4 block">chat_bubble</span>
+                        <p class="text-slate-400 font-bold">প্রথম বার্তা পাঠান!</p>
+                    `;
+                        container.insertBefore(empty, typingEl);
+                    }
+                } catch (err) {
+                    console.error('Failed to load history:', err);
+                }
+            }
+
+            // =====================
+            // ONLINE USERS
+            // =====================
+            function updateOnlineUsers(users) {
+                const count = users.length;
+                document.getElementById('online-count').textContent = `${toBanglaNum(count)} জন অনলাইন`;
+
+                const container = document.getElementById('online-users-container');
+                if (users.length === 0) {
+                    container.innerHTML = '<div class="text-center py-6 text-slate-400 text-xs">কেউ অনলাইন নেই</div>';
+                    return;
+                }
+
+                container.innerHTML = users.map(u => `
+                <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg">
+                    <div class="size-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-black text-xs flex-shrink-0">
+                        ${u.name ? u.name[0].toUpperCase() : '?'}
+                    </div>
+                    <span class="text-xs font-bold truncate">${escapeHtml(u.name)}</span>
+                    <div class="ml-auto online-dot bg-emerald-500 rounded-full flex-shrink-0"></div>
+                </div>
+            `).join('');
+
+                // Update private user dots
+                users.forEach(u => {
+                    const dot = document.getElementById(`dot-${u.userId}`);
+                    if (dot) dot.classList.replace('bg-slate-300', 'bg-emerald-500');
+                });
+            }
+
+            // =====================
+            // TYPING INDICATOR
+            // =====================
+            function handleTyping() {
+                const input = document.getElementById('message-input');
+                const len = input.value.length;
+                document.getElementById('char-count').textContent = `${toBanglaNum(len)}/১০০০`;
+
+                if (!isTyping && socket?.connected) {
+                    isTyping = true;
+                    socket.emit('typing:start', { room: currentRoom });
+                }
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(stopTyping, 2000);
+            }
+
+            function stopTyping() {
+                if (isTyping && socket?.connected) {
+                    isTyping = false;
+                    socket.emit('typing:stop', { room: currentRoom });
+                }
+            }
+
+            let typingName = '';
+            function showTyping(name) {
+                typingName = name;
+                const el = document.getElementById('typing-indicator');
+                el.classList.remove('hidden');
+                document.getElementById('messages-container').scrollTop = 99999;
+            }
+            function hideTyping() {
+                document.getElementById('typing-indicator').classList.add('hidden');
+            }
+
+            // =====================
+            // HELPERS
+            // =====================
+            function handleKeyDown(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            }
+
+            function autoResize(el) {
+                el.style.height = 'auto';
+                el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+            }
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.appendChild(document.createTextNode(text));
+                return div.innerHTML;
+            }
+
+            function toBanglaNum(n) {
+                return String(n).replace(/[0-9]/g, d => '০১২৩৪৫৬৭৮৯'[d]);
+            }
+
+            function showToast(msg, type = 'info') {
+                const toast = document.createElement('div');
+                toast.className = `fixed bottom-24 right-6 px-4 py-3 rounded-xl text-sm font-bold z-50 shadow-lg ${type === 'error' ? 'bg-red-500 text-white' : 'bg-slate-800 text-white'}`;
+                toast.textContent = msg;
+                document.body.appendChild(toast);
+                setTimeout(() => toast.remove(), 3000);
+            }
+
+            // =====================
+            // INIT
+            // =====================
+            document.addEventListener('DOMContentLoaded', () => {
+                initSocket();
+                // Scroll to bottom of initial messages
+                const container = document.getElementById('messages-container');
+                container.scrollTop = container.scrollHeight;
+            });
+        </script>
+</body>
+
+</html>

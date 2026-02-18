@@ -5,8 +5,10 @@ const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const multer = require('multer');
 const fs = require('fs');
+const crypto = require('crypto');
 const session = require('express-session');
-const MongoStore = require('connect-mongo');
+const MongoStore = require('connect-mongo').default || require('connect-mongo').MongoStore || require('connect-mongo');
+const { sendPasswordResetEmail, sendWelcomeEmail } = require('./services/emailService');
 
 // Import Models
 const Course = require('./models/Course');
@@ -21,11 +23,18 @@ const Notification = require('./models/Notification');
 const RoutineTask = require('./models/RoutineTask');
 const PushSubscription = require('./models/PushSubscription');
 const NotificationLog = require('./models/NotificationLog');
+const Message = require('./models/Message');
 
 // Import Services
 const pushNotificationService = require('./services/pushNotificationService');
 
 const app = express();
+const http = require('http').createServer(app);
+const { Server: SocketIO } = require('socket.io');
+const io = new SocketIO(http, {
+    cors: { origin: '*', methods: ['GET', 'POST'] },
+    transports: ['websocket', 'polling']
+});
 const PORT = process.env.PORT || 3005;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/oddhay_db';
 
@@ -95,18 +104,16 @@ const connectDB = async () => {
 };
 
 // --- MIDDLEWARE SETUP ---
-// Session Store with Fallback
-let sessionStore;
-try {
-    sessionStore = MongoStore.create({
-        mongoUrl: MONGODB_URI,
-        ttl: 14 * 24 * 60 * 60,
-        autoRemove: 'native'
-    });
-} catch (err) {
-    console.warn('⚠️ Session Warning: Using MemoryStore due to error:', err.message);
-    sessionStore = new session.MemoryStore();
-}
+// Session Store - MongoStore (async, no try-catch needed)
+const sessionStore = MongoStore.create({
+    mongoUrl: MONGODB_URI,
+    ttl: 14 * 24 * 60 * 60, // 14 days
+    autoRemove: 'native',
+    touchAfter: 24 * 3600 // Only update session once per 24h unless data changes
+});
+sessionStore.on('error', (err) => {
+    console.warn('⚠️ MongoStore session error (non-critical):', err.message);
+});
 
 app.use(session({
     secret: 'oddhay_secret_key',
@@ -237,6 +244,94 @@ app.post('/contact-submit', (req, res) => res.redirect('/?contact=success'));
 app.get('/login', (req, res) => res.render('login'));
 app.get('/register', (req, res) => res.render('register'));
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
+app.get('/forgot-password', (req, res) => res.render('forgot-password', { message: null, error: null }));
+app.get('/reset-password/:token', async (req, res) => {
+    try {
+        await connectDB();
+        const user = await User.findOne({
+            passwordResetToken: req.params.token,
+            passwordResetExpires: { $gt: Date.now() }
+        });
+        if (!user) return res.render('forgot-password', { message: null, error: 'রিসেট লিঙ্কটি মেয়াদ শেষ বা অবৈধ। আবার চেষ্টা করুন।' });
+        res.render('reset-password', { token: req.params.token, error: null });
+    } catch (err) {
+        console.error('Reset password page error:', err);
+        res.status(500).send('সার্ভার ত্রুটি');
+    }
+});
+
+// POST: Forgot Password - email পাঠানো
+app.post('/forgot-password', async (req, res) => {
+    try {
+        await connectDB();
+        const { email } = req.body;
+        if (!email) return res.render('forgot-password', { message: null, error: 'ইমেইল দিন।' });
+
+        const user = await User.findOne({ email: email.trim().toLowerCase() });
+
+        // Security: সবসময় একই message দেখাও (user enumeration attack থেকে রক্ষা)
+        const successMsg = 'যদি এই ইমেইলে কোনো অ্যাকাউন্ট থাকে, তাহলে একটি রিসেট লিঙ্ক পাঠানো হয়েছে।';
+
+        if (!user) {
+            console.log(`[ForgotPW] No user found for email: ${email}`);
+            return res.render('forgot-password', { message: successMsg, error: null });
+        }
+
+        // Token generate করা
+        const token = crypto.randomBytes(32).toString('hex');
+        user.passwordResetToken = token;
+        user.passwordResetExpires = Date.now() + 60 * 60 * 1000; // ১ ঘণ্টা
+        await user.save();
+
+        // Reset link তৈরি
+        const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3005}`;
+        const resetLink = `${baseUrl}/reset-password/${token}`;
+
+        // Email পাঠানো
+        await sendPasswordResetEmail(user.email, user.name, resetLink);
+
+        res.render('forgot-password', { message: successMsg, error: null });
+    } catch (err) {
+        console.error('Forgot password error:', err);
+        res.render('forgot-password', { message: null, error: `ইমেইল পাঠাতে সমস্যা হয়েছে: ${err.message}` });
+    }
+});
+
+// POST: Reset Password - নতুন পাসওয়ার্ড সেট করা
+app.post('/reset-password/:token', async (req, res) => {
+    try {
+        await connectDB();
+        const { password, confirmPassword } = req.body;
+
+        if (!password || password.length < 6) {
+            return res.render('reset-password', { token: req.params.token, error: 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।' });
+        }
+        if (password !== confirmPassword) {
+            return res.render('reset-password', { token: req.params.token, error: 'পাসওয়ার্ড দুটি মিলছে না।' });
+        }
+
+        const user = await User.findOne({
+            passwordResetToken: req.params.token,
+            passwordResetExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            return res.render('forgot-password', { message: null, error: 'রিসেট লিঙ্কটি মেয়াদ শেষ। আবার চেষ্টা করুন।' });
+        }
+
+        // নতুন পাসওয়ার্ড সেট করা
+        user.password = password; // pre-save hook hash করবে
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        await user.save();
+
+        console.log(`✅ Password reset successful for user: ${user.email}`);
+        res.redirect('/login?reset=success');
+    } catch (err) {
+        console.error('Reset password error:', err);
+        res.render('reset-password', { token: req.params.token, error: 'সার্ভার ত্রুটি। আবার চেষ্টা করুন।' });
+    }
+});
 
 app.post('/login', async (req, res) => {
     try {
@@ -946,13 +1041,83 @@ app.get('/qa', async (req, res) => {
     }
 });
 
-app.get('/mock-tests', async (req, res) => {
-    res.render('mock-tests', { user: req.session.user });
+app.get('/mock-tests', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const quizzes = await Quiz.find().populate('course').lean();
+        res.render('mock-tests', { user: req.session.user, quizzes });
+    } catch (err) {
+        res.render('mock-tests', { user: req.session.user, quizzes: [] });
+    }
 });
 
-app.get('/analytics', async (req, res) => {
-    res.render('analytics', { user: req.session.user });
+app.get('/analytics', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const userId = req.session.userId;
+        const user = await User.findById(userId)
+            .populate('enrolledCourses.course')
+            .populate('quizResults.quiz')
+            .lean();
+
+        if (!user) return res.redirect('/login');
+
+        // Quiz performance by subject
+        const subjectPerformance = {};
+        (user.quizResults || []).forEach(r => {
+            const subject = r.quiz?.title?.split(' ')[0] || 'সাধারণ';
+            if (!subjectPerformance[subject]) subjectPerformance[subject] = { total: 0, score: 0, count: 0 };
+            subjectPerformance[subject].score += r.score || 0;
+            subjectPerformance[subject].total += r.total || 1;
+            subjectPerformance[subject].count++;
+        });
+
+        // Weekly activity (last 7 days)
+        const weeklyActivity = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dayStr = date.toISOString().split('T')[0];
+            const quizzesOnDay = (user.quizResults || []).filter(r => {
+                const rDate = new Date(r.date).toISOString().split('T')[0];
+                return rDate === dayStr;
+            }).length;
+            weeklyActivity.push({ day: ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহ', 'শুক্র', 'শনি'][date.getDay()], count: quizzesOnDay });
+        }
+
+        // Stats
+        const totalQuizzes = (user.quizResults || []).length;
+        const avgScore = totalQuizzes > 0
+            ? Math.round((user.quizResults || []).reduce((acc, r) => acc + ((r.score / (r.total || 1)) * 100), 0) / totalQuizzes)
+            : 0;
+        const totalCourses = (user.enrolledCourses || []).length;
+        const completedLessons = (user.completedLessons || []).length;
+        const daysLearning = Math.ceil(Math.abs(new Date() - new Date(user.createdAt)) / (1000 * 60 * 60 * 24));
+
+        // Recent quiz results (last 5)
+        const recentQuizzes = (user.quizResults || [])
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .slice(0, 5);
+
+        res.render('analytics', {
+            user,
+            stats: { totalQuizzes, avgScore, totalCourses, completedLessons, daysLearning },
+            subjectPerformance,
+            weeklyActivity,
+            recentQuizzes
+        });
+    } catch (err) {
+        console.error('Analytics error:', err);
+        res.render('analytics', {
+            user: req.session.user,
+            stats: { totalQuizzes: 0, avgScore: 0, totalCourses: 0, completedLessons: 0, daysLearning: 0 },
+            subjectPerformance: {},
+            weeklyActivity: [],
+            recentQuizzes: []
+        });
+    }
 });
+
 
 app.get('/messages', protect, (req, res) => {
     res.render('messages', { user: req.session.user });
@@ -1895,12 +2060,233 @@ app.get('/api/notifications/unread-count', protect, async (req, res) => {
     }
 });
 
+// ========================================
+// CHAT API ROUTES
+// ========================================
+
+// Get chat messages for a room (supports ?after=lastId for polling)
+app.get('/api/chat/messages', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const room = req.query.room || 'global';
+        const afterId = req.query.after;
+        const limit = 30;
+
+        let query = { room };
+        if (afterId) {
+            // Only get messages newer than the given ID
+            const mongoose = require('mongoose');
+            query._id = { $gt: new mongoose.Types.ObjectId(afterId) };
+        }
+
+        const messages = await Message.find(query)
+            .sort({ createdAt: afterId ? 1 : -1 })
+            .limit(limit)
+            .lean();
+
+        res.json({ success: true, messages: afterId ? messages : messages.reverse() });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Send message via REST API (Vercel fallback - no Socket.io needed)
+app.post('/api/chat/send', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const { room, text, receiverId } = req.body;
+        const user = req.session.user;
+
+        if (!text?.trim()) return res.status(400).json({ success: false, error: 'Empty message' });
+
+        const msg = await Message.create({
+            sender: req.session.userId,
+            senderName: user.name,
+            senderRole: user.role,
+            receiver: receiverId || null,
+            room: room || 'global',
+            text: text.trim().substring(0, 1000)
+        });
+
+        res.json({ success: true, message: msg });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Get list of users for private chat (admin/student)
+app.get('/api/chat/users', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const currentUser = req.session.user;
+        let users;
+        if (['admin', 'superadmin'].includes(currentUser.role)) {
+            // Admin sees all students
+            users = await User.find({ role: 'student' }).select('name role classLevel profilePicture').lean();
+        } else {
+            // Student sees admins
+            users = await User.find({ role: { $in: ['admin', 'superadmin'] } }).select('name role profilePicture').lean();
+        }
+        res.json({ success: true, users });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Get unread message count for current user
+app.get('/api/chat/unread', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const count = await Message.countDocuments({
+            receiver: req.session.userId,
+            isRead: false
+        });
+        res.json({ success: true, count });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Mark messages as read
+app.post('/api/chat/mark-read', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const { room } = req.body;
+        await Message.updateMany(
+            { room, receiver: req.session.userId, isRead: false },
+            { isRead: true }
+        );
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Messages page route
+app.get('/messages', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const user = await User.findById(req.session.userId).lean();
+        // Get users to chat with
+        let chatUsers;
+        if (['admin', 'superadmin'].includes(user.role)) {
+            chatUsers = await User.find({ role: 'student' }).select('name role classLevel profilePicture').lean();
+        } else {
+            chatUsers = await User.find({ role: { $in: ['admin', 'superadmin'] } }).select('name role profilePicture').lean();
+        }
+        // Global chat last 30 messages
+        const globalMessages = await Message.find({ room: 'global' })
+            .sort({ createdAt: -1 }).limit(30).lean();
+
+        res.render('messages', {
+            user,
+            chatUsers,
+            globalMessages: globalMessages.reverse()
+        });
+    } catch (err) {
+        console.error('Messages page error:', err);
+        res.render('messages', { user: req.session.user, chatUsers: [], globalMessages: [] });
+    }
+});
+
+// ========================================
+// SOCKET.IO - REAL-TIME CHAT
+// ========================================
+
+// Track online users: socketId -> { userId, name, role }
+const onlineUsers = new Map();
+
+io.on('connection', (socket) => {
+    console.log(`🔌 Socket connected: ${socket.id}`);
+
+    // User joins with their info
+    socket.on('user:join', async ({ userId, name, role }) => {
+        onlineUsers.set(socket.id, { userId, name, role, socketId: socket.id });
+        socket.userId = userId;
+        socket.userName = name;
+        socket.userRole = role;
+
+        // Join global room
+        socket.join('global');
+
+        // Broadcast updated online users list
+        io.emit('users:online', Array.from(onlineUsers.values()));
+        console.log(`👤 ${name} joined chat`);
+    });
+
+    // Join a private room
+    socket.on('room:join', (roomId) => {
+        socket.join(roomId);
+        console.log(`🚪 ${socket.userName} joined room: ${roomId}`);
+    });
+
+    // Send message to a room
+    socket.on('message:send', async ({ room, text, receiverId }) => {
+        try {
+            if (!socket.userId || !text?.trim()) return;
+
+            // Save to DB
+            const msg = await Message.create({
+                sender: socket.userId,
+                senderName: socket.userName,
+                senderRole: socket.userRole,
+                receiver: receiverId || null,
+                room: room || 'global',
+                text: text.trim().substring(0, 1000)
+            });
+
+            const msgData = {
+                _id: msg._id,
+                sender: socket.userId,
+                senderName: socket.userName,
+                senderRole: socket.userRole,
+                text: msg.text,
+                room: msg.room,
+                createdAt: msg.createdAt
+            };
+
+            // Emit to the room
+            io.to(room || 'global').emit('message:new', msgData);
+
+            // If private, also emit to receiver's socket
+            if (receiverId) {
+                const receiverSocket = Array.from(onlineUsers.values()).find(u => u.userId === receiverId);
+                if (receiverSocket) {
+                    io.to(receiverSocket.socketId).emit('message:new', msgData);
+                }
+            }
+        } catch (err) {
+            console.error('Socket message error:', err);
+            socket.emit('message:error', { error: 'বার্তা পাঠাতে সমস্যা হয়েছে।' });
+        }
+    });
+
+    // Typing indicator
+    socket.on('typing:start', ({ room }) => {
+        socket.to(room).emit('typing:show', { name: socket.userName, room });
+    });
+    socket.on('typing:stop', ({ room }) => {
+        socket.to(room).emit('typing:hide', { name: socket.userName, room });
+    });
+
+    // Disconnect
+    socket.on('disconnect', () => {
+        onlineUsers.delete(socket.id);
+        io.emit('users:online', Array.from(onlineUsers.values()));
+        console.log(`🔌 Socket disconnected: ${socket.id} (${socket.userName || 'unknown'})`);
+    });
+});
+
+// ========================================
+// 404 & SERVER START
+// ========================================
 
 app.get('*', (req, res) => res.status(404).render('404'));
 
 if (require.main === module) {
-    app.listen(PORT, () => {
+    http.listen(PORT, () => {
         console.log(`🚀 Server running at http://localhost:${PORT}`);
+        console.log(`💬 Real-time chat enabled via Socket.io`);
     });
 }
-module.exports = app;
+module.exports = { app, http, io };

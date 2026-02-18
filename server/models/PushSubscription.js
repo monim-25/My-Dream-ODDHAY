@@ -41,7 +41,8 @@ const pushSubscriptionSchema = new mongoose.Schema({
 
 // Index for faster queries
 pushSubscriptionSchema.index({ user: 1, isActive: 1 });
-pushSubscriptionSchema.index({ endpoint: 1 });
+// Note: endpoint already has unique:true in schema, no need for extra index
+
 
 // Update lastUsed on successful notification
 pushSubscriptionSchema.methods.markAsUsed = function () {

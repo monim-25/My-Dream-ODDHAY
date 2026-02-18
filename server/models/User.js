@@ -37,7 +37,9 @@ const userSchema = new mongoose.Schema({
         lessonTitle: { type: String },
         watchedAt: { type: Date, default: Date.now }
     },
-    createdAt: { type: Date, default: Date.now }
+    createdAt: { type: Date, default: Date.now },
+    passwordResetToken: { type: String },
+    passwordResetExpires: { type: Date }
 });
 
 // Hash password before saving
