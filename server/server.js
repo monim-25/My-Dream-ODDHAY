@@ -24,6 +24,7 @@ const RoutineTask = require('./models/RoutineTask');
 const PushSubscription = require('./models/PushSubscription');
 const NotificationLog = require('./models/NotificationLog');
 const Message = require('./models/Message');
+const Payment = require('./models/Payment');
 
 // Import Services
 const pushNotificationService = require('./services/pushNotificationService');
@@ -1226,26 +1227,149 @@ app.get('/checkout/:id', protect, async (req, res) => {
     }
 });
 
-app.post('/buy-course/:id', protect, async (req, res) => {
+// ========================================
+// PAYMENT SYSTEM ROUTES
+// ========================================
+
+// Submit payment (from checkout form)
+app.post('/payment/submit', protect, async (req, res) => {
     try {
-        const { planIndex } = req.body;
-        const user = await User.findById(req.session.user._id);
-        const course = await Course.findById(req.params.id);
-        const plan = course.plans[planIndex];
-        let expiresAt = null;
-        if (plan.durationDays > 0) {
-            expiresAt = new Date();
-            expiresAt.setDate(expiresAt.getDate() + plan.durationDays);
+        await connectDB();
+        const { courseId, planIndex, paymentMethod, phoneNumber, transactionId, amount } = req.body;
+        const user = req.session.user;
+
+        // Check duplicate transaction ID
+        const existing = await Payment.findOne({ transactionId: transactionId.toUpperCase() });
+        if (existing) {
+            const course = await Course.findById(courseId);
+            return res.render('checkout', {
+                course,
+                error: 'এই ট্রানজেকশন আইডি আগেই ব্যবহার হয়েছে। সঠিক TrxID দিন।'
+            });
         }
-        const existing = user.enrolledCourses.find(e => e.course.toString() === req.params.id);
-        if (existing) existing.expiresAt = expiresAt;
-        else user.enrolledCourses.push({ course: req.params.id, expiresAt });
-        await user.save();
-        res.redirect(`/course-details/${req.params.id}`);
+
+        // Create payment record
+        const payment = await Payment.create({
+            user: req.session.userId,
+            course: courseId,
+            planIndex: parseInt(planIndex) || 0,
+            amount: parseFloat(amount) || 0,
+            paymentMethod,
+            phoneNumber,
+            transactionId: transactionId.toUpperCase(),
+            status: 'pending'
+        });
+
+        // Populate for display
+        await payment.populate('course', 'title');
+
+        res.render('payment-pending', { payment, user });
     } catch (err) {
+        console.error('Payment submit error:', err);
+        if (err.code === 11000) {
+            const course = await Course.findById(req.body.courseId).catch(() => null);
+            return res.render('checkout', {
+                course,
+                error: 'এই ট্রানজেকশন আইডি আগেই ব্যবহার হয়েছে।'
+            });
+        }
+        res.status(500).send('পেমেন্ট জমা দিতে সমস্যা হয়েছে।');
+    }
+});
+
+// Student payment history
+app.get('/my-payments', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const payments = await Payment.find({ user: req.session.userId })
+            .populate('course', 'title thumbnail')
+            .sort({ createdAt: -1 })
+            .lean();
+        res.render('my-payments', { user: req.session.user, payments });
+    } catch (err) {
+        res.render('my-payments', { user: req.session.user, payments: [] });
+    }
+});
+
+// Admin: Payment management page
+app.get('/admin/payments', protect, adminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const filter = req.query.status || 'pending';
+        const query = filter === 'all' ? {} : { status: filter };
+
+        const payments = await Payment.find(query)
+            .populate('user', 'name email')
+            .populate('course', 'title')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const [pending, approved, rejected, revenueData] = await Promise.all([
+            Payment.countDocuments({ status: 'pending' }),
+            Payment.countDocuments({ status: 'approved' }),
+            Payment.countDocuments({ status: 'rejected' }),
+            Payment.aggregate([{ $match: { status: 'approved' } }, { $group: { _id: null, total: { $sum: '$amount' } } }])
+        ]);
+
+        res.render('admin/payments', {
+            user: req.session.user,
+            payments,
+            filter,
+            stats: {
+                pending,
+                approved,
+                rejected,
+                totalRevenue: revenueData[0]?.total || 0
+            }
+        });
+    } catch (err) {
+        console.error('Admin payments error:', err);
         res.status(500).send('Error');
     }
 });
+
+// Admin: Approve or reject a payment
+app.post('/admin/payment/:id/review', protect, adminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const { action, adminNote } = req.body;
+        const payment = await Payment.findById(req.params.id).populate('course');
+
+        if (!payment) return res.status(404).json({ success: false, error: 'Payment not found' });
+        if (payment.status !== 'pending') return res.status(400).json({ success: false, error: 'Already reviewed' });
+
+        payment.status = action === 'approve' ? 'approved' : 'rejected';
+        payment.adminNote = adminNote || '';
+        payment.reviewedBy = req.session.userId;
+        payment.reviewedAt = new Date();
+        await payment.save();
+
+        // If approved, enroll the student
+        if (action === 'approve') {
+            const user = await User.findById(payment.user);
+            if (user) {
+                const plan = payment.course?.plans?.[payment.planIndex];
+                let expiresAt = null;
+                if (plan?.durationDays > 0) {
+                    expiresAt = new Date();
+                    expiresAt.setDate(expiresAt.getDate() + plan.durationDays);
+                }
+                const existing = user.enrolledCourses.find(
+                    e => e.course.toString() === payment.course._id.toString()
+                );
+                if (existing) existing.expiresAt = expiresAt;
+                else user.enrolledCourses.push({ course: payment.course._id, expiresAt });
+                await user.save();
+            }
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Payment review error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 
 app.get('/library', protect, async (req, res) => {
     try {
