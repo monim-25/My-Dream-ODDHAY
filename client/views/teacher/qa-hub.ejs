@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title>Q&A | Teacher Studio</title>
+    <% 
+        // Relative Time Helper
+        function timeAgo(date) {
+            const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+            let interval = seconds / 31536000;
+            if (interval > 1) return Math.floor(interval) + " years ago";
+            interval = seconds / 2592000;
+            if (interval > 1) return Math.floor(interval) + " months ago";
+            interval = seconds / 86400;
+            if (interval > 1) return Math.floor(interval) + " days ago";
+            interval = seconds / 3600;
+            if (interval > 1) return Math.floor(interval) + " hours ago";
+            interval = seconds / 60;
+            if (interval > 1) return Math.floor(interval) + " minutes ago";
+            return Math.floor(seconds) + " seconds ago";
+        }
+
+        // Title Case Helper
+        function toTitleCase(str) {
+            if (!str) return '';
+            const s = String(str);
+            return s.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+        }
+    %>
+    <style>
+        :root {
+            --admin-sidebar-width: 260px;
+        }
+
+        .admin-main {
+            margin-left: var(--admin-sidebar-width);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .content-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .qa-card-studio {
+            background: #ffffff;
+            border-radius: 0;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 20px -2px rgba(148, 163, 184, 0.12), 0 2px 8px -1px rgba(148, 163, 184, 0.08);
+            transition: all 0.2s ease;
+        }
+
+        .dark .qa-card-studio {
+            background: #0f172a;
+            border-color: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3);
+        }
+
+        .qa-card-inner {
+            border: none;
+            background: #ffffff;
+            border-radius: 0;
+        }
+
+        .dark .qa-card-inner {
+            background: transparent;
+        }
+
+        .filter-btn {
+            height: 32px;
+            padding: 0 16px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: capitalize;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+        }
+
+        .filter-btn.active {
+            background: #B5E29B;
+            color: #000000;
+        }
+
+        .btn-studio {
+            background: #B5E29B;
+            color: #000000;
+            border-radius: 0;
+            font-weight: 700;
+            text-transform: capitalize;
+            transition: all 0.2s ease;
+        }
+
+        .btn-studio:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .meta-badge {
+            background: #F8FAFC;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #000000;
+            border: 1px solid #f1f5f9;
+        }
+
+        .dark .meta-badge {
+            background: rgba(255, 255, 255, 0.03);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+
+        @media (max-width: 1024px) {
+            .admin-sidebar {
+                transform: translateX(-100%);
+            }
+
+            .admin-main {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-[#F8F8FF] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden antialiased">
+
+    <div class="flex h-screen">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100] border-r border-slate-100 dark:border-white/5">
+            <%- include('sidebar', { active: 'qa' }) %>
+        </aside>
+
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617]">
+            <%- include('../admin/header_v2', { pageTitle: 'Q&A' }) %>
+
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5">
+                <div class="bg-white dark:bg-[#0b1120] border-0 flex flex-col relative rounded-none shadow-none min-h-screen">
+                    <!-- Filters Bar -->
+                    <div class="sticky top-0 z-30 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md px-4 py-3 border-b border-slate-200 dark:border-slate-800/50 flex flex-wrap items-center justify-between gap-3 rounded-none">
+                        <div class="flex items-center gap-2 flex-1 min-w-[300px]">
+                            <div class="flex items-center mr-2">
+                                <span class="px-2 py-1 bg-[#E3E2E6] text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none rounded-none"><%= filters.totalQAs %> Questions</span>
+                            </div>
+
+                            <!-- Class Filter -->
+                            <div class="relative w-36">
+                                <select onchange="updateFilters('class', this.value)" class="w-full h-10 pl-3 pr-8 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
+                                    <option value="all" <%= filters.class === 'all' ? 'selected' : '' %>>All Classes</option>
+                                    <% assignedClasses.forEach(c => { %>
+                                        <option value="<%= c %>" <%= filters.class === c ? 'selected' : '' %>><%= c %></option>
+                                    <% }) %>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                            </div>
+
+                            <!-- Subject Filter -->
+                            <div class="relative w-36">
+                                <select onchange="updateFilters('subject', this.value)" class="w-full h-10 pl-3 pr-8 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
+                                    <option value="all" <%= filters.subject === 'all' ? 'selected' : '' %>>All Subjects</option>
+                                    <% assignedSubjects.forEach(s => { %>
+                                        <option value="<%= s %>" <%= filters.subject === s ? 'selected' : '' %>><%= s %></option>
+                                    <% }) %>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                            </div>
+
+                            <!-- Course Filter -->
+                            <div class="relative w-48">
+                                <select onchange="updateFilters('course', this.value)" class="w-full h-10 pl-3 pr-8 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
+                                    <option value="all" <%= filters.course === 'all' ? 'selected' : '' %>>All Courses</option>
+                                    <% assignedCourses.forEach(c => { %>
+                                        <option value="<%= c.id %>" <%= filters.course === c.id ? 'selected' : '' %>><%= c.title %></option>
+                                    <% }) %>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <script>
+                        function updateFilters(key, value) {
+                            const params = new URLSearchParams(window.location.search);
+                            if (value === 'all') {
+                                params.delete(key);
+                            } else {
+                                params.set(key, value);
+                            }
+                            window.location.href = '?' + params.toString();
+                        }
+                    </script>
+
+                    <!-- Questions Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 mt-2">
+                    <% if (qas.length > 0) { %>
+                        <% qas.forEach(qa => { %>
+                            <div class="p-1 qa-card-studio">
+                                <div class="p-6 qa-card-inner space-y-6">
+                                    
+                                    <!-- Card Header -->
+                                    <div class="flex items-center justify-between gap-4">
+                                        <div class="flex items-center gap-4">
+                                            <div class="size-14 rounded-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-300 overflow-hidden shrink-0">
+                                                <% if (qa.askedBy && qa.askedBy.profilePicture) { %>
+                                                    <img src="<%= qa.askedBy.profilePicture %>" class="size-full object-cover">
+                                                <% } else { %>
+                                                    <span class="material-symbols-rounded text-3xl leading-none">person</span>
+                                                <% } %>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <h4 class="text-base font-black text-slate-900 dark:text-white truncate"><%= toTitleCase(qa.askedBy ? qa.askedBy.name : 'Unknown Student') %></h4>
+                                                <div class="flex items-center gap-3 mt-2">
+                                                    <span class="meta-badge">
+                                                        <%= Array.isArray(qa.course?.classLevel) && qa.course.classLevel.length ? qa.course.classLevel.join(', ') : (qa.course?.classLevel || 'N/A') %>
+                                                    </span>
+                                                    <span class="text-xs font-bold text-slate-500 tracking-tight leading-none"><%= timeAgo(qa.createdAt) %></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="text-right shrink-0">
+                                            <p class="meta-badge">
+                                                <%= Array.isArray(qa.course?.subject) && qa.course.subject.length ? qa.course.subject.map(toTitleCase).join(', ') : toTitleCase(qa.course?.subject || 'General') %>
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Question Content -->
+                                    <div class="p-5 bg-slate-50 dark:bg-black/20 border border-slate-900/5 dark:border-white/5 relative">
+                                        <p class="text-base font-semibold text-slate-800 dark:text-slate-200 leading-relaxed italic">
+                                            "<%= qa.question %>"
+                                        </p>
+                                    </div>
+
+                                    <!-- Action Module -->
+                                    <form action="/teacher/qa/<%= qa._id %>/answer" method="POST" class="space-y-4 pt-4 border-t border-slate-900/5 dark:border-white/5">
+                                        <div class="space-y-2">
+                                            <label class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 leading-none capitalize">
+                                                Answer:
+                                            </label>
+                                            <textarea name="answer" rows="3" placeholder="Type your answer here..." 
+                                                      class="w-full p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-medium outline-none focus:border-[#B5E29B] transition-all resize-none shadow-sm"></textarea>
+                                        </div>
+                                        <div class="flex justify-end">
+                                            <button type="submit" class="h-10 px-10 btn-studio flex items-center gap-2 text-xs leading-none shadow-sm">
+                                                Submit
+                                                <span class="material-symbols-rounded text-sm leading-none">send</span>
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        <% }) %>
+                    <% } else { %>
+                        <div class="col-span-full py-48 text-center bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/5 rounded-none shadow-md">
+                            <div class="size-20 bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-400 dark:text-slate-500 mx-auto mb-8 border border-slate-100 dark:border-white/5 shadow-inner">
+                                <span class="material-symbols-rounded text-4xl leading-none">inventory_2</span>
+                            </div>
+                            <h3 class="text-xl font-black text-slate-900 dark:text-white tracking-tight">No pending questions</h3>
+                            <p class="text-sm font-medium text-slate-500 mt-2">All student queries for this category have been addressed.</p>
+                        </div>
+                    <% } %>
+                </div> <!-- Questions Grid -->
+                
+                <!-- Pagination -->
+                <div class="px-3 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <p class="text-[9px] font-bold text-slate-500">Page <%= filters.page %> of <%= filters.totalPages %></p>
+                    <div class="flex items-center gap-0.5">
+                        <% for(var i=1; i<=filters.totalPages; i++) { %>
+                            <a href="?page=<%= i %>&class=<%= encodeURIComponent(filters.class) %>&subject=<%= encodeURIComponent(filters.subject) %>&course=<%= encodeURIComponent(filters.course) %>" class="size-7 rounded-md flex items-center justify-center text-[9px] font-bold<% if(filters.page === i) { %> bg-primary text-white shadow-lg shadow-primary/20<% } else { %> bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700<% } %> transition-all">
+                                <%= i %>
+                            </a>
+                        <% } %>
+                    </div>
+                </div>
+                
+            </div> <!-- Main Container -->
+        </div> <!-- content-scroll -->
+        </main>
+    </div>
+
+    <script>
+        function toggleAdminSidebar() {
+            const sidebar = document.getElementById('adminSidebar');
+            sidebar.classList.toggle('active');
+        }
+    </script>
+</body>
+
+</html>

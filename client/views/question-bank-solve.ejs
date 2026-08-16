@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Practice Exam | <%= bank.title || bank.subject %></title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+
+<body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <%- include('partials/student-header') %>
+
+    <% 
+       const bSubject = (bank.subject || 'Subject').trim();
+       const bBoard = (bank.board || '').trim();
+       const bYear = (bank.year || '').trim();
+
+       const boardWithYear = [bBoard, bYear].filter(Boolean).join(' ');
+       let bTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${boardWithYear}`;
+       if (bTitle.includes('Custom Exam') || bTitle.includes('Personalized Exam')) {
+           const subjectsPart = bTitle.split(/Personalized Exam|Custom Exam/i)[0].trim();
+           bTitle = `${subjectsPart} Personalized Exam - `;
+       } else if (bYear && !bTitle.includes(bYear)) {
+           bTitle = `${bTitle} ${bYear}`;
+       }
+       const durationMins = parseInt(bank.duration) || 30;
+
+       const isMockTest = bank.isMockTest || bTitle.toLowerCase().startsWith('mock test');
+       const isModelTest = bank.isModelTest || bTitle.toLowerCase().startsWith('model test');
+       const isCustomExam = bank.isCustom || bTitle.includes('Personalized Exam') || bTitle.includes('Custom Exam') || bTitle.includes('Self Test');
+
+       const isExamTab = isMockTest || isModelTest || isCustomExam || (locals.fromExams === true);
+       const activeNavPage = isExamTab ? 'exams' : 'questions';
+    %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: activeNavPage }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative">
+
+            <!-- EXAM HEADER TOOLBAR -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 p-2 sm:p-2.5 shrink-0 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-xs">
+                
+                <div class="min-w-0 flex items-center gap-2">
+                    <% if (bank.negativeMarking) { %>
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 text-[10px] font-bold leading-none">
+                            <span class="material-symbols-rounded text-xs">warning</span>
+                            <span class="leading-none">-<%= bank.negativeMarkValue || 0.25 %> Neg Mark</span>
+                        </span>
+                    <% } %>
+                </div>
+
+                <!-- ANSWERED COUNT & TIMER BADGE -->
+                <div class="flex items-center gap-3 shrink-0">
+                    <span id="answeredCountText" class="text-[11px] font-bold text-slate-500 dark:text-slate-400">0 of <%= questions.length %> answered</span>
+                    <div id="examTimerBadge" class="px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1.5 shrink-0">
+                        <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center">timer</span>
+                        <span id="examTimerText" class="leading-none font-extrabold">00:00</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EXAM QUESTIONS FORM -->
+            <form id="examForm" action="/question-bank/solve/<%= bank._id %>" method="POST" class="p-3 sm:p-5 max-w-4xl w-full mx-auto flex-1 flex flex-col space-y-5">
+                
+                <input type="hidden" name="timeTakenSeconds" id="timeTakenSecondsInput" value="0">
+
+                <% if (questions.length === 0) { %>
+                    <div class="bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center space-y-2">
+                        <span class="material-symbols-rounded text-5xl text-slate-300 dark:text-slate-700 leading-none">quiz</span>
+                        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300">No Questions Available</h3>
+                        <p class="text-xs text-slate-400">This question bank does not have questions attached for practice yet.</p>
+                    </div>
+                <% } else { %>
+                    <div class="space-y-5">
+                        <% questions.forEach(function(q, index) { %>
+                            <% 
+                               const qType = q.questionType || 'MCQ';
+                               const opts = Array.isArray(q.options) ? q.options : [];
+                               const defaultMark = (qType === 'Medium') ? 2 : ((qType === 'Comprehension') ? 10 : 1);
+                               const qMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : defaultMark;
+                               const qIdStr = q._id.toString();
+                            %>
+                            <div class="question-card bg-slate-50 dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4" data-qid="<%= qIdStr %>" data-type="<%= qType %>">
+                                
+                                <!-- QUESTION HEADER & MARKS -->
+                                <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200/60 dark:border-slate-800">
+                                    <span class="px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                                        <span>Question <%= index + 1 %></span>
+                                    </span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700">
+                                            <%= qType %>
+                                        </span>
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 flex items-center gap-1">
+                                            <span class="material-symbols-rounded text-[11px] leading-none flex items-center justify-center shrink-0">star</span>
+                                            <span><%= qMark %> <%= qMark === 1 ? 'Mark' : 'Marks' %></span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- QUESTION STATEMENT -->
+                                <div class="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200 leading-relaxed pt-1">
+                                    <%= q.questionText %>
+                                </div>
+
+                                <!-- MCQ OPTIONS SELECTION (ANSWER HIDDEN) -->
+                                <% const isMcqQuestion = (qType === 'MCQ') && opts.length > 0; %>
+                                <% if (isMcqQuestion) { %>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
+                                        <% const letters = ['A', 'B', 'C', 'D', 'E', 'F']; %>
+                                        <% opts.forEach(function(optText, oIdx) { %>
+                                            <label onclick="onOptionSelect(this)" class="opt-label cursor-pointer p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:border-indigo-500/60 transition-all flex items-center justify-between gap-2.5 text-xs font-semibold select-none group">
+                                                <div class="flex items-center gap-2.5 min-w-0">
+                                                    <span class="opt-badge size-6 sm:size-7 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center text-xs font-bold shrink-0 transition-colors">
+                                                        <%= letters[oIdx] || (oIdx + 1) %>
+                                                    </span>
+                                                    <span class="text-sm sm:text-[15px] font-medium tracking-normal text-slate-800 dark:text-slate-100 leading-snug"><%= optText %></span>
+                                                </div>
+                                                <input type="radio" name="mcq_<%= qIdStr %>" value="<%= oIdx %>" class="hidden" onchange="updateProgressCount()">
+                                                <span class="radio-indicator size-4 rounded-full border-2 border-slate-300 dark:border-slate-600 shrink-0 transition-all flex items-center justify-center">
+                                                    <span class="inner-dot size-2 rounded-full bg-indigo-600 hidden"></span>
+                                                </span>
+                                            </label>
+                                        <% }); %>
+                                    </div>
+                                <% } else { %>
+                                    <!-- WRITTEN RESPONSE AREA FOR NON-MCQ -->
+                                    <div class="space-y-1.5 pt-1">
+                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5">Answer here...</label>
+                                        <textarea name="written_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="Type your answer here..." class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
+                                    </div>
+                                <% } %>
+
+                            </div>
+                        <% }); %>
+                    </div>
+
+                    <!-- INLINE SUBMIT BUTTON PLACED AFTER ALL QUESTIONS -->
+                    <div class="pt-6 pb-12 flex items-center justify-center">
+                        <button type="button" onclick="confirmSubmitExam()" class="h-11 px-8 bg-gradient-to-r from-indigo-600 via-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white rounded-xl font-bold text-xs shadow-md shadow-indigo-500/20 transition-all flex items-center gap-2 active:scale-95">
+                            <span>Submit</span>
+                            <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0">arrow_forward</span>
+                        </button>
+                    </div>
+                <% } %>
+
+            </form>
+        </main>
+    </div>
+
+    <script>
+        const bankId = "<%= bank._id %>";
+        const durationMinutes = <%= durationMins %>;
+        const fullSeconds = durationMinutes * 60;
+
+        const storageKeyTimer = `oddhay_exam_start_${bankId}`;
+        const storageKeyAnswers = `oddhay_exam_answers_${bankId}`;
+
+        // Initialize exam start timestamp in localStorage to calculate elapsed time across refreshes
+        let startTime = localStorage.getItem(storageKeyTimer);
+        if (!startTime) {
+            startTime = Date.now();
+            localStorage.setItem(storageKeyTimer, startTime);
+        } else {
+            startTime = parseInt(startTime, 10);
+        }
+
+        let elapsedSeconds = Math.max(0, Math.floor((Date.now() - startTime) / 1000));
+        let remainingSeconds = Math.max(0, fullSeconds - elapsedSeconds);
+        let timeTakenSeconds = elapsedSeconds;
+        let examInterval = null;
+        let isSubmitted = false;
+
+        function startExamTimer() {
+            const timerText = document.getElementById('examTimerText');
+            const timeTakenInput = document.getElementById('timeTakenSecondsInput');
+
+            function updateDisplay() {
+                const mins = Math.floor(remainingSeconds / 60);
+                const secs = remainingSeconds % 60;
+                if (timerText) {
+                    timerText.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+                }
+            }
+
+            if (remainingSeconds <= 0) {
+                if (timerText) timerText.textContent = "00:00";
+                autoSubmitExam();
+                return;
+            }
+
+            updateDisplay();
+
+            examInterval = setInterval(() => {
+                const nowElapsed = Math.floor((Date.now() - startTime) / 1000);
+                remainingSeconds = Math.max(0, fullSeconds - nowElapsed);
+                timeTakenSeconds = nowElapsed;
+                if (timeTakenInput) timeTakenInput.value = timeTakenSeconds;
+
+                if (remainingSeconds <= 0) {
+                    clearInterval(examInterval);
+                    if (timerText) timerText.textContent = "00:00";
+                    autoSubmitExam();
+                } else {
+                    updateDisplay();
+                }
+            }, 1000);
+        }
+
+        function onOptionSelect(labelEl, shouldSave = true) {
+            const card = labelEl.closest('.question-card');
+            if (!card) return;
+
+            // Clear previous selection highlight in this card
+            card.querySelectorAll('.opt-label').forEach(l => {
+                l.classList.remove('bg-indigo-500/10', 'border-indigo-500', 'dark:bg-indigo-500/15');
+                l.classList.add('bg-white', 'dark:bg-slate-800/80', 'border-slate-200', 'dark:border-slate-700');
+                const radioDot = l.querySelector('.inner-dot');
+                if (radioDot) radioDot.classList.add('hidden');
+                const badge = l.querySelector('.opt-badge');
+                if (badge) {
+                    badge.classList.remove('bg-indigo-600', 'text-white');
+                    badge.classList.add('bg-slate-100', 'dark:bg-slate-700', 'text-slate-600', 'dark:text-slate-300');
+                }
+            });
+
+            // Highlight selected option
+            labelEl.classList.remove('bg-white', 'dark:bg-slate-800/80', 'border-slate-200', 'dark:border-slate-700');
+            labelEl.classList.add('bg-indigo-500/10', 'border-indigo-500', 'dark:bg-indigo-500/15');
+
+            const radioDot = labelEl.querySelector('.inner-dot');
+            if (radioDot) radioDot.classList.remove('hidden');
+
+            const badge = labelEl.querySelector('.opt-badge');
+            if (badge) {
+                badge.classList.remove('bg-slate-100', 'dark:bg-slate-700', 'text-slate-600', 'dark:text-slate-300');
+                badge.classList.add('bg-indigo-600', 'text-white');
+            }
+
+            const radio = labelEl.querySelector('input[type="radio"]');
+            if (radio) radio.checked = true;
+
+            updateProgressCount();
+            if (shouldSave) saveAnswersToStorage();
+        }
+
+        function saveAnswersToStorage() {
+            const draft = {};
+            const radios = document.querySelectorAll('input[type="radio"]:checked');
+            radios.forEach(r => {
+                draft[r.name] = r.value;
+            });
+
+            const textareas = document.querySelectorAll('textarea');
+            textareas.forEach(t => {
+                if (t.value.trim() !== '') {
+                    draft[t.name] = t.value;
+                }
+            });
+
+            localStorage.setItem(storageKeyAnswers, JSON.stringify(draft));
+        }
+
+        function restoreAnswersFromStorage() {
+            const saved = localStorage.getItem(storageKeyAnswers);
+            if (!saved) return;
+
+            try {
+                const draft = JSON.parse(saved);
+                Object.keys(draft).forEach(name => {
+                    const val = draft[name];
+                    const radio = document.querySelector(`input[name="${name}"][value="${val}"]`);
+                    if (radio) {
+                        radio.checked = true;
+                        const label = radio.closest('.opt-label');
+                        if (label) onOptionSelect(label, false);
+                    } else {
+                        const textarea = document.querySelector(`textarea[name="${name}"]`);
+                        if (textarea) {
+                            textarea.value = val;
+                            textarea.style.height = 'auto';
+                            textarea.style.height = textarea.scrollHeight + 'px';
+                        }
+                    }
+                });
+            } catch(e) {
+                console.error("Failed restoring draft answers:", e);
+            }
+        }
+
+        function clearExamStorage() {
+            localStorage.removeItem(storageKeyTimer);
+            localStorage.removeItem(storageKeyAnswers);
+        }
+
+        function updateProgressCount() {
+            const cards = document.querySelectorAll('.question-card');
+            let answered = 0;
+            cards.forEach(card => {
+                const radioChecked = card.querySelector('input[type="radio"]:checked');
+                const textarea = card.querySelector('textarea');
+                const textVal = textarea ? textarea.value.trim() : '';
+
+                if (radioChecked || textVal !== '') {
+                    answered++;
+                }
+            });
+
+            const countEl = document.getElementById('answeredCountText');
+            if (countEl) {
+                countEl.textContent = `${answered} of ${cards.length} answered`;
+            }
+        }
+
+        function confirmSubmitExam() {
+            if (isSubmitted) return;
+            Swal.fire({
+                title: 'Submit Exam?',
+                text: 'Are you sure! Submit now?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#4f46e5',
+                cancelButtonColor: '#94a3b8',
+                confirmButtonText: 'Yes, Submit Now'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    isSubmitted = true;
+                    if (examInterval) clearInterval(examInterval);
+                    clearExamStorage();
+                    document.getElementById('examForm').submit();
+                }
+            });
+        }
+
+        function autoSubmitExam() {
+            if (isSubmitted) return;
+            isSubmitted = true;
+            Swal.fire({
+                title: "Time's Up!",
+                text: "Your exam duration has expired. Submitting your answers now...",
+                icon: 'warning',
+                timer: 2000,
+                showConfirmButton: false
+            }).then(() => {
+                clearExamStorage();
+                document.getElementById('examForm').submit();
+            });
+        }
+
+        window.onload = () => {
+            restoreAnswersFromStorage();
+            startExamTimer();
+            updateProgressCount();
+        };
+    </script>
+</body>
+</html>

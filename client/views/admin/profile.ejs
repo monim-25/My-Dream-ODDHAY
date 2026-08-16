@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title>Profile Management | ODDHAY Command Center</title>
+    <style>
+        :root {
+            --admin-sidebar-width: 260px;
+        }
+
+        .admin-sidebar {
+            width: var(--admin-sidebar-width);
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 100;
+        }
+
+        .admin-main {
+            margin-left: var(--admin-sidebar-width);
+            min-height: 100vh;
+            transition: all 0.3s ease;
+        }
+
+        .profile-card {
+            background: #ffffff;
+            border: 1px solid #f1f5f9;
+            border-radius: 2rem;
+            transition: all 0.3s ease;
+        }
+
+        .dark .profile-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+        }
+
+        .profile-avatar-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .avatar-upload-btn {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            width: 32px;
+            height: 32px;
+            background: #3b82f6;
+            color: white;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 3px solid white;
+            transition: transform 0.2s;
+        }
+
+        .dark .avatar-upload-btn {
+            border-color: #1e293b;
+        }
+
+        .avatar-upload-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .btn-primary-pill {
+            background: #000000;
+            color: #ffffff;
+            border-radius: 1rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary-pill:hover {
+            background: #334155;
+            transform: translateY(-1px);
+        }
+
+        .dark .btn-primary-pill {
+            background: #ffffff;
+            color: #000000;
+        }
+
+        .dark .btn-primary-pill:hover {
+            background: #e2e8f0;
+        }
+    </style>
+</head>
+
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans min-h-screen">
+    <div class="flex">
+        <!-- Sidebar -->
+        <aside id="adminSidebar"
+            class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
+            <%- include('sidebar_content', { active: 'profile' }) %>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main flex-1 ml-[260px] bg-[#F8FAFC] dark:bg-[#020617] flex flex-col min-h-screen">
+            <%- include('header_v2', { pageTitle: 'Profile', statusColor: 'bg-blue-500' }) %>
+
+            <!-- Success Popup -->
+            <div id="successPopup" class="fixed top-24 right-8 z-[110] transform translate-x-full opacity-0 transition-all duration-500 pointer-events-none">
+                <div class="bg-emerald-500 text-white px-6 py-3.5 rounded-xl shadow-xl shadow-emerald-500/20 flex items-center gap-3 border border-emerald-400/20">
+                    <span class="material-symbols-rounded text-lg">check_circle</span>
+                    <span class="text-sm font-bold tracking-tight">Profile updated successfully</span>
+                </div>
+            </div>
+
+            <section class="p-0.5 flex flex-col gap-0.5 w-full flex-1 border-l border-slate-900/10 dark:border-white/5">
+                <!-- Profile Header Card -->
+                <div class="bg-white dark:bg-[#0b1120] p-4 rounded-md border border-slate-200 dark:border-slate-700/50 flex flex-col md:flex-row items-center gap-6 relative shrink-0">
+                    <div class="profile-avatar-container shrink-0">
+                        <div class="size-28 lg:size-32 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center text-4xl font-black text-slate-200 border border-slate-200 dark:border-slate-700 overflow-hidden">
+                            <img id="profilePreview" 
+                                 src="<%= user.profilePicture ? user.profilePicture : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=f1f5f9&color=64748b` %>" 
+                                 class="w-full h-full object-cover">
+                        </div>
+                        <label for="avatarInput" class="avatar-upload-btn shadow-md">
+                            <span class="material-symbols-rounded text-[18px]">photo_camera</span>
+                        </label>
+                        <input type="file" id="avatarInput" class="hidden" accept="image/*" onchange="uploadAvatar(this)">
+                    </div>
+
+                    <div class="text-center md:text-left">
+                        <h1 class="text-3xl font-bold tracking-tight mb-2 text-slate-900 dark:text-white"><%= user.name %></h1>
+                        
+                        <div class="flex flex-col items-center md:items-start gap-2">
+                            <div class="inline-flex px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                                <%= user.role === 'superadmin' ? 'Super Administrator' : 'Administrator' %>
+                            </div>
+                            
+                            <div class="inline-flex px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-500 dark:text-slate-400">
+                                <%= user.email || user.phone %>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-[#0b1120] rounded-md border border-slate-200 dark:border-slate-700/50 flex flex-col shadow-sm">
+                    <div class="flex flex-col">
+                    <form action="/admin/profile/update" method="POST" class="flex flex-col">
+                        <!-- Personal Info Row -->
+                        <div class="p-4 lg:p-5 flex flex-col border-b border-slate-200 dark:border-slate-700/50 space-y-6">
+                            <div class="flex items-center gap-3">
+                                <h3 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Account details</h3>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Full name</label>
+                                    <input type="text" name="name" value="<%= user.name %>" 
+                                           class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500" 
+                                           placeholder="Your name" required>
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Email address</label>
+                                    <input type="email" name="email" value="<%= user.email %>" 
+                                           class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500" 
+                                           placeholder="example@oddhay.com" required>
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Phone number</label>
+                                    <input type="text" name="phone" value="<%= user.phone || '' %>" 
+                                           class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500" 
+                                           placeholder="+880...">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Security Info Row -->
+                        <div class="p-4 lg:p-5 flex flex-col space-y-6">
+                            <div class="flex items-center gap-3 shrink-0">
+                                <h3 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Change password</h3>
+                            </div>
+                        
+                        <% if (error && error !== 'none') { %>
+                            <div class="p-3 rounded-lg bg-orange-50 dark:bg-orange-500/5 border border-orange-100 dark:border-orange-500/10 text-orange-600 dark:text-orange-400 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-sm">warning</span>
+                                <span class="text-xs font-bold tracking-tight uppercase">
+                                    <%= error.replace(/_/g, ' ') %>
+                                </span>
+                            </div>
+                        <% } %>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Current password</label>
+                                    <input type="password" name="oldPassword" placeholder="••••••••" 
+                                           class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">New password</label>
+                                    <input type="password" name="newPassword" placeholder="••••••••" 
+                                           class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Confirm new password</label>
+                                    <input type="password" name="confirmPassword" placeholder="••••••••" 
+                                           class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-100 dark:focus:border-blue-500 dark:focus:ring-blue-500">
+                                </div>
+                            </div>
+                            
+                            <div class="flex justify-end border-t border-slate-100 dark:border-slate-800/50 pt-5 mt-auto">
+                                <button type="submit" class="px-6 py-2.5 btn-primary-pill shadow-[0_4px_12px_rgba(0,0,0,0.1)] dark:shadow-none flex items-center gap-2 text-sm rounded-lg">
+                                    Save
+                                    <span class="material-symbols-rounded text-[18px]">done</span>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Handle Success Popup
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('success') === 'profile_updated') {
+                const popup = document.getElementById('successPopup');
+                popup.classList.remove('translate-x-full', 'opacity-0');
+                popup.classList.add('translate-x-0', 'opacity-100');
+                
+                setTimeout(() => {
+                    popup.classList.add('translate-x-full', 'opacity-0');
+                    popup.classList.remove('translate-x-0', 'opacity-100');
+                    // Remove query param without refreshing
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }, 3000);
+            }
+        });
+
+        async function uploadAvatar(input) {
+            if (!input.files || !input.files[0]) return;
+            
+            const formData = new FormData();
+            formData.append('profileImage', input.files[0]);
+
+            try {
+                const response = await fetch('/admin/profile/upload-avatar', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('profilePreview').src = data.filePath;
+                    const sidebarAvatar = document.querySelector('.admin-sidebar img[alt="Profile"]');
+                    if (sidebarAvatar) sidebarAvatar.src = data.filePath;
+                    
+                    // Show upload success popup
+                    const popup = document.getElementById('successPopup');
+                    popup.querySelector('span:last-child').textContent = 'Profile picture updated';
+                    popup.classList.remove('translate-x-full', 'opacity-0');
+                    popup.classList.add('translate-x-0', 'opacity-100');
+                    setTimeout(() => {
+                        popup.classList.add('translate-x-full', 'opacity-0');
+                        popup.classList.remove('translate-x-0', 'opacity-100');
+                    }, 3000);
+
+                } else {
+                    alert('Upload failed: ' + data.error);
+                }
+            } catch (err) {
+                console.error('Upload error:', err);
+                alert('Server error. Please try again.');
+            }
+        }
+    </script>
+</body>
+
+</html>

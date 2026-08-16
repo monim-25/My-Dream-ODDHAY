@@ -1,431 +1,805 @@
 <!DOCTYPE html>
-<html lang="bn">
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>পুশ নোটিফিকেশন ম্যানেজমেন্ট - ODDHAY</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
-
-        * {
-            font-family: 'Inter', 'Noto Sans Bengali', sans-serif;
-        }
-
-        .shadow-icon {
-            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-        }
-    </style>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#6366f1',
-                    }
-                }
-            }
-        }
-    </script>
+    <%- include('../partials/head') %>
+        <title>Notification Center | ODDHAY Command Center</title>
+        <style>
+            :root { --admin-sidebar-width: 260px; }
+            .admin-main { margin-left: var(--admin-sidebar-width); height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+            .content-scroll { flex: 1; overflow-y: auto; padding: 0; position: relative; }
+            @media (max-width: 1024px) { .admin-sidebar { transform: translateX(-100%); } .admin-main { margin-left: 0; } }
+            .pulse-mini { animation: pulse-mini 2s infinite; }
+            @keyframes pulse-mini { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+            
+            /* Hide scrollbar for clean UI but allow scrolling */
+            .content-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+            .content-scroll::-webkit-scrollbar-track { background: transparent; }
+            .content-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 10px; }
+            .content-scroll::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.4); }
+        </style>
 </head>
 
-<body class="bg-slate-50 dark:bg-slate-900">
-    <div class="flex h-screen overflow-hidden">
-        <!-- Sidebar -->
-        <aside class="w-72 bg-white dark:bg-[#0f172a] border-r border-slate-200 dark:border-slate-800 overflow-y-auto">
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+    <div class="flex h-screen">
+        <aside id="adminSidebar"
+            class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
             <%- include('sidebar_content', { active: 'notifications' }) %>
         </aside>
 
-        <!-- Main Content -->
-        <main class="flex-1 overflow-y-auto">
-            <!-- Top Bar -->
-            <header
-                class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 sticky top-0 z-10">
-                <div class="flex items-center justify-between px-8 py-4">
-                    <div>
-                        <h1 class="text-2xl font-black text-slate-900 dark:text-white">🔔 পুশ নোটিফিকেশন</h1>
-                        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">ইউজারদের নোটিফিকেশন পাঠান এবং ম্যানেজ
-                            করুন</p>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <div
-                            class="px-4 py-2 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 rounded-xl text-sm font-bold">
-                            <span class="material-symbols-outlined text-sm align-middle">check_circle</span>
-                            সিস্টেম সক্রিয়
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617] w-full">
+            <%- include('header_v2', { pageTitle: 'Notification Center' }) %>
+
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5">
+                    <!-- Stats Overview -->
+                    <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/50 p-2 shrink-0">
+                        <div class="grid grid-cols-2 lg:grid-cols-5 gap-2">
+                            <!-- Total Sent -->
+                            <div class="bg-slate-50/40 dark:bg-slate-500/10 border border-slate-200 dark:border-slate-500/20 rounded-xl p-3 flex flex-col group h-[80px] relative overflow-hidden transition-all hover:bg-white dark:hover:bg-slate-800/50 hover:shadow-md hover:border-primary/20 cursor-pointer">
+                                <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-slate-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">campaign</span>
+                                <p class="text-[11px] font-bold text-slate-600 dark:text-slate-400 tracking-wider relative z-10">Broadcasts</p>
+                                <div class="flex-1 flex items-center">
+                                    <h3 class="text-xl font-black text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.total %></h3>
+                                </div>
+                                <p class="text-[10px] text-slate-500/70 font-medium relative z-10">Total Sent &rarr;</p>
+                            </div>
+
+                            <!-- Delivered -->
+                            <div class="bg-emerald-50/40 dark:bg-emerald-500/10 border border-emerald-100/20 dark:border-emerald-500/20 rounded-xl p-3 flex flex-col group h-[80px] relative overflow-hidden transition-all hover:bg-white dark:hover:bg-slate-800/50 hover:shadow-md hover:border-primary/20 cursor-pointer">
+                                <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-emerald-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">done_all</span>
+                                <p class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 tracking-wider relative z-10">Delivered</p>
+                                <div class="flex-1 flex items-center">
+                                    <h3 class="text-xl font-black text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.sent %></h3>
+                                </div>
+                                <p class="text-[10px] text-emerald-500/70 font-medium relative z-10">Successfully Sent &rarr;</p>
+                            </div>
+
+                            <!-- Failed -->
+                            <div class="bg-rose-50/40 dark:bg-rose-500/10 border border-rose-100/20 dark:border-rose-500/20 rounded-xl p-3 flex flex-col group h-[80px] relative overflow-hidden transition-all hover:bg-white dark:hover:bg-slate-800/50 hover:shadow-md hover:border-primary/20 cursor-pointer">
+                                <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-rose-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">error</span>
+                                <p class="text-[11px] font-bold text-rose-600 dark:text-rose-400 tracking-wider relative z-10">Failed</p>
+                                <div class="flex-1 flex items-center">
+                                    <h3 class="text-xl font-black text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.failed %></h3>
+                                </div>
+                                <p class="text-[10px] text-rose-500/70 font-medium relative z-10">Delivery Issues &rarr;</p>
+                            </div>
+
+                            <!-- Clicked -->
+                            <div class="bg-violet-50/40 dark:bg-violet-500/10 border border-violet-100/20 dark:border-violet-500/20 rounded-xl p-3 flex flex-col group h-[80px] relative overflow-hidden transition-all hover:bg-white dark:hover:bg-slate-800/50 hover:shadow-md hover:border-primary/20 cursor-pointer">
+                                <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-violet-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">ads_click</span>
+                                <p class="text-[11px] font-bold text-violet-600 dark:text-violet-400 tracking-wider relative z-10">Engagement</p>
+                                <div class="flex-1 flex items-center">
+                                    <h3 class="text-xl font-black text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.clicked %></h3>
+                                </div>
+                                <p class="text-[10px] text-violet-500/70 font-medium relative z-10">User Interactions &rarr;</p>
+                            </div>
+
+                            <!-- Success Rate -->
+                            <div class="bg-blue-50/40 dark:bg-blue-500/10 border border-blue-100/20 dark:border-blue-500/20 rounded-xl p-3 flex flex-col group h-[80px] relative overflow-hidden transition-all hover:bg-white dark:hover:bg-slate-800/50 hover:shadow-md hover:border-primary/20 cursor-pointer">
+                                <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-blue-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">speed</span>
+                                <p class="text-[11px] font-bold text-blue-600 dark:text-blue-400 tracking-wider relative z-10">Success Rate</p>
+                                <div class="flex-1 flex items-center">
+                                    <h3 class="text-xl font-black text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.total> 0 ? Math.round((stats.sent / stats.total) * 100) : 0 %>%</h3>
+                                </div>
+                                <p class="text-[10px] text-blue-500/70 font-medium relative z-10">System Health &rarr;</p>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </header>
 
-            <div class="p-8 space-y-6">
-                <!-- Statistics Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    <div
-                        class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="material-symbols-outlined text-blue-500 text-3xl">send</span>
-                            <span class="text-xs font-bold text-slate-400 dark:text-slate-500">মোট পাঠানো</span>
-                        </div>
-                        <div class="text-3xl font-black text-slate-900 dark:text-white" id="stat-total">0</div>
-                    </div>
-
-                    <div
-                        class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="material-symbols-outlined text-green-500 text-3xl">check_circle</span>
-                            <span class="text-xs font-bold text-slate-400 dark:text-slate-500">সফল</span>
-                        </div>
-                        <div class="text-3xl font-black text-slate-900 dark:text-white" id="stat-sent">0</div>
-                    </div>
-
-                    <div
-                        class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="material-symbols-outlined text-purple-500 text-3xl">touch_app</span>
-                            <span class="text-xs font-bold text-slate-400 dark:text-slate-500">ক্লিক রেট</span>
-                        </div>
-                        <div class="text-3xl font-black text-slate-900 dark:text-white" id="stat-click-rate">0%</div>
-                    </div>
-
-                    <div
-                        class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200 dark:border-slate-700">
-                        <div class="flex items-center justify-between mb-3">
-                            <span class="material-symbols-outlined text-indigo-500 text-3xl">devices</span>
-                            <span class="text-xs font-bold text-slate-400 dark:text-slate-500">সক্রিয় ডিভাইস</span>
-                        </div>
-                        <div class="text-3xl font-black text-slate-900 dark:text-white" id="stat-devices">0</div>
-                    </div>
-                </div>
-
-                <!-- Send Notification Form -->
-                <div class="bg-white dark:bg-slate-800 rounded-2xl p-8 border border-slate-200 dark:border-slate-700">
-                    <h2 class="text-xl font-black text-slate-900 dark:text-white mb-6">📤 নতুন নোটিফিকেশন পাঠান</h2>
-
-                    <div class="space-y-6">
-                        <!-- Target Selection -->
-                        <div>
-                            <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">প্রাপক
-                                নির্বাচন করুন</label>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <button onclick="selectTarget('user')"
-                                    class="target-btn px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-primary hover:bg-primary/5 transition-all font-bold text-sm">
-                                    <span class="material-symbols-outlined text-lg block mb-1">person</span>
-                                    নির্দিষ্ট ইউজার
+                    <!-- Broadcast Composer -->
+                    <div class="bg-white dark:bg-[#0f172a] border-0 flex flex-col relative rounded-none shadow-sm shrink-0">
+                        <!-- Header -->
+                        <div class="sticky top-0 z-30 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md px-4 py-3 border-b border-slate-100 dark:border-white/5 flex items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-rounded text-blue-500 text-[20px]">campaign</span>
+                                <div>
+                                    <h3 class="text-[13px] font-bold text-slate-900 dark:text-white tracking-tight leading-none">Broadcast Composer</h3>
+                                    <p class="text-[10px] text-slate-400 mt-0.5">Compose and send notifications to your users</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="showTemplates()" class="h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[11px] border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-[16px]">description</span> Templates
                                 </button>
-                                <button onclick="selectTarget('role')"
-                                    class="target-btn px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-primary hover:bg-primary/5 transition-all font-bold text-sm">
-                                    <span class="material-symbols-outlined text-lg block mb-1">groups</span>
-                                    রোল অনুযায়ী
+                                <button type="button" onclick="showPreview()" class="h-9 px-3 rounded-md bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400 font-bold text-[11px] border border-violet-200 dark:border-violet-500/20 hover:bg-violet-100 dark:hover:bg-violet-500/20 transition-all flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-[16px]">preview</span> Preview
                                 </button>
-                                <button onclick="selectTarget('class')"
-                                    class="target-btn px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-primary hover:bg-primary/5 transition-all font-bold text-sm">
-                                    <span class="material-symbols-outlined text-lg block mb-1">school</span>
-                                    ক্লাস অনুযায়ী
-                                </button>
-                                <% if (user.role==='superadmin' ) { %>
-                                    <button onclick="selectTarget('all')"
-                                        class="target-btn px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 hover:border-primary hover:bg-primary/5 transition-all font-bold text-sm">
-                                        <span class="material-symbols-outlined text-lg block mb-1">campaign</span>
-                                        সবাইকে
+                            </div>
+                        </div>
+
+                        <!-- Form Body -->
+                        <div class="p-3">
+                            <form id="broadcastForm" class="grid grid-cols-12 gap-3">
+
+                                <!-- ROW 1: Target + Class/Course (conditional) + Priority + Language -->
+                                <div class="col-span-12 md:col-span-3 flex flex-col gap-1">
+                                    <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Target Audience</label>
+                                    <select name="target" id="targetSelect" class="h-10 w-full rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all cursor-pointer">
+                                        <option value="all">Non-Admin Users (<%= userCounts['student'] + userCounts['teacher'] + userCounts['guardian'] || 0 %>)</option>
+                                        <option value="student">Students Only (<%= userCounts['student'] || 0 %>)</option>
+                                        <option value="teacher">Teachers Only (<%= userCounts['teacher'] || 0 %>)</option>
+                                        <option value="guardian">Guardians Only (<%= userCounts['guardian'] || 0 %>)</option>
+                                        <option value="class">By Class Level</option>
+                                        <option value="course">By Course</option>
+                                        <option value="inactive">Inactive (7+ Days) (<%= userCounts['inactive'] || 0 %>)</option>
+                                        <option value="specific">Specific User</option>
+                                    </select>
+                                </div>
+
+                                <div id="classSelectDiv" class="hidden col-span-12 md:col-span-3 flex flex-col gap-1">
+                                    <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Class Level</label>
+                                    <select name="classLevel" class="h-10 w-full rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all cursor-pointer">
+                                        <% ((typeof globalAcademicClasses !== 'undefined' ? globalAcademicClasses : []).map(c => c.name)).forEach(cls => { %>
+                                            <option value="<%= cls %>"><%= cls %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+
+                                <div id="courseSelectDiv" class="hidden col-span-12 md:col-span-3 flex flex-col gap-1">
+                                    <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Select Course</label>
+                                    <select name="courseId" class="h-10 w-full rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all cursor-pointer">
+                                        <% courses.forEach(course => { %>
+                                            <option value="<%= course._id %>"><%= course.title %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+
+                                <div id="specificUserDiv" class="hidden col-span-12 md:col-span-3 flex flex-col gap-1">
+                                    <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">User ID <span class="text-rose-500">*</span></label>
+                                    <input type="text" name="userId" placeholder="Enter User MongoDB ID"
+                                        class="h-10 w-full rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all placeholder:text-slate-400 placeholder:font-normal">
+                                </div>
+
+                                <div class="col-span-12 md:col-span-3 flex flex-col gap-1">
+                                    <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Priority</label>
+                                    <select name="priority" id="priorityInput" class="h-10 w-full rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all cursor-pointer">
+                                        <option value="normal">Normal</option>
+                                        <option value="urgent">Urgent</option>
+                                        <option value="low">Low</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-span-12 md:col-span-3 flex flex-col gap-1">
+                                    <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Language</label>
+                                    <select name="language" class="h-10 w-full rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all cursor-pointer">
+                                        <option value="en">English</option>
+                                        <option value="bn">বাংলা (Bangla)</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-span-12 md:col-span-3 flex flex-col gap-1">
+                                    <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Category</label>
+                                    <select name="type" class="h-10 w-full rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all cursor-pointer">
+                                        <option value="announcement">Announcement</option>
+                                        <option value="system">System Alert</option>
+                                        <option value="reminder">Reminder</option>
+                                        <option value="exam">Exam Related</option>
+                                        <option value="payment">Payment</option>
+                                    </select>
+                                </div>
+
+                                <!-- ROW 2: Title + Schedule -->
+                                <div class="col-span-12 md:col-span-6 flex flex-col gap-1">
+                                    <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Title / Heading <span class="text-rose-500">*</span></label>
+                                    <input type="text" name="title" id="titleInput" placeholder="e.g., New Exam Scheduled for Class 10" required
+                                        class="h-10 w-full rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all placeholder:text-slate-400 placeholder:font-normal">
+                                </div>
+
+                                <div class="col-span-12 md:col-span-3 flex flex-col gap-1">
+                                    <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Action URL <span class="text-slate-400 font-normal">(optional)</span></label>
+                                    <input type="text" name="url" id="urlInput" placeholder="/my-courses or /quiz/math-101"
+                                        class="h-10 w-full rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all placeholder:text-slate-400 placeholder:font-normal">
+                                </div>
+
+                                <div class="col-span-12 md:col-span-3 flex flex-col gap-1">
+                                    <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Schedule <span class="text-slate-400 font-normal">(optional)</span></label>
+                                    <input type="datetime-local" name="scheduledAt"
+                                        class="h-10 w-full rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all">
+                                </div>
+
+                                <!-- ROW 3: Message Body -->
+                                <div class="col-span-12 flex flex-col gap-1">
+                                    <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Message Body <span class="text-rose-500">*</span></label>
+                                    <textarea name="body" id="bodyInput" rows="4" required placeholder="Write your notification message here..."
+                                        class="w-full rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold px-3 py-2.5 resize-none focus:outline-none focus:border-blue-500 transition-all placeholder:text-slate-400 placeholder:font-normal"></textarea>
+                                </div>
+
+                                <!-- Submit Row -->
+                                <div class="col-span-12 flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                                    <button type="reset" class="h-9 px-4 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[11px] border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all">
+                                        Clear
                                     </button>
+                                    <button type="submit" id="submitBtn" class="h-9 px-5 rounded-md bg-blue-600 text-white font-bold text-[11px] hover:bg-blue-700 transition-all flex items-center gap-2 shadow-lg shadow-blue-500/20 active:scale-[0.98]">
+                                        Send Notification
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Notification History Section (Inside Same Container) -->
+                        <div class="p-6 flex flex-col items-center justify-center text-center bg-white dark:bg-slate-900/50 rounded-b-md">
+                            <div class="size-16 rounded-full bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center mb-4 border border-blue-100 dark:border-blue-500/20">
+                                <span class="material-symbols-rounded text-3xl text-blue-500">history</span>
+                            </div>
+                            <h3 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight mb-1">Live Activity Hub</h3>
+                            <p class="text-[12px] text-slate-500 max-w-[300px] mx-auto mb-4">Real-time broadcast monitoring.</p>
+                            
+                            <!-- Recent Activity Peek -->
+                            <div class="w-full max-w-[450px] mb-4 flex flex-col gap-2">
+                                <% 
+                                    const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+                                    const recentData = history.filter(h => new Date(h.createdAt) >= thirtyMinsAgo);
+                                    const displayItems = recentData.length > 0 ? recentData.slice(0, 4) : history.slice(0, 4);
+                                %>
+                                <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400 text-left px-1 flex items-center gap-2">
+                                    <span class="size-1.5 rounded-full <%= recentData.length > 0 ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.4)]' : 'bg-slate-300' %>"></span>
+                                    <%= recentData.length > 0 ? 'Active in last 30m' : 'Previous Activity' %>
+                                </p>
+                                
+                                <div id="activityFeed" class="flex flex-col gap-1.5">
+                                    <% if (displayItems.length > 0) { %>
+                                        <% displayItems.forEach(log => { %>
+                                            <div class="bg-white dark:bg-slate-800/40 p-2.5 rounded-lg border border-slate-200/60 dark:border-slate-700/50 flex items-start gap-2.5 text-left shadow-sm hover:border-blue-300 transition-all group relative">
+                                                <div class="size-8 rounded bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-500/20">
+                                                    <span class="material-symbols-rounded text-blue-600 dark:text-blue-400 text-[18px]">campaign</span>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex items-center justify-between gap-2 mb-0.5">
+                                                        <p class="text-[11px] font-bold text-slate-900 dark:text-white truncate"><%= log.title %></p>
+                                                        <div class="flex items-center gap-1.5">
+                                                            <span class="text-[8px] font-bold px-1.5 py-0.5 rounded-full <%= log.status === 'sent' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400' %>">
+                                                                <%= log.status %>
+                                                            </span>
+                                                            <button onclick='viewFullDetails(<%- JSON.stringify(log) %>)' class="size-5 rounded hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors">
+                                                                <span class="material-symbols-rounded text-[14px]">visibility</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center justify-between text-[9.5px]">
+                                                        <div class="flex items-center gap-1.5 text-slate-500">
+                                                            <span class="truncate max-w-[80px]" title="<%= log.sentBy ? log.sentBy.email : '' %>"><%= log.sentBy ? log.sentBy.name : 'System' %></span>
+                                                            <span class="size-0.5 rounded-full bg-slate-300"></span>
+                                                            <span class="text-blue-600 dark:text-blue-400 font-medium">
+                                                                <% if (log.target === 'class') { %>
+                                                                    Class: <%= log.classLevel %>
+                                                                <% } else if (log.target === 'course') { %>
+                                                                    Course: <%= log.courseId ? log.courseId.title : 'Deleted Course' %>
+                                                                <% } else { %>
+                                                                    Target: <%= log.target %>
+                                                                <% } %>
+                                                            </span>
+                                                        </div>
+                                                        <span class="text-slate-400 shrink-0"><%= new Date(log.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) %></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <% }) %>
+                                    <% } else { %>
+                                        <div class="py-6 text-center bg-slate-50 dark:bg-slate-800/20 rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
+                                            <p class="text-[10px] text-slate-400">No activity to show</p>
+                                        </div>
                                     <% } %>
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- Dynamic Target Input -->
-                        <div id="target-input" class="hidden">
-                            <!-- Will be populated dynamically -->
-                        </div>
-
-                        <!-- Notification Content -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">শিরোনাম
-                                    (Title)</label>
-                                <input type="text" id="notif-title" placeholder="নোটিফিকেশনের শিরোনাম লিখুন"
-                                    class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
-                            </div>
-                            <div>
-                                <label
-                                    class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">টাইপ</label>
-                                <select id="notif-type"
-                                    class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
-                                    <option value="announcement">📢 ঘোষণা</option>
-                                    <option value="course">📚 কোর্স</option>
-                                    <option value="exam">📝 পরীক্ষা</option>
-                                    <option value="reminder">⏰ রিমাইন্ডার</option>
-                                    <option value="achievement">🏆 অর্জন</option>
-                                    <option value="system">⚙️ সিস্টেম</option>
-                                    <option value="custom">✨ কাস্টম</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">বার্তা
-                                (Message)</label>
-                            <textarea id="notif-body" rows="3" placeholder="নোটিফিকেশনের বিস্তারিত লিখুন"
-                                class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent"></textarea>
-                        </div>
-
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">লিংক
-                                    (URL) - ঐচ্ছিক</label>
-                                <input type="text" id="notif-url" placeholder="/dashboard" value="/dashboard"
-                                    class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
-                            </div>
-                            <div>
-                                <label
-                                    class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">প্রায়োরিটি</label>
-                                <select id="notif-priority"
-                                    class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
-                                    <option value="low">🔵 Low</option>
-                                    <option value="normal" selected>🟢 Normal</option>
-                                    <option value="high">🟡 High</option>
-                                    <option value="urgent">🔴 Urgent</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <!-- Send Button -->
-                        <div>
-                            <button onclick="sendNotification()"
-                                class="w-full px-6 py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-black text-lg transition-all shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30">
-                                <span class="material-symbols-outlined align-middle mr-2">send</span>
-                                নোটিফিকেশন পাঠান
-                            </button>
+                            <a href="/admin/notifications/history" class="h-10 px-6 rounded-md bg-white dark:bg-[#0f172a] text-blue-600 dark:text-blue-400 font-bold text-[12px] border border-blue-200 dark:border-blue-500/30 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all flex items-center gap-2 shadow-sm">
+                                View Full History <span class="material-symbols-rounded text-[16px]">arrow_forward</span>
+                            </a>
                         </div>
                     </div>
                 </div>
-
-                <!-- Recent Notifications Log -->
-                <div class="bg-white dark:bg-slate-800 rounded-2xl p-8 border border-slate-200 dark:border-slate-700">
-                    <h2 class="text-xl font-black text-slate-900 dark:text-white mb-6">📜 সাম্প্রতিক নোটিফিকেশন লগ</h2>
-                    <div id="notification-logs" class="space-y-3">
-                        <!-- Will be populated dynamically -->
-                        <div class="text-center py-8 text-slate-400">
-                            <span class="material-symbols-outlined text-4xl mb-2 block">inbox</span>
-                            লোড হচ্ছে...
-                        </div>
-                    </div>
-                </div>
-            </div>
         </main>
     </div>
 
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        let currentTarget = null;
-        let currentTargetValue = null;
+        // Real-time Activity Listener
+        const socket = io();
+        socket.on('connect', () => {
+            console.log('✅ Connected to Activity Hub');
+            socket.emit('user:join', { userId: '<%= user._id %>', name: '<%= user.name %>', role: '<%= user.role %>' });
+        });
 
-        // Load statistics
-        async function loadStats() {
-            try {
-                const response = await fetch('/api/push/stats');
-                const data = await response.json();
+        socket.on('notification:new', (data) => {
+            const feed = document.getElementById('activityFeed');
+            const emptyState = feed.querySelector('div.py-6');
+            if (emptyState) feed.innerHTML = '';
 
-                if (data.success) {
-                    document.getElementById('stat-total').textContent = data.stats.total || 0;
-                    document.getElementById('stat-sent').textContent = data.stats.sent || 0;
-                    document.getElementById('stat-click-rate').textContent = (data.stats.clickRate || 0) + '%';
-                    document.getElementById('stat-devices').textContent = data.stats.activeSubscriptions || 0;
-                }
-            } catch (error) {
-                console.error('Error loading stats:', error);
-            }
-        }
-
-        // Select target
-        function selectTarget(target) {
-            currentTarget = target;
-
-            // Update button styles
-            document.querySelectorAll('.target-btn').forEach(btn => {
-                btn.classList.remove('border-primary', 'bg-primary/10', 'text-primary');
-            });
-            event.target.closest('.target-btn').classList.add('border-primary', 'bg-primary/10', 'text-primary');
-
-            // Show appropriate input
-            const targetInput = document.getElementById('target-input');
-            targetInput.classList.remove('hidden');
-
-            if (target === 'user') {
-                targetInput.innerHTML = `
-                    <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">ইউজার আইডি</label>
-                    <input type="text" id="target-value" placeholder="ইউজার আইডি লিখুন" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
-                `;
-            } else if (target === 'role') {
-                const userRole = '<%= user.role %>';
-                let roleOptions = '';
-
-                // Regular admin can only send to student and parent
-                if (userRole === 'admin') {
-                    roleOptions = `
-                        <option value="student">👨‍🎓 Student</option>
-                        <option value="parent">👨‍👩‍👧 Parent</option>
-                    `;
-                } else {
-                    // Super admin can send to everyone
-                    roleOptions = `
-                        <option value="student">👨‍🎓 Student</option>
-                        <option value="parent">👨‍👩‍👧 Parent</option>
-                        <option value="admin">👨‍💼 Admin</option>
-                    `;
-                }
-
-                targetInput.innerHTML = `
-                    <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">রোল নির্বাচন করুন</label>
-                    <select id="target-value" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
-                        ${roleOptions}
-                    </select>
-                `;
-            } else if (target === 'class') {
-                targetInput.innerHTML = `
-                    <label class="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">ক্লাস নির্বাচন করুন</label>
-                    <select id="target-value" class="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent">
-                        <option value="Class 6">Class 6</option>
-                        <option value="Class 7">Class 7</option>
-                        <option value="Class 8">Class 8</option>
-                        <option value="Class 9">Class 9</option>
-                        <option value="Class 10">Class 10</option>
-                        <option value="HSC 1st Year">HSC 1st Year</option>
-                        <option value="HSC 2nd Year">HSC 2nd Year</option>
-                    </select>
-                `;
-            } else if (target === 'all') {
-                targetInput.innerHTML = `
-                    <div class="px-4 py-3 bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/20 rounded-xl">
-                        <p class="text-sm font-bold text-yellow-800 dark:text-yellow-400">⚠️ সতর্কতা: এই নোটিফিকেশন সকল ইউজারকে পাঠানো হবে!</p>
+            const item = document.createElement('div');
+            item.className = 'bg-white dark:bg-slate-800/40 p-2.5 rounded-lg border border-blue-400/50 dark:border-blue-400/50 flex items-start gap-2.5 text-left shadow-md transition-all group relative';
+            item.style.animation = 'fadeInDown 0.4s ease-out';
+            
+            const time = new Date(data.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const targetText = data.target === 'class' ? `Class: ${data.classLevel}` : (data.target === 'course' ? `Course: ${data.courseId ? data.courseId.title : 'Course'}` : `Target: ${data.target}`);
+            
+            item.innerHTML = `
+                <div class="size-8 rounded bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-500/20">
+                    <span class="material-symbols-rounded text-blue-600 dark:text-blue-400 text-[18px]">campaign</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center justify-between gap-2 mb-0.5">
+                        <p class="text-[11px] font-bold text-slate-900 dark:text-white truncate">${data.title}</p>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[8px] font-bold px-1.5 py-0.5 rounded-full ${data.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}">
+                                ${data.status}
+                            </span>
+                            <button onclick='viewFullDetails(${JSON.stringify(data)})' class="size-5 rounded hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors">
+                                <span class="material-symbols-rounded text-[14px]">visibility</span>
+                            </button>
+                        </div>
                     </div>
-                `;
-            }
+                    <div class="flex items-center justify-between text-[9.5px]">
+                        <div class="flex items-center gap-1.5 text-slate-500">
+                            <span class="truncate max-w-[80px]">${data.sentBy ? data.sentBy.name : 'System'}</span>
+                            <span class="size-0.5 rounded-full bg-slate-300"></span>
+                            <span class="text-blue-600 font-medium">${targetText}</span>
+                        </div>
+                        <span class="text-slate-400 shrink-0">${time}</span>
+                    </div>
+                </div>
+            `;
+
+            feed.prepend(item);
+            if (feed.children.length > 5) feed.lastElementChild.remove();
+        });
+
+        function viewFullDetails(log) {
+            Swal.fire({
+                title: 'Broadcast Details',
+                html: `
+                    <div class="text-left text-[13px]">
+                        <div class="mb-4 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                            <p class="text-[11px] font-bold text-slate-400 uppercase mb-2">Message Content</p>
+                            <p class="font-bold text-slate-900 dark:text-white mb-1">${log.title}</p>
+                            <p class="text-slate-600 dark:text-slate-400 leading-relaxed">${log.body}</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-md border border-blue-100 dark:border-blue-500/20">
+                                <p class="text-[10px] font-bold text-blue-600/60 uppercase">Target Audience</p>
+                                <p class="font-bold text-blue-700 dark:text-blue-400 capitalize">${log.target}</p>
+                                ${log.classLevel ? `<p class="text-[11px] text-blue-600">Level: ${log.classLevel}</p>` : ''}
+                                ${log.courseId ? `<p class="text-[11px] text-blue-600">Course: ${log.courseId.title || 'Course'}</p>` : ''}
+                            </div>
+                            <div class="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-md border border-emerald-100 dark:border-emerald-500/20">
+                                <p class="text-[10px] font-bold text-emerald-600/60 uppercase">Delivery Stats</p>
+                                <p class="font-bold text-emerald-700 dark:text-emerald-400">${log.sent}/${log.total} Sent</p>
+                                <p class="text-[11px] text-emerald-600">Failed: ${log.failed || 0}</p>
+                            </div>
+                            <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-md border border-slate-100 dark:border-slate-700">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase">Sender</p>
+                                <p class="font-bold text-slate-700 dark:text-slate-300">${log.sentBy ? log.sentBy.name : 'System'}</p>
+                                <p class="text-[11px] text-slate-500">${log.sentBy ? log.sentBy.role : ''}</p>
+                            </div>
+                            <div class="p-2 bg-slate-50 dark:bg-slate-800 rounded-md border border-slate-100 dark:border-slate-700">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase">Timestamp</p>
+                                <p class="font-bold text-slate-700 dark:text-slate-300">${new Date(log.createdAt).toLocaleString()}</p>
+                            </div>
+                        </div>
+                    </div>
+                `,
+                confirmButtonText: 'Dismiss',
+                confirmButtonColor: '#3b82f6',
+                background: document.documentElement.classList.contains('dark') ? '#1e293b' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+                width: '500px'
+            });
         }
 
-        // Send notification
-        async function sendNotification() {
-            if (!currentTarget) {
-                alert('প্রথমে প্রাপক নির্বাচন করুন');
-                return;
-            }
+        function toggleAdminSidebar() { document.getElementById('adminSidebar').classList.toggle('active'); }
 
-            const title = document.getElementById('notif-title').value.trim();
-            const body = document.getElementById('notif-body').value.trim();
-            const url = document.getElementById('notif-url').value.trim();
-            const type = document.getElementById('notif-type').value;
-            const priority = document.getElementById('notif-priority').value;
+        const targetSelect = document.getElementById('targetSelect');
+        const classSelectDiv = document.getElementById('classSelectDiv');
+        const courseSelectDiv = document.getElementById('courseSelectDiv');
+        const specificUserDiv = document.getElementById('specificUserDiv');
 
-            if (!title || !body) {
-                alert('শিরোনাম এবং বার্তা লিখুন');
-                return;
-            }
+        targetSelect.addEventListener('change', () => {
+            classSelectDiv.classList.add('hidden');
+            courseSelectDiv.classList.add('hidden');
+            specificUserDiv.classList.add('hidden');
 
-            const targetValueEl = document.getElementById('target-value');
-            const targetValue = targetValueEl ? targetValueEl.value : null;
+            if (targetSelect.value === 'class') classSelectDiv.classList.remove('hidden');
+            else if (targetSelect.value === 'course') courseSelectDiv.classList.remove('hidden');
+            else if (targetSelect.value === 'specific') specificUserDiv.classList.remove('hidden');
+        });
 
-            let endpoint = '';
-            let payload = { title, body, url, type, priority };
+        document.getElementById('broadcastForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            const submitBtn = document.getElementById('submitBtn');
 
-            if (currentTarget === 'user') {
-                if (!targetValue) {
-                    alert('ইউজার আইডি লিখুন');
-                    return;
-                }
-                endpoint = '/api/push/send-to-user';
-                payload.userId = targetValue;
-            } else if (currentTarget === 'role') {
-                endpoint = '/api/push/send-to-role';
-                payload.role = targetValue;
-            } else if (currentTarget === 'class') {
-                endpoint = '/api/push/send-to-class';
-                payload.classLevel = targetValue;
-            } else if (currentTarget === 'all') {
-                if (!confirm('আপনি কি নিশ্চিত যে সকল ইউজারকে এই নোটিফিকেশন পাঠাতে চান?')) {
-                    return;
-                }
-                endpoint = '/api/push/send-to-all';
-            }
-
+            // Check for duplicates first
             try {
-                const response = await fetch(endpoint, {
+                const dupResponse = await fetch('/admin/notifications/check-duplicate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({ title: data.title, target: data.target })
                 });
+                const dupData = await dupResponse.json();
 
-                const data = await response.json();
+                if (dupData.isDuplicate) {
+                    const existingDate = new Date(dupData.existing.createdAt).toLocaleString();
+                    const confirmResult = await Swal.fire({
+                        title: '⚠️ Similar Notification Found',
+                        html: `
+                            <p style="text-align: left;">You sent a similar notification recently:</p>
+                            <div style="background: #fef3c7; padding: 12px; border-radius: 8px; margin: 12px 0;">
+                                <p style="font-size: 12px; margin: 0;"><strong>Title:</strong> ${dupData.existing.title}</p>
+                                <p style="font-size: 12px; margin: 4px 0 0 0;"><strong>Target:</strong> ${dupData.existing.target}</p>
+                                <p style="font-size: 12px; margin: 4px 0 0 0;"><strong>Sent:</strong> ${existingDate}</p>
+                            </div>
+                            <p style="color: #64748b; font-size: 12px;">Do you want to send this anyway?</p>
+                        `,
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#3b82f6',
+                        cancelButtonColor: '#64748b',
+                        confirmButtonText: 'Yes, Send Anyway',
+                        cancelButtonText: 'Cancel',
+                        background: document.documentElement.classList.contains('dark') ? '#1e293b' : '#fff',
+                        color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+                    });
 
-                if (data.success) {
-                    alert(`✅ সফলভাবে ${data.result.sent || 0} জন ইউজারকে নোটিফিকেশন পাঠানো হয়েছে!`);
-                    // Clear form
-                    document.getElementById('notif-title').value = '';
-                    document.getElementById('notif-body').value = '';
-                    loadStats();
-                    loadLogs();
-                } else {
-                    alert('❌ নোটিফিকেশন পাঠাতে ব্যর্থ হয়েছে: ' + data.error);
+                    if (!confirmResult.isConfirmed) return;
                 }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('❌ একটি ত্রুটি ঘটেছে');
+            } catch (err) {
+                console.error('Duplicate check failed:', err);
             }
+
+            // Show scheduled time warning if set
+            if (data.scheduledAt) {
+                const scheduledDate = new Date(data.scheduledAt);
+                const now = new Date();
+                if (scheduledDate <= now) {
+                    Swal.fire('Error!', 'Scheduled time must be in the future.', 'error');
+                    return;
+                }
+            }
+
+            const confirmText = data.scheduledAt
+                ? `This notification will be scheduled for ${new Date(data.scheduledAt).toLocaleString()}`
+                : `This notification will be sent immediately to all selected users.`;
+
+            Swal.fire({
+                title: data.scheduledAt ? 'Schedule Notification?' : 'Send Notification?',
+                text: confirmText,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#137fec',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: data.scheduledAt ? 'Yes, Schedule It!' : 'Yes, Send Now!',
+                cancelButtonText: 'Cancel',
+                background: document.documentElement.classList.contains('dark') ? '#1e293b' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = '<span class="material-symbols-rounded animate-spin">sync</span> Processing...';
+
+                    try {
+                        const response = await fetch('/admin/notifications/broadcast', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+                        const res = await response.json();
+
+                        if (res.success) {
+                            if (data.scheduledAt) {
+                                Swal.fire({
+                                    title: 'Scheduled!',
+                                    text: `Notification scheduled successfully.`,
+                                    icon: 'success',
+                                    confirmButtonColor: '#137fec'
+                                }).then(() => location.reload());
+                            } else {
+                                Swal.fire({
+                                    title: 'Success!',
+                                    text: `Notification sent to ${res.sent} users successfully.`,
+                                    icon: 'success',
+                                    confirmButtonColor: '#137fec'
+                                }).then(() => location.reload());
+                            }
+                        } else {
+                            Swal.fire('Failed!', res.error || 'Something went wrong.', 'error');
+                        }
+                    } catch (err) {
+                        Swal.fire('Error!', 'Server is not responding.', 'error');
+                    } finally {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<span class="material-symbols-rounded text-sm">rocket_launch</span> Send Notification';
+                    }
+                }
+            });
+        });
+
+        // Preview Modal
+        function showPreview() {
+            const formData = new FormData(document.getElementById('broadcastForm'));
+            const data = Object.fromEntries(formData.entries());
+
+            const targetLabels = {
+                'all': 'All Users',
+                'student': 'Students Only',
+                'teacher': 'Teachers Only',
+                'admin': 'Admins Only',
+                'guardian': 'Guardians Only',
+                'class': 'By Class Level',
+                'course': 'By Course Enrollment'
+            };
+
+            const priorityLabels = {
+                'urgent': '🚨 Urgent',
+                'normal': '✅ Normal',
+                'low': '📉 Low'
+            };
+
+            Swal.fire({
+                title: 'Notification Preview',
+                html: `
+                    <div style="text-align: left; max-width: 400px; margin: 0 auto;">
+                        <div style="background: #f0f4f9; padding: 16px; border-radius: 12px; margin-bottom: 12px;">
+                            <p style="font-size: 10px; color: #64748b; margin: 0 0 4px 0; text-transform: uppercase; font-weight: bold;">Title</p>
+                            <p style="font-size: 14px; font-weight: bold; margin: 0; color: #1e293b;">${data.title || '(No title)'}</p>
+                        </div>
+                        <div style="background: #f0f4f9; padding: 16px; border-radius: 12px; margin-bottom: 12px;">
+                            <p style="font-size: 10px; color: #64748b; margin: 0 0 4px 0; text-transform: uppercase; font-weight: bold;">Message</p>
+                            <p style="font-size: 13px; margin: 0; color: #334155; line-height: 1.6;">${data.body || '(No message)'}</p>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <div style="background: #e0f2fe; padding: 12px; border-radius: 8px;">
+                                <p style="font-size: 9px; color: #0369a1; margin: 0 0 4px 0; text-transform: uppercase; font-weight: bold;">Target</p>
+                                <p style="font-size: 12px; font-weight: bold; margin: 0; color: #0c4a6e;">${targetLabels[data.target] || data.target}</p>
+                            </div>
+                            <div style="background: #fef3c7; padding: 12px; border-radius: 8px;">
+                                <p style="font-size: 9px; color: #92400e; margin: 0 0 4px 0; text-transform: uppercase; font-weight: bold;">Priority</p>
+                                <p style="font-size: 12px; font-weight: bold; margin: 0; color: #78350f;">${priorityLabels[data.priority] || data.priority}</p>
+                            </div>
+                            <div style="background: #e0e7ff; padding: 12px; border-radius: 8px;">
+                                <p style="font-size: 9px; color: #3730a3; margin: 0 0 4px 0; text-transform: uppercase; font-weight: bold;">Language</p>
+                                <p style="font-size: 12px; font-weight: bold; margin: 0; color: #312e81;">${data.language === 'bn' ? 'বাংলা' : 'English'}</p>
+                            </div>
+                            <div style="background: #f3e8ff; padding: 12px; border-radius: 8px;">
+                                <p style="font-size: 9px; color: #6b21a8; margin: 0 0 4px 0; text-transform: uppercase; font-weight: bold;">Category</p>
+                                <p style="font-size: 12px; font-weight: bold; margin: 0; color: #581c87;">${data.type || 'announcement'}</p>
+                            </div>
+                        </div>
+                        ${data.scheduledAt ? `<div style="background: #fef3c7; padding: 12px; border-radius: 8px; margin-top: 8px;"><p style="font-size: 9px; color: #92400e; margin: 0 0 4px 0; text-transform: uppercase; font-weight: bold;">Scheduled For</p><p style="font-size: 12px; font-weight: bold; margin: 0; color: #78350f;">${new Date(data.scheduledAt).toLocaleString()}</p></div>` : ''}
+                    </div>
+                `,
+                width: '600px',
+                confirmButtonText: 'Close',
+                confirmButtonColor: '#3b82f6',
+                background: document.documentElement.classList.contains('dark') ? '#1e293b' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+            });
         }
 
+        // Templates Modal
+        async function showTemplates() {
+            // Load templates from local storage or initialize defaults
+            let allTemplates = [];
+            const defaultTemplates = [
+                {
+                    name: 'Exam Schedule Announcement',
+                    title: 'New Exam Schedule Released',
+                    body: 'The schedule for the upcoming term exams has been published. Please check your courses for details.',
+                    target: 'all',
+                    priority: 'high',
+                    type: 'exam'
+                },
+                {
+                    name: 'System Maintenance Alert',
+                    title: 'Scheduled System Maintenance',
+                    body: 'The platform will undergo scheduled maintenance tonight at 12:00 AM. Access may be temporarily limited.',
+                    target: 'all',
+                    priority: 'urgent',
+                    type: 'system'
+                },
+                {
+                    name: 'Payment Reminder',
+                    title: 'Upcoming Payment Reminder',
+                    body: 'This is a gentle reminder that your tuition fee for the current month is due soon. Please clear your dues.',
+                    target: 'student',
+                    priority: 'normal',
+                    type: 'payment'
+                }
+            ];
 
-
-        // Load notification logs
-        async function loadLogs() {
             try {
-                const response = await fetch('/api/push/logs?limit=10');
-                const data = await response.json();
-
-                const logsContainer = document.getElementById('notification-logs');
-
-                if (data.success && data.logs.length > 0) {
-                    logsContainer.innerHTML = data.logs.map(log => `
-                        <div class="flex items-start gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all">
-                            <div class="flex-shrink-0 w-10 h-10 rounded-xl ${log.status === 'sent' ? 'bg-green-100 dark:bg-green-500/20 text-green-600' :
-                            log.status === 'failed' ? 'bg-red-100 dark:bg-red-500/20 text-red-600' :
-                                'bg-slate-100 dark:bg-slate-700 text-slate-600'
-                        } flex items-center justify-center">
-                                <span class="material-symbols-outlined text-lg">
-                                    ${log.status === 'sent' ? 'check_circle' : log.status === 'failed' ? 'error' : 'schedule'}
-                                </span>
-                            </div>
-                            <div class="flex-1 min-w-0">
-                                <div class="flex items-start justify-between gap-2 mb-1">
-                                    <h3 class="font-bold text-slate-900 dark:text-white truncate">${log.title}</h3>
-                                    <span class="text-xs text-slate-400 whitespace-nowrap">${new Date(log.createdAt).toLocaleString('bn-BD')}</span>
-                                </div>
-                                <p class="text-sm text-slate-600 dark:text-slate-400 line-clamp-2 mb-2">${log.body}</p>
-                                <div class="flex items-center gap-2 text-xs">
-                                    <span class="px-2 py-1 bg-slate-100 dark:bg-slate-700 rounded-md font-bold">${log.type}</span>
-                                    <span class="text-slate-400">→ ${log.user?.name || 'Unknown'}</span>
-                                </div>
-                            </div>
-                        </div>
-                    `).join('');
+                const stored = localStorage.getItem('customNotificationTemplates');
+                if (stored) {
+                    allTemplates = JSON.parse(stored);
+                    // Ensure defaults are present in existing stored data
+                    const hasDefault = allTemplates.some(t => t.name === 'Exam Schedule Announcement');
+                    if (!hasDefault) {
+                        allTemplates = [...allTemplates, ...defaultTemplates];
+                        localStorage.setItem('customNotificationTemplates', JSON.stringify(allTemplates));
+                    }
                 } else {
-                    logsContainer.innerHTML = `
-                        <div class="text-center py-8 text-slate-400">
-                            <span class="material-symbols-outlined text-4xl mb-2 block">inbox</span>
-                            কোনো নোটিফিকেশন লগ নেই
-                        </div>
-                    `;
+                    allTemplates = defaultTemplates;
+                    localStorage.setItem('customNotificationTemplates', JSON.stringify(allTemplates));
                 }
-            } catch (error) {
-                console.error('Error loading logs:', error);
-            }
+            } catch(e) { console.error('Could not load custom templates', e); }
+
+            let html = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; max-height: 400px; overflow-y: auto; padding-right: 4px;">';
+            
+            // Add New Template Card
+            html += `
+                <div onclick="openCreateTemplateModal()" style="background: #f8fafc; border: 2px dashed #cbd5e1; padding: 12px; border-radius: 8px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; color: #3b82f6;" onmouseover="this.style.borderColor='#3b82f6'; this.style.backgroundColor='#eff6ff'" onmouseout="this.style.borderColor='#cbd5e1'; this.style.backgroundColor='#f8fafc'">
+                    <span class="material-symbols-rounded text-[18px]">add_circle</span>
+                    <span style="font-size: 12px; font-weight: bold;">Create Template</span>
+                </div>
+            `;
+
+            allTemplates.forEach((t, i) => {
+                const actionButtons = `
+                    <div style="position: absolute; top: 6px; right: 6px; display: flex; gap: 2px;">
+                        <button onclick="event.stopPropagation(); editTemplate(${i})" style="background: transparent; border: none; cursor: pointer; color: #64748b; padding: 4px; border-radius: 4px;" onmouseover="this.style.color='#3b82f6'; this.style.backgroundColor='#eff6ff'" onmouseout="this.style.color='#64748b'; this.style.backgroundColor='transparent'"><span class="material-symbols-rounded" style="font-size: 13px;">edit</span></button>
+                        <button onclick="event.stopPropagation(); deleteTemplate(${i})" style="background: transparent; border: none; cursor: pointer; color: #64748b; padding: 4px; border-radius: 4px;" onmouseover="this.style.color='#ef4444'; this.style.backgroundColor='#fef2f2'" onmouseout="this.style.color='#64748b'; this.style.backgroundColor='transparent'"><span class="material-symbols-rounded" style="font-size: 13px;">delete</span></button>
+                    </div>
+                `;
+
+                html += `
+                    <div onclick="loadTemplate(${i})" style="position: relative; background: #f0f4f9; padding: 12px; border-radius: 8px; cursor: pointer; border: 2px solid #e2e8f0; transition: all 0.2s;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='#e2e8f0'">
+                        ${actionButtons}
+                        <p style="font-size: 13px; font-weight: bold; margin: 0 0 6px 0; color: #1e293b; padding-right: 40px;">${t.name}</p>
+                        <p style="font-size: 10px; margin: 0 0 4px 0; color: #64748b;"><strong>Title:</strong> ${t.title}</p>
+                        <p style="font-size: 10px; margin: 0; color: #64748b; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;"><strong>Message:</strong> ${t.body}</p>
+                    </div>
+                `;
+            });
+            html += '</div>';
+
+            window.templatesData = allTemplates;
+
+            Swal.fire({
+                title: 'Notification Templates',
+                html,
+                width: '600px',
+                showCancelButton: true,
+                confirmButtonText: 'Close',
+                cancelButtonText: '',
+                cancelButtonColor: 'transparent',
+                confirmButtonColor: '#3b82f6',
+                background: document.documentElement.classList.contains('dark') ? '#1e293b' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+            });
         }
 
-        // Initialize
-        loadStats();
-        loadLogs();
-        setInterval(loadStats, 30000); // Refresh stats every 30 seconds
+        function openCreateTemplateModal(editIndex = null) {
+            let initialData = { name: '', title: '', body: '' };
+            
+            if (editIndex !== null) {
+                try {
+                    const stored = localStorage.getItem('customNotificationTemplates');
+                    if (stored) {
+                        const customTemplates = JSON.parse(stored);
+                        if (customTemplates[editIndex]) {
+                            initialData = customTemplates[editIndex];
+                        }
+                    }
+                } catch(e) {}
+            }
+
+            Swal.fire({
+                title: editIndex !== null ? 'Edit Template' : 'Create Template',
+                html: `
+                    <div style="text-align: left;">
+                        <div style="margin-bottom: 12px;">
+                            <label style="font-size: 11px; font-weight: bold; color: #64748b; margin-bottom: 4px; display: block;">Template Name</label>
+                            <input id="swal-template-name" value="${initialData.name.replace(/"/g, '&quot;')}" class="swal2-input" style="width: 100%; height: 40px; margin: 0; font-size: 13px; border-radius: 6px;" placeholder="e.g. Weekly Update">
+                        </div>
+                        <div style="margin-bottom: 12px;">
+                            <label style="font-size: 11px; font-weight: bold; color: #64748b; margin-bottom: 4px; display: block;">Notification Title</label>
+                            <input id="swal-template-title" value="${initialData.title.replace(/"/g, '&quot;')}" class="swal2-input" style="width: 100%; height: 40px; margin: 0; font-size: 13px; border-radius: 6px;" placeholder="Message Subject">
+                        </div>
+                        <div>
+                            <label style="font-size: 11px; font-weight: bold; color: #64748b; margin-bottom: 4px; display: block;">Message Body</label>
+                            <textarea id="swal-template-body" class="swal2-textarea" style="width: 100%; margin: 0; font-size: 13px; border-radius: 6px; padding: 12px;" rows="3" placeholder="Write the content here...">${initialData.body.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+                        </div>
+                    </div>
+                `,
+                width: '500px',
+                showCancelButton: true,
+                confirmButtonText: 'Save Template',
+                cancelButtonText: 'Cancel',
+                confirmButtonColor: '#10b981',
+                background: document.documentElement.classList.contains('dark') ? '#1e293b' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000',
+                preConfirm: () => {
+                    const name = document.getElementById('swal-template-name').value;
+                    const title = document.getElementById('swal-template-title').value;
+                    const body = document.getElementById('swal-template-body').value;
+                    if (!name || !title || !body) {
+                        Swal.showValidationMessage('All fields are required');
+                        return false;
+                    }
+                    return { name, title, body, target: 'all', priority: 'normal', type: 'announcement' };
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    let customTemplates = [];
+                    try {
+                        const stored = localStorage.getItem('customNotificationTemplates');
+                        if (stored) customTemplates = JSON.parse(stored);
+                    } catch(e) {}
+                    
+                    if (editIndex !== null) {
+                        customTemplates[editIndex] = result.value;
+                    } else {
+                        customTemplates.push(result.value);
+                    }
+                    localStorage.setItem('customNotificationTemplates', JSON.stringify(customTemplates));
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Saved',
+                        text: 'Template saved successfully',
+                        timer: 1500,
+                        showConfirmButton: false
+                    }).then(() => {
+                        showTemplates();
+                    });
+                } else if (result.isDismissed) {
+                    showTemplates();
+                }
+            });
+        }
+
+        function editTemplate(index) {
+            openCreateTemplateModal(index);
+        }
+
+        function deleteTemplate(index) {
+            Swal.fire({
+                title: 'Delete Template?',
+                text: "You won't be able to revert this!",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, delete it',
+                background: document.documentElement.classList.contains('dark') ? '#1e293b' : '#fff',
+                color: document.documentElement.classList.contains('dark') ? '#fff' : '#000'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    try {
+                        const stored = localStorage.getItem('customNotificationTemplates');
+                        if (stored) {
+                            let customTemplates = JSON.parse(stored);
+                            customTemplates.splice(index, 1);
+                            localStorage.setItem('customNotificationTemplates', JSON.stringify(customTemplates));
+                        }
+                    } catch(e) {}
+                    showTemplates();
+                } else {
+                    showTemplates();
+                }
+            });
+        }
+
+        function loadTemplate(index) {
+            const template = window.templatesData[index];
+            if (!template) return;
+
+            document.querySelector('select[name="target"]').value = template.target || 'all';
+            document.querySelector('select[name="priority"]').value = template.priority || 'normal';
+            document.querySelector('select[name="type"]').value = template.type || 'announcement';
+
+            document.querySelector('input[name="title"]').value = template.title;
+            document.querySelector('textarea[name="body"]').value = template.body;
+
+            Swal.close();
+
+            // Trigger change event to show/hide class/course selectors
+            document.getElementById('targetSelect').dispatchEvent(new Event('change'));
+            
+
+        }
     </script>
 </body>
 
 </html>
+

@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+        <title>Notification History | ODDHAY Command Center</title>
+        <style>
+            :root { --admin-sidebar-width: 260px; }
+            .admin-main { margin-left: var(--admin-sidebar-width); height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+            .content-scroll { flex: 1; overflow-y: auto; padding: 0; position: relative; }
+            @media (max-width: 1024px) { .admin-sidebar { transform: translateX(-100%); } .admin-main { margin-left: 0; } }
+            
+            /* Hide scrollbar for clean UI but allow scrolling */
+            .content-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+            .content-scroll::-webkit-scrollbar-track { background: transparent; }
+            .content-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 10px; }
+            .content-scroll::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.4); }
+        </style>
+</head>
+
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+    <div class="flex h-screen">
+        <aside id="adminSidebar"
+            class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
+            <%- include('sidebar_content', { active: 'notifications' }) %>
+        </aside>
+
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617] w-full">
+            <%- include('header_v2', { pageTitle: 'Notification History' }) %>
+
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5">
+                    <!-- Stats Overview -->
+                    <div class="mb-0 bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/50 p-2">
+                        <div class="grid grid-cols-2 lg:grid-cols-5 gap-2">
+                            <div class="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50/50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-700/50 h-[80px]">
+                                <div class="size-8 rounded-md bg-white dark:bg-slate-800 flex items-center justify-center shrink-0 shadow-sm border border-slate-100 dark:border-slate-700/50">
+                                    <span class="material-symbols-rounded text-slate-500 text-[18px]">receipt_long</span>
+                                </div>
+                                <div class="flex flex-col">
+                                    <p class="text-[9px] font-bold text-slate-500 tracking-tight">Total Logs</p>
+                                    <h3 class="text-base font-bold tracking-tight text-slate-900 dark:text-white leading-tight"><%= stats.total %></h3>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-100/50 dark:border-emerald-500/10 h-[80px]">
+                                <div class="size-8 rounded-md bg-white dark:bg-emerald-500/10 flex items-center justify-center shrink-0 shadow-sm border border-emerald-100/50">
+                                    <span class="material-symbols-rounded text-emerald-500 text-[18px]">send</span>
+                                </div>
+                                <div class="flex flex-col">
+                                    <p class="text-[9px] font-bold text-slate-500 tracking-tight">Sent</p>
+                                    <h3 class="text-base font-bold tracking-tight text-emerald-600 dark:text-emerald-400 leading-tight"><%= stats.sent %></h3>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2.5 p-3 rounded-xl bg-rose-50/50 dark:bg-rose-500/5 border border-rose-100/50 dark:border-rose-500/10 h-[80px]">
+                                <div class="size-8 rounded-md bg-white dark:bg-rose-500/10 flex items-center justify-center shrink-0 shadow-sm border border-rose-100/50">
+                                    <span class="material-symbols-rounded text-rose-500 text-[18px]">error</span>
+                                </div>
+                                <div class="flex flex-col">
+                                    <p class="text-[9px] font-bold text-slate-500 tracking-tight">Failed</p>
+                                    <h3 class="text-base font-bold tracking-tight text-rose-600 dark:text-rose-400 leading-tight"><%= stats.failed %></h3>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2.5 p-3 rounded-xl bg-violet-50/50 dark:bg-violet-500/5 border border-violet-100/50 dark:border-violet-500/10 h-[80px]">
+                                <div class="size-8 rounded-md bg-white dark:bg-violet-500/10 flex items-center justify-center shrink-0 shadow-sm border border-violet-100/50">
+                                    <span class="material-symbols-rounded text-violet-500 text-[18px]">schedule</span>
+                                </div>
+                                <div class="flex flex-col">
+                                    <p class="text-[9px] font-bold text-slate-500 tracking-tight">Scheduled</p>
+                                    <h3 class="text-base font-bold tracking-tight text-violet-600 dark:text-violet-400 leading-tight"><%= stats.scheduled %></h3>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50/50 dark:bg-blue-500/5 border border-blue-100/50 dark:border-blue-500/10 h-[80px]">
+                                <div class="size-8 rounded-md bg-white dark:bg-blue-500/10 flex items-center justify-center shrink-0 shadow-sm border border-blue-100/50">
+                                    <span class="material-symbols-rounded text-blue-500 text-[18px]">group</span>
+                                </div>
+                                <div class="flex flex-col">
+                                    <p class="text-[9px] font-bold text-slate-500 tracking-tight">Users Reached</p>
+                                    <h3 class="text-base font-bold tracking-tight text-blue-600 dark:text-blue-400 leading-tight"><%= stats.totalSent %></h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+ 
+                    <!-- Communication Log Section -->
+                    <div class="bg-white dark:bg-[#0f172a] border-0 flex flex-col relative rounded-none shadow-sm">
+
+                        <!-- Header Bar -->
+                        <div class="sticky top-0 z-30 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md px-4 py-3 border-b border-slate-100 dark:border-white/5 flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex items-center gap-3">
+                                <div class="size-8 rounded-lg bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-500/20">
+                                    <span class="material-symbols-rounded text-blue-500 text-[18px]">history</span>
+                                </div>
+                                <div>
+                                    <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight">Communication Log</h3>
+                                    <p class="text-[10px] font-bold text-slate-500"><%= filters.totalMatching || 0 %> matching entries</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 w-full md:w-auto">
+                                <form action="/superadmin/notifications/history" method="GET" class="relative flex-1 md:w-64">
+                                    <span class="material-symbols-rounded text-[16px] text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">search</span>
+                                    <input type="text" name="q" value="<%= filters.q %>" placeholder="Search logs..."
+                                        class="w-full h-9 pl-9 pr-3 text-[11px] font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:border-blue-500 transition-all text-slate-900 dark:text-slate-300 leading-[34px] py-0">
+                                </form>
+                                <button onclick="exportToCSV()" class="h-9 px-4 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg font-bold text-[11px] hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition-all flex items-center gap-1.5 shadow-sm shrink-0">
+                                    <span class="material-symbols-rounded text-[16px]">download</span> Export
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Minimal Filters -->
+                        <div class="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/30">
+                            <div class="flex flex-col gap-3">
+                                <!-- Filter Toggles & Selection Toggle -->
+                                <div class="flex flex-wrap gap-4 items-center justify-between">
+                                    <div class="flex flex-wrap items-center gap-1.5">
+                                        <!-- Status Filter -->
+                                        <div class="flex items-center gap-0.5 bg-white dark:bg-slate-800/50 p-1 rounded-md border border-slate-200 dark:border-slate-700/50 h-9">
+                                            <% ['all','sent','failed','scheduled'].forEach(s => { %>
+                                                <a href="/superadmin/notifications/history?status=<%= s %>&priority=<%= filters.priority %>&target=<%= filters.target %>&q=<%= encodeURIComponent(filters.q) %>&page=1"
+                                                    class="px-3.5 h-full rounded text-[11.5px] font-bold transition-all flex items-center justify-center leading-none whitespace-nowrap <%= filters.status === s ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300' %>">
+                                                    <%= s.charAt(0).toUpperCase() + s.slice(1) %>
+                                                </a>
+                                            <% }) %>
+                                        </div>
+                                        
+                                        <!-- Priority Filter -->
+                                        <div class="flex items-center gap-0.5 bg-white dark:bg-slate-800/50 p-1 rounded-md border border-slate-200 dark:border-slate-700/50 h-9">
+                                            <% ['all','urgent','normal','low'].forEach(p => { %>
+                                                <a href="/superadmin/notifications/history?status=<%= filters.status %>&priority=<%= p %>&target=<%= filters.target %>&q=<%= encodeURIComponent(filters.q) %>&page=1"
+                                                    class="px-3.5 h-full rounded text-[11.5px] font-bold transition-all flex items-center justify-center leading-none whitespace-nowrap <%= filters.priority === p ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300' %>">
+                                                    <%= p.charAt(0).toUpperCase() + p.slice(1) %>
+                                                </a>
+                                            <% }) %>
+                                        </div>
+
+                                        <!-- Target Filter -->
+                                        <div class="flex items-center gap-0.5 bg-white dark:bg-slate-800/50 p-1 rounded-md border border-slate-200 dark:border-slate-700/50 h-9">
+                                        <% 
+                                            let targets = ['all','student','teacher','admin','class','course'];
+                                            if (user.role !== 'superadmin') {
+                                                targets = targets.filter(t => t !== 'admin');
+                                            }
+                                            targets.forEach(t => { 
+                                        %>
+                                                <a href="/superadmin/notifications/history?status=<%= filters.status %>&priority=<%= filters.priority %>&target=<%= t %>&q=<%= encodeURIComponent(filters.q) %>&page=1"
+                                                    class="px-3.5 h-full rounded text-[11.5px] font-bold transition-all flex items-center justify-center leading-none whitespace-nowrap <%= filters.target === t ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300' %>">
+                                                    <%= t.charAt(0).toUpperCase() + t.slice(1) %>
+                                                </a>
+                                            <% }) %>
+                                        </div>
+
+                                        <!-- Conditional Sub-filters -->
+                                        <% if (filters.target === 'class' || filters.target === 'course') { %>
+                                            <div class="animate-in fade-in slide-in-from-left-2 flex items-center">
+                                                <select onchange="window.location.href=`/superadmin/notifications/history?status=<%= filters.status %>&priority=<%= filters.priority %>&target=<%= filters.target %>&q=<%= encodeURIComponent(filters.q) %>&page=1&${this.name}=${this.value}`" 
+                                                        name="<%= filters.target === 'class' ? 'classId' : 'courseId' %>"
+                                                        class="h-9 pl-3 pr-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 focus:outline-none appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2364748b%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E')] bg-[length:14px] bg-[right_8px_center] bg-no-repeat py-0 leading-[34px] min-w-[120px]">
+                                                    <option value="">Select <%= filters.target === 'class' ? 'Class' : 'Course' %>...</option>
+                                                    <% if (filters.target === 'class') { %>
+                                                        <% [6,7,8,9,10,11,12].forEach(c => { %>
+                                                            <option value="Class <%= c %>" <%= filters.classId === `Class ${c}` ? 'selected' : '' %>>Class <%= c %></option>
+                                                        <% }) %>
+                                                    <% } else { %>
+                                                        <% allCourses.forEach(c => { %>
+                                                            <option value="<%= c._id %>" <%= filters.courseId == c._id ? 'selected' : '' %>><%= c.title %></option>
+                                                        <% }) %>
+                                                    <% } %>
+                                                </select>
+                                            </div>
+                                        <% } %>
+
+                                        <div class="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
+
+                                        <!-- Selection Controls -->
+                                        <button onclick="toggleSelectionMode()" id="selectionToggleBtn" class="h-9 w-[160px] rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-bold hover:bg-slate-50 transition-all flex items-center justify-start gap-2 px-3 shadow-sm shrink-0">
+                                            <span class="material-symbols-rounded text-[18px] shrink-0">check_box_outline_blank</span>
+                                            <span class="flex-1 text-left whitespace-nowrap">Select</span>
+                                        </button>
+                                        <div id="bulkActions" class="hidden flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                                            <div class="h-4 w-px bg-slate-200 dark:bg-slate-700 mx-0.5"></div>
+                                            <select onchange="bulkSelect(this.value)" class="h-9 pl-3 pr-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-bold text-slate-600 dark:text-slate-300 focus:outline-none appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2364748b%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C/polyline%3E%3C/svg%3E')] bg-[length:14px] bg-[right_8px_center] bg-no-repeat py-0 leading-[34px]">
+                                                <option value="">Select Logic...</option>
+                                                <option value="all">All</option>
+                                                <option value="success">Success (Sent)</option>
+                                                <option value="failed">Failed</option>
+                                                <option value="none">None</option>
+                                            </select>
+                                            <button onclick="bulkDelete()" class="h-9 px-2.5 rounded-lg bg-rose-50 text-rose-600 text-[11px] font-bold hover:bg-rose-100 transition-all flex items-center gap-1.5 shadow-sm">
+                                                <span class="material-symbols-rounded text-[16px]">delete</span> Delete
+                                            </button>
+                                            <button onclick="bulkRetry()" class="h-9 px-2.5 rounded-lg bg-emerald-50 text-emerald-600 text-[11px] font-bold hover:bg-emerald-100 transition-all flex items-center gap-1.5 shadow-sm">
+                                                <span class="material-symbols-rounded text-[16px]">refresh</span> Retry
+                                            </button>
+                                        </div>
+                                </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Grid -->
+                        <div class="p-3">
+                            <% if (logs && logs.length > 0) { %>
+                                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                                    <% logs.forEach(function(n) {
+                                        const statusColor = n.status === 'sent' ? 'emerald' : n.status === 'failed' ? 'rose' : n.status === 'scheduled' ? 'violet' : 'slate';
+                                    %>
+                                    <div class="notification-card bg-white dark:bg-[#0b1120] rounded-lg border border-slate-200/60 dark:border-slate-700/50 p-3.5 pb-5 flex flex-col gap-3 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-600 transition-all group relative" data-id="<%= n._id %>" data-status="<%= n.status %>">
+                                        
+                                        <!-- Checkbox (Visible in Selection Mode) -->
+                                        <div class="selection-checkbox absolute -left-2 -top-2 hidden z-10">
+                                            <input type="checkbox" value="<%= n._id %>" class="size-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shadow-sm cursor-pointer">
+                                        </div>
+
+                                        <!-- Header: Status + Title -->
+                                        <div class="flex items-start justify-between gap-3">
+                                            <div class="flex-1 min-w-0">
+                                                <div class="flex items-center gap-1.5 mb-1.5">
+                                                    <div class="size-2 rounded-sm bg-<%= statusColor %>-500 shadow-sm shadow-<%= statusColor %>-500/50"></div>
+                                                    <span class="text-[10.5px] font-bold text-slate-500 tracking-tight capitalize"><%= (n.status || 'Unknown') %></span>
+                                                    <span class="text-slate-300 dark:text-slate-700">&bull;</span>
+                                                    <span class="text-[10.5px] font-bold text-slate-400 tracking-tight capitalize"><%= (n.priority || 'Normal') %></span>
+                                                </div>
+                                                <h4 class="text-[13px] font-bold text-slate-900 dark:text-white truncate" title="<%= n.title %>"><%= n.title %></h4>
+                                                <p class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 leading-relaxed"><%= n.body %></p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Simple Stats Row (Inside Container) -->
+                                        <div class="flex items-center justify-between p-2 rounded-md bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/50">
+                                            <div class="flex flex-col items-center">
+                                                <span class="text-[8px] font-bold text-slate-400 tracking-tight mb-0.5">Delivered</span>
+                                                <span class="text-[11px] font-black text-slate-700 dark:text-slate-300 leading-none"><%= n.sent || 0 %></span>
+                                            </div>
+                                            <div class="w-px h-5 bg-slate-200 dark:bg-slate-700"></div>
+                                            <div class="flex flex-col items-center">
+                                                <span class="text-[8px] font-bold text-slate-400 tracking-tight mb-0.5">Failed</span>
+                                                <span class="text-[11px] font-black text-rose-500 leading-none"><%= n.failed || 0 %></span>
+                                            </div>
+                                            <div class="w-px h-5 bg-slate-200 dark:bg-slate-700"></div>
+                                            <div class="flex flex-col items-center">
+                                                <span class="text-[8px] font-bold text-slate-400 tracking-tight mb-0.5">Clicks</span>
+                                                <span class="text-[11px] font-black text-blue-500 leading-none"><%= n.clickCount || 0 %></span>
+                                            </div>
+                                            <div class="w-px h-5 bg-slate-200 dark:bg-slate-700"></div>
+                                            <div class="flex flex-col items-center">
+                                                <span class="text-[8px] font-bold text-slate-400 tracking-tight mb-0.5">Target</span>
+                                                <span class="text-[11px] font-black text-slate-700 dark:text-slate-300 leading-none capitalize"><%= n.target || 'All' %></span>
+                                            </div>
+                                        </div>
+
+                                        <!-- Footer: Date & Actions -->
+                                        <div class="flex items-center justify-between mt-auto pt-1">
+                                            <p class="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                                <span class="material-symbols-rounded text-[13px]">schedule</span>
+                                                <%= new Date(n.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) %> &middot; <%= new Date(n.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) %>
+                                            </p>
+                                            
+                                            <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <a href="/superadmin/notifications/<%= n._id %>" class="size-7 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 flex items-center justify-center transition-all" title="View Details">
+                                                    <span class="material-symbols-rounded text-[16px]">visibility</span>
+                                                </a>
+                                                <% if (n.status === 'scheduled') { %>
+                                                    <button onclick="cancelNotification('<%= n._id %>')" class="size-7 rounded-md hover:bg-violet-50 dark:hover:bg-violet-500/10 text-violet-500 flex items-center justify-center transition-all" title="Cancel">
+                                                        <span class="material-symbols-rounded text-[16px]">cancel</span>
+                                                    </button>
+                                                <% } %>
+                                                <% if (n.status === 'failed') { %>
+                                                    <button onclick="retryNotification('<%= n._id %>')" class="size-7 rounded-md hover:bg-emerald-50 dark:hover:bg-emerald-500/10 text-emerald-500 flex items-center justify-center transition-all" title="Retry">
+                                                        <span class="material-symbols-rounded text-[16px]">refresh</span>
+                                                    </button>
+                                                <% } %>
+                                                <button onclick="deleteNotification('<%= n._id %>')" class="size-7 rounded-md hover:bg-rose-50 dark:hover:bg-rose-500/10 text-rose-600 flex items-center justify-center transition-all" title="Delete">
+                                                    <span class="material-symbols-rounded text-[16px]">delete</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <% }) %>
+                                </div>
+                            <% } else { %>
+                                <!-- Empty State -->
+                                <div class="flex flex-col items-center justify-center py-16 text-center">
+                                    <div class="size-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+                                        <span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600">notifications_off</span>
+                                    </div>
+                                    <p class="text-[13px] font-bold text-slate-500 dark:text-slate-400">No notifications found</p>
+                                    <p class="text-[10px] text-slate-400 dark:text-slate-600 mt-1">Try adjusting your filters or send a new campaign.</p>
+                                    <a href="/superadmin/notifications" class="mt-4 h-8 px-4 bg-blue-600 text-white rounded-lg font-bold text-[10px] hover:bg-blue-700 transition-all flex items-center gap-1.5 shadow-sm shadow-blue-500/20">
+                                        <span class="material-symbols-rounded text-[14px]">add</span> Create Campaign
+                                    </a>
+                                </div>
+                            <% } %>
+                        </div>
+
+                        <!-- Pagination -->
+                        <div class="px-3 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                            <p class="text-[9px] font-bold text-slate-500">Showing <%= logs ? logs.length : 0 %> of <%= filters.totalMatching || 0 %> &middot; Page <%= filters ? filters.page : 1 %> of <%= filters ? filters.totalPages : 1 %></p>
+                            <div class="flex items-center gap-0.5">
+                                <% if (filters && filters.page > 1) { %>
+                                    <a href="/superadmin/notifications/history?page=<%= filters.page - 1 %>&status=<%=filters.status%>&priority=<%=filters.priority%>&target=<%=filters.target%>&language=<%=filters.language%>&q=<%=encodeURIComponent(filters.q)%>" class="size-7 rounded-md flex items-center justify-center text-[9px] font-bold bg-white dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+                                        <span class="material-symbols-rounded text-sm">chevron_left</span>
+                                    </a>
+                                <% } %>
+                                <% if (filters) { for(let i=1; i<=filters.totalPages; i++) { %>
+                                    <% if (i===1 || i===filters.totalPages || (i>= filters.page - 2 && i <= filters.page + 2)) { %>
+                                        <a href="/superadmin/notifications/history?page=<%= i %>&status=<%=filters.status%>&priority=<%=filters.priority%>&target=<%=filters.target%>&language=<%=filters.language%>&q=<%=encodeURIComponent(filters.q)%>" class="size-7 rounded-md flex items-center justify-center text-[9px] font-bold transition-all shadow-sm <%= filters.page === i ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-white dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-slate-700 hover:bg-slate-50' %>">
+                                            <%= i %>
+                                        </a>
+                                    <% } else if (i===filters.page - 3 || i===filters.page + 3) { %>
+                                        <span class="size-7 flex items-center justify-center text-[9px] font-bold text-slate-400">...</span>
+                                    <% } %>
+                                <% } } %>
+                                <% if (filters && filters.page < filters.totalPages) { %>
+                                    <a href="/superadmin/notifications/history?page=<%= filters.page + 1 %>&status=<%=filters.status%>&priority=<%=filters.priority%>&target=<%=filters.target%>&language=<%=filters.language%>&q=<%=encodeURIComponent(filters.q)%>" class="size-7 rounded-md flex items-center justify-center text-[9px] font-bold bg-white dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+                                        <span class="material-symbols-rounded text-sm">chevron_right</span>
+                                    </a>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+            </div>
+        </main>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        function toggleAdminSidebar() { document.getElementById('adminSidebar').classList.toggle('active'); }
+
+        async function deleteNotification(id) {
+            const result = await Swal.fire({
+                title: 'Delete Notification Log?',
+                text: 'This action cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, delete it!',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`/superadmin/notifications/${id}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire('Deleted!', 'Notification log has been deleted.', 'success');
+                        location.reload();
+                    } else {
+                        Swal.fire('Error!', data.error || 'Failed to delete.', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error!', 'Server error.', 'error');
+                }
+            }
+        }
+
+        async function retryNotification(id) {
+            const result = await Swal.fire({
+                title: 'Retry Failed Notification?',
+                text: 'This will attempt to resend the notification to all targeted users.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Retry!',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`/superadmin/notifications/${id}/retry`, {
+                        method: 'POST'
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire({
+                            title: 'Retry Successful!',
+                            text: `Sent to ${data.sent} users.`,
+                            icon: 'success'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire('Error!', data.error || 'Failed to retry.', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error!', 'Server error.', 'error');
+                }
+            }
+        }
+
+        async function cancelNotification(id) {
+            const result = await Swal.fire({
+                title: 'Cancel Scheduled Notification?',
+                text: 'This scheduled notification will be cancelled and will not be sent.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#8b5cf6',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Cancel it!',
+                cancelButtonText: 'No, Keep it'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`/superadmin/notifications/${id}/cancel`, {
+                        method: 'POST'
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire({
+                            title: 'Cancelled!',
+                            text: 'Scheduled notification has been cancelled.',
+                            icon: 'success'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire('Error!', data.error || 'Failed to cancel.', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error!', 'Server error.', 'error');
+                }
+            }
+        }
+
+        function exportToCSV() {
+            window.location.href = '/superadmin/notifications/export';
+        }
+
+        let selectionMode = false;
+
+        function toggleSelectionMode() {
+            selectionMode = !selectionMode;
+            const btn = document.getElementById('selectionToggleBtn');
+            const bulkActions = document.getElementById('bulkActions');
+            const checkboxes = document.querySelectorAll('.selection-checkbox');
+
+            if (selectionMode) {
+                btn.classList.add('bg-blue-50', 'text-blue-600', 'border-blue-200');
+                btn.innerHTML = '<span class="material-symbols-rounded text-[18px] shrink-0">check_box</span> <span class="flex-1 text-left whitespace-nowrap">Cancel Selection</span>';
+                bulkActions.classList.remove('hidden');
+                checkboxes.forEach(cb => cb.classList.remove('hidden'));
+            } else {
+                btn.classList.remove('bg-blue-50', 'text-blue-600', 'border-blue-200');
+                btn.innerHTML = '<span class="material-symbols-rounded text-[18px] shrink-0">check_box_outline_blank</span> <span class="flex-1 text-left whitespace-nowrap">Select</span>';
+                bulkActions.classList.add('hidden');
+                checkboxes.forEach(cb => {
+                    cb.classList.add('hidden');
+                    cb.querySelector('input').checked = false;
+                });
+            }
+        }
+
+        function bulkSelect(type) {
+            const checkboxes = document.querySelectorAll('.selection-checkbox input');
+            const cards = document.querySelectorAll('.notification-card');
+            
+            checkboxes.forEach((cb, index) => {
+                const status = cards[index].dataset.status;
+                if (type === 'all') cb.checked = true;
+                else if (type === 'none') cb.checked = false;
+                else if (type === 'success' && status === 'sent') cb.checked = true;
+                else if (type === 'failed' && status === 'failed') cb.checked = true;
+                else cb.checked = false;
+            });
+        }
+
+        function getSelectedIds() {
+            const selected = [];
+            document.querySelectorAll('.selection-checkbox input:checked').forEach(cb => {
+                selected.push(cb.value);
+            });
+            return selected;
+        }
+
+        async function bulkDelete() {
+            const ids = getSelectedIds();
+            if (ids.length === 0) return Swal.fire('No selection', 'Please select some logs to delete.', 'info');
+
+            const result = await Swal.fire({
+                title: `Delete ${ids.length} Logs?`,
+                text: 'This action cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                confirmButtonText: 'Yes, delete selected!'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch('/superadmin/notifications/bulk-delete', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire('Deleted!', `${data.count || ids.length} logs deleted.`, 'success').then(() => location.reload());
+                    } else {
+                        Swal.fire('Error!', data.error || 'Failed to delete logs.', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error!', 'Server error.', 'error');
+                }
+            }
+        }
+
+        async function bulkRetry() {
+            const ids = getSelectedIds();
+            if (ids.length === 0) return Swal.fire('No selection', 'Please select some logs to retry.', 'info');
+
+            const result = await Swal.fire({
+                title: `Retry ${ids.length} Logs?`,
+                text: 'This will attempt to resend all selected failed notifications.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#10b981',
+                confirmButtonText: 'Yes, Retry selected!'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch('/superadmin/notifications/bulk-retry', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ids })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire('Retried!', `${data.count || ids.length} logs are being retried.`, 'success').then(() => location.reload());
+                    } else {
+                        Swal.fire('Error!', data.error || 'Failed to retry logs.', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error!', 'Server error.', 'error');
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>

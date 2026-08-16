@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Answer Review | <%= bank.title || bank.subject %></title>
+</head>
+
+<body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <%- include('partials/student-header') %>
+
+    <% 
+       const bSubject = (bank.subject || 'Subject').trim();
+       const bBoard = (bank.board || 'Board Exam').trim();
+       const bYear = (bank.year || '').trim();
+       const bTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} ${bBoard} ${bYear}`.trim();
+
+       const isMockTest = (bank.isMockTest || bTitle.toLowerCase().includes('mock test'));
+       const isModelTest = bTitle.toLowerCase().includes('model test');
+       const isCustomExam = bTitle.includes('Personalized Exam') || bTitle.includes('Custom Exam') || bTitle.includes('Self Test');
+
+       const isExamTab = isMockTest || isModelTest || isCustomExam;
+       const activeNavPage = isExamTab ? 'exams' : 'questions';
+    %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: activeNavPage }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative">
+
+            <!-- TOP REVIEW HEADER -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 p-2 sm:p-2.5 shrink-0 flex items-center justify-end gap-3 shadow-xs">
+                
+                <!-- SEGMENTED FILTER TABS (RIGHT ALIGNED) -->
+                <div class="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shrink-0 ml-auto">
+                    <button type="button" onclick="filterReview('all', this)" class="filter-btn px-3 py-1 rounded-lg bg-white dark:bg-slate-700 text-emerald-600 dark:text-emerald-400 text-xs font-black shadow-xs transition-all">
+                        All (<%= questions.length %>)
+                    </button>
+                    <button type="button" onclick="filterReview('mcq', this)" class="filter-btn px-3 py-1 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 text-xs font-bold transition-all">
+                        MCQs (<%= attempt.mcqTotalQuestions %>)
+                    </button>
+                    <% if (attempt.nonMcqCount > 0) { %>
+                        <button type="button" onclick="filterReview('written', this)" class="filter-btn px-3 py-1 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 text-xs font-bold transition-all">
+                            Written (<%= attempt.nonMcqCount %>)
+                        </button>
+                    <% } %>
+                </div>
+            </div>
+
+            <!-- REVIEW FEED CONTAINER -->
+            <div class="p-3 sm:p-5 max-w-4xl w-full mx-auto flex-1 flex flex-col space-y-5 pb-12">
+
+                <div id="reviewContainer" class="space-y-5">
+                    <% questions.forEach(function(q, index) { %>
+                        <% 
+                           const qType = q.questionType || 'MCQ';
+                           const opts = Array.isArray(q.options) ? q.options : [];
+                           const ua = q.userAnswer || {};
+                           const isMCQ = (qType === 'MCQ');
+                           const defaultMark = (qType === 'Medium') ? 2 : ((qType === 'Comprehension') ? 10 : 1);
+                           const qMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : defaultMark;
+
+                           const correctIdx = typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : -1;
+                           const userIdx = typeof ua.selectedOptionIndex === 'number' ? ua.selectedOptionIndex : -1;
+                           const isUserCorrect = Boolean(ua.isCorrect);
+                           const expText = String(q.explanation || q.explanationText || q.solution || '').trim();
+                        %>
+                        <div class="review-card bg-slate-50 dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4" data-category="<%= isMCQ ? 'mcq' : 'written' %>" data-correct="<%= isUserCorrect %>">
+                            
+                            <!-- CARD HEADER & BADGES -->
+                            <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200/60 dark:border-slate-800">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                                        <span>Question <%= index + 1 %></span>
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700">
+                                        <%= qType %>
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 flex items-center gap-1">
+                                        <span class="material-symbols-rounded text-[11px] leading-none flex items-center justify-center shrink-0">star</span>
+                                        <span><%= qMark %> <%= qMark === 1 ? 'Mark' : 'Marks' %></span>
+                                    </span>
+                                </div>
+
+                                <!-- MCQ CORRECTNESS BADGE -->
+                                <% if (isMCQ) { %>
+                                    <% if (userIdx < 0) { %>
+                                        <span class="px-2.5 py-1 rounded-lg bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[11px] font-bold flex items-center gap-1">
+                                            <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">remove_circle_outline</span>
+                                            <span>Skipped</span>
+                                        </span>
+                                    <% } else if (isUserCorrect) { %>
+                                        <span class="px-2.5 py-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-[11px] font-extrabold flex items-center gap-1">
+                                            <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">check_circle</span>
+                                            <span>Correct (+<%= qMark %>)</span>
+                                        </span>
+                                    <% } else { %>
+                                        <span class="px-2.5 py-1 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-400 text-[11px] font-extrabold flex items-center gap-1">
+                                            <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">cancel</span>
+                                            <span>Incorrect (0)</span>
+                                        </span>
+                                    <% } %>
+                                <% } else { %>
+                                    <span class="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-400 text-[11px] font-bold flex items-center gap-1">
+                                        <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">edit_note</span>
+                                        <span>Written Answer</span>
+                                    </span>
+                                <% } %>
+                            </div>
+
+                            <!-- QUESTION STATEMENT -->
+                            <div class="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200 leading-relaxed pt-1">
+                                <%= q.questionText %>
+                            </div>
+
+                            <!-- MCQ REVIEW OPTIONS GRID -->
+                            <% if (isMCQ && opts.length > 0) { %>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                    <% const letters = ['A', 'B', 'C', 'D', 'E', 'F']; %>
+                                    <% opts.forEach(function(optText, oIdx) { %>
+                                        <% 
+                                           const isCorrectOpt = (oIdx === correctIdx) || (q.correctAnswer && q.correctAnswer.trim().toLowerCase() === optText.trim().toLowerCase());
+                                           const isUserPicked = (oIdx === userIdx);
+                                           
+                                           let cardStyle = "bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-normal";
+                                           let badgeStyle = "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300";
+                                           let iconName = null;
+                                           let iconColor = "";
+
+                                           if (isCorrectOpt) {
+                                               cardStyle = "bg-emerald-500/10 border-emerald-500/50 text-emerald-800 dark:text-emerald-300 font-bold shadow-xs";
+                                               badgeStyle = "bg-emerald-500 text-white";
+                                               iconName = "check_circle";
+                                               iconColor = "text-emerald-500";
+                                           } else if (isUserPicked && !isUserCorrect) {
+                                               cardStyle = "bg-rose-500/10 border-rose-500/50 text-rose-800 dark:text-rose-300 font-bold shadow-xs";
+                                               badgeStyle = "bg-rose-500 text-white";
+                                               iconName = "cancel";
+                                               iconColor = "text-rose-500";
+                                           }
+                                        %>
+                                        <div class="p-3 sm:p-3.5 rounded-xl border transition-all flex items-center justify-between gap-2.5 text-xs <%= cardStyle %>">
+                                            <div class="flex items-center gap-2.5 min-w-0">
+                                                <span class="size-6 sm:size-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 <%= badgeStyle %>">
+                                                    <%= letters[oIdx] || (oIdx + 1) %>
+                                                </span>
+                                                <span class="text-sm sm:text-[15px] leading-snug font-medium"><%= optText %></span>
+                                            </div>
+
+                                            <div class="flex items-center gap-1.5 shrink-0">
+                                                <% if (isUserPicked && !isCorrectOpt) { %>
+                                                    <span class="text-[9px] font-bold text-rose-600 dark:text-rose-400 bg-rose-100 dark:bg-rose-500/20 px-1.5 py-0.5 rounded">Your Pick</span>
+                                                <% } else if (isUserPicked && isCorrectOpt) { %>
+                                                    <span class="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-500/20 px-1.5 py-0.5 rounded">Your Pick</span>
+                                                <% } %>
+
+                                                <% if (iconName) { %>
+                                                    <span class="material-symbols-rounded <%= iconColor %> text-base leading-none shrink-0"><%= iconName %></span>
+                                                <% } %>
+                                            </div>
+                                        </div>
+                                    <% }); %>
+                                </div>
+                            <% } else { %>
+                                <!-- WRITTEN REVIEW (STUDENT ANSWER + TEACHER MODEL ANSWER) -->
+                                <div class="space-y-3 pt-1">
+                                    <!-- Student Typed Answer -->
+                                    <div class="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                                        <p class="text-xs font-bold text-slate-500 dark:text-slate-400">Your Response</p>
+                                        <p class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 leading-relaxed">
+                                            <%= ua.writtenAnswer && ua.writtenAnswer.trim() !== '' ? ua.writtenAnswer : 'No written response submitted.' %>
+                                        </p>
+                                    </div>
+
+                                    <!-- Teacher Model Solution -->
+                                    <div class="rounded-xl overflow-hidden border border-emerald-500/30 dark:border-emerald-500/25">
+                                        <div class="px-3.5 py-2 bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center gap-1.5 border-b border-emerald-500/20">
+                                            <span class="material-symbols-rounded text-emerald-500 text-base leading-none flex items-center justify-center shrink-0">verified</span>
+                                            <span class="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400">Solution</span>
+                                        </div>
+                                        <div class="px-4 py-3 bg-white dark:bg-slate-800/60">
+                                            <p class="text-sm sm:text-base font-medium text-slate-800 dark:text-slate-100 leading-relaxed">
+                                                <%- q.correctAnswer || q.answer || 'Model answer not provided.' %>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% } %>
+
+                            <!-- EXPLANATION BOX -->
+                            <% if (expText !== '') { %>
+                                <div class="bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 rounded-xl p-3.5 sm:p-4 space-y-1.5 mt-3">
+                                    <div class="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold text-xs sm:text-sm">
+                                        <span class="material-symbols-rounded text-base leading-none flex items-center justify-center shrink-0">lightbulb</span>
+                                        <span>Explanation</span>
+                                    </div>
+                                    <div class="text-sm sm:text-base font-medium text-slate-800 dark:text-slate-100 leading-relaxed pt-0.5">
+                                        <%= expText %>
+                                    </div>
+                                </div>
+                            <% } %>
+
+                        </div>
+                    <% }); %>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function filterReview(type, btn) {
+            document.querySelectorAll('.filter-btn').forEach(b => {
+                b.classList.remove('bg-white', 'dark:bg-slate-700', 'text-emerald-600', 'dark:text-emerald-400', 'shadow-xs', 'font-black');
+                b.classList.add('text-slate-600', 'dark:text-slate-400', 'font-bold');
+            });
+            btn.classList.remove('text-slate-600', 'dark:text-slate-400', 'font-bold');
+            btn.classList.add('bg-white', 'dark:bg-slate-700', 'text-emerald-600', 'dark:text-emerald-400', 'shadow-xs', 'font-black');
+
+            const cards = document.querySelectorAll('.review-card');
+            cards.forEach(card => {
+                const cat = card.getAttribute('data-category');
+                if (type === 'all' || cat === type) {
+                    card.classList.remove('hidden');
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

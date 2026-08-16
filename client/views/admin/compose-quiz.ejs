@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title>Compose Assessment | ODDHAY Command Center</title>
+    <style>
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); min-height: 100vh; transition: all 0.3s ease; }
+        .form-label { font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 0.5rem; display: block; letter-spacing: -0.01em; }
+        .dark .form-label { color: #94a3b8; }
+        .form-input { width: 100%; height: 42px; padding: 0 0.85rem; font-size: 11.5px; font-weight: 700; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 0.5rem; outline: none; transition: all 0.2s ease; appearance: none; }
+        .dark .form-input { background: #020617; border: 1px solid #334155; color: #f1f5f9; }
+        .form-input::placeholder { color: #94a3b8; font-weight: 500; opacity: 0.8; font-size: 12px; }
+        .form-input:hover { border-color: #94a3b8; }
+        .dark .form-input:hover { border-color: #475569; }
+        .form-input:focus { border-color: #1e293b; }
+        .dark .form-input:focus { border-color: #f1f5f9; }
+        @media (max-width: 1024px) { .admin-main { margin-left: 0; } }
+    </style>
+</head>
+
+<body class="bg-[#F8F8FF] dark:bg-[#0b1120] text-slate-700 dark:text-slate-300 font-sans min-h-screen antialiased">
+    <div class="flex">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100] lg:translate-x-0 -translate-x-full">
+            <%- include('sidebar_content', { active: 'quizzes' }) %>
+        </aside>
+
+        <main class="admin-main flex-1 flex flex-col w-full">
+            <%- include('header_v2', { pageTitle: 'Compose Assessment' }) %>
+
+            <section class="flex-1 flex flex-col bg-[#F8F8FF] dark:bg-[#0b1120] border-l border-slate-900/10 dark:border-white/5">
+                <form action="/admin/add-quiz" method="POST" class="w-full">
+                    <div class="divide-y divide-slate-100 dark:divide-white/5 bg-white dark:bg-[#0f172a]">
+                        <!-- Messages -->
+                        <% if (locals.success || locals.error) { %>
+                        <div class="p-6 pb-0">
+                            <% if (locals.success) { %>
+                                <div class="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-3 py-2.5 rounded-lg flex items-center gap-2 text-[12px] font-bold">
+                                    <span class="material-symbols-rounded text-[16px]">check_circle</span>
+                                    <%= success %>
+                                </div>
+                            <% } %>
+                            <% if (locals.error) { %>
+                                <div class="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 px-3 py-2.5 rounded-lg flex items-center gap-2 text-[12px] font-bold">
+                                    <span class="material-symbols-rounded text-[16px]">error</span>
+                                    <%= error %>
+                                </div>
+                            <% } %>
+                        </div>
+                        <% } %>
+
+                        <!-- Basic Information -->
+                        <div class="p-8">
+                            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-6 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[20px] text-blue-500">quiz</span> Exam Identification
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div class="md:col-span-2">
+                                    <label class="form-label">Exam Title</label>
+                                    <input type="text" name="title" required placeholder="e.g Physics Mock Test 01" class="form-input">
+                                </div>
+                                <div class="md:col-span-1">
+                                    <label class="form-label">Duration (Minutes)</label>
+                                    <input type="number" name="duration" required value="10" min="1" class="form-input">
+                                </div>
+                                <div class="md:col-span-1">
+                                    <label class="form-label">Access Model</label>
+                                    <select name="accessType" class="form-input cursor-pointer">
+                                        <option value="Free">Free Access</option>
+                                        <option value="Paid">Premium (Paid)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Categorization -->
+                        <div class="p-8">
+                            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-6 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[20px] text-emerald-500">account_tree</span> Logic & Routing
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div class="md:col-span-1">
+                                    <label class="form-label">Exam Type</label>
+                                    <select name="isModelTest" id="isModelTest" onchange="updateView()" class="form-input cursor-pointer">
+                                        <option value="false">Course-Linked Exam</option>
+                                        <option value="true">Standalone Model Test</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-1">
+                                    <label class="form-label">Class Level</label>
+                                    <select name="classLevel" id="classLevel" onchange="updateView()" class="form-input cursor-pointer" required>
+                                        <option value="">-- Select Class --</option>
+                                        <% ['6', '7', '8', '9', '10', '11', '12', 'HSC', 'Admission'].forEach(lvl => { %>
+                                            <option value="<%= lvl %>"><%= lvl.includes('Class') || ['HSC', 'Admission'].includes(lvl) ? lvl : 'Class ' + lvl %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div id="courseContainer" class="md:col-span-2">
+                                    <label class="form-label">Link to Course</label>
+                                    <select name="courseId" id="courseId" class="form-input cursor-pointer">
+                                        <option value="">-- Select Course --</option>
+                                        <% courses.forEach(course => { %>
+                                            <option value="<%= course._id %>" data-class="<%= course.classLevel %>"><%= course.title %></option>
+                                        <% }); %>
+                                    </select>
+                                </div>
+                                <div id="subjectContainer" class="md:col-span-1 hidden">
+                                    <label class="form-label">Subject</label>
+                                    <select name="subject" class="form-input cursor-pointer">
+                                        <option value="">-- Select Subject --</option>
+                                        <% (subjects || []).forEach(sub => { %>
+                                            <option value="<%= sub %>"><%= sub %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Creation Strategy -->
+                        <div class="p-8">
+                            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-6 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[20px] text-violet-500">design_services</span> Composition Strategy
+                            </h3>
+                            <div class="flex flex-col md:flex-row items-start md:items-center gap-8">
+                                <label class="flex items-center gap-3 cursor-pointer group">
+                                    <input type="radio" name="strategy" value="manual" onchange="toggleStrategy('manual')" checked class="w-4 h-4 text-violet-600 border-slate-300 focus:ring-violet-500">
+                                    <div class="flex flex-col">
+                                        <span class="text-[12px] font-bold text-slate-700 dark:text-slate-200">Manual Studio</span>
+                                        <span class="text-[10px] text-slate-400 font-medium italic">Create an empty exam and add questions manually.</span>
+                                    </div>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer group">
+                                    <input type="radio" name="strategy" value="automated" onchange="toggleStrategy('automated')" class="w-4 h-4 text-violet-600 border-slate-300 focus:ring-violet-500">
+                                    <div class="flex flex-col">
+                                        <span class="text-[12px] font-bold text-slate-700 dark:text-slate-200">Smart Generation</span>
+                                        <span class="text-[10px] text-slate-400 font-medium italic">Auto-populate using Question Bank data.</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Question Distribution -->
+                        <div id="distributionSection" class="p-8">
+                            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-6 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[20px] text-amber-500">format_list_numbered</span> Question Configuration
+                            </h3>
+                            
+                            <!-- Bank Filters (Shown for Smart Generation) -->
+                            <div id="bankFilters" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 hidden">
+                                <div>
+                                    <label class="form-label">Filter by Topic</label>
+                                    <select name="bankTopic" id="bankTopic" onchange="syncBankMetadata()" class="form-input cursor-pointer">
+                                        <option value="">Any Topic</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label">Filter by Board</label>
+                                    <select name="bankBoard" id="bankBoard" onchange="syncBankMetadata()" class="form-input cursor-pointer">
+                                        <option value="">Any Board</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label">Filter by Year</label>
+                                    <select name="bankYear" id="bankYear" onchange="syncBankMetadata()" class="form-input cursor-pointer">
+                                        <option value="">Any Year</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div>
+                                    <label class="form-label">MCQ Count</label>
+                                    <input type="number" name="mcqCount" value="0" min="0" class="form-input" placeholder="0">
+                                </div>
+                                <div>
+                                    <label class="form-label">Short Question Count</label>
+                                    <input type="number" name="shortCount" value="0" min="0" class="form-input" placeholder="0">
+                                </div>
+                                <div>
+                                    <label class="form-label">Medium Question Count</label>
+                                    <input type="number" name="mediumCount" value="0" min="0" class="form-input" placeholder="0">
+                                </div>
+                                <div>
+                                    <label class="form-label">Comprehension Count</label>
+                                    <input type="number" name="comprehensionCount" value="0" min="0" class="form-input" placeholder="0">
+                                </div>
+                            </div>
+                            <p id="strategyDesc" class="mt-4 text-[11px] text-slate-400 font-medium italic">
+                                * System will create empty slots for you to fill manually.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Action Bar -->
+                    <div class="p-6 border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-slate-900/30">
+                        <div class="flex items-center justify-end gap-4">
+                            <a href="/admin/quizzes" class="text-[12px] font-bold text-slate-400 hover:text-slate-600 transition-all px-4">Cancel</a>
+                            <button type="submit" class="h-11 px-10 bg-black dark:bg-white text-white dark:text-black rounded-lg font-bold text-[12px] transition-all shadow-sm hover:opacity-90 active:scale-[0.98]">
+                                Create & Add Questions
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const allCourses = Array.from(document.querySelectorAll('#courseId option')).slice(1);
+
+        async function syncBankMetadata() {
+            const classLevel = document.getElementById('classLevel').value;
+            const isModelTest = document.getElementById('isModelTest').value === 'true';
+            let subject = '';
+            
+            if (isModelTest) {
+                subject = document.querySelector('select[name="subject"]').value;
+            } else {
+                const courseSelect = document.getElementById('courseId');
+                const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
+                subject = selectedOpt ? selectedOpt.text.split('-')[0].trim() : '';
+            }
+
+            const topic = document.getElementById('bankTopic').value;
+            const board = document.getElementById('bankBoard').value;
+            const year = document.getElementById('bankYear').value;
+
+            if (!classLevel || !subject) return;
+
+            try {
+                const url = `/admin/api/bank-metadata?classLevel=${classLevel}&subject=${subject}&topic=${topic}&board=${board}&year=${year}`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success) {
+                    updateDropdown('bankTopic', data.topics, topic, 'Any Topic');
+                    updateDropdown('bankBoard', data.boards, board, 'Any Board');
+                    updateDropdown('bankYear', data.years, year, 'Any Year');
+                }
+            } catch (err) { console.error('Failed to sync metadata'); }
+        }
+
+        function updateDropdown(id, items, currentVal, placeholder) {
+            const select = document.getElementById(id);
+            let html = `<option value="">${placeholder}</option>`;
+            items.forEach(item => {
+                html += `<option value="${item}" ${item === currentVal ? 'selected' : ''}>${item}</option>`;
+            });
+            select.innerHTML = html;
+        }
+
+        function updateView() {
+            const isModelTest = document.getElementById('isModelTest').value === 'true';
+            const selectedClass = document.getElementById('classLevel').value;
+            
+            const courseContainer = document.getElementById('courseContainer');
+            const subjectContainer = document.getElementById('subjectContainer');
+            const courseSelect = document.getElementById('courseId');
+
+            if (isModelTest) {
+                courseContainer.classList.add('hidden');
+                subjectContainer.classList.remove('hidden');
+            } else {
+                courseContainer.classList.remove('hidden');
+                subjectContainer.classList.add('hidden');
+            }
+
+            courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+            if (selectedClass) {
+                const filtered = allCourses.filter(opt => {
+                    const courseClass = opt.getAttribute('data-class');
+                    return courseClass.includes(selectedClass) || courseClass.includes('Class ' + selectedClass);
+                });
+                filtered.forEach(opt => courseSelect.appendChild(opt.cloneNode(true)));
+            }
+            
+            syncBankMetadata();
+        }
+
+        function toggleStrategy(strategy) {
+            const bankFilters = document.getElementById('bankFilters');
+            const strategyDesc = document.getElementById('strategyDesc');
+            
+            if (strategy === 'automated') {
+                bankFilters.classList.remove('hidden');
+                strategyDesc.innerText = '* Questions will be pulled automatically from the Question Bank based on these counts.';
+                syncBankMetadata();
+            } else {
+                bankFilters.classList.add('hidden');
+                strategyDesc.innerText = '* System will create empty slots for you to fill manually.';
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            updateView();
+            toggleStrategy('manual');
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title>Academic Setup | ODDHAY Command Center</title>
+    <style>
+        .admin-main {
+            margin-left: 260px;
+            min-height: 100vh;
+            transition: all 0.3s ease;
+        }
+
+        @media (max-width: 1024px) {
+            #adminSidebar {
+                transform: translateX(-100%);
+            }
+
+            #adminSidebar.active {
+                transform: translateX(0);
+            }
+
+            .admin-main {
+                margin-left: 0;
+            }
+        }
+        
+        .drag-handle { cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+    </style>
+</head>
+
+<body class="bg-[#F8F8FF] text-slate-800 dark:text-slate-200 font-sans min-h-screen">
+
+    <div class="flex">
+        <!-- Sidebar -->
+        <aside id="adminSidebar"
+            class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100] border-r border-slate-200 dark:border-white/5">
+            <%- include('sidebar_content', { active: 'academic-setup' }) %>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main flex-1 bg-[#F8F8FF] flex flex-col min-h-screen relative w-full">
+            <%- include('header_v2', { pageTitle: 'Academic Setup' }) %>
+
+            <section class="p-0.5 flex flex-col gap-0.5 w-full flex-1 border-l border-slate-900/10 dark:border-white/5">
+                
+                <div class="bg-white dark:bg-[#0b1120] p-4 flex flex-col gap-1 border-b border-slate-200 dark:border-slate-700/50">
+                    <div class="flex items-center gap-2">
+                        <div class="size-2 rounded-sm bg-blue-500 shadow-sm shadow-blue-500/50"></div>
+                        <h3 class="text-[15px] font-bold text-slate-900 dark:text-white tracking-tight leading-none">Class List</h3>
+                    </div>
+                    <p class="text-[12px] text-slate-500 pl-4">Drag to reorder. Define classes and their subjects here.</p>
+                </div>
+
+                <div class="bg-white dark:bg-[#0b1120] flex-1 p-2">
+                    <div id="classesContainer" class="flex flex-col divide-y divide-slate-200 dark:divide-slate-700/50 border border-slate-200 dark:border-slate-700/50 rounded-md overflow-hidden">
+                        <% classes.forEach((cls, index) => { %>
+                            <div class="class-item bg-white dark:bg-slate-900/50 p-2 relative group transition-all" data-id="<%= cls._id %>">
+                                <div class="flex items-start gap-2">
+                                    <div class="drag-handle text-slate-400 hover:text-slate-600 dark:hover:text-white mt-2.5 px-1 cursor-grab active:cursor-grabbing">
+                                        <span class="material-symbols-rounded text-lg">drag_indicator</span>
+                                    </div>
+                                    <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                        <div class="space-y-1">
+                                            <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 pl-1">Class Name</label>
+                                            <input type="text" class="class-name-input w-full h-10 bg-[#FBFCFD] dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-[12px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all" value="<%= cls.name %>" placeholder="e.g. Class 10">
+                                        </div>
+                                        <div class="space-y-1 flex gap-1.5">
+                                            <div class="flex-1 space-y-1">
+                                                <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 pl-1">Subjects (Comma separated)</label>
+                                                <textarea rows="2" class="class-subjects-input w-full bg-[#FBFCFD] dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-[12px] p-2 focus:outline-none focus:border-blue-500 transition-all resize-y min-h-[40px]"><%= cls.subjects ? cls.subjects.join(', ') : '' %></textarea>
+                                            </div>
+                                            <div class="pt-5">
+                                                <button type="button" class="delete-class-btn p-1 bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-100 dark:border-red-500/20 h-10 w-10 flex items-center justify-center" title="Delete Class" data-id="<%= cls._id %>">
+                                                    <span class="material-symbols-rounded text-[18px]">delete</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                    
+                    <% if (classes.length === 0) { %>
+                        <div id="emptyState" class="p-8 text-center border border-dashed border-slate-300 dark:border-slate-700 mt-2 bg-[#F8FAFC] dark:bg-slate-900/50">
+                            <div class="size-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center mx-auto mb-2">
+                                <span class="material-symbols-rounded text-xl text-slate-400">school</span>
+                            </div>
+                            <h3 class="text-[12px] font-bold mb-1">No Classes Found</h3>
+                            <p class="text-[10px] text-slate-500 max-w-sm mx-auto">You haven't defined any academic classes yet.</p>
+                        </div>
+                    <% } %>
+                    
+                    <!-- Action Buttons -->
+                    <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex justify-end gap-2 bg-white dark:bg-[#0b1120]">
+                        <button id="addClassBtn" class="h-9 px-4 bg-[#F8FAFC] dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded font-bold text-[11px] hover:border-blue-500 hover:text-blue-500 transition-all flex items-center gap-1 shadow-sm">
+                            <span class="material-symbols-rounded text-[14px]">add</span>
+                            Add Class
+                        </button>
+                        <button id="saveBtn" class="h-9 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[11px] transition-all flex items-center gap-1 shadow-sm">
+                            <span class="material-symbols-rounded text-[14px]">save</span>
+                            Save Changes
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Template for new class -->
+    <template id="newClassTemplate">
+        <div class="class-item bg-white dark:bg-slate-900/50 p-2 relative group transition-all" data-id="">
+            <div class="flex items-start gap-2">
+                <div class="drag-handle text-slate-400 hover:text-slate-600 dark:hover:text-white mt-2.5 px-1 cursor-grab active:cursor-grabbing">
+                    <span class="material-symbols-rounded text-lg">drag_indicator</span>
+                </div>
+                <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div class="space-y-1">
+                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 pl-1">Class Name</label>
+                        <input type="text" class="class-name-input w-full h-10 bg-[#FBFCFD] dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-[12px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all" value="" placeholder="e.g. Class 10">
+                    </div>
+                    <div class="space-y-1 flex gap-1.5">
+                        <div class="flex-1 space-y-1">
+                            <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 pl-1">Subjects (Comma separated)</label>
+                            <textarea rows="2" class="class-subjects-input w-full bg-[#FBFCFD] dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-[12px] p-2 focus:outline-none focus:border-blue-500 transition-all resize-y min-h-[40px]" placeholder="Bangla, English, Math, Physics..."></textarea>
+                        </div>
+                        <div class="pt-5">
+                            <button type="button" class="delete-class-btn p-1 bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-100 dark:border-red-500/20 h-10 w-10 flex items-center justify-center" title="Delete Class" data-id="">
+                                <span class="material-symbols-rounded text-[18px]">delete</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        function toggleAdminSidebar() {
+            document.getElementById('adminSidebar').classList.toggle('active');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('classesContainer');
+            const addBtn = document.getElementById('addClassBtn');
+            const saveBtn = document.getElementById('saveBtn');
+            const template = document.getElementById('newClassTemplate');
+            const emptyState = document.getElementById('emptyState');
+
+            // Initialize Sortable for drag and drop
+            new Sortable(container, {
+                animation: 150,
+                handle: '.drag-handle',
+                ghostClass: 'opacity-50'
+            });
+
+            // Add new class
+            addBtn.addEventListener('click', () => {
+                if (emptyState) emptyState.style.display = 'none';
+                const clone = template.content.cloneNode(true);
+                container.appendChild(clone);
+                // focus the new input
+                const newInputs = container.querySelectorAll('.class-name-input');
+                if (newInputs.length > 0) newInputs[newInputs.length - 1].focus();
+            });
+
+            // Delete class
+            container.addEventListener('click', async (e) => {
+                const btn = e.target.closest('.delete-class-btn');
+                if (!btn) return;
+                
+                const id = btn.getAttribute('data-id');
+                const item = btn.closest('.class-item');
+
+                const result = await Swal.fire({
+                    title: 'Delete Class?',
+                    text: "Are you sure you want to remove this class?",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#ef4444',
+                    cancelButtonColor: '#64748b',
+                    confirmButtonText: 'Yes, delete it!'
+                });
+
+                if (result.isConfirmed) {
+                    if (id) {
+                        try {
+                            const res = await fetch(`/superadmin/academic-setup/${id}`, { method: 'DELETE' });
+                            if (res.ok) {
+                                item.remove();
+                                Swal.fire({
+                                    icon: 'success',
+                                    title: 'Deleted!',
+                                    text: 'Class has been deleted.',
+                                    timer: 1500,
+                                    showConfirmButton: false
+                                });
+                            } else {
+                                Swal.fire('Error', 'Failed to delete class', 'error');
+                            }
+                        } catch (err) {
+                            Swal.fire('Error', 'Network error', 'error');
+                        }
+                    } else {
+                        item.remove();
+                    }
+                }
+            });
+
+            // Save all
+            saveBtn.addEventListener('click', async () => {
+                const items = container.querySelectorAll('.class-item');
+                const classData = [];
+                let hasError = false;
+
+                items.forEach((item, index) => {
+                    const id = item.getAttribute('data-id');
+                    const name = item.querySelector('.class-name-input').value.trim();
+                    const subjects = item.querySelector('.class-subjects-input').value.trim();
+
+                    if (!name) {
+                        item.querySelector('.class-name-input').classList.add('border-red-500');
+                        hasError = true;
+                    } else {
+                        item.querySelector('.class-name-input').classList.remove('border-red-500');
+                        classData.push({ _id: id || null, name, subjects, order: index });
+                    }
+                });
+
+                if (hasError) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Validation Error',
+                        text: 'Please fill out all class names.'
+                    });
+                    return;
+                }
+                
+                const origText = saveBtn.innerHTML;
+                saveBtn.innerHTML = '<span class="material-symbols-rounded animate-spin text-[14px]">refresh</span> Saving...';
+                saveBtn.disabled = true;
+
+                try {
+                    const res = await fetch('/superadmin/academic-setup', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ classData })
+                    });
+                    
+                    if (res.ok) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Success!',
+                            text: 'Academic setup saved successfully.',
+                            timer: 1500,
+                            showConfirmButton: false
+                        }).then(() => {
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire('Error', 'Failed to save data', 'error');
+                        saveBtn.innerHTML = origText;
+                        saveBtn.disabled = false;
+                    }
+                } catch (err) {
+                    Swal.fire('Error', 'Network error', 'error');
+                    saveBtn.innerHTML = origText;
+                    saveBtn.disabled = false;
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,6 +1,7 @@
 const webpush = require('web-push');
 const PushSubscription = require('../models/PushSubscription');
 const NotificationLog = require('../models/NotificationLog');
+const Notification = require('../models/Notification');
 
 class PushNotificationService {
     constructor() {
@@ -9,6 +10,8 @@ class PushNotificationService {
         const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
         const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '';
         const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@oddhay.com';
+
+        this.io = null;
 
         if (vapidPublicKey && vapidPrivateKey) {
             webpush.setVapidDetails(
@@ -23,6 +26,10 @@ class PushNotificationService {
             console.warn('⚠️ VAPID keys not configured. Push notifications will not work.');
             console.warn('   Generate keys with: npx web-push generate-vapid-keys');
         }
+    }
+
+    setIo(io) {
+        this.io = io;
     }
 
     // Get VAPID public key
@@ -89,48 +96,72 @@ class PushNotificationService {
     // Send notification to a single user
     async sendToUser(userId, notification) {
         try {
-            if (!this.isConfigured) {
-                console.warn('⚠️ Push notifications not configured');
-                return { success: false, error: 'Not configured' };
+            // ALWAYS Create In-App Notification Record FIRST
+            const inAppNotification = new Notification({
+                user: userId,
+                title: notification.title,
+                message: notification.body || notification.message || notification.title,
+                type: notification.type || 'system',
+                link: notification.url || notification.link || '/',
+                broadcastId: notification.broadcastId || null
+            });
+            await inAppNotification.save();
+
+            // Emit Real-time Notification via Socket.io
+            if (this.io) {
+                this.io.to(`user_${userId}`).emit('notification:new', {
+                    _id: inAppNotification._id,
+                    title: notification.title,
+                    message: notification.body || notification.message,
+                    type: inAppNotification.type,
+                    link: inAppNotification.link,
+                    createdAt: inAppNotification.createdAt
+                });
             }
 
-            // Get all active subscriptions for user
+            // Only create individual log if NOT a broadcast
+            let notificationLog = null;
+            if (!notification.broadcastId) {
+                notificationLog = new NotificationLog({
+                    user: userId,
+                    title: notification.title,
+                    body: notification.body || notification.message,
+                    type: notification.type || 'custom',
+                    icon: notification.icon,
+                    url: notification.url || notification.link,
+                    data: notification.data,
+                    priority: notification.priority || 'normal',
+                    campaign: notification.campaign
+                });
+                await notificationLog.save();
+            }
+
+            // Web Push notification attempt (if configured & subscriptions exist)
+            if (!this.isConfigured) {
+                return { success: true, inAppId: inAppNotification._id, push: 'not_configured' };
+            }
+
             const subscriptions = await PushSubscription.find({
                 user: userId,
                 isActive: true
             });
 
             if (subscriptions.length === 0) {
-                console.log('⚠️ No active subscriptions for user:', userId);
-                return { success: false, error: 'No subscriptions' };
+                return { success: true, inAppId: inAppNotification._id, push: 'no_subscriptions' };
             }
-
-            // Create notification log
-            const notificationLog = new NotificationLog({
-                user: userId,
-                title: notification.title,
-                body: notification.body,
-                type: notification.type || 'custom',
-                icon: notification.icon,
-                url: notification.url,
-                data: notification.data,
-                priority: notification.priority || 'normal',
-                campaign: notification.campaign
-            });
 
             const payload = JSON.stringify({
                 title: notification.title,
-                body: notification.body,
+                body: notification.body || notification.message,
                 icon: notification.icon || '/images/icon-192.png',
                 badge: notification.badge || '/images/badge-72.png',
-                url: notification.url || '/',
+                url: notification.url || notification.link || '/',
                 tag: notification.tag || 'oddhay-notification',
                 requireInteraction: notification.requireInteraction || false,
                 data: notification.data || {},
                 actions: notification.actions || []
             });
 
-            // Send to all user's devices
             const results = await Promise.allSettled(
                 subscriptions.map(sub =>
                     webpush.sendNotification({
@@ -145,7 +176,6 @@ class PushNotificationService {
                             return { success: true, endpoint: sub.endpoint };
                         })
                         .catch(error => {
-                            // Handle errors (e.g., subscription expired)
                             if (error.statusCode === 410 || error.statusCode === 404) {
                                 sub.deactivate();
                             }
@@ -154,20 +184,19 @@ class PushNotificationService {
                 )
             );
 
-            // Update notification log
-            const successCount = results.filter(r => r.value?.success).length;
-            if (successCount > 0) {
-                await notificationLog.markAsSent();
-            } else {
-                await notificationLog.markAsFailed('All subscriptions failed');
+            if (!notification.broadcastId && notificationLog) {
+                const successCount = results.filter(r => r.value?.success).length;
+                if (successCount > 0) {
+                    await notificationLog.markAsSent();
+                } else {
+                    await notificationLog.markAsFailed('Push subscription failed');
+                }
             }
 
-            console.log(`✅ Sent notification to ${successCount}/${subscriptions.length} devices`);
-
             return {
-                success: successCount > 0,
+                success: true,
                 total: subscriptions.length,
-                sent: successCount,
+                inAppId: inAppNotification._id,
                 results
             };
         } catch (error) {

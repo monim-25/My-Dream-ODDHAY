@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= locals.user && user.theme === 'dark' ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Exam History | ODDHAY</title>
+</head>
+
+<body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <%- include('partials/student-header') %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'exams' }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-4 sm:p-6 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative space-y-4 pb-12">
+            
+            <!-- HEADER BAR WITH TITLE, LIFETIME MARKS BADGES & SEARCH -->
+            <div class="max-w-5xl w-full mx-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div class="flex items-center gap-3 flex-wrap">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-rounded text-cyan-600 dark:text-cyan-400 text-xl leading-none flex items-center justify-center shrink-0">history</span>
+                        <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">Exam History</h1>
+                    </div>
+
+                    <!-- LIFETIME GAINED MARKS BADGES -->
+                    <% 
+                       let lifeMcq = 0;
+                       let lifeWritten = 0;
+                       attempts.forEach(function(a) {
+                           lifeMcq += (a.mcqScore || 0);
+                           if (Array.isArray(a.userAnswers)) {
+                               a.userAnswers.forEach(function(ua) {
+                                   if (ua.questionType !== 'MCQ' && ua.marksObtained !== undefined && ua.marksObtained !== null) {
+                                       lifeWritten += ua.marksObtained;
+                                   }
+                               });
+                           }
+                       });
+                       let lifeTotal = lifeMcq + lifeWritten;
+                    %>
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="px-2.5 py-1 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/20 text-xs font-semibold">
+                            MCQ: <%= lifeMcq %>
+                        </span>
+                        <span class="px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 text-xs font-semibold">
+                            Written: <%= lifeWritten %>
+                        </span>
+                        <span class="px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 text-xs font-semibold">
+                            Total: <%= lifeTotal %>
+                        </span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                    <!-- TOTAL ATTEMPTS BADGE -->
+                    <span class="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 shrink-0">
+                        <span class="material-symbols-rounded text-sm text-cyan-500 leading-none">assignment_turned_in</span>
+                        <span id="attemptCountBadge"><%= attempts.length %> <%= attempts.length === 1 ? 'Attempt' : 'Attempts' %></span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- HISTORY LIST / CARDS -->
+            <div class="max-w-5xl w-full mx-auto space-y-3">
+                <% if (attempts.length === 0) { %>
+                    <div class="py-16 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                        <span class="material-symbols-rounded text-4xl text-slate-400 leading-none">history_toggle_off</span>
+                        <h3 class="text-xs font-bold text-slate-600 dark:text-slate-400">No Exam History Found</h3>
+                        <p class="text-[11px] text-slate-400">You have not completed any exams yet.</p>
+                    </div>
+                <% } else { %>
+                    <div id="historyContainer" class="space-y-2.5">
+                        <% attempts.forEach(function(att) { %>
+                            <% 
+                               const bankObj = att.bank || {};
+                               const rawTitle = (bankObj.title && bankObj.title.trim() !== '') ? bankObj.title.trim() : (bankObj.subject || 'Practice Exam');
+                               
+                               let displayTitle = rawTitle;
+                               if (bankObj.isMockTest || rawTitle.toLowerCase().includes('mock test')) {
+                                   const cleanName = rawTitle.replace(/^(mock test|model test)\s*-\s*/i, '');
+                                   displayTitle = `Mock Test - ${cleanName}`;
+                               } else if (rawTitle.toLowerCase().includes('model test')) {
+                                   const cleanName = rawTitle.replace(/^(model test|mock test)\s*-\s*/i, '');
+                                   displayTitle = `Model Test - ${cleanName}`;
+                               }
+
+                               const mcqScore = att.mcqScore || 0;
+                               const maxMcqScore = att.maxMcqScore || 0;
+                               
+                               const userAnswers = att.userAnswers || [];
+                               const writtenAnswers = userAnswers.filter(ua => ua.questionType !== 'MCQ');
+                               const hasWritten = att.nonMcqCount > 0 || writtenAnswers.length > 0;
+                               
+                               let writtenScoreObtained = 0;
+                               let writtenMaxMarks = 0;
+                               let isWrittenPending = false;
+
+                               if (hasWritten) {
+                                   let pendingCount = 0;
+                                   writtenAnswers.forEach(ua => {
+                                       writtenMaxMarks += (ua.maxMarks || 5);
+                                       if (ua.marksObtained !== undefined && ua.marksObtained !== null) {
+                                           writtenScoreObtained += ua.marksObtained;
+                                       } else {
+                                           pendingCount++;
+                                       }
+                                   });
+                                   if (att.writtenStatus === 'pending' || pendingCount > 0) {
+                                       isWrittenPending = true;
+                                   }
+                               }
+
+                               const totalObtainedMarks = mcqScore + (isWrittenPending ? 0 : writtenScoreObtained);
+                               const totalMaxMarks = maxMcqScore + writtenMaxMarks;
+
+                               const totalExamMins = parseInt(bankObj.duration) || 30;
+                               const timeSecs = att.timeTakenSeconds || 0;
+                               const timeMins = Math.floor(timeSecs / 60);
+                               const remSecs = timeSecs % 60;
+                               const timeTakenStr = (timeMins > 0) ? `${timeMins}m ${remSecs}s` : `${remSecs}s`;
+                               const formattedDuration = `${timeTakenStr}/${totalExamMins}m`;
+
+                               const subDate = att.submittedAt ? new Date(att.submittedAt) : new Date();
+                               const formattedSubmission = subDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                            %>
+                            
+                            <div class="history-item bg-slate-50 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all duration-200 hover:border-cyan-500/50 shadow-2xs" data-title="<%= displayTitle.toLowerCase() %>">
+                                
+                                <div class="min-w-0 flex-1 space-y-1">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/20">
+                                            <%= bankObj.subject || 'General' %>
+                                        </span>
+                                        <span class="text-[10px] text-slate-400 font-medium">
+                                            Submitted: <%= formattedSubmission %> • <span class="text-slate-900 dark:text-white font-bold">Total: <%= isWrittenPending ? 'Pending' : (totalObtainedMarks + '/' + totalMaxMarks) %></span>
+                                        </span>
+                                    </div>
+
+                                    <h3 class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
+                                        <%= displayTitle %>
+                                    </h3>
+
+                                    <div class="flex items-center gap-3 text-xs font-semibold text-slate-600 dark:text-slate-300 pt-0.5 flex-wrap">
+                                        <!-- MCQ Marks -->
+                                        <div class="flex items-center gap-1">
+                                            <span class="text-slate-400 font-medium text-[11px]">MCQ:</span>
+                                            <span class="font-bold text-slate-800 dark:text-slate-100"><%= mcqScore %>/<%= maxMcqScore %></span>
+                                        </div>
+
+                                        <!-- Written Marks / Status -->
+                                        <% if (hasWritten) { %>
+                                            <div class="flex items-center gap-1">
+                                                <span class="text-slate-400 font-medium text-[11px]">Written:</span>
+                                                <% if (isWrittenPending) { %>
+                                                    <span class="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
+                                                        Pending
+                                                    </span>
+                                                <% } else { %>
+                                                    <span class="font-bold text-slate-800 dark:text-slate-100"><%= writtenScoreObtained %>/<%= writtenMaxMarks %></span>
+                                                <% } %>
+                                            </div>
+                                        <% } %>
+
+                                        <!-- Duration -->
+                                        <div class="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                            <span class="material-symbols-rounded text-xs leading-none">timer</span>
+                                            <span><%= formattedDuration %></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- SEE ANSWERS ACTION ICON BUTTON -->
+                                <div class="shrink-0 flex items-center justify-end w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/60 dark:border-slate-800">
+                                    <a href="/question-bank/review/<%= att._id %>" class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-cyan-600 dark:hover:bg-cyan-500 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs active:scale-95" title="See Answers">
+                                        <span class="material-symbols-rounded text-sm leading-none">visibility</span>
+                                        <span>See Answers</span>
+                                    </a>
+                                </div>
+
+                            </div>
+                        <% }); %>
+                    </div>
+                <% } %>
+
+                <div id="noHistoryResults" class="hidden py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                    <span class="material-symbols-rounded text-3xl text-slate-400 leading-none">search_off</span>
+                    <h3 class="text-xs font-bold text-slate-600 dark:text-slate-400">No Matching Exam History</h3>
+                    <p class="text-[11px] text-slate-400">Try adjusting your search terms.</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        window.filterHistoryWithQuery = function(query) {
+            const q = (query || '').toLowerCase().trim();
+            const items = document.querySelectorAll('.history-item');
+            let visibleCount = 0;
+
+            items.forEach(item => {
+                const title = (item.getAttribute('data-title') || '').toLowerCase().trim();
+                if (q === '' || title.includes(q)) {
+                    item.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    item.classList.add('hidden');
+                }
+            });
+
+            const badgeEl = document.getElementById('attemptCountBadge');
+            if (badgeEl) {
+                badgeEl.textContent = `${visibleCount} ${visibleCount === 1 ? 'Attempt' : 'Attempts'}`;
+            }
+
+            const noRes = document.getElementById('noHistoryResults');
+            if (noRes) {
+                if (visibleCount === 0 && items.length > 0) {
+                    noRes.classList.remove('hidden');
+                } else {
+                    noRes.classList.add('hidden');
+                }
+            }
+        };
+    </script>
+</body>
+</html>

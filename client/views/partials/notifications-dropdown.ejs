@@ -1,0 +1,164 @@
+<div id="notificationDropdown" class="hidden absolute right-0 mt-3 w-[340px] md:w-[400px] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2rem] shadow-2xl shadow-slate-200/50 dark:shadow-black/40 z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
+    <div class="px-6 py-5 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between">
+        <h4 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            <span class="material-symbols-rounded text-primary text-xl">notifications</span>
+            নোটিফিকেশন
+        </h4>
+        <button onclick="markAllNotificationsRead()" class="text-[10px] font-black text-primary uppercase tracking-widest hover:opacity-70 transition-opacity">সব পড়া হয়েছে</button>
+    </div>
+
+    <div id="notificationList" class="max-h-[400px] overflow-y-auto no-scrollbar p-2">
+        <!-- Notifications will be injected here via JS -->
+        <div class="py-12 text-center opacity-40">
+            <span class="material-symbols-rounded text-4xl mb-2">notifications_off</span>
+            <p class="text-xs font-bold">কোনো নোটিফিকেশন নেই</p>
+        </div>
+    </div>
+
+    <div class="p-4 border-t border-slate-50 dark:border-slate-800 text-center">
+        <a href="/notifications" class="text-[11px] font-bold text-slate-400 hover:text-primary transition-colors uppercase tracking-widest">সব নোটিফিকেশন দেখুন</a>
+    </div>
+</div>
+
+<template id="notificationItemTemplate">
+    <a href="#" class="notification-item flex items-start gap-4 p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-800 group relative">
+        <div class="notification-icon size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+            <span class="material-symbols-rounded">notifications</span>
+        </div>
+        <div class="flex-1 min-w-0">
+            <h5 class="notification-title text-[13px] font-bold text-slate-800 dark:text-white mb-1 line-clamp-1"></h5>
+            <p class="notification-message text-[12px] font-medium text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-1.5"></p>
+            <span class="notification-time text-[9px] font-bold text-slate-300 dark:text-slate-500 uppercase tracking-widest"></span>
+        </div>
+        <div class="unread-dot absolute top-5 right-5 size-2 bg-primary rounded-full hidden"></div>
+    </a>
+</template>
+
+<script>
+    const notificationList = document.getElementById('notificationList');
+    const notificationBadge = document.getElementById('notificationBadge');
+    const notificationDot = document.getElementById('notificationDot');
+
+    async function fetchNotifications() {
+        try {
+            const res = await fetch('/api/notifications/latest');
+            const data = await res.json();
+            if (data.success) {
+                renderNotifications(data.notifications);
+            }
+            
+            const countRes = await fetch('/api/notifications/unread-count');
+            const countData = await countRes.json();
+            if (countData.success) {
+                updateNotificationBadge(countData.count);
+            }
+        } catch (error) {
+            console.error('Failed to fetch notifications:', error);
+        }
+    }
+
+    function renderNotifications(notifications) {
+        if (!notifications || notifications.length === 0) return;
+
+        notificationList.innerHTML = '';
+        const template = document.getElementById('notificationItemTemplate');
+
+        notifications.forEach(notif => {
+            const clone = template.content.cloneNode(true);
+            const item = clone.querySelector('.notification-item');
+            
+            item.href = notif.link || '#';
+            clone.querySelector('.notification-title').innerText = notif.title;
+            clone.querySelector('.notification-message').innerText = notif.message;
+            clone.querySelector('.notification-time').innerText = formatTime(notif.createdAt);
+            
+            const typeIcons = {
+                announcement: 'campaign',
+                system: 'settings',
+                course: 'school',
+                message: 'chat',
+                exam: 'quiz',
+                reminder: 'alarm'
+            };
+            clone.querySelector('.notification-icon .material-symbols-rounded').innerText = typeIcons[notif.type] || 'notifications';
+
+            if (!notif.isRead) {
+                clone.querySelector('.unread-dot').classList.remove('hidden');
+                item.classList.add('bg-blue-50/50', 'dark:bg-primary/5');
+            }
+
+            item.addEventListener('click', () => markAsRead(notif._id));
+            notificationList.appendChild(clone);
+        });
+    }
+
+    function updateNotificationBadge(count) {
+        if (count > 0) {
+            if (notificationBadge) {
+                notificationBadge.innerText = count > 9 ? '9+' : count;
+                notificationBadge.classList.remove('hidden');
+            }
+            if (notificationDot) notificationDot.classList.remove('hidden');
+        } else {
+            if (notificationBadge) notificationBadge.classList.add('hidden');
+            if (notificationDot) notificationDot.classList.add('hidden');
+        }
+    }
+
+    async function markAsRead(id) {
+        try {
+            await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+            fetchNotifications(); // Refresh
+        } catch (e) { console.error(e); }
+    }
+
+    async function markAllNotificationsRead() {
+        try {
+            await fetch('/api/notifications/mark-all-read', { method: 'POST' });
+            fetchNotifications();
+        } catch (e) { console.error(e); }
+    }
+
+    function formatTime(dateStr) {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diff = Math.floor((now - date) / 1000);
+        
+        if (diff < 60) return 'এইমাত্র';
+        if (diff < 3600) return Math.floor(diff / 60) + ' মিনিট আগে';
+        if (diff < 86400) return Math.floor(diff / 3600) + ' ঘণ্টা আগে';
+        return date.toLocaleDateString('bn-BD');
+    }
+
+    // Toggle Dropdown
+    function toggleNotifications() {
+        const dropdown = document.getElementById('notificationDropdown');
+        dropdown.classList.toggle('hidden');
+        if (!dropdown.classList.contains('hidden')) {
+            fetchNotifications();
+        }
+    }
+
+    // Close on click outside
+    window.addEventListener('click', (e) => {
+        const dropdown = document.getElementById('notificationDropdown');
+        const btn = document.getElementById('notificationBtn');
+        if (dropdown && !dropdown.contains(e.target) && !btn.contains(e.target)) {
+            dropdown.classList.add('hidden');
+        }
+    });
+
+    // Real-time listener
+    if (window.socket) {
+        socket.on('notification:new', (notif) => {
+            fetchNotifications();
+            // Show a mini toast
+            if (window.showRealtimeToast) {
+                window.showRealtimeToast(notif.title, notif.message, notif.link, notif.type);
+            }
+        });
+    }
+
+    // Initial Fetch
+    fetchNotifications();
+</script>

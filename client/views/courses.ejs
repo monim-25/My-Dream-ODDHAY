@@ -1,109 +1,451 @@
 <!DOCTYPE html>
-<html class="light" lang="bn">
-
+<html lang="en" class="<%= locals.user && user.theme === 'dark' ? 'dark' : '' %>">
 <head>
-    <title>কোর্স লাইব্রেরি | অধ্যায়</title>
+    <% 
+    function getImg(path) {
+        if(!path) return '';
+        if(path.startsWith('http')) return path;
+        let normalized = path.replace(/\\/g, '/');
+        if (!normalized.startsWith('/')) normalized = '/' + normalized;
+        return normalized;
+    }
+
+    function getPrice(c) {
+        if (!c) return 'Free';
+        if (c.accessType === 'paid' || c.accessType === 'Paid') {
+            if (c.discountPrice > 0) return '৳' + c.discountPrice;
+            if (c.price > 0) return '৳' + c.price;
+            if (c.plans && c.plans.length > 0 && c.plans[0].price > 0) return '৳' + c.plans[0].price;
+            return '৳' + (c.price || 0);
+        }
+        if (c.accessType === 'free' || c.accessType === 'Free') return 'Free';
+        if (c.accessType === 'trial' || c.accessType === 'Trial') return 'Free';
+        
+        // Fallback
+        if (c.discountPrice > 0) return '৳' + c.discountPrice;
+        if (c.price > 0) return '৳' + c.price;
+        if (c.plans && c.plans.length > 0 && c.plans[0].price > 0) return '৳' + c.plans[0].price;
+        return 'Free';
+    }
+
+    function getPriceIcon(c) {
+        const p = getPrice(c);
+        if (p === 'Free') return 'auto_awesome';
+        return 'payments';
+    }
+    %>
     <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Courses | ODDHAY</title>
+    <style>
+        /* Teacher Panel Studio Theme Overrides */
+        .course-card-studio {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 0;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .course-card-studio:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+            border-color: #cbd5e1;
+        }
+        .dark .course-card-studio {
+            background: #1e293b;
+            border-color: #334155;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        .dark .course-card-studio:hover {
+            border-color: #475569;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+        }
+        .course-card-inner {
+            background: transparent;
+        }
+        .meta-badge {
+            background: #f1f5f9;
+            color: #64748b;
+            padding: 2px 8px;
+            font-size: 10px;
+            font-weight: 800;
+            border-radius: 0;
+            border: 1px solid #e2e8f0;
+            text-transform: uppercase;
+        }
+        .dark .meta-badge {
+            background: #0f172a;
+            color: #94a3b8;
+            border-color: #334155;
+        }
+        .btn-studio {
+            background: #0f172a;
+            color: #fff;
+            border-radius: 0;
+            font-weight: 800;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+        }
+        .btn-studio:hover {
+            background: #334155;
+            transform: translateY(-1px);
+        }
+        .dark .btn-studio {
+            background: #f8fafc;
+            color: #0f172a;
+        }
+        .dark .btn-studio:hover {
+            background: #e2e8f0;
+        }
+        .btn-continue {
+            background: #10b981 !important;
+            color: #fff !important;
+        }
+        .btn-continue:hover {
+            background: #059669 !important;
+        }
+        .btn-view {
+            background: #3b82f6 !important;
+            color: #fff !important;
+        }
+        .btn-view:hover {
+            background: #2563eb !important;
+        }
+    </style>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen">
-    <%- include('partials/nav') %>
+<body class="bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300">
+    <%- include('partials/student-header') %>
 
-        <main class="relative overflow-hidden pt-36 pb-20 px-6 max-w-7xl mx-auto">
-            <!-- Background Blobs -->
-            <div class="bg-blob -top-20 -left-20 opacity-30"></div>
-            <div class="bg-blob top-1/2 -right-20 opacity-20" style="animation-delay: -5s;"></div>
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'courses' }) %>
 
-            <div class="mb-16 reveal">
-                <h1 class="h1-hero">কোর্সসমূহ</h1>
-            </div>
+        <main class="flex-1 w-full overflow-y-auto p-0 m-0 space-y-0 no-scrollbar bg-[#FFFFFF] dark:bg-[#0b1120] relative">
+            
+            <!-- CONTENT AREA -->
+            <div id="hub-content" class="w-full m-0 p-0 space-y-0 flex flex-col">
 
-            <!-- Filters -->
-            <div class="flex flex-wrap gap-3 mb-16 reveal delay-100">
-                <a href="/courses"
-                    class="px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl <%= !activeCategory || activeCategory === 'all' ? 'bg-primary text-white shadow-primary/20 scale-105' : 'bg-white dark:bg-slate-900 text-slate-500 hover:text-primary border border-slate-100 dark:border-slate-800' %>">
-                    সবগুলো
-                </a>
-                <% categories.forEach(cat=> { %>
-                    <a href="/courses?category=<%= cat %>"
-                        class="px-8 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl <%= activeCategory === cat ? 'bg-primary text-white shadow-primary/20 scale-105' : 'bg-white dark:bg-slate-900 text-slate-500 hover:text-primary border border-slate-100 dark:border-slate-800' %>">
-                        <%= cat %>
-                    </a>
-                    <% }) %>
-            </div>
+                    <!-- DARKY GRAY-700 CAROUSEL WITH CENTERED LIGHT GLOBULE & SOFT CORNER BUBBLES -->
+                    <% if(locals.exploreCourses && exploreCourses.length > 0) { %>
+                    <div id="featuredCarouselBox" class="w-full relative bg-gradient-to-br from-[#374151] via-[#1f2937] to-[#111827] text-white py-7 px-4 sm:px-8 lg:px-12 border-b border-slate-700/60 shadow-2xl group/carousel select-none overflow-hidden">
+                        
+                        <!-- Top-Right Floating My Courses Button On Carousel -->
+                        <div class="absolute top-3 right-3 sm:top-4 sm:right-6 z-30">
+                            <a href="/my-courses" class="flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#F43F5E] hover:bg-rose-600 text-white text-xs font-bold transition-all active:scale-95 shadow-lg backdrop-blur-md border border-rose-400/30">
+                                <span class="material-symbols-rounded text-[16px] leading-none flex items-center justify-center">school</span>
+                                <span>My Courses</span>
+                                <span class="px-1.5 py-0.5 rounded-full text-[10px] font-black bg-white/25 text-white leading-none flex items-center justify-center"><%= (locals.enrolledCourses || []).filter(ec => ec && ec.course).length %></span>
+                            </a>
+                        </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 reveal delay-200">
-                <% courses.forEach(course=> { %>
-                    <div
-                        class="group card-smart !p-0 overflow-hidden hover:translate-y-[-10px] transition-all duration-500">
-                        <div class="aspect-[16/10] relative overflow-hidden">
-                            <img src="<%= course.thumbnail || 'https://via.placeholder.com/600x400' %>"
-                                class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000">
-                            <div
-                                class="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/10 to-transparent">
-                            </div>
-                            <div class="absolute top-4 left-4 flex gap-2">
-                                <span
-                                    class="px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-white font-black text-[10px] border border-white/20 uppercase tracking-tighter">
-                                    <%= course.classLevel %>
-                                </span>
+                        <!-- Centered Ambient Light Glow -->
+                        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-[500px] rounded-full bg-cyan-500/15 blur-3xl pointer-events-none animate-pulse z-0"></div>
+
+                        <!-- 2 Soft-Blended Corner Bubbles (Half Hidden out of section) -->
+                        <!-- 1. Right Top Corner Bubble -->
+                        <div class="absolute -top-16 -right-16 size-48 sm:size-56 rounded-full bg-gradient-to-br from-white/10 via-cyan-400/10 to-transparent backdrop-blur-md border border-white/15 shadow-sm pointer-events-none opacity-40 z-0"></div>
+
+                        <!-- 2. Left Bottom Corner Bubble -->
+                        <div class="absolute -bottom-16 -left-16 size-48 sm:size-56 rounded-full bg-gradient-to-br from-white/10 via-teal-400/10 to-transparent backdrop-blur-md border border-white/15 shadow-sm pointer-events-none opacity-40 z-0"></div>
+
+                        <div id="courseCarouselContainer" class="relative w-full overflow-hidden z-10 min-h-[300px] flex items-center justify-center">
+                            <div id="courseCarouselTrack" class="relative w-full max-w-6xl">
+                                <% exploreCourses.forEach((c, idx) => { %>
+                                    <div id="carousel-card-<%= idx %>" class="carousel-card-item transition-all duration-700 ease-in-out transform w-full flex flex-col md:flex-row items-center gap-6 lg:gap-8 rounded-2xl p-2 sm:p-4 bg-transparent <%= idx === 0 ? 'relative opacity-100 scale-100 translate-x-0 z-20 pointer-events-auto' : 'absolute top-0 left-0 opacity-0 scale-95 translate-x-10 z-0 pointer-events-none' %>">
+                                        <!-- Left: Course Thumbnail Image Container -->
+                                        <div class="w-full md:w-5/12 lg:w-[320px] xl:w-[340px] h-44 sm:h-48 lg:h-52 rounded-xl overflow-hidden relative shadow-2xl border border-slate-600/60 ring-1 ring-white/10 shrink-0 bg-[#1e293b] aspect-[16/10]">
+                                            <% if (c.thumbnail && c.thumbnail.trim() !== '') { %>
+                                                <img src="<%= getImg(c.thumbnail) %>" class="w-full h-full object-cover transition-transform duration-500 hover:scale-105" alt="<%= c.title %>" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                                <div class="hidden w-full h-full bg-[#1e293b] items-center justify-center">
+                                                    <span class="material-symbols-rounded text-5xl text-slate-400">school</span>
+                                                </div>
+                                            <% } else { %>
+                                                <div class="w-full h-full bg-[#1e293b] flex items-center justify-center">
+                                                    <span class="material-symbols-rounded text-5xl text-slate-400">school</span>
+                                                </div>
+                                            <% } %>
+                                        </div>
+
+                                        <!-- Right: Course Information & Action Buttons -->
+                                        <div class="w-full md:w-7/12 lg:flex-1 flex flex-col justify-between space-y-3">
+                                            <div class="space-y-1.5">
+                                                <!-- Course Title (Normal Casing, Clean Font) -->
+                                                <h3 class="text-lg sm:text-xl lg:text-2xl font-bold text-white leading-tight tracking-tight line-clamp-1 drop-shadow-sm" title="<%= c.title || 'Untitled Course' %>">
+                                                    <%= c.title || 'Untitled Course' %>
+                                                </h3>
+                                                <!-- Subtext Short Details (2.5 Lines Truncated with ...) -->
+                                                <p class="text-xs sm:text-sm text-slate-200 line-clamp-2 sm:line-clamp-3 leading-relaxed font-normal">
+                                                    <%= c.description ? c.description.replace(/(<([^>]+)>)/gi, "") : 'Master your curriculum with comprehensive lessons, live support, and interactive quizzes designed for top grades.' %>
+                                                </p>
+                                            </div>
+
+                                            <!-- What will be provided (Resource Highlights in Normal Casing) -->
+                                            <% 
+                                                let vCount = 0, lCount = 0, nCount = 0, mCount = 0, qCount = 0;
+                                                if (c.chapters && Array.isArray(c.chapters)) {
+                                                    c.chapters.forEach(ch => {
+                                                        if (ch.videos) vCount += ch.videos.length;
+                                                        if (ch.liveClasses) lCount += ch.liveClasses.length;
+                                                        if (ch.notes) nCount += ch.notes.length;
+                                                        if (ch.exams) mCount += ch.exams.length;
+                                                        if (ch.quizzes) qCount += ch.quizzes.length;
+                                                    });
+                                                }
+                                                if (c.modelTests) mCount += c.modelTests.length;
+                                                if (c.quizzes) qCount += c.quizzes.length;
+                                            %>
+                                            <div class="flex flex-wrap items-center gap-1.5 py-0.5">
+                                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-xs font-medium text-slate-200 backdrop-blur-md">
+                                                    <span class="material-symbols-rounded text-sm text-cyan-400">play_circle</span> <%= vCount %> Video Lessons
+                                                </span>
+                                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-xs font-medium text-slate-200 backdrop-blur-md">
+                                                    <span class="material-symbols-rounded text-sm text-cyan-400">live_tv</span> <%= lCount %> Live Classes
+                                                </span>
+                                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-xs font-medium text-slate-200 backdrop-blur-md">
+                                                    <span class="material-symbols-rounded text-sm text-cyan-400">description</span> <%= nCount %> Notes
+                                                </span>
+                                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-xs font-medium text-slate-200 backdrop-blur-md">
+                                                    <span class="material-symbols-rounded text-sm text-cyan-400">quiz</span> <%= mCount %> Model Tests
+                                                </span>
+                                                <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800/80 border border-slate-700/80 text-xs font-medium text-slate-200 backdrop-blur-md">
+                                                    <span class="material-symbols-rounded text-sm text-cyan-400">task</span> <%= qCount %> Quizzes
+                                                </span>
+                                            </div>
+
+                                            <!-- Enrolled Count & Price & Action Buttons -->
+                                            <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-700/70">
+                                                <div class="flex items-center gap-3">
+                                                    <!-- Price Tag -->
+                                                    <span class="text-base sm:text-lg font-bold text-emerald-400 flex items-center gap-1.5 leading-none">
+                                                        <span class="material-symbols-rounded text-lg text-emerald-400 leading-none select-none -mt-0.5"><%= getPriceIcon(c) %></span>
+                                                        <span class="leading-none"><%= getPrice(c) %></span>
+                                                    </span>
+
+                                                    <!-- Enrolled Count -->
+                                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-xs font-semibold text-emerald-300 leading-none backdrop-blur-md">
+                                                        <span class="material-symbols-rounded text-sm leading-none select-none">group</span>
+                                                        <span class="leading-none"><%= c.studentCount || 0 %> Enrolled</span>
+                                                    </span>
+                                                </div>
+
+                                                <!-- Action Buttons: See Details & Enroll Now -->
+                                                <div class="flex items-center gap-2">
+                                                    <a href="/course-details/<%= c._id %>" class="px-4 py-2 text-xs font-semibold rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-md transition-all flex items-center gap-1.5 active:scale-95 shadow-xs">
+                                                        <span class="material-symbols-rounded text-sm text-slate-300">visibility</span> See Details
+                                                    </a>
+                                                    <a href="<%= (c.accessType === 'free' || c.accessType === 'Free') ? '/course-details/' + c._id : '/checkout/course/' + c._id %>" class="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-400/25 active:scale-95">
+                                                        <span class="material-symbols-rounded text-sm">how_to_reg</span> Enroll Now
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <% }) %>
                             </div>
                         </div>
-                        <div class="p-8">
-                            <div class="flex items-center gap-2 mb-3">
-                                <span class="text-[10px] font-black text-primary uppercase tracking-widest">
-                                    <%= course.category %>
-                                </span>
-                                <span class="text-slate-300">•</span>
-                                <span
-                                    class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">১০+
-                                    লেসন</span>
-                            </div>
-                            <h3
-                                class="text-xl font-black mb-6 group-hover:text-primary transition-colors line-clamp-2 leading-tight">
-                                <%= course.title %>
-                            </h3>
 
-                            <div
-                                class="flex items-center justify-between pt-6 border-t border-slate-100 dark:border-slate-800">
-                                <div class="flex flex-col">
-                                    <span class="text-[10px] font-black text-slate-400 uppercase mb-1">কործ ফি</span>
-                                    <span class="text-2xl font-black text-primary">৳ <%= (course.plans &&
-                                            course.plans.length> 0) ? course.plans[0].price : '0' %></span>
-                                </div>
-                                <a href="/course-details/<%= course._id %>"
-                                    class="size-14 rounded-2xl bg-primary text-white flex items-center justify-center shadow-lg shadow-primary/30 hover:bg-primary-dark transition-all duration-300">
-                                    <span class="material-symbols-outlined text-2xl">shopping_cart</span>
-                                </a>
-                            </div>
+                        <!-- Left & Right Chevron Buttons -->
+                        <button type="button" onclick="prevFeaturedSlide()" class="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 size-9 sm:size-10 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white border border-slate-700 flex items-center justify-center transition-all shadow-md active:scale-90 cursor-pointer z-30" title="Previous Card">
+                            <span class="material-symbols-rounded text-xl leading-none select-none -ml-0.5">chevron_left</span>
+                        </button>
+                        <button type="button" onclick="nextFeaturedSlide()" class="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 size-9 sm:size-10 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white border border-slate-700 flex items-center justify-center transition-all shadow-md active:scale-90 cursor-pointer z-30" title="Next Card">
+                            <span class="material-symbols-rounded text-xl leading-none select-none -mr-0.5">chevron_right</span>
+                        </button>
+
+                        <!-- Indicators -->
+                        <div class="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
+                            <% exploreCourses.forEach((_, i) => { %>
+                                <button onclick="goToFeaturedSlide(<%= i %>)" class="h-2 rounded-full transition-all duration-300 <%= i === 0 ? 'w-7 bg-emerald-400 shadow-md shadow-emerald-400/50' : 'w-2 bg-white/30' %>" id="indicator-<%= i %>"></button>
+                            <% }) %>
                         </div>
                     </div>
-                    <% }) %>
+                    <% } %>
 
-                        <% if(courses.length===0) { %>
-                            <div class="col-span-full py-32 text-center card-smart border-dashed border-2">
-                                <div
-                                    class="size-24 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-8 text-slate-300">
-                                    <span class="material-symbols-outlined text-6xl">school</span>
-                                </div>
-                                <h2 class="text-3xl font-black mb-4 tracking-tight">বর্তমানে কোনো কোর্স নেই</h2>
-                                <p class="text-slate-500 font-bold">খুব শীঘ্রই আমরা নতুন কোর্স নিয়ে আসছি। আমাদের সাথেই
-                                    থাকুন!</p>
-                            </div>
+
+
+                    <div class="p-3.5 lg:p-4 bg-[#FFFFFF] dark:bg-[#0b1120]">
+                        <div class="bg-[#FFFFFF] dark:bg-[#0f172a] p-3 sm:p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4">
+                            <% if(locals.exploreCourses && exploreCourses.length > 0) { %>
+                                <% exploreCourses.forEach(course => { %>
+                                    <div class="p-1 course-card-studio course-item group cursor-pointer" data-title="<%= course.title ? course.title.toLowerCase() : '' %>" data-subject="<%= course.subject || '' %>" onclick="window.location.href='/course-details/<%= course._id %>'">
+                                        <div class="course-card-inner h-full flex flex-col relative overflow-hidden">
+                                            
+                                            <!-- Thumbnail -->
+                                            <div class="w-full h-28 bg-slate-50 dark:bg-slate-800/30 relative overflow-hidden border-b border-slate-100 dark:border-slate-800/50 shrink-0">
+                                                <% if (course.thumbnail) { %>
+                                                    <img src="<%= getImg(course.thumbnail) %>" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                                    <div class="hidden w-full h-full items-center justify-center text-slate-300 dark:text-slate-700">
+                                                        <span class="material-symbols-rounded text-4xl">auto_stories</span>
+                                                    </div>
+                                                <% } else { %>
+                                                    <div class="w-full h-full flex items-center justify-center text-slate-300 dark:text-slate-700">
+                                                        <span class="material-symbols-rounded text-4xl opacity-50">auto_stories</span>
+                                                    </div>
+                                                <% } %>
+                                            </div>
+
+                                            <!-- Content Wrapper -->
+                                            <div class="p-3 flex flex-col flex-1">
+                                                
+                                                <!-- Core Info -->
+                                                <div class="flex-1">
+                                                    <div class="flex items-start justify-between gap-2 mb-2">
+                                                        <h4 class="text-[13px] font-semibold text-slate-800 dark:text-slate-200 line-clamp-2 leading-tight flex-1"><%= course.title || 'Untitled Course' %></h4>
+                                                        
+                                                        <div class="flex flex-col items-center shrink-0">
+                                                            <span class="material-symbols-rounded text-[16px] text-slate-400 dark:text-slate-500 leading-none mb-0.5">group</span>
+                                                            <span class="text-[10px] font-black text-slate-700 dark:text-slate-300 leading-none"><%= course.studentCount || 0 %></span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div class="flex flex-wrap gap-1 mb-2">
+                                                        <span class="meta-badge text-[8px] px-1.5 py-0.5"><%= course.classLevel || 'N/A' %></span>
+                                                        <span class="meta-badge text-[8px] px-1.5 py-0.5"><%= course.subject || 'General' %></span>
+                                                    </div>
+
+                                                    <!-- Short Details -->
+                                                    <p class="text-[10px] font-medium text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                                                        <%= course.description ? course.description.replace(/(<([^>]+)>)/gi, "") : 'Explore this course to enhance your skills and knowledge.' %>
+                                                    </p>
+                                                </div>
+
+                                                <!-- Action Footer -->
+                                                <div class="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
+                                                    <div class="flex items-center gap-1.5">
+                                                        <span class="text-[12px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1">
+                                                            <span class="material-symbols-rounded text-[14px] text-slate-400"><%= getPriceIcon(course) %></span>
+                                                            <%= getPrice(course) %>
+                                                        </span>
+                                                    </div>
+                                                    
+                                                    <a href="/course-details/<%= course._id %>" class="h-7 px-4 btn-studio btn-view flex items-center justify-center text-[10px]">
+                                                        View
+                                                    </a>
+                                                </div>
+
+                                            </div>
+                                        </div>
+                                    </div>
+                                <% }) %>
+                            <% } else { %>
+                                <div class="col-span-full py-16 text-center text-xs font-bold text-slate-400 italic">No courses found</div>
                             <% } %>
+                        </div>
+                    </div>
+                </div>
+            </section>
+                
             </div>
         </main>
+    </div>
 
-        <%- include('partials/footer') %>
+    <%- include('partials/student-bottom-nav', { activePage: 'courses' }) %>
+    <%- include('partials/app-scripts') %>
+    <script>
+        let currentCoursesSearch = '<%= locals.search || "" %>';
+        let currentCoursesSubject = '<%= locals.activeSubject || "all" %>';
 
-            <script>
-                document.addEventListener('DOMContentLoaded', () => {
-                    const observer = new IntersectionObserver((entries) => {
-                        entries.forEach(entry => entry.isIntersecting && entry.target.classList.add('active'));
-                    }, { threshold: 0.1 });
-                    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-                });
-            </script>
+        window.filterCoursesWithSearch = function(query) {
+            currentCoursesSearch = (query || '').toLowerCase().trim();
+            filterCourses();
+        };
+
+        window.filterCoursesWithSubject = function(subject) {
+            currentCoursesSubject = subject || 'all';
+            filterCourses();
+        };
+
+        function filterCourses() {
+            const searchVal = currentCoursesSearch.toLowerCase().trim();
+            const subjectVal = currentCoursesSubject;
+            
+            const items = document.querySelectorAll('.course-item');
+            
+            let enrolledVisible = 0;
+            let exploreVisible = 0;
+
+            items.forEach(item => {
+                const title = (item.getAttribute('data-title') || '').toLowerCase();
+                const subject = item.getAttribute('data-subject') || '';
+                
+                const matchSearch = !searchVal || title.includes(searchVal) || subject.toLowerCase().includes(searchVal);
+                const matchSubject = subjectVal === 'all' || subject === subjectVal || subject.toLowerCase() === subjectVal.toLowerCase();
+                
+                if(matchSearch && matchSubject) {
+                    item.style.display = 'block';
+                    if(item.closest('#section-enrolled')) enrolledVisible++;
+                    if(item.closest('#section-explore')) exploreVisible++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+        // 5-Second Seamless Auto-Slide Carousel Controller
+        let currentSlide = 0;
+        const totalSlides = <%= (locals.exploreCourses || []).length %>;
+        let slideTimer = null;
+
+        function updateSlide(direction = 'next') {
+            if (totalSlides === 0) return;
+            for (let i = 0; i < totalSlides; i++) {
+                const card = document.getElementById('carousel-card-' + i);
+                const ind = document.getElementById('indicator-' + i);
+                if (!card) continue;
+
+                if (i === currentSlide) {
+                    // Active Card Slide-In
+                    card.className = "carousel-card-item transition-all duration-700 ease-in-out transform w-full flex flex-col md:flex-row items-center gap-6 lg:gap-8 rounded-2xl p-2 sm:p-4 bg-transparent relative opacity-100 scale-100 translate-x-0 z-20 pointer-events-auto";
+                } else {
+                    // Inactive Card Transition
+                    const offsetClass = direction === 'next' ? '-translate-x-10' : 'translate-x-10';
+                    card.className = `carousel-card-item transition-all duration-700 ease-in-out transform w-full flex flex-col md:flex-row items-center gap-6 lg:gap-8 rounded-2xl p-2 sm:p-4 bg-transparent absolute top-0 left-0 opacity-0 scale-95 ${offsetClass} z-0 pointer-events-none`;
+                }
+
+                if (ind) {
+                    if (i === currentSlide) {
+                        ind.className = 'h-2 rounded-full transition-all duration-300 w-7 bg-teal-600 dark:bg-teal-400 shadow-xs';
+                    } else {
+                        ind.className = 'h-2 rounded-full transition-all duration-300 w-2 bg-slate-300 dark:bg-slate-700';
+                    }
+                }
+            }
+        }
+
+        function nextFeaturedSlide() {
+            if (totalSlides <= 1) return;
+            currentSlide = (currentSlide + 1) % totalSlides;
+            updateSlide('next');
+            resetTimer();
+        }
+
+        function prevFeaturedSlide() {
+            if (totalSlides <= 1) return;
+            currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
+            updateSlide('prev');
+            resetTimer();
+        }
+
+        function goToFeaturedSlide(idx) {
+            if (idx === currentSlide) return;
+            const dir = idx > currentSlide ? 'next' : 'prev';
+            currentSlide = idx;
+            updateSlide(dir);
+            resetTimer();
+        }
+
+        function resetTimer() {
+            if (slideTimer) clearInterval(slideTimer);
+            if (totalSlides > 1) {
+                slideTimer = setInterval(nextFeaturedSlide, 5000);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (totalSlides > 1) {
+                slideTimer = setInterval(nextFeaturedSlide, 5000);
+            }
+        });
+    </script>
 </body>
-
 </html>

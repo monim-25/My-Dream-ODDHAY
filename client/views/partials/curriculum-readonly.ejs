@@ -1,0 +1,137 @@
+<!-- Read-Only Curriculum View Partial -->
+<div id="readonly-curriculum-container" class="border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden bg-[#F8FAFC] dark:bg-[#0b1120]"></div>
+
+<script>
+    (function() {
+        const curriculumNodes = <%- JSON.stringify(course.curriculumNodes || []) %>;
+        let currentFolderId = null;
+
+        function openReadonlyFolder(folderId) {
+            currentFolderId = folderId || null;
+            renderReadonlyTree();
+        }
+        window.openReadonlyFolder = openReadonlyFolder;
+
+        function renderReadonlyTree() {
+            const container = document.getElementById('readonly-curriculum-container');
+            if (!container) return;
+            
+            let html = '';
+            const currentFolder = currentFolderId ? curriculumNodes.find(n => n._id === currentFolderId) : null;
+            const parentId = currentFolder ? currentFolder.parentId : null;
+            
+            if (currentFolderId) {
+                html += `
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-white/10 bg-[#FFFFFF] dark:bg-[#0b1120]">
+                        <div class="flex items-center gap-3">
+                            <button type="button" onclick="openReadonlyFolder('${parentId || ''}')" class="p-1.5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-none transition-all text-slate-500">
+                                <span class="material-symbols-rounded text-[18px]">arrow_back</span>
+                            </button>
+                            <span class="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 font-sans">
+                                <span class="material-symbols-rounded text-amber-500 text-xl">folder_open</span>
+                                ${currentFolder.name}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            html += `<div class="divide-y divide-slate-100 dark:divide-white/5">`;
+            
+            const currentNodes = curriculumNodes.filter(n => String(n.parentId || '') === String(currentFolderId || ''));
+            
+            if (currentNodes.length === 0) {
+                html += `
+                    <div class="p-12 flex flex-col items-center justify-center text-center">
+                        <div class="size-16 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-4">
+                            <span class="material-symbols-rounded text-3xl text-slate-400">folder_open</span>
+                        </div>
+                        <h4 class="text-base font-bold text-slate-800 dark:text-white mb-1">Empty Folder</h4>
+                        <p class="text-xs font-bold text-slate-500">No content available here.</p>
+                    </div>
+                `;
+            } else {
+                currentNodes.forEach(node => {
+                    const isFolder = node.type === 'folder';
+                    let icon = 'folder';
+                    let typeLabel = 'Folder';
+                    let detailHtml = '';
+                    
+                    if (node.type === 'video') {
+                        icon = 'play_circle';
+                        typeLabel = 'Video Lesson';
+                        detailHtml = node.duration ? `<span class="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-none font-mono font-bold">${node.duration}</span>` : '';
+                    } else if (node.type === 'note') {
+                        icon = 'description';
+                        typeLabel = 'Note';
+                        if (node.filePath) {
+                            const ext = node.filePath.split('.').pop().toLowerCase();
+                            const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext);
+                            detailHtml = `<a href="${node.filePath}" target="_blank" class="text-[9px] text-emerald-500 hover:underline flex items-center gap-0.5 font-bold"><span class="material-symbols-rounded text-xs">${isImage ? 'image' : 'picture_as_pdf'}</span>View File</a>`;
+                        }
+                    } else if (node.type === 'liveClass') {
+                        icon = 'podcasts';
+                        const isScheduled = node.date && new Date(node.date) > new Date();
+                        const isEnded = node.videoPath || node.isRecorded;
+                        if (isEnded) {
+                            typeLabel = 'Video Lesson';
+                            icon = 'play_circle';
+                            detailHtml = node.duration ? `<span class="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-none font-mono font-bold">${node.duration}</span>` : `<span class="text-[10px] text-slate-500 font-bold">Recorded Video</span>`;
+                        } else if (isScheduled) {
+                            typeLabel = 'Scheduled Live Class';
+                            detailHtml = `<span class="text-[10px] text-slate-500 font-bold">${new Date(node.date).toLocaleString()}</span>`;
+                        } else {
+                            typeLabel = 'Live Class';
+                            detailHtml = `<span class="text-[10px] text-rose-500 font-bold">Live Now</span>`;
+                        }
+                    } else if (node.type === 'quiz') {
+                        icon = 'psychology';
+                        typeLabel = 'Quiz';
+                        detailHtml = `<span class="text-[9px] px-1.5 py-0.5 bg-amber-50 dark:bg-amber-500/10 text-amber-500 rounded-none font-bold">Quiz</span>`;
+                    }
+                    
+                    let actionOnClick = `class="group flex items-center p-4 bg-white dark:bg-[#0b1120] hover:bg-slate-50 dark:hover:bg-white/5 transition-all cursor-pointer"`;
+                    if (isFolder) {
+                        actionOnClick = `onclick="openReadonlyFolder('${node._id}')" ` + actionOnClick;
+                    } else if (node.type === 'video' || (node.type === 'liveClass' && (node.videoPath || node.isRecorded))) {
+                        actionOnClick = `onclick="if(typeof playVideoNode === 'function') playVideoNode('${node._id}'); else alert('Video player not available.');" ` + actionOnClick;
+                    } else if (node.type === 'note' && node.filePath) {
+                        actionOnClick = `onclick="window.open('${node.filePath}', '_blank')" ` + actionOnClick;
+                    } else if (node.type === 'quiz') {
+                        const qId = (node.quizId && node.quizId._id) ? node.quizId._id : (node.quizId || node._id);
+                        actionOnClick = `onclick="window.open('/teacher/quiz-details/${qId}', '_blank')" ` + actionOnClick;
+                    } else if (node.type === 'liveClass' && node.meetingUrl) {
+                        actionOnClick = `onclick="window.open('/live/${node.meetingUrl}', '_blank')" ` + actionOnClick;
+                    }
+                    
+                    const iconColor = isFolder ? 'text-amber-500' : 'text-slate-400 dark:text-slate-500';
+                    
+                    html += `
+                        <div ${actionOnClick}>
+                            <div class="flex items-center gap-4 min-w-0 flex-1">
+                                <span class="material-symbols-rounded shrink-0 text-[28px] ${iconColor}">${icon}</span>
+                                <div class="min-w-0 flex-1">
+                                    <h5 class="text-sm font-bold text-slate-800 dark:text-white truncate leading-normal font-sans">${node.name}</h5>
+                                    <div class="flex items-center gap-2.5 mt-1">
+                                        <span class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">${typeLabel}</span>
+                                        ${detailHtml}
+                                    </div>
+                                </div>
+                            </div>
+                            ${isFolder ? `
+                                <div class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 ml-auto pl-4">
+                                    <span class="material-symbols-rounded text-slate-400 group-hover:text-primary transition-colors text-xl">chevron_right</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                });
+            }
+            
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        document.addEventListener('DOMContentLoaded', renderReadonlyTree);
+    })();
+</script>

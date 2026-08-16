@@ -1,253 +1,1201 @@
 <!DOCTYPE html>
-<html class="light" lang="bn">
-
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
 <head>
-    <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>রুটিন | ODDHAY</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Lexend:wght@300..900&family=Noto+Sans+Bengali:wght@300..900&display=swap"
-        rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-        rel="stylesheet" />
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: { "primary": "#137fec" },
-                    fontFamily: { "display": ["Lexend", "Noto Sans Bengali", "sans-serif"] },
-                },
-            },
-        }
-    </script>
-    <style>
-        body {
-            font-family: 'Lexend', 'Noto Sans Bengali', sans-serif;
-        }
-
-        .pb-safe {
-            padding-bottom: env(safe-area-inset-bottom, 20px);
-        }
-    </style>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Routine & Study Plan | ODDHAY</title>
 </head>
 
-<body class="bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 min-h-screen pb-20">
-    <!-- Header -->
-    <header
-        class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-4 sticky top-0 z-50">
-        <div class="max-w-2xl mx-auto flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <a href="/dashboard" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl">
-                    <span class="material-symbols-outlined">arrow_back</span>
-                </a>
-                <h1 class="text-lg font-black">আমার রুটিন</h1>
-            </div>
-            <button onclick="openAddModal()"
-                class="px-4 py-2 bg-primary text-white rounded-xl text-xs font-black flex items-center gap-1">
-                <span class="material-symbols-outlined text-sm">add</span> টাস্ক যোগ
-            </button>
-        </div>
-    </header>
+<body class="bg-[#f8fafc] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300">
+    <%- include('partials/student-header') %>
 
-    <main class="max-w-2xl mx-auto p-4 py-6 space-y-4">
-
-        <!-- Today's Tasks -->
-        <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <h3 class="text-sm font-black mb-4 flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary">today</span> আজকের টাস্ক
-            </h3>
-            <div class="space-y-3" id="todayTasks">
-                <% if(tasks && tasks.filter(t=> new Date(t.date).toDateString() === new Date().toDateString()).length >
-                    0) { %>
-                    <% tasks.filter(t=> new Date(t.date).toDateString() === new Date().toDateString()).forEach(task => {
-                        %>
-                        <div
-                            class="flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800 <%= task.isCompleted ? 'opacity-50' : '' %>">
-                            <form action="/routine/toggle/<%= task._id %>" method="POST">
-                                <button type="submit"
-                                    class="size-8 rounded-lg <%= task.isCompleted ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800' %> flex items-center justify-center">
-                                    <span class="material-symbols-outlined text-sm">
-                                        <%= task.isCompleted ? 'check' : '' %>
-                                    </span>
-                                </button>
-                            </form>
-                            <div class="flex-1">
-                                <p class="text-sm font-black <%= task.isCompleted ? 'line-through' : '' %>">
-                                    <%= task.title %>
-                                </p>
-                                <p class="text-[10px] text-slate-500">
-                                    <%= task.time || 'সময় নির্ধারণ করা হয়নি' %>
-                                </p>
-                            </div>
-                            <span
-                                class="px-2 py-1 rounded-lg text-[9px] font-bold <%= task.type === 'exam' ? 'bg-rose-100 text-rose-600' : (task.type === 'class' ? 'bg-blue-100 text-blue-600' : 'bg-teal-100 text-teal-600') %>">
-                                <%= task.type==='exam' ? 'পরীক্ষা' : (task.type==='class' ? 'ক্লাস' : 'টাস্ক' ) %>
-                            </span>
-                            <form action="/routine/delete/<%= task._id %>" method="POST">
-                                <button type="submit" class="text-slate-400 hover:text-red-500">
-                                    <span class="material-symbols-outlined text-sm">delete</span>
-                                </button>
-                            </form>
-                        </div>
-                        <% }) %>
-                            <% } else { %>
-                                <div class="text-center py-8 text-slate-400">
-                                    <span class="material-symbols-outlined text-4xl mb-2">event_available</span>
-                                    <p class="text-sm">আজকে কোনো টাস্ক নেই</p>
-                                </div>
-                                <% } %>
-            </div>
-        </div>
-
-        <!-- Upcoming Tasks -->
-        <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <h3 class="text-sm font-black mb-4 flex items-center gap-2">
-                <span class="material-symbols-outlined text-amber-500">schedule</span> আসন্ন টাস্ক
-            </h3>
-            <div class="space-y-3">
-                <% if(tasks && tasks.filter(t=> new Date(t.date) > new Date()).length > 0) { %>
-                    <% tasks.filter(t=> new Date(t.date) > new Date()).slice(0, 5).forEach(task => { %>
-                        <div
-                            class="flex items-center gap-3 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                            <div class="size-8 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
-                                <span class="material-symbols-outlined text-sm">event</span>
-                            </div>
-                            <div class="flex-1">
-                                <p class="text-sm font-black">
-                                    <%= task.title %>
-                                </p>
-                                <p class="text-[10px] text-slate-500">
-                                    <%= new Date(task.date).toLocaleDateString('bn-BD') %>
-                                        <%= task.time ? '- ' + task.time : '' %>
-                                </p>
-                            </div>
-                            <span class="px-2 py-1 rounded-lg text-[9px] font-bold bg-slate-100 text-slate-600">
-                                <%= task.type==='exam' ? 'পরীক্ষা' : (task.type==='class' ? 'ক্লাস' : 'টাস্ক' ) %>
-                            </span>
-                        </div>
-                        <% }) %>
-                            <% } else { %>
-                                <div class="text-center py-6 text-slate-400">
-                                    <p class="text-sm">কোনো আসন্ন টাস্ক নেই</p>
-                                </div>
-                                <% } %>
-            </div>
-        </div>
-
-        <!-- All Tasks -->
-        <div class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800">
-            <h3 class="text-sm font-black mb-4 flex items-center gap-2">
-                <span class="material-symbols-outlined text-slate-500">list</span> সব টাস্ক (<%= tasks ? tasks.length :
-                    0 %>)
-            </h3>
-            <div class="space-y-2">
-                <% if(tasks && tasks.length> 0) { %>
-                    <% tasks.forEach(task=> { %>
-                        <div
-                            class="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 <%= task.isCompleted ? 'opacity-50' : '' %>">
-                            <div
-                                class="size-6 rounded-lg <%= task.isCompleted ? 'bg-emerald-500' : 'bg-slate-200' %> flex items-center justify-center text-white">
-                                <% if(task.isCompleted) { %><span class="material-symbols-outlined text-xs">check</span>
-                                    <% } %>
-                            </div>
-                            <p
-                                class="flex-1 text-xs font-bold <%= task.isCompleted ? 'line-through text-slate-400' : '' %>">
-                                <%= task.title %>
-                            </p>
-                            <p class="text-[9px] text-slate-400">
-                                <%= new Date(task.date).toLocaleDateString('bn-BD') %>
-                            </p>
-                        </div>
-                        <% }) %>
-                            <% } else { %>
-                                <p class="text-center text-slate-400 text-sm py-4">কোনো টাস্ক নেই</p>
-                                <% } %>
-            </div>
-        </div>
-    </main>
-
-    <!-- Add Task Modal -->
-    <div id="addModal" class="fixed inset-0 bg-black/50 z-[200] hidden items-center justify-center p-4">
-        <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-md">
-            <h3 class="text-lg font-black mb-4">নতুন টাস্ক যোগ করুন</h3>
-            <form action="/routine/add" method="POST" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1">টাস্কের নাম *</label>
-                    <input type="text" name="title" required
-                        class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold"
-                        placeholder="যেমন: গণিত পড়া">
+    <div class="flex-1 flex overflow-hidden w-full">
+        <%- include('partials/student-sidebar', { activePage: 'routine' }) %>
+        
+        <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative">
+            
+            <!-- Page Header Bar (Left-Aligned Action Buttons, Attached Flush to Top Navbar) -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 rounded-none px-3.5 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 shrink-0">
+                <div class="flex items-center gap-2">
+                    <button onclick="openAiModal()" class="px-3.5 py-1.5 bg-gradient-to-r from-rose-500 to-indigo-600 hover:from-rose-600 hover:to-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all">
+                        <span class="material-symbols-rounded text-base leading-none flex items-center justify-center shrink-0">auto_awesome</span> AI Study Planner
+                    </button>
+                    <button onclick="openAddTaskModal()" class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all">
+                        <span class="material-symbols-rounded text-base leading-none flex items-center justify-center shrink-0">add_circle</span> Add Task
+                    </button>
                 </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 mb-1">তারিখ</label>
-                        <input type="date" name="date"
-                            class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold">
+            </div>
+
+            <!-- Weekly 7-Day Interactive Calendar Strip (Saturday to Friday) -->
+            <% 
+                const now = new Date();
+                const currDayOfWeek = now.getDay(); // 0 = Sun, 6 = Sat
+                const saturdayOffset = currDayOfWeek === 6 ? 0 : -(currDayOfWeek + 1);
+                const saturdayDate = new Date(now);
+                saturdayDate.setDate(now.getDate() + saturdayOffset);
+                
+                const dayNames = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+                const fullDayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const todayName = fullDayNames[now.getDay()];
+
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const todayFormattedDate = `${todayName}, ${now.getDate()} ${monthNames[now.getMonth()]}`;
+                
+                const weekDates = [];
+                for (let i = 0; i < 7; i++) {
+                    const d = new Date(saturdayDate);
+                    d.setDate(saturdayDate.getDate() + i);
+                    let iso = '';
+                    try { iso = d.toISOString().split('T')[0]; } catch(e){}
+                    const isToday = (iso === now.toISOString().split('T')[0]);
+                    
+                    const dayTasks = (locals.tasks || []).filter(t => {
+                        try {
+                            if (!t || !t.date) return false;
+                            return new Date(t.date).toISOString().split('T')[0] === iso;
+                        } catch(e) { return false; }
+                    });
+                    
+                    weekDates.push({
+                        name: dayNames[i],
+                        dateNum: d.getDate(),
+                        iso: iso,
+                        isToday: isToday,
+                        taskCount: dayTasks.length,
+                        completedCount: dayTasks.filter(t => t && t.isCompleted).length
+                    });
+                }
+
+                // Compute Other Dates Serial List outside current Saturday-Friday week
+                const currentWeekISOs = weekDates.map(w => w.iso);
+                const otherTaskDatesMap = {};
+                (locals.tasks || []).forEach(t => {
+                    try {
+                        if (t && t.date) {
+                            const iso = new Date(t.date).toISOString().split('T')[0];
+                            if (!currentWeekISOs.includes(iso)) {
+                                if (!otherTaskDatesMap[iso]) {
+                                    otherTaskDatesMap[iso] = { iso: iso, count: 0 };
+                                }
+                                otherTaskDatesMap[iso].count++;
+                            }
+                        }
+                    } catch(e){}
+                });
+                const otherTaskDates = Object.values(otherTaskDatesMap).sort((a,b) => a.iso.localeCompare(b.iso));
+            %>
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 rounded-none p-2.5 sm:p-3 shrink-0">
+                <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 mb-2 gap-2 flex-wrap">
+                    <div class="flex items-center gap-1.5">
+                        <span class="material-symbols-rounded text-primary text-base leading-none flex items-center justify-center shrink-0">event_repeat</span>
+                        <h2 class="text-xs font-bold text-slate-800 dark:text-white">Weekly Schedule</h2>
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 mb-1">সময়</label>
-                        <input type="time" name="time"
-                            class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                        <button onclick="filterByDate('all')" id="btn-date-all" class="date-filter-btn px-2.5 py-1 text-[10px] font-bold rounded-md bg-slate-100 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary/40 transition-colors">
+                            Show All
+                        </button>
+                        <button onclick="filterByDate('<%= now.toISOString().split('T')[0] %>')" id="btn-date-today" class="date-filter-btn px-2.5 py-1 text-[10px] font-bold rounded-md bg-primary text-white border border-primary shadow-sm transition-colors">
+                            Today
+                        </button>
+                        
+                        <!-- Other Dates Serial List Dropdown -->
+                        <div class="relative">
+                            <button onclick="toggleOtherDatesDropdown(event)" id="btn-date-other" class="date-filter-btn px-2.5 py-1 text-[10px] font-bold rounded-md bg-slate-100 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:border-primary/40 transition-colors flex items-center gap-1">
+                                <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">calendar_month</span>
+                                <span id="otherDateBtnLabel">Other Dates</span>
+                                <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">expand_more</span>
+                            </button>
+
+                            <div id="otherDatesMenu" class="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl hidden z-50 p-1 max-h-48 overflow-y-auto no-scrollbar">
+                                <% if (otherTaskDates && otherTaskDates.length > 0) { %>
+                                    <% otherTaskDates.forEach(od => { %>
+                                        <button onclick="filterByDate('<%= od.iso %>'); hideOtherDatesDropdown();" class="w-full text-left px-2.5 py-1.5 text-[10px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md flex items-center justify-between">
+                                            <span>📅 <%= od.iso %></span>
+                                            <span class="px-1.5 py-0.2 text-[9px] rounded-full bg-primary/10 text-primary border border-primary/20"><%= od.count %> tasks</span>
+                                        </button>
+                                    <% }); %>
+                                <% } else { %>
+                                    <div class="px-2.5 py-2 text-[10px] font-semibold text-slate-400 text-center">No other task dates set</div>
+                                <% } %>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1">ধরন</label>
-                    <select name="type"
-                        class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold">
-                        <option value="task">সাধারণ টাস্ক</option>
-                        <option value="class">ক্লাস</option>
-                        <option value="exam">পরীক্ষা</option>
-                        <option value="other">অন্যান্য</option>
-                    </select>
+
+                <!-- Compact Weekly Days Cards (Saturday to Friday) -->
+                <div class="grid grid-cols-7 gap-1 sm:gap-1.5 text-center w-full">
+                    <% weekDates.forEach(wd => { %>
+                        <button onclick="filterByDate('<%= wd.iso %>')" id="date-strip-<%= wd.iso %>" 
+                            class="date-strip-card flex flex-col items-center justify-center p-1 sm:p-1.5 rounded-lg border transition-all cursor-pointer group <%= wd.isToday ? 'bg-rose-50/80 dark:bg-rose-950/40 border-[#F43F5E] shadow-sm' : 'bg-slate-50/60 dark:bg-slate-900/60 border-slate-200/70 dark:border-slate-800 hover:border-primary/40' %>">
+                            <span class="text-[9px] font-bold <%= wd.isToday ? 'text-[#F43F5E]' : 'text-slate-400' %> uppercase"><%= wd.name %></span>
+                            <span class="text-xs sm:text-sm font-black <%= wd.isToday ? 'text-[#F43F5E]' : 'text-slate-800 dark:text-white' %> leading-none my-0.5"><%= wd.dateNum %></span>
+                            <% if (wd.taskCount > 0) { %>
+                                <span class="px-1 py-0.2 text-[8px] font-bold rounded-full <%= wd.completedCount === wd.taskCount ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-primary/10 text-primary border border-primary/20' %>">
+                                    <%= wd.completedCount %>/<%= wd.taskCount %>
+                                </span>
+                            <% } else { %>
+                                <span class="text-[8px] text-slate-400 font-semibold">•</span>
+                            <% } %>
+                        </button>
+                    <% }); %>
                 </div>
-                <div class="flex gap-3 pt-2">
-                    <button type="button" onclick="closeAddModal()"
-                        class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-sm">বাতিল</button>
-                    <button type="submit" class="flex-1 py-3 bg-primary text-white rounded-xl font-bold text-sm">যোগ
-                        করুন</button>
+            </div>
+
+            <!-- Two-Column Layout Attached Seamlessly (Left: Tasks & Routine, Right: XP, Exams & Quotes) -->
+            <div class="flex-1 grid grid-cols-1 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-slate-200 dark:divide-slate-800 w-full min-h-0 bg-white dark:bg-[#0b1120]">
+
+                <!-- LEFT COLUMN: Task Tracker + Course Routine (col-span-3) -->
+                <div class="lg:col-span-3 flex flex-col divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-[#0b1120]">
+
+                    <!-- 1. Today's Tasks & Learning Goals Widget -->
+                    <div class="w-full flex flex-col bg-white dark:bg-[#0f172a]/50">
+                        
+                        <!-- Header Bar -->
+                        <div class="flex flex-wrap items-center justify-between px-3.5 sm:px-4 py-2 sm:py-2.5 border-b border-slate-100 dark:border-slate-800 gap-2 bg-slate-50/50 dark:bg-[#0f172a]">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[#F43F5E] text-lg shrink-0 flex items-center justify-center leading-none -mt-0.5">task_alt</span>
+                                <h2 class="font-bold text-sm text-slate-800 dark:text-slate-200 leading-tight" id="taskSectionTitle">Today's Tasks</h2>
+                            </div>
+
+                            <!-- Progress Indicator & Clear Completed Action -->
+                            <% 
+                                const todayStr = now.toISOString().split('T')[0];
+                                const todayTasks = (locals.tasks || []).filter(t => {
+                                    try { return t && t.date && new Date(t.date).toISOString().split('T')[0] === todayStr; } catch(e) { return false; }
+                                });
+                                const completedToday = todayTasks.filter(t => t && t.isCompleted).length;
+                                const progressPct = todayTasks.length > 0 ? Math.round((completedToday / todayTasks.length) * 100) : 0;
+                            %>
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button id="clearCompletedBtn" onclick="promptClearCompleted()" class="hidden px-2.5 py-0.5 text-[10px] font-bold text-rose-500 hover:text-white bg-rose-50 hover:bg-rose-500 dark:bg-rose-950/40 dark:hover:bg-rose-600 border border-rose-200 dark:border-rose-900 rounded-md transition-colors flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">delete_sweep</span> Delete All
+                                </button>
+                                <span id="taskProgressBadge" class="px-2.5 py-0.5 rounded text-[10px] font-extrabold bg-rose-500/10 text-[#F43F5E] border border-rose-500/20 flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">bolt</span>
+                                    <span id="taskProgressText"><%= completedToday %> / <%= todayTasks.length %> Completed (<%= progressPct %>%)</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Sub Filter Bar (Renamed Category Tabs: Class, Exams, Reading, Completed) -->
+                        <div class="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 bg-slate-50/60 dark:bg-slate-900/40 border-b border-slate-100 dark:border-slate-800/80 overflow-x-auto no-scrollbar">
+                            <button onclick="filterTaskType('all', this)" class="type-filter-btn active px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-primary text-white border border-primary transition-all">All Tasks</button>
+                            <button onclick="filterTaskType('class', this)" class="type-filter-btn px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all">Class</button>
+                            <button onclick="filterTaskType('exam', this)" class="type-filter-btn px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all">Exams</button>
+                            <button onclick="filterTaskType('task', this)" class="type-filter-btn px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all">Reading</button>
+                            <button onclick="filterTaskType('completed', this)" class="type-filter-btn px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-all">Completed</button>
+                        </div>
+
+                        <!-- Task List Container -->
+                        <div class="p-3.5 sm:p-4 flex-1 flex flex-col">
+                            <div class="space-y-2 flex-1" id="tasksListContainer">
+                                <% if (locals.tasks && tasks.length > 0) { %>
+                                    <% tasks.forEach(task => { 
+                                        let taskDateStr = '';
+                                        try { 
+                                            if (task && task.date) {
+                                                taskDateStr = new Date(task.date).toISOString().split('T')[0]; 
+                                            }
+                                        } catch(e){}
+                                    %>
+                                        <div class="routine-task-row flex items-center justify-between p-2.5 sm:p-3 rounded-xl border bg-slate-50/70 dark:bg-slate-900/60 border-slate-200/70 dark:border-slate-800 transition-all gap-3 group hover:border-primary/40 cursor-pointer"
+                                            id="task-row-<%= task._id %>"
+                                            data-date="<%= taskDateStr %>"
+                                            data-type="<%= task.type || 'task' %>"
+                                            data-completed="<%= task.isCompleted ? 'true' : 'false' %>"
+                                            onclick="toggleTask('<%= task._id %>')">
+                                            
+                                            <div class="flex items-center gap-3 min-w-0 flex-1">
+                                                <!-- Checkbox Box -->
+                                                <div class="task-checkbox-box size-5 rounded-md border flex items-center justify-center transition-all shrink-0 <%= task.isCompleted ? 'bg-primary border-primary' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800' %>">
+                                                    <span class="material-symbols-rounded text-white text-xs font-bold leading-none flex items-center justify-center shrink-0 <%= task.isCompleted ? '' : 'hidden' %>">check</span>
+                                                </div>
+                                                
+                                                <!-- Title & Badges -->
+                                                <div class="min-w-0 flex-1">
+                                                    <h3 class="task-title-text text-xs font-bold text-slate-800 dark:text-slate-200 truncate <%= task.isCompleted ? 'line-through opacity-50' : '' %>">
+                                                        <%= task.title %>
+                                                    </h3>
+                                                    <div class="flex items-center gap-2 mt-0.5 text-[10px] font-semibold text-slate-400 flex-wrap">
+                                                        <% if (task.time) { %>
+                                                            <span class="flex items-center gap-0.5">
+                                                                <span class="material-symbols-rounded text-xs shrink-0 flex items-center justify-center leading-none">schedule</span>
+                                                                <%= task.time %>
+                                                            </span>
+                                                        <% } %>
+                                                        <span class="px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider <%= task.type === 'exam' ? 'bg-rose-50 dark:bg-rose-500/10 text-rose-500 border border-rose-200/50' : (task.type === 'class' ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-500 border border-indigo-200/50' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 border border-emerald-200/50') %>">
+                                                            <%= task.type === 'exam' ? 'Exams' : (task.type === 'class' ? 'Class' : 'Reading') %>
+                                                        </span>
+                                                        <span class="text-[9px] text-slate-400 font-medium">
+                                                            📅 <%= taskDateStr %>
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Actions: Go to Resource & Delete -->
+                                            <div class="flex items-center gap-1.5 shrink-0">
+                                                <% 
+                                                    let resourceUrl = task.link;
+                                                    if (!resourceUrl || resourceUrl === '') {
+                                                        if (task.type === 'exam') resourceUrl = '/exams';
+                                                        else if (task.type === 'class') resourceUrl = '/courses';
+                                                        else resourceUrl = '/library';
+                                                    }
+                                                %>
+                                                <a href="<%= resourceUrl %>" target="_blank" rel="noopener noreferrer" 
+                                                    onclick="event.stopPropagation(); handleResourceClick('<%= task._id %>', <%= task.isCompleted %>);" 
+                                                    class="px-2 py-1 bg-rose-500/10 hover:bg-[#F43F5E] text-[#F43F5E] hover:text-white rounded-md border border-rose-500/20 text-[9.5px] font-extrabold flex items-center gap-1 transition-all shrink-0">
+                                                    <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">open_in_new</span> Resource
+                                                </a>
+                                                
+                                                <button onclick="event.stopPropagation(); promptDeleteSingleTask('<%= task._id %>')"
+                                                    class="size-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors shrink-0 opacity-80 sm:opacity-0 group-hover:opacity-100" title="Delete Task">
+                                                    <span class="material-symbols-rounded text-base leading-none flex items-center justify-center shrink-0">delete</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    <% }); %>
+                                <% } %>
+
+                                <!-- Cute Encouraging Empty State Notice -->
+                                <div class="flex flex-col items-center justify-center text-center py-8 px-4 gap-2 my-auto" id="no-tasks-placeholder">
+                                    <div class="size-12 rounded-2xl bg-gradient-to-tr from-rose-100 to-indigo-100 dark:from-rose-950/40 dark:to-indigo-950/40 flex items-center justify-center text-rose-500 shadow-sm shrink-0 border border-rose-200/50 dark:border-rose-900/40">
+                                        <span class="material-symbols-rounded text-2xl leading-none flex items-center justify-center shrink-0">celebration</span>
+                                    </div>
+                                    <h3 class="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-slate-100">No tasks</h3>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 font-semibold max-w-xs leading-relaxed">Add new tasks to elevate your academic performance and track your daily progress.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Enrolled Class Routine (Shows Today's Routine Only with Date Badge) -->
+                    <% 
+                        const todayRoutines = [];
+                        if (locals.enrolledCourses && enrolledCourses.length > 0) {
+                            enrolledCourses.forEach(ec => {
+                                if (ec && ec.course && ec.course.routine && ec.course.routine.length > 0) {
+                                    ec.course.routine.forEach(r => {
+                                        if (r && r.day && r.day.toLowerCase().trim() === todayName.toLowerCase().trim()) {
+                                            let isLiveStarted = false;
+                                            let liveJoinUrl = `/course/${ec.course._id}`;
+
+                                            if (ec.course.isLive) {
+                                                isLiveStarted = true;
+                                            }
+
+                                            if (!isLiveStarted && ec.course.curriculumNodes && ec.course.curriculumNodes.length > 0) {
+                                                const activeLive = ec.course.curriculumNodes.find(n => n && n.type === 'liveClass' && (n.isLive === true || (n.meetingUrl && n.isLive !== false && n.date && Math.abs(new Date(n.date).getTime() - Date.now()) < 10800000)));
+                                                if (activeLive) {
+                                                    isLiveStarted = true;
+                                                    if (activeLive.meetingUrl) {
+                                                        liveJoinUrl = activeLive.meetingUrl.startsWith('http') ? activeLive.meetingUrl : `/live/${activeLive.meetingUrl}`;
+                                                    }
+                                                }
+                                            }
+
+                                            if (!isLiveStarted && ec.course.chapters && ec.course.chapters.length > 0) {
+                                                for (const ch of ec.course.chapters) {
+                                                    if (ch.liveClasses && ch.liveClasses.length > 0) {
+                                                        const activeLive = ch.liveClasses.find(lc => lc && (lc.isLive === true || (lc.meetingUrl && lc.isLive !== false && lc.date && Math.abs(new Date(lc.date).getTime() - Date.now()) < 10800000)));
+                                                        if (activeLive) {
+                                                            isLiveStarted = true;
+                                                            if (activeLive.meetingUrl) {
+                                                                liveJoinUrl = activeLive.meetingUrl.startsWith('http') ? activeLive.meetingUrl : `/live/${activeLive.meetingUrl}`;
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            todayRoutines.push({
+                                                courseTitle: ec.course.title,
+                                                subject: ec.course.subject,
+                                                time: r.time || '10:00 AM',
+                                                topic: r.topic || 'Regular Class',
+                                                courseId: ec.course._id,
+                                                isLiveStarted: isLiveStarted,
+                                                liveJoinUrl: liveJoinUrl
+                                            });
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    %>
+                    <div class="w-full flex flex-col bg-white dark:bg-[#0f172a]/50">
+                        <div class="flex items-center justify-between px-3.5 sm:px-4 py-2 sm:py-2.5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-[#0f172a]">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[#F43F5E] text-lg shrink-0 flex items-center justify-center leading-none -mt-0.5">school</span>
+                                <h2 class="font-bold text-sm text-slate-800 dark:text-slate-200 leading-tight">Today's Class Routine</h2>
+                            </div>
+                            <span class="text-[10px] font-extrabold text-[#F43F5E] bg-rose-500/10 px-2.5 py-0.5 rounded border border-rose-500/20 flex items-center gap-1">
+                                <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">today</span>
+                                <%= todayFormattedDate %>
+                            </span>
+                        </div>
+
+                        <div class="p-3.5 sm:p-4 space-y-2.5">
+                            <% if (todayRoutines.length > 0) { %>
+                                <% todayRoutines.forEach(tr => { %>
+                                    <div class="p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 flex items-center justify-between gap-3">
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="material-symbols-rounded <%= tr.isLiveStarted ? 'text-rose-500 animate-pulse' : 'text-primary' %> text-base shrink-0 flex items-center justify-center leading-none">videocam</span>
+                                                <h3 class="text-xs font-bold text-slate-800 dark:text-white truncate"><%= tr.courseTitle %></h3>
+                                            </div>
+                                            <div class="flex items-center gap-2 mt-0.5 text-[10px] text-slate-400 font-semibold flex-wrap">
+                                                <span>📚 <%= tr.subject %></span>
+                                                <span>⏰ <%= tr.time %></span>
+                                                <% if (tr.topic && tr.topic !== 'Regular Class') { %>
+                                                    <span class="text-slate-500 dark:text-slate-400">• <%= tr.topic %></span>
+                                                <% } %>
+                                            </div>
+                                        </div>
+                                        
+                                        <% if (tr.isLiveStarted) { %>
+                                            <a href="<%= tr.liveJoinUrl %>" class="px-2.5 py-1 bg-rose-500 hover:bg-rose-600 text-white rounded-md text-[10px] font-extrabold transition-colors shrink-0 flex items-center gap-1 shadow-sm">
+                                                <span class="size-1.5 rounded-full bg-white animate-ping"></span> Join Live
+                                            </a>
+                                        <% } else { %>
+                                            <span class="px-2 py-0.5 rounded text-[9px] font-bold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/50 shrink-0">
+                                                Upcoming
+                                            </span>
+                                        <% } %>
+                                    </div>
+                                <% }); %>
+                            <% } else { %>
+                                <div class="text-center py-4 bg-slate-50/50 dark:bg-slate-900/40 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                                    <p class="text-xs text-slate-400 font-bold">No live classes or routines scheduled for today.</p>
+                                    <p class="text-[10px] text-slate-400 mt-0.5">Recorded lessons are available anytime in your enrolled courses.</p>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+
+                </div><!-- /LEFT COLUMN -->
+
+                <!-- RIGHT COLUMN: Exams & Motivation (col-span-2) -->
+                <div class="lg:col-span-2 flex flex-col divide-y divide-slate-200 dark:divide-slate-800 bg-white dark:bg-[#0b1120]">
+
+                    <!-- 1. XP Progress & Level Card -->
+                    <div class="w-full p-3.5 sm:p-4 flex flex-col gap-2.5 bg-white dark:bg-[#0f172a]/40">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-rounded text-amber-500 text-lg shrink-0 flex items-center justify-center leading-none -mt-0.5">military_tech</span>
+                                <h2 class="font-bold text-sm text-slate-800 dark:text-slate-200 leading-tight">Study Level & XP</h2>
+                            </div>
+                            <span id="headerLevelBadge" class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-500/10 text-[#F43F5E] border border-rose-500/20">
+                                Level <%= Math.floor(((locals.user && user.totalXP) || 0) / 1000) + 1 %>
+                            </span>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                                <span>Total XP Points</span>
+                                <span id="headerXpText" class="font-bold text-slate-800 dark:text-white"><%= (locals.user && user.totalXP) || 0 %> XP</span>
+                            </div>
+                            <div class="w-full h-2.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
+                                <div id="headerXpBar" class="h-full rounded-full transition-all duration-700" style="width: <%= (((locals.user && user.totalXP) || 0) % 1000) / 10 %>%; background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7)"></div>
+                            </div>
+                        </div>
+
+                        <div class="p-2.5 rounded-xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200/70 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-2">
+                            <span class="material-symbols-rounded text-base text-amber-500 shrink-0 flex items-center justify-center leading-none">bolt</span>
+                            <span>Completing each routine task awards <strong>+25 XP</strong> directly!</span>
+                        </div>
+                    </div>
+
+                    <!-- 2. Exams Suggestion Card (Renamed to Exams with 3-Item Rotation Cycle) -->
+                    <div class="w-full p-3.5 sm:p-4 flex flex-col gap-2.5 bg-white dark:bg-[#0f172a]/40">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[#F43F5E] text-lg shrink-0 flex items-center justify-center leading-none -mt-0.5">quiz</span>
+                                <h2 class="font-bold text-sm text-slate-800 dark:text-slate-200 leading-tight">Exams</h2>
+                            </div>
+                            <button onclick="rotateExamSuggestion()" class="text-[10px] font-bold text-[#F43F5E] hover:underline flex items-center gap-0.5">
+                                <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">refresh</span> Next
+                            </button>
+                        </div>
+
+                        <div class="space-y-2" id="examsListContainer">
+                            <!-- Populated dynamically via renderExamsList JS -->
+                        </div>
+                    </div>
+
+                    <!-- 3. Smart Study Quotes Card (Quotes Only) -->
+                    <div class="w-full p-3.5 sm:p-4 flex flex-col gap-2 bg-white dark:bg-[#0f172a]/40">
+                        <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+                            <span class="material-symbols-rounded text-amber-500 text-lg shrink-0 flex items-center justify-center leading-none -mt-0.5">format_quote</span>
+                            <h2 class="font-bold text-sm text-slate-800 dark:text-slate-200 leading-tight">Daily Motivation</h2>
+                        </div>
+                        <div class="p-3 rounded-xl bg-amber-50/60 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-900/40 relative">
+                            <p class="text-xs font-semibold text-amber-950 dark:text-amber-200 leading-relaxed italic">
+                                "সফলতা কোনো দুর্ঘটনাবশত আসা বিষয় নয়; এটি কঠোর পরিশ্রম, অধ্যবসায়, শেখা, পড়াশোনা এবং সবচেয়ে বেশি হলো আপনি যা করছেন তা ভালোবাসার ফল।"
+                            </p>
+                            <span class="block mt-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 text-right">— পেলে (Pelé)</span>
+                        </div>
+                    </div>
+
+                </div><!-- /RIGHT COLUMN -->
+
+            </div><!-- /Two-Column Grid -->
+
+        </main>
+    </div>
+
+    <!-- ADD TASK MODAL (All Mandatory Inputs & Clear Validation Warnings) -->
+    <div id="addTaskModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden transition-opacity">
+        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col">
+            <div class="px-4 py-3 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-rounded text-primary text-base sm:text-lg shrink-0 flex items-center justify-center -mt-0.5 leading-none">add_circle</span>
+                    <h3 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white">Add New Routine Task</h3>
+                </div>
+                <button onclick="closeAddTaskModal()" class="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg">
+                    <span class="material-symbols-rounded text-lg leading-none flex items-center justify-center shrink-0">close</span>
+                </button>
+            </div>
+            <form onsubmit="handleAddTaskSubmit(event)" class="p-4 space-y-3" id="addTaskForm" novalidate>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Task Title <span class="text-rose-500">*</span></label>
+                    <input type="text" id="taskTitleInput" placeholder="e.g. Physics Chapter 3 Reading & Revision" 
+                        class="w-full px-3 py-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 outline-none focus:border-primary transition-colors">
+                    <p id="titleErrorMsg" class="hidden text-[10px] font-bold text-rose-500 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">error</span> Please enter a task title</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Date <span class="text-rose-500">*</span></label>
+                        <input type="date" id="taskDateInput" 
+                            class="w-full px-3 py-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 outline-none focus:border-primary transition-colors">
+                        <p id="dateErrorMsg" class="hidden text-[10px] font-bold text-rose-500 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">error</span> Please select a date</p>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Category <span class="text-rose-500">*</span></label>
+                        <select id="taskTypeInput" class="w-full px-3 py-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 outline-none focus:border-primary transition-colors">
+                            <option value="">Select Category</option>
+                            <option value="class">Class</option>
+                            <option value="exam">Exams</option>
+                            <option value="task">Reading</option>
+                        </select>
+                        <p id="typeErrorMsg" class="hidden text-[10px] font-bold text-rose-500 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">error</span> Please select a category</p>
+                    </div>
+                </div>
+
+                <!-- Interactive Time Picker with Hour, Min, AM/PM Labels -->
+                <div>
+                    <input type="hidden" id="taskTimeInput" value="06:00 PM">
+                    
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <!-- Hour Column -->
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5">Hour</label>
+                            <div class="relative">
+                                <select id="taskTimeHour" onchange="updateSelectedTime()" 
+                                    class="w-full pl-2.5 pr-6 py-1.5 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 outline-none focus:border-primary cursor-pointer transition-colors"
+                                    style="appearance: none; -webkit-appearance: none;">
+                                    <% ['01','02','03','04','05','06','07','08','09','10','11','12'].forEach(h => { %>
+                                        <option value="<%= h %>" <%= h === '06' ? 'selected' : '' %>><%= h %></option>
+                                    <% }); %>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none select-none">expand_more</span>
+                            </div>
+                        </div>
+
+                        <!-- Minute Column -->
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5">Min</label>
+                            <div class="relative">
+                                <select id="taskTimeMinute" onchange="updateSelectedTime()" 
+                                    class="w-full pl-2.5 pr-6 py-1.5 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 outline-none focus:border-primary cursor-pointer transition-colors"
+                                    style="appearance: none; -webkit-appearance: none;">
+                                    <% ['00','05','10','15','20','25','30','35','40','45','50','55'].forEach(m => { %>
+                                        <option value="<%= m %>" <%= m === '00' ? 'selected' : '' %>><%= m %></option>
+                                    <% }); %>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none select-none">expand_more</span>
+                            </div>
+                        </div>
+
+                        <!-- Period Column -->
+                        <div>
+                            <div class="h-[15.5px]"></div>
+                            <div class="relative">
+                                <select id="taskTimePeriod" onchange="updateSelectedTime()" 
+                                    class="w-full pl-2.5 pr-6 py-1.5 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 outline-none focus:border-primary cursor-pointer transition-colors"
+                                    style="appearance: none; -webkit-appearance: none;">
+                                    <option value="AM">AM</option>
+                                    <option value="PM" selected>PM</option>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none select-none">expand_more</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <p id="timeErrorMsg" class="hidden text-[10px] font-bold text-rose-500 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">error</span> Please select study time</p>
+                </div>
+                <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" onclick="closeAddTaskModal()" class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-200">Cancel</button>
+                    <button type="submit" class="px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-xs font-bold rounded-lg shadow-sm">Save Task</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Mobile Bottom Nav -->
-    <nav
-        class="fixed bottom-0 left-0 right-0 z-[100] bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 lg:hidden pb-safe">
-        <div class="flex items-center justify-around h-16">
-            <a href="/dashboard" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">home</span>
-                <span class="text-[9px] font-black">হোম</span>
-            </a>
-            <a href="/messages" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">mail</span>
-                <span class="text-[9px] font-black">মেসেজ</span>
-            </a>
-            <a href="/downloads" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">download</span>
-                <span class="text-[9px] font-black">ডাউনলোড</span>
-            </a>
-            <a href="/profile" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">person</span>
-                <span class="text-[9px] font-black">প্রোফাইল</span>
-            </a>
+    <!-- AI PLANNER MODAL -->
+    <div id="aiModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden transition-opacity">
+        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 w-full max-w-md rounded-xl shadow-2xl overflow-hidden flex flex-col">
+            <div class="px-4 py-3 bg-gradient-to-r from-rose-500 to-indigo-600 text-white flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-rounded text-base sm:text-lg shrink-0 flex items-center justify-center leading-none">auto_awesome</span>
+                    <h3 class="text-xs sm:text-sm font-bold">Oddhay AI Routine Generator</h3>
+                </div>
+                <button onclick="closeAiModal()" class="p-1 text-white/80 hover:text-white rounded-lg">
+                    <span class="material-symbols-rounded text-lg leading-none flex items-center justify-center shrink-0">close</span>
+                </button>
+            </div>
+            <form onsubmit="handleAiSubmit(event)" class="p-4 space-y-3" id="aiForm" novalidate>
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Select Enrolled Course <span class="text-rose-500">*</span></label>
+                    <select id="aiCourseSelect" class="w-full px-3 py-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 outline-none focus:border-primary transition-colors">
+                        <option value="">Select Course</option>
+                        <% if (locals.enrolledCourses && enrolledCourses.length > 0) { %>
+                            <% enrolledCourses.forEach(ec => { %>
+                                <% if (ec && ec.course) { %>
+                                    <option value="<%= ec.course._id %>"><%= ec.course.title %></option>
+                                <% } %>
+                            <% }); %>
+                        <% } %>
+                    </select>
+                    <p id="aiCourseErrorMsg" class="hidden text-[10px] font-bold text-rose-500 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">error</span> Please select an enrolled course</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Target Days <span class="text-rose-500">*</span></label>
+                        <input type="number" id="aiDaysInput" value="7" min="1" max="90" 
+                            class="w-full px-3 py-1.5 text-xs font-semibold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 outline-none focus:border-primary transition-colors">
+                        <p id="aiDaysErrorMsg" class="hidden text-[10px] font-bold text-rose-500 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">error</span> Please enter target days</p>
+                    </div>
+
+                    <!-- AI Study Time Selector with Column Labels -->
+                    <div>
+                        <input type="hidden" id="aiTimeInput" value="07:00 PM">
+                        
+                        <div class="grid grid-cols-3 gap-1">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5">Hour</label>
+                                <div class="relative">
+                                    <select id="aiTimeHour" onchange="updateAiSelectedTime()" 
+                                        class="w-full pl-1.5 pr-4 py-1.5 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 outline-none focus:border-primary cursor-pointer transition-colors"
+                                        style="appearance: none; -webkit-appearance: none;">
+                                        <% ['01','02','03','04','05','06','07','08','09','10','11','12'].forEach(h => { %>
+                                            <option value="<%= h %>" <%= h === '07' ? 'selected' : '' %>><%= h %></option>
+                                        <% }); %>
+                                    </select>
+                                    <span class="material-symbols-rounded absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none select-none">expand_more</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 mb-0.5">Min</label>
+                                <div class="relative">
+                                    <select id="aiTimeMinute" onchange="updateAiSelectedTime()" 
+                                        class="w-full pl-1.5 pr-4 py-1.5 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 outline-none focus:border-primary cursor-pointer transition-colors"
+                                        style="appearance: none; -webkit-appearance: none;">
+                                        <% ['00','05','10','15','20','25','30','35','40','45','50','55'].forEach(m => { %>
+                                            <option value="<%= m %>" <%= m === '00' ? 'selected' : '' %>><%= m %></option>
+                                        <% }); %>
+                                    </select>
+                                    <span class="material-symbols-rounded absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none select-none">expand_more</span>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="h-[15.5px]"></div>
+                                <div class="relative">
+                                    <select id="aiTimePeriod" onchange="updateAiSelectedTime()" 
+                                        class="w-full pl-1.5 pr-4 py-1.5 text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 outline-none focus:border-primary cursor-pointer transition-colors"
+                                        style="appearance: none; -webkit-appearance: none;">
+                                        <option value="AM">AM</option>
+                                        <option value="PM" selected>PM</option>
+                                    </select>
+                                    <span class="material-symbols-rounded absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none select-none">expand_more</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p id="aiTimeErrorMsg" class="hidden text-[10px] font-bold text-rose-500 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">error</span> Please select time</p>
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-400 font-medium italic">The AI Planner analyzes all existing lessons, handnotes, exams, and routines to generate a personalized schedule.</p>
+                <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" onclick="closeAiModal()" class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-200">Cancel</button>
+                    <button type="submit" class="px-4 py-1.5 bg-gradient-to-r from-rose-500 to-indigo-600 hover:from-rose-600 hover:to-indigo-700 text-white text-xs font-bold rounded-lg shadow-sm">Generate AI Plan</button>
+                </div>
+            </form>
         </div>
-    </nav>
+    </div>
+
+    <!-- CUSTOM SYSTEM CONFIRM MODAL (NO BROWSER POPUPS) -->
+    <div id="customConfirmModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 hidden transition-opacity">
+        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 w-full max-w-sm rounded-xl shadow-2xl overflow-hidden flex flex-col p-4 space-y-3">
+            <div class="flex items-center gap-3">
+                <div class="size-10 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-500 flex items-center justify-center border border-rose-100 dark:border-rose-900/60 shrink-0">
+                    <span class="material-symbols-rounded text-2xl leading-none flex items-center justify-center shrink-0">warning</span>
+                </div>
+                <div>
+                    <h3 id="confirmModalTitle" class="text-xs sm:text-sm font-extrabold text-slate-800 dark:text-white">Confirm Action</h3>
+                    <p id="confirmModalMessage" class="text-[11px] font-semibold text-slate-400 mt-0.5">Are you sure you want to proceed?</p>
+                </div>
+            </div>
+            <div class="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onclick="closeConfirmModal()" class="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-200">Cancel</button>
+                <button type="button" id="confirmModalActionBtn" class="px-4 py-1.5 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-lg shadow-sm">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <%- include('partials/student-bottom-nav', { activePage: 'routine' }) %>
+    <%- include('partials/app-scripts') %>
 
     <script>
-        function openAddModal() {
-            document.getElementById('addModal').classList.remove('hidden');
-            document.getElementById('addModal').classList.add('flex');
+        let currentDateFilter = 'all';
+        let currentTypeFilter = 'all';
+        let confirmActionCallback = null;
+
+        // Exam suggestions rotation array
+        const allExamsList = <%- JSON.stringify((locals.boardQuizzes && boardQuizzes.length > 0) ? boardQuizzes : [
+            { _id: 'e1', title: 'HSC Physics Model Exam', subject: 'Physics', accessType: 'Free' },
+            { _id: 'e2', title: 'SSC Chemistry Board Quiz', subject: 'Chemistry', accessType: 'Paid' },
+            { _id: 'e3', title: 'General Math Model Test', subject: 'Mathematics', accessType: 'Free' },
+            { _id: 'e4', title: 'Biology Chapter 4 Evaluation', subject: 'Biology', accessType: 'Free' },
+            { _id: 'e5', title: 'Higher Math MCQ Practice', subject: 'Higher Math', accessType: 'Paid' },
+            { _id: 'e6', title: 'English Grammar Board Paper', subject: 'English', accessType: 'Free' }
+        ]) %>;
+
+        let currentExamOffset = 0;
+
+        function renderExamsList() {
+            const container = document.getElementById('examsListContainer');
+            if (!container || !allExamsList.length) return;
+            container.innerHTML = '';
+
+            const countToDisplay = Math.min(3, allExamsList.length);
+            for (let i = 0; i < countToDisplay; i++) {
+                const exam = allExamsList[(currentExamOffset + i) % allExamsList.length];
+                const div = document.createElement('div');
+                div.className = 'p-2.5 rounded-xl bg-rose-50/60 dark:bg-rose-950/40 border border-rose-200/60 dark:border-rose-900/40 flex items-center justify-between gap-2 transition-all duration-300';
+                div.innerHTML = `
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="material-symbols-rounded text-rose-500 text-base shrink-0 flex items-center justify-center leading-none">assignment</span>
+                        <div class="min-w-0">
+                            <h3 class="text-xs font-bold text-slate-800 dark:text-white truncate">${exam.title}</h3>
+                            <div class="flex items-center gap-1.5 text-[9px] text-slate-500 dark:text-slate-400 font-semibold">
+                                <span>${exam.subject || 'General'}</span>
+                                <span>• ${exam.accessType || 'Free'}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="/exams" onclick="rotateExamSuggestion()" class="px-2 py-0.5 bg-[#F43F5E] hover:bg-rose-600 text-white text-[9.5px] font-bold rounded-md transition-colors shrink-0">
+                        Start
+                    </a>
+                `;
+                container.appendChild(div);
+            }
         }
-        function closeAddModal() {
-            document.getElementById('addModal').classList.add('hidden');
-            document.getElementById('addModal').classList.remove('flex');
+
+        function rotateExamSuggestion() {
+            currentExamOffset = (currentExamOffset + 1) % allExamsList.length;
+            renderExamsList();
         }
-        // Close on overlay click
-        document.getElementById('addModal').addEventListener('click', function (e) {
-            if (e.target === this) closeAddModal();
+
+        // Custom Confirm Modal Helpers
+        function openConfirmModal(title, message, onConfirm) {
+            document.getElementById('confirmModalTitle').innerText = title;
+            document.getElementById('confirmModalMessage').innerText = message;
+            confirmActionCallback = onConfirm;
+            const actionBtn = document.getElementById('confirmModalActionBtn');
+            actionBtn.onclick = async () => {
+                if (confirmActionCallback) await confirmActionCallback();
+                closeConfirmModal();
+            };
+            document.getElementById('customConfirmModal').classList.remove('hidden');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('customConfirmModal').classList.add('hidden');
+            confirmActionCallback = null;
+        }
+
+        function updateSelectedTime() {
+            const h = document.getElementById('taskTimeHour')?.value || '06';
+            const m = document.getElementById('taskTimeMinute')?.value || '00';
+            const p = document.getElementById('taskTimePeriod')?.value || 'PM';
+            const timeInput = document.getElementById('taskTimeInput');
+            if (timeInput) {
+                timeInput.value = `${h}:${m} ${p}`;
+            }
+        }
+
+        function setQuickTime(hour, min, period) {
+            const hEl = document.getElementById('taskTimeHour');
+            const mEl = document.getElementById('taskTimeMinute');
+            const pEl = document.getElementById('taskTimePeriod');
+            if (hEl) hEl.value = hour;
+            if (mEl) mEl.value = min;
+            if (pEl) pEl.value = period;
+            updateSelectedTime();
+        }
+
+        function updateAiSelectedTime() {
+            const h = document.getElementById('aiTimeHour')?.value || '07';
+            const m = document.getElementById('aiTimeMinute')?.value || '00';
+            const p = document.getElementById('aiTimePeriod')?.value || 'PM';
+            const timeInput = document.getElementById('aiTimeInput');
+            if (timeInput) {
+                timeInput.value = `${h}:${m} ${p}`;
+            }
+        }
+
+        function openAddTaskModal() {
+            const dateIn = document.getElementById('taskDateInput');
+            if (dateIn && !dateIn.value) {
+                dateIn.value = new Date().toISOString().split('T')[0];
+            }
+            updateSelectedTime();
+
+            // Reset validation errors
+            const titleError = document.getElementById('titleErrorMsg');
+            const dateError = document.getElementById('dateErrorMsg');
+            const timeError = document.getElementById('timeErrorMsg');
+            const typeError = document.getElementById('typeErrorMsg');
+            [titleError, dateError, timeError, typeError].forEach(el => el && el.classList.add('hidden'));
+
+            const titleInput = document.getElementById('taskTitleInput');
+            const dateInput = document.getElementById('taskDateInput');
+            const timeInput = document.getElementById('taskTimeInput');
+            const typeInput = document.getElementById('taskTypeInput');
+            [titleInput, dateInput, timeInput, typeInput].forEach(el => el && el.classList.remove('border-rose-500'));
+
+            document.getElementById('addTaskModal').classList.remove('hidden');
+        }
+
+        function closeAddTaskModal() {
+            document.getElementById('addTaskModal').classList.add('hidden');
+        }
+
+        function openAiModal() {
+            document.getElementById('aiModal').classList.remove('hidden');
+        }
+
+        function closeAiModal() {
+            document.getElementById('aiModal').classList.add('hidden');
+        }
+
+        function toggleOtherDatesDropdown(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('otherDatesMenu');
+            if (menu) menu.classList.toggle('hidden');
+        }
+
+        function hideOtherDatesDropdown() {
+            const menu = document.getElementById('otherDatesMenu');
+            if (menu) menu.classList.add('hidden');
+        }
+
+        document.addEventListener('click', () => hideOtherDatesDropdown());
+
+        function filterByDate(dateIso) {
+            currentDateFilter = dateIso;
+            
+            // Highlight date strip buttons
+            document.querySelectorAll('.date-filter-btn').forEach(btn => {
+                btn.classList.remove('bg-primary', 'text-white', 'border-primary');
+                btn.classList.add('bg-slate-100', 'dark:bg-[#1e293b]', 'text-slate-600', 'dark:text-slate-300', 'border-slate-200', 'dark:border-slate-700');
+            });
+
+            const todayIso = new Date().toISOString().split('T')[0];
+            const title = document.getElementById('taskSectionTitle');
+
+            if (dateIso === 'all') {
+                const btnAll = document.getElementById('btn-date-all');
+                if (btnAll) {
+                    btnAll.classList.add('bg-primary', 'text-white', 'border-primary');
+                    btnAll.classList.remove('bg-slate-100', 'dark:bg-[#1e293b]', 'text-slate-600', 'dark:text-slate-300', 'border-slate-200', 'dark:border-slate-700');
+                }
+                if (title) title.innerText = 'All Scheduled Tasks';
+            } else if (dateIso === todayIso) {
+                const btnToday = document.getElementById('btn-date-today');
+                if (btnToday) {
+                    btnToday.classList.add('bg-primary', 'text-white', 'border-primary');
+                    btnToday.classList.remove('bg-slate-100', 'dark:bg-[#1e293b]', 'text-slate-600', 'dark:text-slate-300', 'border-slate-200', 'dark:border-slate-700');
+                }
+                if (title) title.innerText = "Today's Tasks";
+            } else {
+                const btnOther = document.getElementById('btn-date-other');
+                const labelOther = document.getElementById('otherDateBtnLabel');
+                if (btnOther) {
+                    btnOther.classList.add('bg-primary', 'text-white', 'border-primary');
+                    btnOther.classList.remove('bg-slate-100', 'dark:bg-[#1e293b]', 'text-slate-600', 'dark:text-slate-300', 'border-slate-200', 'dark:border-slate-700');
+                }
+                if (labelOther) labelOther.innerText = dateIso;
+                if (title) title.innerText = `Tasks for ${dateIso}`;
+            }
+
+            applyTaskFilters();
+        }
+
+        function filterTaskType(type, btnEl) {
+            currentTypeFilter = type;
+            document.querySelectorAll('.type-filter-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-primary', 'text-white', 'border-primary');
+                btn.classList.add('bg-slate-100', 'dark:bg-[#1e293b]', 'text-slate-600', 'dark:text-slate-300', 'border-slate-200', 'dark:border-slate-700');
+            });
+            if (btnEl) {
+                btnEl.classList.add('active', 'bg-primary', 'text-white', 'border-primary');
+                btnEl.classList.remove('bg-slate-100', 'dark:bg-[#1e293b]', 'text-slate-600', 'dark:text-slate-300', 'border-slate-200', 'dark:border-slate-700');
+            }
+
+            const clearBtn = document.getElementById('clearCompletedBtn');
+            if (clearBtn) {
+                if (type === 'completed') clearBtn.classList.remove('hidden');
+                else clearBtn.classList.add('hidden');
+            }
+
+            applyTaskFilters();
+        }
+
+        function applyTaskFilters() {
+            const rows = document.querySelectorAll('.routine-task-row');
+            let visibleCount = 0;
+
+            rows.forEach(row => {
+                const rowDate = row.getAttribute('data-date');
+                const rowType = row.getAttribute('data-type');
+                const rowCompleted = row.getAttribute('data-completed') === 'true';
+
+                const matchesDate = (currentDateFilter === 'all' || rowDate === currentDateFilter);
+                
+                let matchesType = false;
+                if (currentTypeFilter === 'completed') {
+                    matchesType = rowCompleted;
+                } else if (currentTypeFilter === 'all') {
+                    matchesType = !rowCompleted; // HIDE completed tasks from All Tasks tab!
+                } else {
+                    matchesType = (!rowCompleted && rowType === currentTypeFilter); // HIDE completed tasks from Category tabs too!
+                }
+
+                if (matchesDate && matchesType) {
+                    row.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            const placeholder = document.getElementById('no-tasks-placeholder');
+            if (placeholder) {
+                if (visibleCount === 0) placeholder.classList.remove('hidden');
+                else placeholder.classList.add('hidden');
+            }
+
+            updateProgressBadge();
+            updateDateStripCounts();
+        }
+
+        function updateProgressBadge() {
+            const rows = document.querySelectorAll('.routine-task-row');
+            let total = 0;
+            let completed = 0;
+
+            rows.forEach(row => {
+                const rowDate = row.getAttribute('data-date');
+                const isCompleted = row.getAttribute('data-completed') === 'true';
+
+                if (currentDateFilter === 'all' || rowDate === currentDateFilter) {
+                    total++;
+                    if (isCompleted) completed++;
+                }
+            });
+
+            const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+            const progressText = document.getElementById('taskProgressText');
+            if (progressText) {
+                progressText.textContent = `${completed} / ${total} Completed (${pct}%)`;
+            }
+        }
+
+        function updateDateStripCounts() {
+            const rows = document.querySelectorAll('.routine-task-row');
+            const countsByDate = {};
+
+            rows.forEach(row => {
+                const d = row.getAttribute('data-date');
+                const c = row.getAttribute('data-completed') === 'true';
+                if (d) {
+                    if (!countsByDate[d]) countsByDate[d] = { total: 0, completed: 0 };
+                    countsByDate[d].total++;
+                    if (c) countsByDate[d].completed++;
+                }
+            });
+
+            Object.keys(countsByDate).forEach(d => {
+                const stripBtn = document.getElementById('date-strip-' + d);
+                if (stripBtn) {
+                    const badge = stripBtn.querySelector('span:last-child');
+                    if (badge) {
+                        const { total, completed } = countsByDate[d];
+                        badge.textContent = `${completed}/${total}`;
+                        if (completed === total && total > 0) {
+                            badge.className = 'px-1 py-0.2 text-[8px] font-bold rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20';
+                        }
+                    }
+                }
+            });
+        }
+
+        async function toggleTask(taskId) {
+            try {
+                const res = await fetch('/routine/toggle/' + taskId, {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    const row = document.getElementById('task-row-' + taskId);
+                    if (row) {
+                        const checkIcon = row.querySelector('.task-checkbox-box span');
+                        const checkBox = row.querySelector('.task-checkbox-box');
+                        const titleText = row.querySelector('.task-title-text');
+
+                        row.setAttribute('data-completed', data.isCompleted ? 'true' : 'false');
+
+                        if (data.isCompleted) {
+                            if (checkIcon) checkIcon.classList.remove('hidden');
+                            if (checkBox) {
+                                checkBox.classList.add('bg-primary', 'border-primary');
+                                checkBox.classList.remove('border-slate-300', 'dark:border-slate-600', 'bg-white', 'dark:bg-slate-800');
+                            }
+                            if (titleText) titleText.classList.add('line-through', 'opacity-50');
+                        } else {
+                            if (checkIcon) checkIcon.classList.add('hidden');
+                            if (checkBox) {
+                                checkBox.classList.remove('bg-primary', 'border-primary');
+                                checkBox.classList.add('border-slate-300', 'dark:border-slate-600', 'bg-white', 'dark:bg-slate-800');
+                            }
+                            if (titleText) titleText.classList.remove('line-through', 'opacity-50');
+                        }
+                    }
+                    if (data.currentXP !== undefined) {
+                        const xpText = document.getElementById('headerXpText');
+                        if (xpText) xpText.innerText = `${data.currentXP} XP`;
+                        const xpBar = document.getElementById('headerXpBar');
+                        if (xpBar) xpBar.style.width = `${(data.currentXP % 1000) / 10}%`;
+                        const lvlBadge = document.getElementById('headerLevelBadge');
+                        if (lvlBadge && data.level) lvlBadge.innerText = `Level ${data.level}`;
+                    }
+
+                    // Re-apply live task filter so Completed tasks hide from All Tasks immediately
+                    applyTaskFilters();
+                }
+            } catch (err) {
+                console.error('Error toggling task:', err);
+            }
+        }
+
+        function handleResourceClick(taskId, isCompleted) {
+            if (!isCompleted) {
+                toggleTask(taskId);
+            }
+        }
+
+        function promptDeleteSingleTask(taskId) {
+            openConfirmModal(
+                'Delete Task',
+                'Are you sure you want to delete this routine task?',
+                async () => {
+                    try {
+                        const res = await fetch('/routine/delete/' + taskId, {
+                            method: 'POST',
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            const row = document.getElementById('task-row-' + taskId);
+                            if (row) row.remove();
+                            applyTaskFilters();
+                        }
+                    } catch (err) {
+                        console.error('Error deleting task:', err);
+                    }
+                }
+            );
+        }
+
+        function promptClearCompleted() {
+            openConfirmModal(
+                'Clear Completed Tasks',
+                'Are you sure you want to delete all completed tasks permanently?',
+                async () => {
+                    try {
+                        const res = await fetch('/routine/clear-completed', {
+                            method: 'POST',
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            document.querySelectorAll('.routine-task-row[data-completed="true"]').forEach(el => el.remove());
+                            applyTaskFilters();
+                        }
+                    } catch (err) {
+                        console.error('Error clearing completed tasks:', err);
+                    }
+                }
+            );
+        }
+
+        async function handleAddTaskSubmit(e) {
+            e.preventDefault();
+            const titleInput = document.getElementById('taskTitleInput');
+            const dateInput = document.getElementById('taskDateInput');
+            const timeInput = document.getElementById('taskTimeInput');
+            const typeInput = document.getElementById('taskTypeInput');
+
+            const titleError = document.getElementById('titleErrorMsg');
+            const dateError = document.getElementById('dateErrorMsg');
+            const timeError = document.getElementById('timeErrorMsg');
+            const typeError = document.getElementById('typeErrorMsg');
+
+            let isValid = true;
+
+            // Reset error states
+            [titleError, dateError, timeError, typeError].forEach(el => el && el.classList.add('hidden'));
+            [titleInput, dateInput, timeInput, typeInput].forEach(el => el && el.classList.remove('border-rose-500'));
+
+            if (!titleInput.value.trim()) {
+                titleError.classList.remove('hidden');
+                titleInput.classList.add('border-rose-500');
+                isValid = false;
+            }
+
+            if (!dateInput.value) {
+                dateError.classList.remove('hidden');
+                dateInput.classList.add('border-rose-500');
+                isValid = false;
+            }
+
+            if (!timeInput.value.trim()) {
+                timeError.classList.remove('hidden');
+                timeInput.classList.add('border-rose-500');
+                isValid = false;
+            }
+
+            if (!typeInput.value) {
+                typeError.classList.remove('hidden');
+                typeInput.classList.add('border-rose-500');
+                isValid = false;
+            }
+
+            if (!isValid) return;
+
+            const title = titleInput.value.trim();
+            const date = dateInput.value;
+            const time = timeInput.value.trim();
+            const type = typeInput.value;
+
+            try {
+                const res = await fetch('/routine/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ title, date, time, type })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeAddTaskModal();
+                    window.location.reload();
+                }
+            } catch (err) {
+                console.error('Error adding task:', err);
+            }
+        }
+
+        function openAiModal() {
+            const courseInput = document.getElementById('aiCourseSelect');
+            const daysInput = document.getElementById('aiDaysInput');
+            const timeInput = document.getElementById('aiTimeInput');
+
+            const courseError = document.getElementById('aiCourseErrorMsg');
+            const daysError = document.getElementById('aiDaysErrorMsg');
+            const timeError = document.getElementById('aiTimeErrorMsg');
+
+            [courseError, daysError, timeError].forEach(el => el && el.classList.add('hidden'));
+            [courseInput, daysInput, timeInput].forEach(el => el && el.classList.remove('border-rose-500'));
+
+            document.getElementById('aiModal').classList.remove('hidden');
+        }
+
+        async function handleAiSubmit(e) {
+            e.preventDefault();
+            const courseInput = document.getElementById('aiCourseSelect');
+            const daysInput = document.getElementById('aiDaysInput');
+            const timeInput = document.getElementById('aiTimeInput');
+
+            const courseError = document.getElementById('aiCourseErrorMsg');
+            const daysError = document.getElementById('aiDaysErrorMsg');
+            const timeError = document.getElementById('aiTimeErrorMsg');
+
+            let isValid = true;
+
+            [courseError, daysError, timeError].forEach(el => el && el.classList.add('hidden'));
+            [courseInput, daysInput, timeInput].forEach(el => el && el.classList.remove('border-rose-500'));
+
+            if (!courseInput.value) {
+                courseError.classList.remove('hidden');
+                courseInput.classList.add('border-rose-500');
+                isValid = false;
+            }
+
+            if (!daysInput.value || parseInt(daysInput.value) <= 0) {
+                daysError.classList.remove('hidden');
+                daysInput.classList.add('border-rose-500');
+                isValid = false;
+            }
+
+            if (!timeInput.value.trim()) {
+                timeError.classList.remove('hidden');
+                timeInput.classList.add('border-rose-500');
+                isValid = false;
+            }
+
+            if (!isValid) return;
+
+            const courseId = courseInput.value;
+            const targetDays = daysInput.value;
+            const studyTime = timeInput.value.trim();
+
+            try {
+                const res = await fetch('/routine/generate-ai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ courseId, targetDays, studyTime })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeAiModal();
+                    window.location.reload();
+                } else {
+                    alert(data.error || 'Failed to generate AI Routine.');
+                }
+            } catch (err) {
+                console.error('Error generating AI routine:', err);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderExamsList();
+            filterByDate('all');
         });
     </script>
 </body>
-
 </html>

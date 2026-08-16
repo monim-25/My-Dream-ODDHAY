@@ -1,0 +1,78 @@
+<script>
+    function toggleSidebar() {
+        const panel = document.getElementById('sidebar-panel');
+        const overlay = document.querySelector('.sidebar-overlay');
+        panel.classList.toggle('active');
+        overlay.classList.toggle('active');
+    }
+
+    function toggleNotifications() {
+        const panel = document.getElementById('notif-panel');
+        const overlay = document.getElementById('notif-overlay');
+        panel.classList.toggle('active');
+        overlay.classList.toggle('active');
+        if (!panel.classList.contains('active')) {
+            updateUnreadCount();
+        }
+    }
+
+    function toggleTheme() {
+        if (document.documentElement.classList.contains('dark')) {
+            document.documentElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+        } else {
+            document.documentElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        }
+    }
+
+    async function updateUnreadCount() {
+        try {
+            const res = await fetch('/api/notifications/unread-count');
+            const data = await res.json();
+            const dot = document.getElementById('notif-dot');
+            if (data.count > 0) {
+                dot.classList.remove('hidden');
+            } else {
+                dot.classList.add('hidden');
+            }
+        } catch (e) {
+            console.error('Unread count error:', e);
+        }
+    }
+
+    async function handleNotifClick(notifId, link) {
+        try {
+            await fetch(`/api/notifications/${notifId}/read`, {
+                method: 'POST'
+            });
+            window.location.href = link;
+        } catch (e) {
+            window.location.href = link;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        updateUnreadCount();
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        }
+
+        // --- Scroll Reveal Logic ---
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    });
+</script>

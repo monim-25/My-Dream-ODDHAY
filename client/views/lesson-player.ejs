@@ -1,344 +1,554 @@
 <!DOCTYPE html>
-<html class="light" lang="bn">
+<html lang="bn" class="light">
 
 <head>
-    <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>
-        <%= course.title %> | ODDHAY
-    </title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title><%= course.title %> | ODDHAY - Lesson Player</title>
     <%- include('partials/head') %>
-        <style>
-            .video-container {
-                aspect-ratio: 16/9;
-                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            }
+    <%- include('partials/app-styles') %>
+    <style>
+        body {
+            background-color: #f8f8ff;
+            overflow: hidden;
+            height: 100vh;
+        }
 
-            .sidebar-scroll {
-                height: calc(100vh - 250px);
-            }
-
-            .lesson-active {
-                background: var(--primary) !important;
-                color: white !important;
-            }
-
-            .lesson-active .status-icon,
-            .lesson-active .time-icon,
-            .lesson-active p,
-            .lesson-active span {
-                color: white !important;
-            }
-        </style>
+        .dark body {
+            background-color: #0b1120;
+        }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        .tab-btn {
+            padding: 0.75rem 0;
+            font-size: 0.75rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgb(148 163 184);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            white-space: nowrap;
+        }
+        .tab-btn.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+    </style>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen">
-    <!-- Navbar -->
-    <header class="glass-nav sticky top-0 z-[100] border-b border-slate-100 dark:border-slate-800">
-        <div class="max-w-[1800px] mx-auto px-6 h-20 flex items-center justify-between">
-            <div class="flex items-center gap-6">
-                <a href="/dashboard"
-                    class="size-12 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-primary transition-all shadow-sm border border-slate-100 dark:border-slate-700">
-                    <span class="material-symbols-outlined">arrow_back</span>
-                </a>
-                <div class="reveal">
-                    <h1 class="text-lg font-black truncate max-w-[200px] md:max-w-md leading-tight">
-                        <%= course.title %>
-                    </h1>
-                    <div class="flex items-center gap-2 mt-1">
-                        <span class="text-[10px] font-black text-primary uppercase tracking-widest">
-                            <%= course.subject %>
-                        </span>
-                        <span class="text-slate-300">•</span>
-                        <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            <%= course.classLevel %>
-                        </span>
+<body class="text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300">
+
+    <!-- Topbar -->
+    <%- include('partials/student-header') %>
+
+    <!-- Main Layout -->
+    <div class="flex-1 flex overflow-hidden">
+        
+        <%- include('partials/student-sidebar', { activePage: 'courses' }) %>
+
+        <main class="flex-1 overflow-y-auto p-1.5 lg:p-1.5 no-scrollbar z-10 bg-[#F8F8FF] dark:bg-[#0b1120] relative">
+            <div class="w-full h-full flex flex-col gap-1">
+
+                <% 
+                    const enrollment = locals.user && user.enrolledCourses ? user.enrolledCourses.find(e => e.course.toString() === course._id.toString()) : null;
+                    if (enrollment && enrollment.progress === 100) { 
+                %>
+                <!-- Completion Banner -->
+                <div class="w-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-md p-4 md:p-3 shadow-lg shadow-emerald-500/20 flex flex-col md:flex-row items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <div class="size-12 rounded-full bg-white/20 flex items-center justify-center text-white shrink-0">
+                            <span class="material-symbols-rounded text-2xl">workspace_premium</span>
+                        </div>
+                        <div>
+                            <h3 class="text-white font-bold text-lg leading-tight">অভিনন্দন! আপনি কোর্সটি সফলভাবে Completed করেছেন</h3>
+                            <p class="text-white/80 text-[13px] font-medium mt-0.5">Congratulations on your dedication and hard work. Now it's time to collect your certificate.</p>
+                        </div>
                     </div>
+                    <button class="px-6 py-2.5 bg-white text-emerald-600 font-bold rounded-md shadow-sm hover:scale-105 transition-transform flex items-center gap-2 whitespace-nowrap">
+                        <span class="material-symbols-rounded text-xl">download</span>
+                        Download Certificate
+                    </button>
                 </div>
-            </div>
-            <div class="flex items-center gap-4 reveal">
-                <button
-                    class="size-12 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center text-slate-500 hover:text-primary transition-all"
-                    onclick="document.documentElement.classList.toggle('dark')">
-                    <span class="material-symbols-outlined block dark:hidden">dark_mode</span>
-                    <span class="material-symbols-outlined hidden dark:block text-amber-400">light_mode</span>
-                </button>
-            </div>
-        </div>
-    </header>
+                <% } %>
 
-    <main class="max-w-[1800px] mx-auto p-4 md:p-8">
-        <div class="flex flex-col xl:flex-row gap-8">
-            <!-- Left Side: Video Player & Content -->
-            <div class="flex-1 space-y-8">
-                <!-- Video Player Card -->
-                <div class="bg-black rounded-[2.5rem] overflow-hidden video-container relative group reveal">
-                    <% if (hasAccess) { %>
-                        <iframe id="main-player" class="w-full h-full"
-                            src="<%= course.lessons.length > 0 ? course.lessons[0].videoUrl : '' %>" frameborder="0"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowfullscreen></iframe>
-                        <% if(course.lessons.length===0) { %>
-                            <div
-                                class="absolute inset-0 flex flex-col items-center justify-center text-white bg-slate-900 px-6 text-center">
-                                <div class="size-20 rounded-full bg-white/10 flex items-center justify-center mb-6">
-                                    <span class="material-symbols-outlined text-4xl">video_off</span>
+                <!-- TOP ROW: Video (left) | Playlist (right) -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 lg:gap-2 items-start">
+                    
+                    <!-- LEFT: Video Player & Metadata -->
+                    <div class="lg:col-span-8 flex flex-col">
+                        <div class="bg-white dark:bg-[#0f172a] rounded-md border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex flex-col">
+                            <div class="w-full aspect-video bg-black relative group">
+                                <video id="playerVideoEl" controls class="w-full h-full object-contain hidden" controlsList="nodownload" style="background:#000"></video>
+                                <iframe id="playerIframeEl" class="w-full h-full border-0 hidden" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+                                <div id="playerEmptyState" class="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-center p-3">
+                                    <span class="material-symbols-rounded text-slate-600 text-6xl mb-3">play_circle</span>
+                                    <p class="text-slate-400 font-medium text-sm">Select a lesson from the curriculum on the right</p>
                                 </div>
-                                <h3 class="text-xl font-black mb-2">কন্টেন্ট লোড করা যায়নি</h3>
-                                <p class="text-slate-400 font-bold text-sm">এই লেসনটির ভিডিও সম্ভবত এখনো আপলোড করা হয়নি।
-                                </p>
+                                <div id="live-badge" class="hidden absolute top-4 left-4 px-3 py-1.5 bg-rose-600 text-white rounded-full flex items-center gap-2 text-[9px] font-black uppercase tracking-widest z-10 shadow-xl shadow-rose-500/20">
+                                    <span class="size-1.5 bg-white rounded-full animate-pulse"></span>LIVE
+                                </div>
                             </div>
-                            <% } %>
-                                <% } else { %>
-                                    <!-- Lock Overlay -->
-                                    <div
-                                        class="absolute inset-0 z-10 flex items-center justify-center p-8 text-center bg-slate-900/40 backdrop-blur-2xl">
-                                        <div class="max-w-md w-full glass-card p-10 reveal active">
-                                            <div
-                                                class="size-20 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-8">
-                                                <span
-                                                    class="material-symbols-outlined text-4xl text-primary font-black">
-                                                    <%= trialExpired ? 'hourglass_disabled' : (subscriptionExpired
-                                                        ? 'history' : 'lock_open' ) %>
-                                                </span>
-                                            </div>
-                                            <h3 class="text-2xl font-black mb-4 leading-tight">
-                                                <%= trialExpired ? 'ফ্রি ট্রায়াল শেষ হয়েছে' : (subscriptionExpired
-                                                    ? 'সাবস্ক্রিপশন শেষ' : 'এই লেসনটি লক করা আছে' ) %>
-                                            </h3>
-                                            <p class="text-slate-500 font-bold text-sm mb-10 leading-relaxed">
-                                                <%= trialExpired
-                                                    ? 'আপনার ট্রায়াল পিরিয়ড শেষ। নিয়মিত পড়াশোনা চালিয়ে যেতে এখনই এনরোল করুন।'
-                                                    : (subscriptionExpired
-                                                    ? 'আপনার সাবস্ক্রিপশন শেষ। নতুন প্ল্যান কিনে এক্সেস ফিরিয়ে নিন।'
-                                                    : 'পুরো চ্যাপ্টারটি দেখতে এবং কন্টেন্ট আনলক করতে কোর্সটি কিনুন।' )
-                                                    %>
-                                            </p>
+                            
+                            <!-- METADATA BLOCK -->
+                            <div class="space-y-4 py-4 px-4 md:px-6">
+                                <h2 class="text-xl font-bold text-slate-900 dark:text-white leading-snug flex items-center gap-2">
+                                    <span id="playerVideoTitle">Course Lesson</span>
+                                </h2>
 
-                                            <div class="space-y-4">
-                                                <a href="/checkout/<%= course._id %>"
-                                                    class="btn-primary w-full !rounded-2xl h-14">এনরোল করুন</a>
-                                                <% if (course.accessType==='trial' && !trialExpired &&
-                                                    !subscriptionExpired) { %>
-                                                    <form action="/enroll-trial/<%= course._id %>" method="POST">
-                                                        <button type="submit"
-                                                            class="btn-secondary w-full !rounded-2xl h-14">ফ্রি ট্রায়াল
-                                                            শুরু করুন</button>
-                                                    </form>
-                                                    <% } %>
+                                <div class="flex items-center gap-2 pb-3 border-b border-slate-100 dark:border-slate-800/50">
+                                    <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                                        <span class="material-symbols-rounded text-[16px] text-slate-400">visibility</span>
+                                        <span id="playerVideoViews">0</span> views
+                                    </div>
+                                </div>
+
+                                <div class="pt-2 pb-1 flex items-center gap-3">
+                                    <div class="size-10 rounded-full overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800 shrink-0">
+                                        <img src="<%= (course.instructor && course.instructor.profileImage) ? course.instructor.profileImage : '/images/default-avatar.png' %>" class="size-full object-cover" alt="Author">
+                                    </div>
+                                    <div class="flex-1 min-w-0 flex flex-col">
+                                        <h4 class="text-[13px] font-bold text-slate-800 dark:text-slate-200 leading-tight"><%= course.instructor ? course.instructor.name : 'ODDHAY Mentor' %></h4>
+                                        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Instructor</span>
+                                    </div>
+                                </div>
+
+                                <div class="relative group !mt-3 p-3 bg-[#F8F8FF] dark:bg-white/5 rounded-md border border-slate-200 dark:border-slate-800 shadow-inner">
+                                    <p id="playerVideoDesc" class="text-[13px] text-slate-600 dark:text-slate-400 leading-relaxed font-medium whitespace-pre-wrap break-words">
+                                        No description available for this lesson.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TABS BLOCK: Q&A, Notes -->
+                        <div class="bg-white dark:bg-[#0f172a] rounded-md border border-slate-200 dark:border-slate-800 shadow-sm mt-4 overflow-hidden">
+                            <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800 px-6 overflow-x-auto no-scrollbar">
+                                <div onclick="switchPlayerTab('notes')" class="tab-btn active player-tab-trigger" id="tab-notes">Notes & PDF</div>
+                                <div onclick="switchPlayerTab('qa')" class="tab-btn player-tab-trigger" id="tab-qa">Questions & Answers (Q&A)</div>
+                            </div>
+                            
+                            <div class="p-3">
+                                <!-- Notes Tab -->
+                                <div id="content-notes" class="player-content-section">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="notes-container">
+                                        <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center py-8 col-span-full">কোনো Notes পাওয়া যায়নি</p>
+                                    </div>
+                                </div>
+                                <!-- QA Tab -->
+                                <div id="content-qa" class="hidden player-content-section">
+                                    <div class="flex flex-col max-h-[400px]">
+                                        <!-- Post Question Form -->
+                                        <form action="/qa-ask" method="POST" class="mb-4 flex items-start gap-3 bg-[#F8F8FF] dark:bg-slate-800/50 p-3 rounded-md border border-slate-200 dark:border-slate-700">
+                                            <input type="hidden" name="courseId" value="<%= course._id %>">
+                                            <input type="hidden" name="redirectUrl" value="/course-details/<%= course._id %>?lesson=qa">
+                                            <div class="size-8 rounded-full overflow-hidden shrink-0">
+                                                <img src="<%= (locals.user && user.profileImage) ? user.profileImage : '/images/default-avatar.png' %>" class="size-full object-cover">
                                             </div>
+                                            <div class="flex-1 flex flex-col gap-2">
+                                                <textarea name="question" rows="2" placeholder="Write your question or problem..." required class="w-full bg-transparent border-none outline-none text-[13px] font-medium text-slate-700 dark:text-slate-300 resize-none p-0 focus:ring-0"></textarea>
+                                                <div class="flex justify-end">
+                                                    <button type="submit" class="px-4 py-1.5 bg-primary hover:bg-primary/90 text-white text-[11px] font-bold uppercase tracking-widest rounded-lg transition-colors">Post</button>
+                                                </div>
+                                            </div>
+                                        </form>
+
+                                        <!-- QAs List -->
+                                        <div class="flex-1 overflow-y-auto no-scrollbar pr-2 space-y-4">
+                                            <% if (locals.qas && qas.length > 0) { %>
+                                                <% qas.forEach(function(qa) { %>
+                                                    <div class="p-4 rounded-md border border-slate-100 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-sm relative group">
+                                                        <div class="flex items-start gap-3">
+                                                            <div class="size-8 rounded-full overflow-hidden shrink-0 bg-slate-100">
+                                                                <img src="<%= (qa.askedBy && qa.askedBy.profileImage) ? qa.askedBy.profileImage : '/images/default-avatar.png' %>" class="size-full object-cover">
+                                                            </div>
+                                                            <div class="flex-1 min-w-0">
+                                                                <div class="flex items-center gap-2">
+                                                                    <h5 class="text-[12px] font-bold text-slate-800 dark:text-slate-200"><%= qa.askedBy ? qa.askedBy.name : (qa.askedByName || 'Student') %></h5>
+                                                                    <span class="text-[9px] text-slate-400 font-bold"><%= new Date(qa.createdAt).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) %></span>
+                                                                </div>
+                                                                <p class="text-[13px] text-slate-600 dark:text-slate-400 mt-1 font-medium"><%= qa.question %></p>
+                                                            </div>
+                                                        </div>
+
+                                                        <% if (qa.answer) { %>
+                                                            <div class="mt-3 ml-11 p-3 bg-primary/5 dark:bg-primary/10 rounded-md border border-primary/10 relative">
+                                                                <div class="flex items-start gap-3">
+                                                                    <div class="size-6 rounded-full overflow-hidden shrink-0 bg-primary/20">
+                                                                        <img src="<%= (qa.answeredBy && qa.answeredBy.profileImage) ? qa.answeredBy.profileImage : '/images/default-avatar.png' %>" class="size-full object-cover">
+                                                                    </div>
+                                                                    <div class="flex-1 min-w-0">
+                                                                        <div class="flex items-center gap-2">
+                                                                            <h5 class="text-[11px] font-bold text-primary"><%= qa.answeredBy ? qa.answeredBy.name : 'Teacher' %> <span class="text-[9px] text-slate-400 ml-1">Answered</span></h5>
+                                                                        </div>
+                                                                        <p class="text-[12px] text-slate-700 dark:text-slate-300 mt-1 font-medium"><%= qa.answer %></p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        <% } %>
+                                                    </div>
+                                                <% }); %>
+                                            <% } else { %>
+                                                <div class="flex flex-col items-center justify-center text-center py-8">
+                                                    <span class="material-symbols-rounded text-3xl text-slate-300 dark:text-slate-700 mb-2">forum</span>
+                                                    <p class="text-[11px] text-slate-400 font-bold uppercase tracking-widest">No questions asked yet</p>
+                                                </div>
+                                            <% } %>
                                         </div>
                                     </div>
-                                    <img src="<%= course.thumbnail || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=800' %>"
-                                        class="w-full h-full object-cover blur-sm opacity-50">
-                                    <% } %>
-                </div>
-
-                <!-- Content Info -->
-                <div class="card-smart reveal">
-                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-                        <div>
-                            <h2 id="current-lesson-title" class="text-2xl md:text-3xl font-black mb-2">
-                                <%= course.lessons.length> 0 ? course.lessons[0].title : 'স্বাগতম' %>
-                            </h2>
-                            <p class="text-slate-500 font-bold text-sm">এই লেসনটিতে আপনি শিখবেন বিষয়ের মূল কনসেপ্টসমূহ।
-                            </p>
+                                </div>
+                            </div>
                         </div>
-                        <button id="complete-btn" onclick="markComplete()"
-                            class="btn-primary !py-3 !px-8 !rounded-2xl shadow-emerald-500/20 shadow-xl overflow-visible">
-                            <span class="material-symbols-outlined">verified</span> শেষ হয়েছে
-                        </button>
+
                     </div>
 
-                    <div
-                        class="grid grid-cols-1 md:grid-cols-2 gap-8 pt-10 border-t border-slate-100 dark:border-slate-800">
-                        <div>
-                            <h3 class="font-black text-lg mb-4 flex items-center gap-2">
-                                <span class="material-symbols-outlined text-primary">analytics</span> কি কি শিখবেন?
-                            </h3>
-                            <ul class="space-y-3">
-                                <% ['বিষয়ের গভীর বিশ্লেষণ', 'বাস্তব উদাহরণ' , 'বোর্ড পরীক্ষার প্রশ্ন সমাধান'
-                                    , 'শর্টকাট টেকনিকসমূহ' ].forEach(item=> { %>
-                                    <li class="flex items-center gap-3 text-sm font-bold text-slate-500 italic">
-                                        <span
-                                            class="material-symbols-outlined text-emerald-500 text-lg">check_circle</span>
-                                        <%= item %>
-                                    </li>
-                                    <% }) %>
-                            </ul>
-                        </div>
-                        <div>
-                            <h3 class="font-black text-lg mb-4 flex items-center gap-2">
-                                <span class="material-symbols-outlined text-primary">download</span> ডাউনলোড রিসোর্স
-                            </h3>
-                            <div class="space-y-3">
-                                <% if (course.notes && course.notes.length> 0) { %>
-                                    <% course.notes.forEach(note=> { %>
-                                        <div
-                                            class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 group hover:border-primary transition-colors">
-                                            <div class="flex items-center gap-3">
-                                                <div
-                                                    class="size-10 rounded-xl bg-red-100 dark:bg-red-500/10 flex items-center justify-center text-red-500">
-                                                    <span class="material-symbols-outlined">picture_as_pdf</span>
-                                                </div>
-                                                <span class="text-xs font-black truncate max-w-[150px]">
-                                                    <%= note.title %>
-                                                </span>
-                                            </div>
-                                            <a href="<%= note.fileUrl %>" target="_blank"
-                                                class="size-10 rounded-xl bg-white dark:bg-slate-700 shadow-sm border border-slate-100 dark:border-slate-600 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all">
-                                                <span class="material-symbols-outlined text-xl">download</span>
-                                            </a>
-                                        </div>
-                                        <% }) %>
-                                            <% } else { %>
-                                                <div
-                                                    class="p-6 text-center border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-3xl">
-                                                    <p class="text-xs font-bold text-slate-400">এই লেসনের জন্য কোনো
-                                                        পিডিএফ নেই।</p>
-                                                </div>
-                                                <% } %>
+                    <!-- RIGHT: Course Playlist (Curriculum) -->
+                    <div class="lg:col-span-4 flex flex-col">
+                        <div class="bg-white dark:bg-[#0f172a] rounded-md border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col sticky top-3 overflow-hidden" style="max-height: calc(100vh - 120px);">
+                            <div class="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800 shrink-0 gap-2">
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <span class="material-symbols-rounded text-slate-400 text-[18px]">playlist_play</span>
+                                    <h3 class="text-sm font-bold text-slate-800 dark:text-white">Curriculum</h3>
+                                </div>
+                            </div>
+                            
+                            <div id="playlistContainer" class="flex-1 overflow-y-auto p-3 space-y-1 no-scrollbar">
+                                <% if (course.curriculumNodes && course.curriculumNodes.length > 0) { %>
+                                    <%
+                                        function renderPlayerSidebarTree(nodes, parentId, depth) {
+                                            var currentNodes = nodes.filter(function(n) {
+                                                return String(n.parentId || '') === String(parentId || '');
+                                            });
+                
+                                            currentNodes.forEach(function(node) {
+                                                var isFolder = node.type === 'folder';
+                
+                                                if (isFolder) {
+                                    %>
+                                                    <div class="mb-1">
+                                                        <div class="px-3 py-2 bg-slate-50 dark:bg-slate-800/30 text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center justify-between rounded-lg" style="margin-left: <%= depth * 0.5 %>rem">
+                                                            <span class="flex items-center gap-1.5 truncate">
+                                                                <span class="material-symbols-rounded text-amber-500 text-[14px] shrink-0">folder</span>
+                                                                <span class="truncate"><%= node.name %></span>
+                                                            </span>
+                                                            <span class="material-symbols-rounded text-[14px] shrink-0">expand_more</span>
+                                                        </div>
+                                                        <div class="mt-1">
+                                                            <% renderPlayerSidebarTree(nodes, node._id.toString(), depth + 1); %>
+                                                        </div>
+                                                    </div>
+                                    <%
+                                                } else if (node.type === 'video' || node.type === 'liveClass') {
+                                                    var isRecordedLive = (node.type === 'liveClass') && (node.isRecorded || !!node.videoPath);
+                                                    var isNormalVideo = (node.type === 'video');
+                                                    var hasVideo = !!node.videoPath;
+                
+                                                    if (isNormalVideo || (isRecordedLive && hasVideo)) {
+                                                        var iconBg = 'bg-slate-100 dark:bg-slate-800/50 text-slate-400';
+                                                        var iconName = 'play_circle';
+                                                        var badgeText = 'Video Lesson';
+                                                        if (isRecordedLive) {
+                                                            badgeText = node.duration ? node.duration : 'Recorded Video';
+                                                        }
+                
+                                                        var siblingNotes = nodes.filter(function(n) {
+                                                            return String(n.parentId || '') === String(node.parentId || '') && n.type === 'note';
+                                                        }).map(function(n) {
+                                                            return { title: n.name, filePath: n.filePath, _id: n._id };
+                                                        });
+                                    %>
+                                                        <button
+                                                            onclick="playLesson('<%= node.videoPath %>', '<%= (node.name || '').replace(/'/g, "\\'") %>', '<%= node.duration || '' %>', this)"
+                                                            data-lesson-id="<%= node._id %>"
+                                                            data-notes='<%= JSON.stringify(siblingNotes) %>'
+                                                            class="lesson-item w-full p-2.5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all rounded-lg text-left group" style="margin-left: <%= depth * 0.5 %>rem">
+                                                            <div class="size-7 rounded border border-slate-200 dark:border-slate-700 <%= iconBg %> flex items-center justify-center shrink-0 group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-all shadow-sm">
+                                                                <span class="material-symbols-rounded text-[16px]"><%= iconName %></span>
+                                                            </div>
+                                                            <div class="flex-1 min-w-0 flex flex-col justify-center">
+                                                                <h5 class="text-[12px] font-bold text-slate-700 dark:text-slate-300 group-hover:text-primary transition-colors truncate"><%= node.name %></h5>
+                                                                <span class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5"><%= badgeText %></span>
+                                                            </div>
+                                                        </button>
+                                    <%
+                                                    } else if (node.type === 'liveClass') {
+                                    %>
+                                                        <button onclick="joinLive('<%= node.meetingUrl %>', '<%= (node.name || '').replace(/'/g, "\\'") %>')"
+                                                            class="lesson-item w-full p-2.5 flex items-start gap-3 hover:bg-rose-50/50 dark:hover:bg-rose-500/5 transition-all rounded-lg text-left group" style="margin-left: <%= depth * 0.5 %>rem">
+                                                            <div class="size-7 rounded border border-rose-200 dark:border-rose-500/20 bg-rose-50 dark:bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0 group-hover:bg-rose-500 group-hover:text-white transition-all shadow-sm">
+                                                                <span class="material-symbols-rounded text-[16px]">live_tv</span>
+                                                            </div>
+                                                            <div class="flex-1 min-w-0 flex flex-col justify-center">
+                                                                <h5 class="text-[12px] font-bold text-slate-700 dark:text-slate-300 group-hover:text-rose-500 transition-colors truncate"><%= node.name %></h5>
+                                                                <div class="flex items-center gap-1 mt-0.5">
+                                                                    <span class="text-[7px] font-black text-rose-500 uppercase tracking-widest">LIVE</span>
+                                                                    <% if (node.date) { %>
+                                                                        <span class="size-1 bg-slate-200 rounded-full"></span>
+                                                                        <span class="text-[8px] font-bold text-slate-400"><%= new Date(node.date).toLocaleTimeString('bn-BD', {hour: '2-digit', minute:'2-digit'}) %></span>
+                                                                    <% } %>
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                    <%
+                                                    }
+                                                } else if (node.type === 'quiz') {
+                                                    var quizObj = node.quizId;
+                                    %>
+                                                        <a href="/quiz/<%= quizObj ? (quizObj._id || quizObj) : '' %>"
+                                                            class="lesson-item w-full p-2.5 flex items-start gap-3 hover:bg-amber-50/50 dark:hover:bg-amber-500/5 transition-all rounded-lg text-left group" style="margin-left: <%= depth * 0.5 %>rem">
+                                                            <div class="size-7 rounded border border-amber-200 dark:border-amber-500/20 bg-amber-50 dark:bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 group-hover:bg-amber-500 group-hover:text-white transition-all shadow-sm">
+                                                                <span class="material-symbols-rounded text-[16px]">psychology</span>
+                                                            </div>
+                                                            <div class="flex-1 min-w-0 flex flex-col justify-center">
+                                                                <h5 class="text-[12px] font-bold text-slate-700 dark:text-slate-300 group-hover:text-amber-600 transition-colors truncate"><%= node.name %></h5>
+                                                                <span class="text-[7px] font-black text-amber-600 uppercase tracking-widest mt-0.5 inline-block">EXAM</span>
+                                                            </div>
+                                                        </a>
+                                    <%
+                                                } else if (node.type === 'note') {
+                                    %>
+                                                        <a href="<%= node.filePath %>" target="_blank" onclick="trackNoteRead('<%= node._id %>')"
+                                                            class="lesson-item w-full p-2.5 flex items-start gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all rounded-lg text-left group" style="margin-left: <%= depth * 0.5 %>rem">
+                                                            <div class="size-7 rounded border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800/50 text-slate-500 flex items-center justify-center shrink-0 group-hover:bg-slate-700 group-hover:text-white transition-all shadow-sm">
+                                                                <span class="material-symbols-rounded text-[16px]">picture_as_pdf</span>
+                                                            </div>
+                                                            <div class="flex-1 min-w-0 flex flex-col justify-center">
+                                                                <h5 class="text-[12px] font-bold text-slate-700 dark:text-slate-300 group-hover:text-slate-800 dark:group-hover:text-white transition-colors truncate"><%= node.name %></h5>
+                                                                <span class="text-[7px] font-black text-slate-500 uppercase tracking-widest mt-0.5 inline-block">PDF Note</span>
+                                                            </div>
+                                                        </a>
+                                    <%
+                                                }
+                                            });
+                                        }
+                                        renderPlayerSidebarTree(course.curriculumNodes, null, 0);
+                                    %>
+                                <% } else { %>
+                                    <div class="flex flex-col items-center justify-center text-center py-12 opacity-60">
+                                        <span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600 mb-3">playlist_play</span>
+                                        <p class="text-xs font-medium text-slate-500">No lessons available</p>
+                                    </div>
+                                <% } %>
                             </div>
                         </div>
                     </div>
+
                 </div>
+
             </div>
+        </main>
+    </div>
 
-            <!-- Right Side: Lesson Sidebar -->
-            <aside class="w-full xl:w-[450px] shrink-0 reveal delay-200">
-                <div
-                    class="card-smart !p-0 sticky top-28 overflow-hidden flex flex-col h-full border-2 border-primary/10">
-                    <div
-                        class="p-10 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
-                        <h3 class="text-xl font-black mb-1">কোর্স কন্টেন্ট</h3>
-                        <p class="text-slate-500 font-bold text-xs">
-                            <%= course.lessons.length %> টি লেসন অন্তর্ভুক্ত
-                        </p>
-
-                        <!-- Mini Progress -->
-                        <div class="mt-6">
-                            <div class="flex justify-between items-end mb-2">
-                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest">আপনার
-                                    প্রোগ্রেস</p>
-                                <p class="text-xs font-black text-primary">০%</p>
-                            </div>
-                            <div class="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                <div class="h-full bg-primary rounded-full transition-all duration-1000"
-                                    style="width: 2%"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="sidebar-scroll overflow-y-auto p-4 custom-scrollbar">
-                        <% if (user) { %>
-                            <% course.lessons.forEach((lesson, index)=> { %>
-                                <% const isCompleted=user.completedLessons &&
-                                    user.completedLessons.includes(lesson._id.toString()); %>
-                                    <button id="lesson-btn-<%= lesson._id %>" data-completed="<%= isCompleted %>"
-                                        onclick="changeVideo('<%= lesson.videoUrl %>', '<%= lesson.title %>', '<%= lesson._id %>')"
-                                        class="w-full flex items-center gap-4 p-5 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all text-left mb-2 group <%= index === 0 ? 'bg-primary/5 border border-primary/20 outline outline-1 outline-primary/20' : '' %>">
-                                        <div
-                                            class="size-10 rounded-xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex items-center justify-center text-xs font-black shrink-0 text-slate-400 group-hover:scale-110 transition-transform">
-                                            <span
-                                                class="status-icon <%= isCompleted ? 'material-symbols-outlined text-emerald-500' : '' %>">
-                                                <%= isCompleted ? 'check_circle' : (index + 1) %>
-                                            </span>
-                                        </div>
-                                        <div class="flex-1 min-w-0">
-                                            <p
-                                                class="text-sm font-black truncate leading-tight mb-1 group-hover:text-primary transition-colors">
-                                                <%= lesson.title %>
-                                            </p>
-                                            <div
-                                                class="flex items-center gap-3 text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-                                                <span class="flex items-center gap-1"><span
-                                                        class="material-symbols-outlined text-[12px] time-icon">schedule</span>
-                                                    <%= lesson.duration || '১০:০০' %>
-                                                </span>
-                                                <span>•</span>
-                                                <span>রেকর্ড ক্লাস</span>
-                                            </div>
-                                        </div>
-                                        <div class="opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <span class="material-symbols-outlined text-primary">play_circle</span>
-                                        </div>
-                                    </button>
-                                    <% }); %>
-                                        <% } %>
-                    </div>
-                </div>
-            </aside>
-        </div>
-    </main>
+    <%- include('partials/student-bottom-nav', { activePage: 'courses' }) %>
 
     <script>
-        let currentLessonId = '<%= course.lessons.length > 0 ? course.lessons[0]._id : "" %>';
-
-        function changeVideo(url, title, id) {
-            document.getElementById('main-player').src = url;
-            document.getElementById('current-lesson-title').innerText = title;
-            currentLessonId = id;
-
-            const btn = document.getElementById('complete-btn');
-            const lessonBtn = document.getElementById(`lesson-btn-${id}`);
-            const isCompleted = lessonBtn.getAttribute('data-completed') === 'true';
-
-            if (isCompleted) {
-                btn.className = "btn-secondary !py-3 !px-8 !rounded-2xl !bg-emerald-500/10 !text-emerald-500 pointer-events-none";
-                btn.innerHTML = '<span class="material-symbols-outlined">task_alt</span> সম্পন্ন হয়েছে';
-            } else {
-                btn.className = "btn-primary !py-3 !px-8 !rounded-2xl shadow-emerald-500/20 shadow-xl overflow-visible";
-                btn.innerHTML = '<span class="material-symbols-outlined">verified</span> শেষ হয়েছে';
-                btn.style.pointerEvents = 'auto';
-            }
-
-            // Highlight active button
-            document.querySelectorAll('button[id^="lesson-btn-"]').forEach(b => {
-                b.classList.remove('bg-primary/5', 'border', 'border-primary/20', 'outline', 'outline-1', 'outline-primary/20');
-                b.classList.remove('lesson-active');
-            });
-            lessonBtn.classList.add('bg-primary/5', 'border', 'border-primary/20', 'outline', 'outline-1', 'outline-primary/20');
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.getElementById('themeIcon').innerText = isDark ? 'light_mode' : 'dark_mode';
         }
 
-        async function markComplete() {
-            const btn = document.getElementById('complete-btn');
-            try {
-                const res = await fetch('/api/progress', {
+        if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+            const icon = document.getElementById('themeIcon');
+            if (icon) icon.innerText = 'light_mode';
+        }
+
+        function switchPlayerTab(tabId) {
+            document.querySelectorAll('.player-tab-trigger').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.player-content-section').forEach(s => s.classList.add('hidden'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+            document.getElementById('content-' + tabId).classList.remove('hidden');
+        }
+
+        let activeLessonId = null;
+        let lastProgressSaveTime = 0;
+
+        function playLesson(url, title, duration, btn) {
+            const iframe = document.getElementById('playerIframeEl');
+            const videoEl = document.getElementById('playerVideoEl');
+            const emptyState = document.getElementById('playerEmptyState');
+
+            emptyState.classList.add('hidden');
+
+            const lessonId = btn ? btn.getAttribute('data-lesson-id') : null;
+            activeLessonId = lessonId;
+            const courseId = '<%= course._id %>';
+            const currentUserId = '<%= user ? user._id : "" %>';
+
+            // Determine saved resume timestamp (URL query param > localStorage > server timestamp)
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramTime = parseFloat(urlParams.get('time'));
+            const localSavedTime = parseFloat(localStorage.getItem(`video-progress-${currentUserId}-${lessonId}`));
+            const serverSavedTime = <%= (user && user.lastWatchedLesson && user.lastWatchedLesson.lastPosition) || 0 %>;
+            
+            let targetResumeTime = 0;
+            if (!isNaN(paramTime) && paramTime > 0) {
+                targetResumeTime = paramTime;
+            } else if (!isNaN(localSavedTime) && localSavedTime > 0) {
+                targetResumeTime = localSavedTime;
+            } else if (serverSavedTime > 0) {
+                targetResumeTime = serverSavedTime;
+            }
+
+            const isLocalFile = url && (url.startsWith('/uploads/') || url.startsWith('/api/') || /\.(mp4|webm|ogg|mov)$/i.test(url));
+
+            if (isLocalFile) {
+                iframe.classList.add('hidden');
+                iframe.src = '';
+                videoEl.classList.remove('hidden');
+                videoEl.src = url;
+                videoEl.load();
+
+                // Seek to targetResumeTime on metadata load
+                if (targetResumeTime > 0) {
+                    const seekHandler = function() {
+                        if (videoEl.duration && targetResumeTime < videoEl.duration - 2) {
+                            videoEl.currentTime = targetResumeTime;
+                        }
+                        videoEl.removeEventListener('loadedmetadata', seekHandler);
+                    };
+                    videoEl.addEventListener('loadedmetadata', seekHandler);
+                }
+
+                const playPromise = videoEl.play();
+                if (playPromise !== undefined) {
+                    playPromise.catch(error => { console.log('Autoplay prevented:', error); });
+                }
+
+                // Track and save video progress dynamically
+                videoEl.ontimeupdate = function() {
+                    if (videoEl.currentTime > 0 && activeLessonId) {
+                        localStorage.setItem(`video-progress-${currentUserId}-${activeLessonId}`, videoEl.currentTime);
+                        const nowSec = Math.floor(videoEl.currentTime);
+                        if (Math.abs(nowSec - lastProgressSaveTime) >= 5) {
+                            lastProgressSaveTime = nowSec;
+                            fetch('/api/progress', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ lessonId: activeLessonId, courseId, lessonTitle: title || 'Lesson', lastPosition: nowSec })
+                            }).catch(err => console.log('Progress update error:', err));
+                        }
+                    }
+                };
+            } else {
+                videoEl.classList.add('hidden');
+                videoEl.pause();
+                videoEl.src = '';
+                iframe.classList.remove('hidden');
+                let embedUrl = url || '';
+                if (embedUrl && embedUrl.includes('vimeo.com') && !embedUrl.includes('player.vimeo.com')) {
+                    embedUrl = embedUrl.replace('vimeo.com', 'player.vimeo.com/video');
+                }
+                if (targetResumeTime > 0) {
+                    if (embedUrl.includes('youtube.com') || embedUrl.includes('youtu.be')) {
+                        embedUrl += (embedUrl.includes('?') ? '&' : '?') + 'start=' + Math.floor(targetResumeTime);
+                    } else if (embedUrl.includes('vimeo.com')) {
+                        embedUrl += '#t=' + Math.floor(targetResumeTime) + 's';
+                    }
+                }
+                iframe.src = embedUrl;
+            }
+
+            document.getElementById('playerVideoTitle').innerText = title || 'Course Lesson';
+            document.getElementById('live-badge').classList.add('hidden');
+            
+            // --- Save last watched lesson to server immediately on play ---
+            console.log('[ODDHAY XP] Sending play event for lessonId:', lessonId, 'courseId:', courseId);
+            fetch('/api/progress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ lessonId: lessonId || null, courseId: courseId || null, lessonTitle: title || 'Lesson', lastPosition: Math.floor(targetResumeTime), isPlayEvent: true })
+            })
+            .then(r => r.json())
+            .then(data => console.log('[ODDHAY XP] Progress response:', data))
+            .catch(err => console.log('[ODDHAY XP] Progress save failed:', err));
+
+            // Increment views (simulated)
+            document.getElementById('playerVideoViews').innerText = Math.floor(Math.random() * 500) + 50;
+
+            document.querySelectorAll('.lesson-item').forEach(b => {
+                b.classList.remove('bg-primary/10', 'border-primary', 'shadow-md');
+                const iconContainer = b.querySelector('.size-7');
+                if (iconContainer && !b.innerHTML.includes('LIVE') && !b.innerHTML.includes('EXAM')) {
+                    iconContainer.classList.remove('bg-primary', 'text-white', 'border-primary');
+                }
+            });
+
+            if (btn) {
+                btn.classList.add('bg-primary/5', 'border-primary', 'shadow-sm');
+                const iconContainer = btn.querySelector('.size-7');
+                if (iconContainer) iconContainer.classList.add('bg-primary', 'text-white', 'border-primary');
+            }
+
+            const notesContainer = document.getElementById('notes-container');
+            notesContainer.innerHTML = '';
+            let notes = [];
+            try { notes = JSON.parse((btn && btn.getAttribute('data-notes')) || '[]'); } catch(e) {}
+            
+            if (notes.length > 0) {
+                notes.forEach(function(note) {
+                    notesContainer.innerHTML += '<a href="' + note.filePath + '" target="_blank" onclick="trackNoteRead(\'' + note._id + '\')" class="p-4 rounded-md bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex items-center gap-3 group hover:border-primary/50 transition-all"><div class="size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center border border-primary/20"><span class="material-symbols-rounded text-[18px]">description</span></div><div class="flex-1"><h4 class="text-xs font-black text-slate-700 dark:text-slate-200">' + note.title + '</h4><p class="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">PDF File</p></div><span class="material-symbols-rounded text-slate-300">download</span></a>';
+                });
+            } else {
+                notesContainer.innerHTML = '<p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center py-8 col-span-full">No notes available for this lesson</p>';
+            }
+
+            // Scroll to top
+            document.querySelector('main').scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function joinLive(roomId, title) {
+            document.getElementById('playerVideoTitle').innerText = title || 'Live Class';
+            document.getElementById('live-badge').classList.remove('hidden');
+            window.location.href = '/live/' + roomId;
+        }
+
+        function trackNoteRead(noteId) {
+            // First track activity for XP
+            fetch('/api/track-activity', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'note' })
+            }).catch(e => {});
+
+            // Then save progress for course completion
+            if (noteId) {
+                const courseId = '<%= course._id %>';
+                fetch('/api/progress', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lessonId: currentLessonId })
-                });
-
-                if (res.ok) {
-                    btn.className = "btn-secondary !py-3 !px-8 !rounded-2xl !bg-emerald-500/10 !text-emerald-500 pointer-events-none";
-                    btn.innerHTML = '<span class="material-symbols-outlined">task_alt</span> সম্পন্ন হয়েছে';
-
-                    const sidebarIcon = document.querySelector(`#lesson-btn-${currentLessonId} .status-icon`);
-                    if (sidebarIcon) {
-                        sidebarIcon.innerHTML = 'check_circle';
-                        sidebarIcon.classList.add('text-emerald-500', 'material-symbols-outlined');
-                    }
-                    document.getElementById(`lesson-btn-${currentLessonId}`).setAttribute('data-completed', 'true');
-                }
-            } catch (err) { console.error(err); }
+                    body: JSON.stringify({ lessonId: noteId, courseId: courseId })
+                }).catch(e => {});
+            }
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            if (currentLessonId && document.getElementById(`lesson-btn-${currentLessonId}`)) {
-                const isCompleted = document.getElementById(`lesson-btn-${currentLessonId}`).getAttribute('data-completed') === 'true';
-                if (isCompleted) {
-                    const btn = document.getElementById('complete-btn');
-                    btn.className = "btn-secondary !py-3 !px-8 !rounded-2xl !bg-emerald-500/10 !text-emerald-500 pointer-events-none";
-                    btn.innerHTML = '<span class="material-symbols-outlined">task_alt</span> সম্পন্ন হয়েছে';
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const lessonId = urlParams.get('lesson');
+            
+            let targetBtn = null;
+            if (lessonId) {
+                targetBtn = document.querySelector(`button[data-lesson-id="${lessonId}"]`);
+                if (!targetBtn) {
+                    targetBtn = Array.from(document.querySelectorAll('button[onclick^="playLesson"]')).find(btn => btn.getAttribute('onclick').includes(lessonId));
                 }
             }
-            // Intersection Observer
-            const observer = new IntersectionObserver((entries) => {
-                entries.forEach(entry => entry.isIntersecting && entry.target.classList.add('active'));
-            }, { threshold: 0.1 });
-            document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+            
+            if (!targetBtn) {
+                targetBtn = document.querySelector('button[data-notes]');
+            }
+            
+            if (targetBtn) {
+                targetBtn.click();
+                setTimeout(() => {
+                    targetBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 500);
+            }
         });
     </script>
 </body>
-
 </html>

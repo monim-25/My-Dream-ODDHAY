@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Written Solutions | <%= bank.title || bank.subject %></title>
+</head>
+
+<body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <%- include('partials/student-header') %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'questions' }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative">
+            
+            <% 
+               const bSubject = (bank.subject || 'Subject').trim();
+               const bBoard = (bank.board || 'Board Exam').trim();
+               const bYear = (bank.year || '').trim();
+               const bTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${bBoard} ${bYear}`.trim();
+            %>
+
+            <!-- STICKY TOP HEADER -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 p-3 sm:p-3.5 shrink-0 flex items-center justify-between gap-3 sticky top-0 z-30 shadow-xs">
+                <div class="min-w-0 flex items-center gap-2.5">
+                    <a href="/question-bank/result/<%= attempt._id %>" class="size-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition-all shrink-0" title="Back to Result">
+                        <span class="material-symbols-rounded text-lg leading-none flex items-center justify-center shrink-0">arrow_back</span>
+                    </a>
+                    <div>
+                        <h1 class="text-xs sm:text-sm font-black text-slate-900 dark:text-slate-100 truncate leading-tight">
+                            Written Solutions — <%= bTitle %>
+                        </h1>
+                        <p class="text-[10px] font-semibold text-slate-400 mt-0.5"><%= questions.length %> Written Questions</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FEED CONTAINER -->
+            <div class="p-3 sm:p-5 max-w-4xl w-full mx-auto flex-1 flex flex-col space-y-5 pb-12">
+                <% if (questions.length === 0) { %>
+                    <div class="bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center space-y-2">
+                        <span class="material-symbols-rounded text-5xl text-slate-300 dark:text-slate-700 leading-none flex items-center justify-center shrink-0">edit_note</span>
+                        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300">No Written Questions</h3>
+                        <p class="text-xs text-slate-400">This question bank contains MCQs only.</p>
+                    </div>
+                <% } else { %>
+                    <div class="space-y-5">
+                        <% questions.forEach(function(q, index) { %>
+                            <% 
+                               const qType = q.questionType || 'Short';
+                               const ua = q.userAnswer || {};
+                               const defaultMark = (qType === 'Medium') ? 2 : ((qType === 'Comprehension') ? 10 : 1);
+                               const qMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : defaultMark;
+                               const expText = String(q.explanation || q.explanationText || q.solution || '').trim();
+                            %>
+                            <div class="bg-slate-50 dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
+                                
+                                <!-- QUESTION HEADER & MARKS -->
+                                <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200/60 dark:border-slate-800">
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                                            <span>Question <%= index + 1 %></span>
+                                        </span>
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700">
+                                            <%= qType %>
+                                        </span>
+                                    </div>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 flex items-center gap-1">
+                                        <span class="material-symbols-rounded text-[11px] leading-none flex items-center justify-center shrink-0">star</span>
+                                        <span><%= qMark %> <%= qMark === 1 ? 'Mark' : 'Marks' %></span>
+                                    </span>
+                                </div>
+
+                                <!-- QUESTION STATEMENT -->
+                                <div class="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100 leading-relaxed">
+                                    <%= q.questionText %>
+                                </div>
+
+                                <!-- STUDENT ANSWER -->
+                                <div class="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1">
+                                    <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400">Your Answer</p>
+                                    <p class="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-relaxed">
+                                        <%= ua.writtenAnswer && ua.writtenAnswer.trim() !== '' ? ua.writtenAnswer : 'No answer submitted.' %>
+                                    </p>
+                                </div>
+
+                                <!-- TEACHER MODEL SOLUTION -->
+                                <div class="rounded-xl overflow-hidden border border-emerald-500/30 dark:border-emerald-500/25">
+                                    <div class="px-3.5 py-2 bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center gap-1.5 border-b border-emerald-500/20">
+                                        <span class="material-symbols-rounded text-emerald-500 text-base leading-none flex items-center justify-center shrink-0">verified</span>
+                                        <span class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">Solution</span>
+                                    </div>
+                                    <div class="px-4 py-3 bg-white dark:bg-slate-800/60">
+                                        <p class="text-[13px] font-semibold text-slate-800 dark:text-slate-200 leading-relaxed">
+                                            <%- q.correctAnswer || q.answer || 'Model answer not provided.' %>
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- EXPLANATION -->
+                                <% if (expText !== '') { %>
+                                    <div class="bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 rounded-xl p-3.5 sm:p-4 text-xs space-y-1.5 mt-3">
+                                        <div class="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-extrabold text-xs">
+                                            <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0">lightbulb</span>
+                                            <span>Explanation</span>
+                                        </div>
+                                        <div class="text-slate-700 dark:text-slate-300 font-medium leading-relaxed">
+                                            <%= expText %>
+                                        </div>
+                                    </div>
+                                <% } %>
+
+                            </div>
+                        <% }); %>
+                    </div>
+                <% } %>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

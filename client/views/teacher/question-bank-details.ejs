@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title><%= bank.board %> <%= bank.year %> | ODDHAY Command Center</title>
+    <style>
+        * { font-family: 'Inter', 'Hind Siliguri', sans-serif !important; }
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); min-height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+        .content-scroll { flex: 1; padding: 0; }
+        
+        .cockpit-unit { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 0.375rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .dark .cockpit-unit { background: #1e293b; border-color: #334155; }
+        
+        .stat-pill { background: #f8fafc; border: 1px solid #f1f5f9; border-radius: 0.375rem; padding: 0.75rem; transition: all 0.2s ease; }
+        .dark .stat-pill { background: #0f172a; border-color: #1e293b; }
+        .stat-pill:hover { background: #ffffff; border-color: #3b82f6; transform: translateY(-1px); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .dark .stat-pill:hover { background: #1e293b; border-color: #60a5fa; }
+
+        .q-table th { background: #f8fafc; color: #64748b; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; text-align: left; }
+        .dark .q-table th { background: #0f172a; color: #94a3b8; border-bottom-color: #1e293b; }
+        .q-table td { padding: 0.75rem 1rem; font-size: 12px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #f8fafc; }
+        .dark .q-table td { color: #f1f5f9; border-bottom-color: #0f172a; }
+        .q-table tr:hover td { background: #f8fafc; }
+        .dark .q-table tr:hover td { background: #1e293b; }
+
+        .pill { padding: 0.25rem 0.6rem; border-radius: 9999px; font-size: 10px; font-weight: 800; text-transform: uppercase; display: inline-flex; align-items: center; gap: 4px; }
+        .pill-blue { background: #eff6ff; color: #2563eb; }
+        .dark .pill-blue { background: #1e3a8a; color: #93c5fd; }
+        .pill-emerald { background: #ecfdf5; color: #059669; }
+        .dark .pill-emerald { background: #064e3b; color: #6ee7b7; }
+        .pill-amber { background: #fffbeb; color: #d97706; }
+        .dark .pill-amber { background: #78350f; color: #fcd34d; }
+        .pill-rose { background: #fff1f2; color: #e11d48; }
+        .dark .pill-rose { background: #881337; color: #fda4af; }
+
+        @media (max-width: 1024px) { .admin-main { margin-left: 0; } }
+    </style>
+</head>
+
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans min-h-screen">
+    <div class="flex">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
+            <%- include('sidebar', { active: 'questions' }) %>
+        </aside>
+
+        <main class="admin-main flex-1">
+            <%- include('../admin/header_v2', { pageTitle: 'Bank Intelligence' }) %>
+
+            <div class="content-scroll flex flex-col gap-0 border-l border-slate-200 dark:border-white/5">
+                <!-- Top Summary Container -->
+                <div class="bg-white rounded-md p-4 border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h1 class="text-2xl font-black text-slate-800 dark:text-white tracking-tight"><%= bank.board %> - <%= bank.year %></h1>
+                            <div class="flex items-center gap-5 mt-3">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-slate-400 text-[18px]">book</span>
+                                    <p class="text-[13px] font-bold text-slate-700 dark:text-slate-300"><%= bank.subject %></p>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-slate-400 text-[18px]">school</span>
+                                    <p class="text-[13px] font-bold text-slate-600 dark:text-slate-400">
+                                        Class <%= (Array.isArray(bank.classLevel) ? bank.classLevel : [bank.classLevel]).map(c => String(c).replace('Class', '').trim()).join(', ') %>
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-slate-400 text-[18px]">sell</span>
+                                    <p class="text-[13px] font-bold text-slate-600 dark:text-slate-400"><%= bank.accessType %> Tier</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <div class="text-right mr-2">
+                                <h2 class="text-[11px] font-black text-slate-700 dark:text-slate-200 leading-tight"><%= bank.addedBy ? bank.addedBy.name : 'System' %></h2>
+                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Contributor</p>
+                            </div>
+                            <div class="size-9 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-white dark:border-slate-700 shadow-sm overflow-hidden">
+                                <img src="<%= bank.addedBy && bank.addedBy.profileImage ? bank.addedBy.profileImage : '/images/default-avatar.png' %>" class="size-full object-cover">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Intelligence Ring Hub -->
+                    <div class="border-t border-slate-50 dark:border-slate-800 mt-4 pt-6 pb-2">
+                        <div class="flex items-center gap-6 px-2">
+                            <!-- Donut Chart (Left) -->
+                            <div class="relative size-32 flex-shrink-0">
+                                <% 
+                                    const t = stats.total || 1;
+                                    const pM = (stats.MCQ / t) * 100;
+                                    const pS = (stats.Short / t) * 100;
+                                    const pMed = (stats.Medium / t) * 100;
+                                    const pC = (stats.Comprehension / t) * 100;
+                                %>
+                                <svg viewBox="0 0 42 42" class="size-full -rotate-90">
+                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#f1f5f9" stroke-width="4.5" class="dark:stroke-slate-800"></circle>
+                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#3b82f6" stroke-width="4.5" stroke-dasharray="<%= pM %> <%= 100 - pM %>" stroke-dashoffset="0" class="transition-all duration-1000"></circle>
+                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#10b981" stroke-width="4.5" stroke-dasharray="<%= pS %> <%= 100 - pS %>" stroke-dashoffset="<%= -pM %>" class="transition-all duration-1000"></circle>
+                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#f59e0b" stroke-width="4.5" stroke-dasharray="<%= pMed %> <%= 100 - pMed %>" stroke-dashoffset="<%= -(pM + pS) %>" class="transition-all duration-1000"></circle>
+                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#f43f5e" stroke-width="4.5" stroke-dasharray="<%= pC %> <%= 100 - pC %>" stroke-dashoffset="<%= -(pM + pS + pMed) %>" class="transition-all duration-1000"></circle>
+                                </svg>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span class="text-2xl font-black text-slate-700 dark:text-slate-200 leading-none"><%= stats.total %></span>
+                                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">Total</span>
+                                </div>
+                            </div>
+ 
+                            <!-- Legend (Middle) -->
+                            <div class="flex-1 grid grid-cols-1 gap-y-2 ml-2">
+                                <div class="flex items-center gap-3">
+                                    <div class="size-1.5 rounded-full bg-blue-500"></div>
+                                    <div class="flex items-baseline gap-1.5">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide">MCQ:</p>
+                                        <h3 class="text-base font-black text-slate-700 dark:text-slate-200 leading-none"><%= stats.MCQ %> <span class="text-[10px] font-bold text-slate-400">Items</span></h3>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div class="size-1.5 rounded-full bg-emerald-500"></div>
+                                    <div class="flex items-baseline gap-1.5">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide">Short Ques:</p>
+                                        <h3 class="text-base font-black text-slate-700 dark:text-slate-200 leading-none"><%= stats.Short %> <span class="text-[10px] font-bold text-slate-400">Items</span></h3>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div class="size-1.5 rounded-full bg-amber-500"></div>
+                                    <div class="flex items-baseline gap-1.5">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide">Medium Ques:</p>
+                                        <h3 class="text-base font-black text-slate-700 dark:text-slate-200 leading-none"><%= stats.Medium %> <span class="text-[10px] font-bold text-slate-400">Items</span></h3>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div class="size-1.5 rounded-full bg-rose-500"></div>
+                                    <div class="flex items-baseline gap-1.5">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide">Comprehension:</p>
+                                        <h3 class="text-base font-black text-slate-700 dark:text-slate-200 leading-none"><%= stats.Comprehension %> <span class="text-[10px] font-bold text-slate-400">Items</span></h3>
+                                    </div>
+                                </div>
+                            </div>
+ 
+                            <!-- Live Engagement (Right) -->
+                            <div class="w-96 border-l border-slate-50 dark:border-slate-800 pl-6 flex flex-col gap-3">
+                                <!-- Top mini stats row -->
+                                <div class="flex items-center gap-4">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="material-symbols-rounded text-[13px] text-slate-400">visibility</span>
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide"><%= engagement.views %> Views</p>
+                                    </div>
+                                    <% if (bank.accessType === 'Paid' && engagement.buyers > 0) { %>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="material-symbols-rounded text-[13px] text-amber-400">payments</span>
+                                        <p class="text-[10px] font-bold text-amber-500 tracking-wide"><%= engagement.buyers %> Buyers</p>
+                                    </div>
+                                    <% } %>
+                                </div>
+                                <!-- Exam Takers -->
+                                <div class="flex flex-col gap-1.5">
+                                    <div class="flex justify-between items-end">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide leading-none">Exam Takers</p>
+                                        <p class="text-[11px] font-black text-indigo-500 leading-none"><%= engagement.activeTakers %></p>
+                                    </div>
+                                    <div class="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-sm overflow-hidden shadow-inner">
+                                        <div class="h-full bg-indigo-500 transition-all duration-1000" style="width: <%= Math.min((engagement.activeTakers / engagement.maxTakers) * 100, 100) %>%"></div>
+                                    </div>
+                                    <% if (engagement.activeTakers === 0) { %>
+                                        <p class="text-[9px] text-slate-400 font-medium italic">Tracked when an exam is launched from this bank</p>
+                                    <% } %>
+                                </div>
+                                <!-- Avg. Study Duration -->
+                                <div class="flex flex-col gap-1.5">
+                                    <div class="flex justify-between items-end">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide leading-none">Avg. Study Duration</p>
+                                        <p class="text-[11px] font-black text-cyan-500 leading-none"><%= engagement.studyDuration %>m</p>
+                                    </div>
+                                    <div class="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-sm overflow-hidden shadow-inner">
+                                        <div class="h-full bg-cyan-500 transition-all duration-1000" style="width: <%= Math.min((engagement.studyDuration / engagement.maxDuration) * 100, 100) %>%"></div>
+                                    </div>
+                                    <% if (engagement.activeTakers === 0) { %>
+                                        <p class="text-[9px] text-slate-400 font-medium italic">Estimated based on question count</p>
+                                    <% } %>
+                                </div>
+                                <!-- Popularity Score -->
+                                <div class="flex flex-col gap-1.5">
+                                    <div class="flex justify-between items-end">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide leading-none">Popularity Score</p>
+                                        <p class="text-[11px] font-black text-rose-500 leading-none"><%= engagement.popularityScore %>%</p>
+                                    </div>
+                                    <div class="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-sm overflow-hidden shadow-inner">
+                                        <div class="h-full bg-rose-500 transition-all duration-1000" style="width: <%= engagement.popularityScore %>%"></div>
+                                    </div>
+                                    <p class="text-[9px] text-slate-400 font-medium italic">Based on views, buyers & exam activity</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Material Action Bar — only shown if a file is attached -->
+                    <% if (bank.fileUrl) { %>
+                    <div class="bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <div class="size-8 rounded bg-orange-50 dark:bg-orange-500/10 border border-orange-100 dark:border-orange-500/20 flex items-center justify-center text-orange-500">
+                                <span class="material-symbols-rounded text-base">picture_as_pdf</span>
+                            </div>
+                            <div>
+                                <p class="text-[11px] font-black text-slate-700 dark:text-slate-200 leading-none">Primary Material Asset</p>
+                                <p class="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">PDF Document</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <a href="/teacher/deploy-bank-to-quiz/<%= bank._id %>" class="h-9 px-4 rounded-md bg-emerald-600 text-white text-[11px] font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20">
+                                <span class="leading-none">Launch Exam</span>
+                            </a>
+                            <a href="<%= bank.fileUrl %>" download class="h-9 px-4 rounded-md bg-primary text-white text-[11px] font-bold flex items-center gap-2 hover:bg-blue-600 transition-all shadow-lg shadow-primary/20">
+                                <span class="material-symbols-rounded text-base leading-none">download</span>
+                                <span class="leading-none">Download Material</span>
+                            </a>
+                            <a href="<%= bank.fileUrl %>" target="_blank" class="h-9 px-4 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-bold flex items-center gap-2 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">
+                                <span class="material-symbols-rounded text-base leading-none">open_in_new</span>
+                                <span class="leading-none">Open Viewer</span>
+                            </a>
+                        </div>
+                    </div>
+                    <% } else { %>
+                    <!-- No file: show only the Launch Exam action -->
+                    <div class="bg-slate-50/50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800 px-4 py-3 flex items-center justify-end gap-2">
+                        <a href="/teacher/deploy-bank-to-quiz/<%= bank._id %>" class="h-9 px-4 rounded-md bg-emerald-600 text-white text-[11px] font-bold flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-500/20">
+                            <span class="leading-none">Launch Exam</span>
+                        </a>
+                    </div>
+                    <% } %>
+
+                </div>
+
+                <!-- Filters & List -->
+                <div class="bg-white dark:bg-[#0b1120] rounded-md border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden mb-10">
+                    <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-[#0b1120]">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div class="flex items-center gap-3">
+                                <div class="size-10 rounded-2xl bg-slate-50 flex items-center justify-center border border-slate-100">
+                                    <span class="material-symbols-rounded text-slate-400 text-[22px]">inventory_2</span>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Question Archive</h3>
+                                    <p class="text-[11px] font-bold text-slate-500 mt-0.5"><%= stats.total %> items cataloged</p>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center gap-3">
+                                <div class="flex items-center gap-2 pr-4 border-r border-slate-100 dark:border-slate-800">
+                                    <span class="text-[11px] font-bold text-slate-500">Filter type:</span>
+                                    <select onchange="filterQuestions(this.value)" class="h-9 min-w-[120px] px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] font-bold text-slate-700 dark:text-slate-200 outline-none bg-slate-50 dark:bg-slate-900 focus:border-slate-900 dark:focus:border-white transition-all">
+                                        <option value="all">All questions</option>
+                                        <option value="MCQ">Multiple choice</option>
+                                        <option value="Short">Short answer</option>
+                                        <option value="Medium">Medium complexity</option>
+                                        <option value="Comprehension">Comprehension</option>
+                                    </select>
+                                </div>
+                                <button type="button" onclick="toggleAllAnswers(this)" class="h-10 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 text-[11px] font-bold flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm">
+                                    <span class="material-symbols-rounded text-sm">visibility</span>
+                                    <span>Show All Answers</span>
+                                </button>
+                                <a href="/teacher/edit-question-bank/<%= bank._id %>" class="h-10 px-5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-[11px] font-bold flex items-center gap-2 hover:bg-black dark:hover:bg-slate-600 transition-all shadow-xl shadow-slate-900/10">
+                                    <span class="material-symbols-rounded text-sm">edit_note</span>
+                                    <span>Edit archive</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="p-6 space-y-6">
+                        <% questions.forEach((q, i) => { %>
+                            <div class="q-item p-6 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 hover:border-primary/20 transition-all bg-white dark:bg-[#0f172a] shadow-sm hover:shadow-md" data-type="<%= q.questionType %>">
+                                <!-- Top Row: Metadata & Actions -->
+                                <div class="flex items-center justify-between mb-6">
+                                    <div class="flex items-center gap-4">
+                                        <div class="size-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-lg shadow-slate-900/10">
+                                            <%= (i + 1).toString().padStart(2, '0') %>
+                                        </div>
+                                        <div class="flex items-center gap-2.5">
+                                            <span class="px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-700 border border-slate-200"><%= q.questionType %></span>
+                                            <span class="text-[10px] font-bold text-slate-500">ID: <%= q._id.toString().slice(-6).toUpperCase() %></span>
+                                        </div>
+                                    </div>
+                                    <button onclick="toggleAnswer('<%= i %>', this)" class="h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-black dark:hover:text-white transition-all shadow-sm flex items-center gap-2">
+                                        <span class="material-symbols-rounded text-sm">visibility</span>
+                                        <span class="text-[10px] font-bold">Show Answer</span>
+                                    </button>
+                                </div>
+
+                                <!-- Second Line onwards: Question Content -->
+                                <div class="pl-2">
+                                    <div class="text-[16px] font-bold text-slate-800 leading-relaxed mb-0">
+                                        <%- q.questionText || q.title || 'Untitled Question' %>
+                                    </div>
+
+                                    <!-- Answer Section (Hidden by default) -->
+                                    <div id="ans-<%= i %>" class="hidden mt-8 pt-8 border-t border-slate-100 animate-slide-up">
+                                        <% if (q.questionType === 'MCQ') { %>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-8">
+                                                <% (q.options || []).forEach((opt, idx) => { %>
+                                                    <div class="p-4 rounded-2xl border-2 <%= q.correctAnswerIndex === idx ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-500' %> text-[13px] font-bold flex gap-4 items-center">
+                                                        <div class="size-7 rounded-xl <%= q.correctAnswerIndex === idx ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500' %> flex items-center justify-center text-[11px] font-black shrink-0">
+                                                            <%= String.fromCharCode(65 + idx) %>
+                                                        </div>
+                                                        <span class="flex-1"><%= opt %></span>
+                                                    </div>
+                                                <% }) %>
+                                            </div>
+
+                                            <% const expMCQ = String(q.explanation || q.explanationText || q.solution || '').trim(); %>
+                                            <% if (expMCQ !== '') { %>
+                                                <div class="mt-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex gap-3.5 items-start">
+                                                    <div class="size-9 rounded-xl bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                                        <span class="material-symbols-rounded text-lg">lightbulb</span>
+                                                    </div>
+                                                    <div class="flex-1">
+                                                        <p class="text-[10px] font-extrabold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1">Explanation</p>
+                                                        <p class="text-[13px] font-semibold text-slate-700 dark:text-slate-300 leading-relaxed"><%= expMCQ %></p>
+                                                    </div>
+                                                </div>
+                                            <% } %>
+                                        <% } else { %>
+                                            <div class="p-6 rounded-[2rem] bg-emerald-50 border border-emerald-100">
+                                                <div class="flex items-center gap-3 mb-4">
+                                                    <div class="size-9 rounded-xl bg-slate-100 flex items-center justify-center">
+                                                        <span class="material-symbols-rounded text-slate-600">verified</span>
+                                                    </div>
+                                                    <p class="text-[10px] font-bold text-slate-500">Model solution</p>
+                                                </div>
+                                                <div class="text-[15px] font-bold text-slate-700 leading-relaxed">
+                                                    <%- q.correctAnswer || 'Answer not provided.' %>
+                                                </div>
+                                            </div>
+                                            <% const expNonMCQ = String(q.explanation || q.explanationText || q.solution || '').trim(); %>
+                                            <% if (expNonMCQ !== '') { %>
+                                                <div class="mt-4 p-4 rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex gap-3.5 items-start">
+                                                    <div class="size-9 rounded-xl bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                                        <span class="material-symbols-rounded text-lg">lightbulb</span>
+                                                    </div>
+                                                    <div class="flex-1">
+                                                        <p class="text-[10px] font-extrabold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1">Explanation</p>
+                                                        <p class="text-[13px] font-semibold text-slate-700 dark:text-slate-300 leading-relaxed"><%= expNonMCQ %></p>
+                                                    </div>
+                                                </div>
+                                            <% } %>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+
+                    <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30">
+                        <p class="text-[11px] font-bold text-slate-500">Showing all <%= stats.total %> questions</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function toggleAnswer(id, btn) {
+            console.log('Toggling answer for:', id);
+            const ans = document.getElementById(`ans-${id}`);
+            if (!ans) {
+                console.error('Answer element not found for ID:', id);
+                return;
+            }
+            if (ans.classList.contains('hidden')) {
+                ans.classList.remove('hidden');
+                btn.innerHTML = '<span class="material-symbols-rounded text-sm">visibility_off</span><span class="text-[10px] font-bold">Hide Answer</span>';
+                btn.classList.add('border-blue-500', 'text-blue-600');
+            } else {
+                ans.classList.add('hidden');
+                btn.innerHTML = '<span class="material-symbols-rounded text-sm">visibility</span><span class="text-[10px] font-bold">Show Answer</span>';
+                btn.classList.remove('border-blue-500', 'text-blue-600');
+            }
+        }
+
+        let allAnswersVisible = false;
+        function toggleAllAnswers(btn) {
+            allAnswersVisible = !allAnswersVisible;
+            document.querySelectorAll('[id^="ans-"]').forEach(ans => {
+                if (allAnswersVisible) {
+                    ans.classList.remove('hidden');
+                } else {
+                    ans.classList.add('hidden');
+                }
+            });
+            document.querySelectorAll('.q-item button[onclick^="toggleAnswer"]').forEach(b => {
+                b.innerHTML = allAnswersVisible
+                    ? '<span class="material-symbols-rounded text-sm">visibility_off</span><span class="text-[10px] font-bold">Hide Answer</span>'
+                    : '<span class="material-symbols-rounded text-sm">visibility</span><span class="text-[10px] font-bold">Show Answer</span>';
+                if (allAnswersVisible) {
+                    b.classList.add('border-blue-500', 'text-blue-600');
+                } else {
+                    b.classList.remove('border-blue-500', 'text-blue-600');
+                }
+            });
+            if (btn) {
+                const icon = btn.querySelector('.material-symbols-rounded');
+                const label = btn.querySelector('span:last-child');
+                if (icon) icon.textContent = allAnswersVisible ? 'visibility_off' : 'visibility';
+                if (label) label.textContent = allAnswersVisible ? 'Hide All Answers' : 'Show All Answers';
+            }
+        }
+
+        function filterQuestions(type) {
+            const items = document.querySelectorAll('.q-item');
+            items.forEach(item => {
+                if (type === 'all' || item.getAttribute('data-type') === type) {
+                    item.classList.remove('hidden');
+                } else {
+                    item.classList.add('hidden');
+                }
+            });
+        }
+
+        function openWizard() {
+            document.getElementById('compositionWizardModal').classList.remove('hidden');
+            document.getElementById('compositionWizardModal').classList.add('flex');
+        }
+
+        function closeWizard() {
+            document.getElementById('compositionWizardModal').classList.add('hidden');
+            document.getElementById('compositionWizardModal').classList.remove('flex');
+        }
+
+        async function startComposition() {
+            const classLevel = document.getElementById('wizClass').value;
+            const subject = document.getElementById('wizSubject').value;
+            const topic = document.getElementById('wizTopic').value;
+            const type = document.getElementById('wizType').value;
+            const count = document.getElementById('wizCount').value;
+
+            const params = new URLSearchParams({
+                class: classLevel,
+                subject: subject,
+                topic: topic,
+                type: type,
+                count: count,
+                bankId: '<%= bank._id %>'
+            });
+
+            window.location.href = `/teacher/add-question?${params.toString()}`;
+        }
+    </script>
+
+    <!-- Composition Wizard Modal -->
+    <div id="compositionWizardModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[1000] hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl border border-white/10 overflow-hidden animate-slide-up">
+            <div class="p-8">
+                <div class="flex justify-between items-center mb-8">
+                    <div>
+                        <h2 class="text-2xl font-black text-slate-900 dark:text-white leading-tight">Composition Wizard</h2>
+                        <p class="text-[11px] font-bold text-slate-500 mt-1 uppercase tracking-wider">Setup metadata before studio entry</p>
+                    </div>
+                    <button onclick="closeWizard()" class="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all flex items-center justify-center">
+                        <span class="material-symbols-rounded">close</span>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-5 mb-8">
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Class</label>
+                        <select id="wizClass" class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-primary">
+                            <% 
+                                const curCls = (Array.isArray(bank.classLevel) ? bank.classLevel : [bank.classLevel]).map(c => String(c).trim());
+                                const hasCls = (v) => curCls.includes(v) || curCls.includes('Class ' + v) || curCls.includes(v.replace('Class', '').trim());
+                            %>
+                            <option value="Class 9" <%= hasCls('9') ? 'selected' : '' %>>Class 9</option>
+                            <option value="Class 10" <%= hasCls('10') ? 'selected' : '' %>>Class 10</option>
+                            <option value="Class 11" <%= hasCls('11') ? 'selected' : '' %>>Class 11</option>
+                            <option value="Class 12" <%= hasCls('12') ? 'selected' : '' %>>Class 12</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Subject</label>
+                        <select id="wizSubject" class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-primary">
+                            <% ['Physics','Chemistry','Biology','Higher Mathematics','General Mathematics','Bangla','English','ICT','Accounting','Business Organization','Finance & Banking','Economics'].forEach(s => { %>
+                                <option value="<%= s %>" <%= bank.subject === s ? 'selected' : '' %>><%= s %></option>
+                            <% }) %>
+                        </select>
+                    </div>
+                    <div class="col-span-2 space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Chapter / Topic <span class="text-slate-400 font-medium">(Optional)</span></label>
+                        <input type="text" id="wizTopic" placeholder="e.g. Linear Motion" class="w-full h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-primary">
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Question Type</label>
+                        <select id="wizType" class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-primary">
+                            <option value="MCQ">MCQ</option>
+                            <option value="Short">Short answer</option>
+                            <option value="Medium">Medium Complexity</option>
+                            <option value="Comprehension">Comprehension</option>
+                        </select>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Quantity</label>
+                        <input type="number" id="wizCount" value="5" min="1" max="50" class="w-full h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-primary">
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <button onclick="closeWizard()" class="flex-1 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[12px] font-bold hover:bg-slate-200 transition-all">Cancel</button>
+                    <button onclick="startComposition()" class="flex-[2] h-12 rounded-lg bg-slate-900 text-white text-[12px] font-bold hover:bg-black transition-all shadow-xl shadow-slate-900/20">Make questions</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

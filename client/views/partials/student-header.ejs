@@ -1,0 +1,1173 @@
+<header class="h-[46px] shrink-0 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md flex items-center justify-between p-0 z-50 relative">
+    <!-- Left Controls (Mobile Menu Toggle & Oddhay Logo Text) -->
+    <div id="headerLeftBox" class="flex items-center gap-1.5 sm:gap-2 shrink-0 lg:w-[260px] lg:border-r border-slate-200/80 dark:border-slate-800/80 px-3 sm:px-4 h-full min-w-0 transition-all duration-300">
+        <!-- Mobile Menu Toggle Button -->
+        <button onclick="toggleMobileSidebar()" class="lg:hidden p-1 text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center shrink-0" title="Menu">
+            <span class="material-symbols-rounded text-xl leading-none">menu</span>
+        </button>
+
+        <!-- Oddhay Brand Logo Text in Sidebar Top Header Box -->
+        <div class="flex items-center min-w-0 shrink-0">
+            <a href="/dashboard" class="flex items-center gap-1.5" title="Oddhay Home">
+                <span class="font-black text-slate-900 dark:text-white text-[15px] sm:text-[17px] tracking-tight">Oddhay</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Active Page Title & Back Arrow (Displayed to the right of the sidebar division line) -->
+    <div class="flex items-center justify-between gap-1.5 sm:gap-2 px-3 sm:px-4 min-w-0 flex-1 h-full">
+        <div class="flex items-center gap-1.5 sm:gap-2 min-w-0 shrink-0">
+            <!-- Back Arrow Navigation Button (Shown on subpages) -->
+            <button id="navBackBtn" onclick="if(window.history.length > 1) { window.history.back(); } else { window.location.href='/dashboard'; }" 
+                class="p-1 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-colors items-center justify-center shrink-0 leading-none hidden" title="Go Back">
+                <span class="material-symbols-rounded text-base sm:text-lg leading-none shrink-0 flex items-center justify-center -mt-0.5 p-0 m-0">arrow_back</span>
+            </button>
+
+            <h1 id="headerPageTitle" class="text-[13px] sm:text-[14px] font-medium antialiased text-slate-600 dark:text-slate-300 truncate leading-none tracking-tight flex items-center p-0 m-0 shrink-0">
+                <% 
+                let pageTitleText = 'Dashboard';
+                if (locals.pageTitle) {
+                    pageTitleText = locals.pageTitle;
+                } else if (locals.bank && locals.bank.title) {
+                    pageTitleText = locals.bank.title;
+                } else if (locals.activePage) {
+                    const pageTitles = {
+                        'dashboard': 'Dashboard',
+                        'courses': 'Courses',
+                        'messages': 'Messages',
+                        'library': 'Library',
+                        'exams': 'Exams & Quizzes',
+                        'routine': 'Routine & Plan',
+                        'notes': 'Notes',
+                        'questions': 'Question Bank',
+                        'question-bank': 'Question Bank',
+                        'qa': 'Q&A Community',
+                        'qa-forum': 'Q&A Community',
+                        'progress': 'Progress Report',
+                        'analytics': 'Progress Report',
+                        'report-card': 'Progress Report',
+                        'payments': 'Payment History',
+                        'profile': 'My Profile'
+                    };
+                    pageTitleText = pageTitles[locals.activePage] || (locals.activePage.charAt(0).toUpperCase() + locals.activePage.slice(1));
+                }
+                %>
+                <%= pageTitleText %>
+            </h1>
+        </div>
+
+        <!-- Dynamic Navbar Tools Slot (Subject Filter & Live Search Bar for Q&A Community & Question Bank) -->
+        <div id="headerToolsSlot" class="hidden flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
+            <!-- Q&A Subject Filter Dropdown -->
+            <div id="qa-header-subject-box" class="flex items-center gap-1 shrink-0">
+                <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hidden lg:inline select-none">Subject:</span>
+                <select id="qa-header-subject" onchange="submitQaSubject(this.value)"
+                    class="px-2 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-slate-200 rounded-md outline-none cursor-pointer shrink-0">
+                    <option value="all">All Subjects</option>
+                    <% (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
+                        <option value="<%= sub %>" <%= (locals.filters && locals.filters.subject === sub) ? 'selected' : '' %>><%= sub %></option>
+                    <% }) %>
+                </select>
+            </div>
+
+            <!-- Q&A Live Search Input Bar -->
+            <div id="qa-header-search-box" class="relative flex items-center shrink-0">
+                <input type="text" id="qa-search-input" name="search" value="<%= (locals.filters && locals.filters.search) || '' %>" placeholder="Live search questions..."
+                    class="w-28 sm:w-40 md:w-52 pl-6 pr-6 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-white rounded-md outline-none focus:border-primary transition-all">
+                <span class="material-symbols-rounded absolute left-1.5 text-slate-400 text-xs flex items-center justify-center leading-none select-none pointer-events-none">search</span>
+                <button type="button" id="clear-search-btn" onclick="clearLiveSearch()" class="hidden absolute right-1.5 size-4 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                    <span class="material-symbols-rounded text-xs flex items-center justify-center leading-none">cancel</span>
+                </button>
+            </div>
+
+            <!-- Question Bank Live Search Bar -->
+            <div id="qb-header-search-box" class="hidden relative flex items-center shrink-0">
+                <input type="text" id="qb-search-input-header" 
+                    oninput="submitQbHeaderSearch(this.value)" 
+                    onkeyup="submitQbHeaderSearch(this.value)"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); submitQbHeaderSearch(this.value);}"
+                    placeholder="Search archive..." value="<%= locals.search || '' %>"
+                    class="w-28 sm:w-40 md:w-52 pl-6 pr-6 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-white rounded-md outline-none focus:border-primary transition-all">
+                <span class="material-symbols-rounded absolute left-1.5 text-slate-400 text-xs flex items-center justify-center leading-none select-none pointer-events-none">search</span>
+                <button type="button" id="qb-clear-search-btn" onclick="clearQbHeaderSearch()" class="<%= (locals.search && locals.search.trim().length > 0) ? '' : 'hidden' %> absolute right-1.5 size-4 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                    <span class="material-symbols-rounded text-xs flex items-center justify-center leading-none">cancel</span>
+                </button>
+            </div>
+
+            <!-- Notes Live Search Bar -->
+            <div id="notes-header-search-box" class="hidden relative flex items-center shrink-0">
+                <input type="text" id="notes-search-input-header" 
+                    oninput="submitNotesHeaderSearch(this.value)" 
+                    onkeyup="submitNotesHeaderSearch(this.value)"
+                    onchange="submitNotesHeaderSearch(this.value)"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); submitNotesHeaderSearch(this.value);}"
+                    placeholder="Search notes & folders..." value="<%= locals.search || '' %>"
+                    class="w-28 sm:w-40 md:w-52 pl-6 pr-6 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-white rounded-md outline-none focus:border-primary transition-all">
+                <span class="material-symbols-rounded absolute left-1.5 text-slate-400 text-xs flex items-center justify-center leading-none select-none pointer-events-none">search</span>
+                <button type="button" id="notes-clear-search-btn" onclick="clearNotesHeaderSearch()" class="<%= (locals.search && locals.search.trim().length > 0) ? '' : 'hidden' %> absolute right-1.5 size-4 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                    <span class="material-symbols-rounded text-xs flex items-center justify-center leading-none">cancel</span>
+                </button>
+            </div>
+
+            <!-- Exam History Live Search Bar -->
+            <div id="exam-history-header-search-box" class="hidden relative flex items-center shrink-0">
+                <input type="text" id="history-search-input-header" 
+                    oninput="submitHistoryHeaderSearch(this.value)" 
+                    onkeyup="submitHistoryHeaderSearch(this.value)"
+                    onchange="submitHistoryHeaderSearch(this.value)"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); submitHistoryHeaderSearch(this.value);}"
+                    placeholder="Search exam history..."
+                    class="w-28 sm:w-40 md:w-52 pl-6 pr-6 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-white rounded-md outline-none focus:border-primary transition-all">
+                <span class="material-symbols-rounded absolute left-1.5 text-slate-400 text-xs flex items-center justify-center leading-none select-none pointer-events-none">search</span>
+                <button type="button" id="history-clear-search-btn" onclick="clearHistoryHeaderSearch()" class="hidden absolute right-1.5 size-4 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                    <span class="material-symbols-rounded text-xs flex items-center justify-center leading-none">cancel</span>
+                </button>
+            </div>
+
+            <!-- Mock Tests Subject Filter Dropdown -->
+            <div id="mock-header-subject-box" class="hidden flex items-center gap-1 shrink-0">
+                <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hidden lg:inline select-none">Subject:</span>
+                <select id="mock-header-subject" onchange="submitMockSubject(this.value)"
+                    class="px-2 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-slate-200 rounded-md outline-none cursor-pointer shrink-0">
+                    <option value="all">All Subjects</option>
+                    <% (locals.assignedSubjects || locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
+                        <option value="<%= sub %>"><%= sub %></option>
+                    <% }) %>
+                </select>
+            </div>
+
+            <!-- Mock Tests Live Search Bar -->
+            <div id="mock-header-search-box" class="hidden relative flex items-center shrink-0">
+                <input type="text" id="mock-search-input-header" 
+                    oninput="submitMockHeaderSearch(this.value)" 
+                    onkeyup="submitMockHeaderSearch(this.value)"
+                    onchange="submitMockHeaderSearch(this.value)"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); submitMockHeaderSearch(this.value);}"
+                    placeholder="Search mock tests..."
+                    class="w-28 sm:w-40 md:w-52 pl-6 pr-6 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-white rounded-md outline-none focus:border-primary transition-all">
+                <span class="material-symbols-rounded absolute left-1.5 text-slate-400 text-xs flex items-center justify-center leading-none select-none pointer-events-none">search</span>
+                <button type="button" id="mock-clear-search-btn" onclick="clearMockHeaderSearch()" class="hidden absolute right-1.5 size-4 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                    <span class="material-symbols-rounded text-xs flex items-center justify-center leading-none">cancel</span>
+                </button>
+            </div>
+
+            <!-- Model Tests Subject Filter Dropdown -->
+            <div id="model-header-subject-box" class="hidden flex items-center gap-1 shrink-0">
+                <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hidden lg:inline select-none">Subject:</span>
+                <select id="model-header-subject" onchange="submitModelSubject(this.value)"
+                    class="px-2 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-slate-200 rounded-md outline-none cursor-pointer shrink-0">
+                    <option value="all">All Subjects</option>
+                    <% (locals.assignedSubjects || locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
+                        <option value="<%= sub %>"><%= sub %></option>
+                    <% }) %>
+                </select>
+            </div>
+
+            <!-- Model Tests Live Search Bar -->
+            <div id="model-header-search-box" class="hidden relative flex items-center shrink-0">
+                <input type="text" id="model-search-input-header" 
+                    oninput="submitModelHeaderSearch(this.value)" 
+                    onkeyup="submitModelHeaderSearch(this.value)"
+                    onchange="submitModelHeaderSearch(this.value)"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); submitModelHeaderSearch(this.value);}"
+                    placeholder="Search model tests..."
+                    class="w-28 sm:w-40 md:w-52 pl-6 pr-6 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-white rounded-md outline-none focus:border-primary transition-all">
+                <span class="material-symbols-rounded absolute left-1.5 text-slate-400 text-xs flex items-center justify-center leading-none select-none pointer-events-none">search</span>
+                <button type="button" id="model-clear-search-btn" onclick="clearModelHeaderSearch()" class="hidden absolute right-1.5 size-4 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                    <span class="material-symbols-rounded text-xs flex items-center justify-center leading-none">cancel</span>
+                </button>
+            </div>
+
+            <!-- Subject Tests Topic Filter Dropdown -->
+            <div id="subject-tests-header-topic-box" class="hidden flex items-center gap-1 shrink-0">
+                <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hidden lg:inline select-none">Topic:</span>
+                <select id="subject-tests-header-topic" onchange="submitSubjectTestsTopic(this.value)"
+                    class="px-2 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-slate-200 rounded-md outline-none cursor-pointer shrink-0">
+                    <option value="all">All Topics</option>
+                    <% (locals.subjectTopics || []).forEach(tp => { %>
+                        <option value="<%= tp %>"><%= tp %></option>
+                    <% }) %>
+                </select>
+            </div>
+
+            <!-- Subject Tests Live Search Bar -->
+            <div id="subject-tests-header-search-box" class="hidden relative flex items-center shrink-0">
+                <input type="text" id="subject-tests-search-input-header" 
+                    oninput="submitSubjectTestsHeaderSearch(this.value)" 
+                    onkeyup="submitSubjectTestsHeaderSearch(this.value)"
+                    onchange="submitSubjectTestsHeaderSearch(this.value)"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); submitSubjectTestsHeaderSearch(this.value);}"
+                    placeholder="Search exams or topics..."
+                    class="w-28 sm:w-40 md:w-52 pl-6 pr-6 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-white rounded-md outline-none focus:border-primary transition-all">
+                <span class="material-symbols-rounded absolute left-1.5 text-slate-400 text-xs flex items-center justify-center leading-none select-none pointer-events-none">search</span>
+                <button type="button" id="subject-tests-clear-search-btn" onclick="clearSubjectTestsHeaderSearch()" class="hidden absolute right-1.5 size-4 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                    <span class="material-symbols-rounded text-xs flex items-center justify-center leading-none">cancel</span>
+                </button>
+            </div>
+
+            <!-- Library Subject Filter Dropdown -->
+            <div id="library-header-subject-box" class="hidden relative flex items-center shrink-0">
+                <select id="library-header-subject" onchange="selectLibrarySubject(this.value)"
+                    style="-webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: none;"
+                    class="pl-6 pr-6 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-slate-200 rounded-md outline-none focus:border-primary transition-all cursor-pointer shadow-2xs">
+                    <option value="all">All Subjects</option>
+                    <% (locals.subjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
+                        <option value="<%= sub %>"><%= sub %></option>
+                    <% }) %>
+                </select>
+                <span class="material-symbols-rounded absolute left-1.5 text-primary text-xs leading-none flex items-center justify-center pointer-events-none select-none">tune</span>
+                <span class="material-symbols-rounded absolute right-1.5 text-slate-400 text-xs leading-none flex items-center justify-center pointer-events-none select-none">expand_more</span>
+            </div>
+
+            <!-- Library Live Search Bar -->
+            <div id="library-header-search-box" class="hidden relative flex items-center shrink-0">
+                <input type="text" id="library-search-input-header" 
+                    oninput="submitLibraryHeaderSearch(this.value)" 
+                    onkeyup="submitLibraryHeaderSearch(this.value)"
+                    onchange="submitLibraryHeaderSearch(this.value)"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); submitLibraryHeaderSearch(this.value);}"
+                    placeholder="Search books, guides, authors..."
+                    class="w-28 sm:w-44 md:w-56 pl-6 pr-6 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-white rounded-md outline-none focus:border-primary transition-all">
+                <span class="material-symbols-rounded absolute left-1.5 text-slate-400 text-xs flex items-center justify-center leading-none select-none pointer-events-none">search</span>
+                <button type="button" id="library-clear-search-btn" onclick="clearLibraryHeaderSearch()" class="hidden absolute right-1.5 size-4 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                    <span class="material-symbols-rounded text-xs flex items-center justify-center leading-none">cancel</span>
+                </button>
+            </div>
+
+            <!-- Courses Subject Filter Dropdown -->
+            <div id="courses-header-subject-box" class="hidden relative flex items-center shrink-0">
+                <select id="courses-header-subject" onchange="submitCoursesSubject(this.value)"
+                    style="-webkit-appearance: none; -moz-appearance: none; appearance: none; background-image: none;"
+                    class="pl-6 pr-6 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-slate-200 rounded-md outline-none focus:border-primary transition-all cursor-pointer shadow-2xs">
+                    <option value="all">All Subjects</option>
+                    <% (locals.subjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
+                        <option value="<%= sub %>" <%= (locals.activeSubject === sub) ? 'selected' : '' %>><%= sub %></option>
+                    <% }) %>
+                </select>
+                <span class="material-symbols-rounded absolute left-1.5 text-primary text-xs leading-none flex items-center justify-center pointer-events-none select-none">tune</span>
+                <span class="material-symbols-rounded absolute right-1.5 text-slate-400 text-xs leading-none flex items-center justify-center pointer-events-none select-none">expand_more</span>
+            </div>
+
+            <!-- Courses Live Search Bar -->
+            <div id="courses-header-search-box" class="hidden relative flex items-center shrink-0">
+                <input type="text" id="courses-search-input-header" 
+                    oninput="submitCoursesHeaderSearch(this.value)" 
+                    onkeyup="submitCoursesHeaderSearch(this.value)"
+                    onchange="submitCoursesHeaderSearch(this.value)"
+                    onkeydown="if(event.key==='Enter'){event.preventDefault(); submitCoursesHeaderSearch(this.value);}"
+                    placeholder="Find Course..." value="<%= locals.search || '' %>"
+                    class="w-28 sm:w-44 md:w-56 pl-6 pr-6 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-[11px] font-semibold text-slate-800 dark:text-white rounded-md outline-none focus:border-primary transition-all">
+                <span class="material-symbols-rounded absolute left-1.5 text-slate-400 text-xs flex items-center justify-center leading-none select-none pointer-events-none">search</span>
+                <button type="button" id="courses-clear-search-btn" onclick="clearCoursesHeaderSearch()" class="<%= (locals.search && locals.search.trim().length > 0) ? '' : 'hidden' %> absolute right-1.5 size-4 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                    <span class="material-symbols-rounded text-xs flex items-center justify-center leading-none">cancel</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Controls (Notifications, Dark Mode Toggle & ODDHAY Logo) -->
+    <div class="flex items-center gap-0.5 sm:gap-1 shrink-0 pr-3 sm:pr-6">
+        <!-- Notifications Dropdown -->
+        <div class="relative flex items-center justify-center">
+            <button id="notificationBtn" onclick="toggleNotifications()"
+                class="size-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary flex items-center justify-center shrink-0" title="Notifications">
+                <span class="material-symbols-rounded text-lg sm:text-[20px] leading-none">notifications</span>
+                <span id="notificationDot"
+                    class="absolute top-1.5 right-1.5 size-2 bg-rose-500 border-2 border-white dark:border-slate-900 rounded-full hidden animate-pulse"></span>
+            </button>
+            <%- include('notifications-dropdown') %>
+        </div>
+
+        <!-- Dark Mode Toggle -->
+        <button id="themeToggleBtn" onclick="toggleTheme()"
+            class="size-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary flex items-center justify-center shrink-0" title="Toggle Theme">
+            <span class="material-symbols-rounded text-lg sm:text-[20px] leading-none" id="themeIcon">dark_mode</span>
+        </button>
+
+        <!-- Profile Avatar / Icon Button -->
+        <a href="/profile" class="size-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary flex items-center justify-center shrink-0 ml-0.5 sm:ml-1 overflow-hidden" title="My Profile">
+            <% if (locals.user && user.profilePicture) { %>
+                <img src="<%= user.profilePicture %>" alt="Profile" class="size-full object-cover rounded-lg" />
+            <% } else { %>
+                <span class="material-symbols-rounded text-lg sm:text-[20px] leading-none">person</span>
+            <% } %>
+        </a>
+    </div>
+</header>
+
+<!-- Mobile Sidebar Overlay & Drawer -->
+<div id="mobileSidebarBackdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-300 lg:hidden"></div>
+<div id="mobileSidebarDrawer" class="fixed inset-y-0 left-0 w-[280px] bg-white dark:bg-[#0f172a] z-50 -translate-x-full transition-transform duration-300 ease-out shadow-2xl lg:hidden flex flex-col">
+    <div class="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
+        <div class="flex items-center gap-2">
+            <span class="font-black text-base dark:text-white">ODDHAY</span>
+        </div>
+        <button onclick="toggleMobileSidebar()" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg">
+            <span class="material-symbols-rounded text-xl">close</span>
+        </button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-3">
+        <%- include('student-sidebar', { activePage: locals.activePage }) %>
+    </div>
+</div>
+
+<script>
+    function toggleMobileSidebar() {
+        const backdrop = document.getElementById('mobileSidebarBackdrop');
+        const drawer = document.getElementById('mobileSidebarDrawer');
+        if (!backdrop || !drawer) return;
+        
+        if (drawer.classList.contains('-translate-x-full')) {
+            backdrop.classList.remove('hidden');
+            setTimeout(() => {
+                backdrop.classList.remove('opacity-0');
+                drawer.classList.remove('-translate-x-full');
+            }, 10);
+        } else {
+            backdrop.classList.add('opacity-0');
+            drawer.classList.add('-translate-x-full');
+            setTimeout(() => {
+                backdrop.classList.add('hidden');
+            }, 300);
+        }
+    }
+
+    // Handle Form Submit In-Place (No Page Redirect)
+    function handleHeaderSearchSubmit(event) {
+        event.preventDefault();
+        const searchInput = document.getElementById('studentSearchInput');
+        if (searchInput && searchInput.value.trim()) {
+            searchInput.dispatchEvent(new Event('input'));
+        }
+    }
+
+    // Live Instant Search Logic
+    (function initLiveStudentSearch() {
+        const searchInput = document.getElementById('studentSearchInput');
+        const searchDropdown = document.getElementById('studentSearchDropdown');
+        const searchResults = document.getElementById('studentSearchResults');
+        let debounceTimer;
+
+        if (!searchInput || !searchDropdown || !searchResults) return;
+
+        searchInput.addEventListener('focus', function() {
+            if (this.value.trim().length >= 1) {
+                this.dispatchEvent(new Event('input'));
+            }
+        });
+
+        searchInput.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            const query = this.value.trim();
+
+            if (!query) {
+                searchDropdown.classList.add('hidden');
+                return;
+            }
+
+            searchResults.innerHTML = `
+                <div class="p-4 text-center text-xs font-bold text-slate-400 flex items-center justify-center gap-2">
+                    <span class="material-symbols-rounded text-base animate-spin text-primary">sync</span> Searching resources...
+                </div>
+            `;
+            searchDropdown.classList.remove('hidden');
+
+            debounceTimer = setTimeout(() => {
+                fetch('/api/search?q=' + encodeURIComponent(query))
+                    .then(res => res.json())
+                    .then(data => {
+                        renderLiveResults(data, query);
+                    })
+                    .catch(err => {
+                        searchResults.innerHTML = `<div class="p-3 text-center text-xs font-bold text-rose-500">Search error</div>`;
+                    });
+            }, 180);
+        });
+
+        function renderLiveResults(data, query) {
+            const hasCourses = data.courses && data.courses.length > 0;
+            const hasNotes = data.notes && data.notes.length > 0;
+            const hasVideos = data.videos && data.videos.length > 0;
+            const hasBooks = data.books && data.books.length > 0;
+            const hasQuestionBanks = data.questionBanks && data.questionBanks.length > 0;
+            const hasQuizzes = data.quizzes && data.quizzes.length > 0;
+            const hasQA = data.qa && data.qa.length > 0;
+
+            if (!hasCourses && !hasNotes && !hasVideos && !hasBooks && !hasQuestionBanks && !hasQuizzes && !hasQA) {
+                searchResults.innerHTML = `
+                    <div class="p-4 text-center text-xs font-bold text-slate-400">
+                        No resources found matching "${query}"
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+
+            if (hasCourses) {
+                html += `<div class="text-[9px] font-bold uppercase text-primary tracking-wider px-2 pt-1 pb-0.5">Courses (${data.courses.length})</div>`;
+                data.courses.forEach(c => {
+                    html += `
+                        <a href="/courses" class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group">
+                            <div class="size-7 rounded bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-sm">auto_stories</span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-primary">${c.title}</p>
+                                <p class="text-[9px] font-semibold text-slate-400 uppercase">${c.subject || 'General'} ${c.classLevel ? '• ' + c.classLevel : ''}</p>
+                            </div>
+                        </a>
+                    `;
+                });
+            }
+
+            if (hasNotes) {
+                html += `<div class="text-[9px] font-bold uppercase text-primary tracking-wider px-2 pt-2 pb-0.5">Notes (${data.notes.length})</div>`;
+                data.notes.forEach(n => {
+                    html += `
+                        <a href="/note/${n._id}" class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group">
+                            <div class="size-7 rounded bg-blue-50 dark:bg-slate-800 text-blue-500 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-sm">description</span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-primary">${n.title}</p>
+                                <p class="text-[9px] font-semibold text-slate-400 uppercase">${n.subject || 'Note'} ${n.classLevel ? '• ' + n.classLevel : ''}</p>
+                            </div>
+                        </a>
+                    `;
+                });
+            }
+
+            if (hasVideos) {
+                html += `<div class="text-[9px] font-bold uppercase text-primary tracking-wider px-2 pt-2 pb-0.5">Video Lessons (${data.videos.length})</div>`;
+                data.videos.forEach(v => {
+                    html += `
+                        <a href="/courses" class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group">
+                            <div class="size-7 rounded bg-rose-50 dark:bg-slate-800 text-rose-500 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-sm">play_circle</span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-primary">${v.title}</p>
+                                <p class="text-[9px] font-semibold text-slate-400 uppercase">${v.subject || 'Video'} ${v.classLevel ? '• ' + v.classLevel : ''}</p>
+                            </div>
+                        </a>
+                    `;
+                });
+            }
+
+            if (hasQuizzes) {
+                html += `<div class="text-[9px] font-bold uppercase text-primary tracking-wider px-2 pt-2 pb-0.5">Exams & Quizzes (${data.quizzes.length})</div>`;
+                data.quizzes.forEach(q => {
+                    html += `
+                        <a href="/exams" class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group">
+                            <div class="size-7 rounded bg-amber-50 dark:bg-slate-800 text-amber-500 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-sm">psychology</span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-primary">${q.title}</p>
+                                <p class="text-[9px] font-semibold text-slate-400 uppercase">${q.subject || 'Quiz'} ${q.classLevel ? '• ' + q.classLevel : ''}</p>
+                            </div>
+                        </a>
+                    `;
+                });
+            }
+
+            if (hasQuestionBanks) {
+                html += `<div class="text-[9px] font-bold uppercase text-primary tracking-wider px-2 pt-2 pb-0.5">Question Bank (${data.questionBanks.length})</div>`;
+                data.questionBanks.forEach(q => {
+                    html += `
+                        <a href="/question-bank" class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group">
+                            <div class="size-7 rounded bg-purple-50 dark:bg-slate-800 text-purple-500 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-sm">archive</span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-primary">${q.subject} (${q.board || ''} ${q.year || ''})</p>
+                                <p class="text-[9px] font-semibold text-slate-400 uppercase">${q.classLevel || 'Paper'}</p>
+                            </div>
+                        </a>
+                    `;
+                });
+            }
+
+            if (hasBooks) {
+                html += `<div class="text-[9px] font-bold uppercase text-primary tracking-wider px-2 pt-2 pb-0.5">Library (${data.books.length})</div>`;
+                data.books.forEach(b => {
+                    html += `
+                        <a href="/library" class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group">
+                            <div class="size-7 rounded bg-emerald-50 dark:bg-slate-800 text-emerald-500 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-sm">local_library</span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-primary">${b.title}</p>
+                                <p class="text-[9px] font-semibold text-slate-400 uppercase">${b.category || 'Book'}</p>
+                            </div>
+                        </a>
+                    `;
+                });
+            }
+
+            if (hasQA) {
+                html += `<div class="text-[9px] font-bold uppercase text-primary tracking-wider px-2 pt-2 pb-0.5">Q&A Forum (${data.qa.length})</div>`;
+                data.qa.forEach(q => {
+                    html += `
+                        <a href="/qa-forum" class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group">
+                            <div class="size-7 rounded bg-rose-50 dark:bg-slate-800 text-rose-500 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-sm">forum</span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-primary">${q.question}</p>
+                                <p class="text-[9px] font-semibold text-slate-400 uppercase">By ${q.askedByName || 'Member'}</p>
+                            </div>
+                        </a>
+                    `;
+                });
+            }
+
+            searchResults.innerHTML = html;
+        }
+
+        // Close on click outside
+        document.addEventListener('click', function(e) {
+            if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
+                searchDropdown.classList.add('hidden');
+            }
+        });
+
+        // Close on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                searchDropdown.classList.add('hidden');
+            }
+        });
+    })();
+
+    // Dynamic Page Title Controller (Guarantees exact title matching the current page URL)
+    (function() {
+        const titleElem = document.getElementById('headerPageTitle');
+        if (!titleElem) return;
+
+        const path = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/dashboard';
+        const pathToTitle = {
+            '': 'Dashboard',
+            '/dashboard': 'Dashboard',
+            '/courses': 'Courses',
+            '/my-courses': 'My Courses',
+            '/messages': 'Messages',
+            '/library': 'Library',
+            '/exams': 'Exams & Quizzes',
+            '/routine': 'Routine & Plan',
+            '/notes': 'Notes',
+            '/question-bank': 'Question Bank',
+            '/questions': 'Question Bank',
+            '/qa-forum': 'Q&A Community',
+            '/qa': 'Q&A Community',
+            '/report-card': 'Progress Report',
+            '/analytics': 'Progress Report',
+            '/progress': 'Progress Report',
+            '/progress-report': 'Progress Report',
+            '/my-payments': 'Payment History',
+            '/payments': 'Payment History',
+            '/payment/history': 'Payment History',
+            '/profile': 'My Profile',
+            '/profile/edit': 'Edit Profile',
+            '/profile/security': 'Security Settings',
+            '/security': 'Security Settings',
+            '/leaderboard': 'Leaderboard',
+            '/subject-tests': 'Subject Tests',
+            '/exams/subject-tests': 'Subject Tests',
+            '/mock-tests': 'Mock Test',
+            '/exams/mock-tests': 'Mock Test',
+            '/model-tests': 'Model Test',
+            '/exams/model-tests': 'Model Test',
+            '/custom-test': 'Custom Quiz',
+            '/exams/custom-test': 'Custom Quiz',
+            '/exams/custom-start': 'Custom Quiz',
+            '/exams/history': 'Exam History',
+            '/exam/history': 'Exam History',
+            '/notices': 'Notices & Updates'
+        };
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const subParam = urlParams.get('subject');
+
+        if (path === '/exams/subject-tests' || path === '/subject-tests') {
+            if (subParam && subParam !== 'all') {
+                titleElem.textContent = `Subject Tests / ${decodeURIComponent(subParam)}`;
+            } else {
+                titleElem.textContent = 'Subject Tests';
+            }
+        } else if (pathToTitle[path]) {
+            titleElem.textContent = pathToTitle[path];
+        } else {
+            const currentTxt = titleElem.textContent ? titleElem.textContent.trim() : '';
+            if (path.includes('/exams/subject-tests') || path.includes('/subject-tests')) {
+                if (subParam && subParam !== 'all') {
+                    titleElem.textContent = `Subject Tests / ${decodeURIComponent(subParam)}`;
+                } else {
+                    titleElem.textContent = 'Subject Tests';
+                }
+            } else if (path.includes('/exams/model-tests') || path.includes('/model-tests')) {
+                titleElem.textContent = 'Model Test';
+            } else if (path.includes('/exams/mock-tests') || path.includes('/mock-tests')) {
+                titleElem.textContent = 'Mock Test';
+            } else if (path.includes('/exams/history') || path.includes('/exam/history')) {
+                titleElem.textContent = 'Exam History';
+            } else if (path.includes('/exams/custom-test') || path.includes('/custom-test')) {
+                titleElem.textContent = 'Custom Quiz';
+            } else if (path.includes('/question-bank/view/') || path.includes('/question-bank/solve/') || path.includes('/question-bank/result/') || path.includes('/question-bank/review/') || path.includes('/question-bank/written')) {
+                if (!currentTxt || currentTxt === 'Dashboard') {
+                    titleElem.textContent = 'Question Bank Result';
+                }
+            } else if (!currentTxt || currentTxt === 'Dashboard') {
+                if (path.includes('/course/')) {
+                    titleElem.textContent = 'Course Details';
+                } else if (path.includes('/note/')) {
+                    titleElem.textContent = 'Note Viewer';
+                } else if (path.includes('/exam/')) {
+                    titleElem.textContent = 'Exam & Quiz';
+                } else if (path.includes('/notice/')) {
+                    titleElem.textContent = 'Notice Details';
+                }
+            }
+        }
+    })();
+
+    // Back Arrow Navigation Button Controller (Only shown when navigated deeper from a main sidebar page)
+    (function() {
+        const backBtn = document.getElementById('navBackBtn');
+        if (backBtn) {
+            const currentPath = window.location.pathname.toLowerCase();
+            const mainSidebarPages = [
+                '/',
+                '/dashboard',
+                '/dashboard/',
+                '/courses',
+                '/courses/',
+                '/messages',
+                '/messages/',
+                '/library',
+                '/library/',
+                '/exams',
+                '/exams/',
+                '/routine',
+                '/routine/',
+                '/notes',
+                '/notes/',
+                '/question-bank',
+                '/question-bank/',
+                '/questions',
+                '/questions/',
+                '/qa-forum',
+                '/qa-forum/',
+                '/qa',
+                '/qa/',
+                '/report-card',
+                '/report-card/',
+                '/analytics',
+                '/analytics/',
+                '/progress',
+                '/progress/',
+                '/progress-report',
+                '/progress-report/',
+                '/my-payments',
+                '/my-payments/',
+                '/payments',
+                '/payments/',
+                '/payment/history',
+                '/payment/history/',
+                '/profile',
+                '/profile/',
+                '/profile/security',
+                '/profile/security/',
+                '/security',
+                '/security/',
+                '/leaderboard',
+                '/leaderboard/'
+            ];
+
+            const isMainSidebarPage = mainSidebarPages.includes(currentPath);
+
+            if (!isMainSidebarPage) {
+                backBtn.classList.remove('hidden');
+                backBtn.classList.add('flex');
+            } else {
+                backBtn.classList.add('hidden');
+                backBtn.classList.remove('flex');
+            }
+        }
+    })();
+
+    // Dynamic Header Tools Controller
+    (function() {
+        const headerTools = document.getElementById('headerToolsSlot');
+        if (headerTools) {
+            const currentPath = window.location.pathname.toLowerCase().replace(/\/$/, '') || '/dashboard';
+            const isQaPage = currentPath === '/qa' || currentPath === '/qa-forum';
+            const isQbPage = currentPath === '/question-bank' || currentPath === '/questions';
+            const isNotesPage = currentPath === '/notes' || currentPath === '/lecture-notes' || currentPath === '/my-notes';
+            const isHistoryPage = currentPath === '/exams/history' || currentPath === '/exam/history';
+            const isMockPage = currentPath === '/exams/mock-tests' || currentPath === '/mock-tests';
+            const isModelPage = currentPath === '/exams/model-tests' || currentPath === '/model-tests';
+            const isSubjectTestsPage = currentPath === '/exams/subject-tests' || currentPath === '/subject-tests';
+            const isLibraryPage = currentPath === '/library' || currentPath === '/library/';
+            const isCoursesPage = currentPath === '/courses' || currentPath === '/courses/';
+
+            const qaSubjectBox = document.getElementById('qa-header-subject-box');
+            const qaSearchBox = document.getElementById('qa-header-search-box');
+            const qbSearchBox = document.getElementById('qb-header-search-box');
+            const notesSearchBox = document.getElementById('notes-header-search-box');
+            const historySearchBox = document.getElementById('exam-history-header-search-box');
+            const mockSubjectBox = document.getElementById('mock-header-subject-box');
+            const mockSearchBox = document.getElementById('mock-header-search-box');
+            const modelSubjectBox = document.getElementById('model-header-subject-box');
+            const modelSearchBox = document.getElementById('model-header-search-box');
+            const subjectTestsTopicBox = document.getElementById('subject-tests-header-topic-box');
+            const subjectTestsSearchBox = document.getElementById('subject-tests-header-search-box');
+            const librarySubjectBox = document.getElementById('library-header-subject-box');
+            const librarySearchBox = document.getElementById('library-header-search-box');
+            const coursesSubjectBox = document.getElementById('courses-header-subject-box');
+            const coursesSearchBox = document.getElementById('courses-header-search-box');
+
+            if (isQaPage) {
+                headerTools.classList.remove('hidden');
+                headerTools.classList.add('flex');
+                if (qaSubjectBox) qaSubjectBox.classList.remove('hidden');
+                if (qaSearchBox) qaSearchBox.classList.remove('hidden');
+                if (qbSearchBox) qbSearchBox.classList.add('hidden');
+                if (notesSearchBox) notesSearchBox.classList.add('hidden');
+                if (historySearchBox) historySearchBox.classList.add('hidden');
+                if (mockSubjectBox) mockSubjectBox.classList.add('hidden');
+                if (mockSearchBox) mockSearchBox.classList.add('hidden');
+                if (modelSubjectBox) modelSubjectBox.classList.add('hidden');
+                if (modelSearchBox) modelSearchBox.classList.add('hidden');
+                if (subjectTestsTopicBox) subjectTestsTopicBox.classList.add('hidden');
+                if (subjectTestsSearchBox) subjectTestsSearchBox.classList.add('hidden');
+                if (librarySubjectBox) librarySubjectBox.classList.add('hidden');
+                if (librarySearchBox) librarySearchBox.classList.add('hidden');
+                if (coursesSubjectBox) coursesSubjectBox.classList.add('hidden');
+                if (coursesSearchBox) coursesSearchBox.classList.add('hidden');
+            } else if (isQbPage) {
+                headerTools.classList.remove('hidden');
+                headerTools.classList.add('flex');
+                if (qaSubjectBox) qaSubjectBox.classList.add('hidden');
+                if (qaSearchBox) qaSearchBox.classList.add('hidden');
+                if (qbSearchBox) qbSearchBox.classList.remove('hidden');
+                if (notesSearchBox) notesSearchBox.classList.add('hidden');
+                if (historySearchBox) historySearchBox.classList.add('hidden');
+                if (mockSubjectBox) mockSubjectBox.classList.add('hidden');
+                if (mockSearchBox) mockSearchBox.classList.add('hidden');
+                if (modelSubjectBox) modelSubjectBox.classList.add('hidden');
+                if (modelSearchBox) modelSearchBox.classList.add('hidden');
+                if (subjectTestsTopicBox) subjectTestsTopicBox.classList.add('hidden');
+                if (subjectTestsSearchBox) subjectTestsSearchBox.classList.add('hidden');
+                if (librarySubjectBox) librarySubjectBox.classList.add('hidden');
+                if (librarySearchBox) librarySearchBox.classList.add('hidden');
+                if (coursesSubjectBox) coursesSubjectBox.classList.add('hidden');
+                if (coursesSearchBox) coursesSearchBox.classList.add('hidden');
+            } else if (isNotesPage) {
+                headerTools.classList.remove('hidden');
+                headerTools.classList.add('flex');
+                if (qaSubjectBox) qaSubjectBox.classList.add('hidden');
+                if (qaSearchBox) qaSearchBox.classList.add('hidden');
+                if (qbSearchBox) qbSearchBox.classList.add('hidden');
+                if (notesSearchBox) notesSearchBox.classList.remove('hidden');
+                if (historySearchBox) historySearchBox.classList.add('hidden');
+                if (mockSubjectBox) mockSubjectBox.classList.add('hidden');
+                if (mockSearchBox) mockSearchBox.classList.add('hidden');
+                if (modelSubjectBox) modelSubjectBox.classList.add('hidden');
+                if (modelSearchBox) modelSearchBox.classList.add('hidden');
+                if (subjectTestsTopicBox) subjectTestsTopicBox.classList.add('hidden');
+                if (subjectTestsSearchBox) subjectTestsSearchBox.classList.add('hidden');
+                if (librarySubjectBox) librarySubjectBox.classList.add('hidden');
+                if (librarySearchBox) librarySearchBox.classList.add('hidden');
+                if (coursesSubjectBox) coursesSubjectBox.classList.add('hidden');
+                if (coursesSearchBox) coursesSearchBox.classList.add('hidden');
+            } else if (isHistoryPage) {
+                headerTools.classList.remove('hidden');
+                headerTools.classList.add('flex');
+                if (qaSubjectBox) qaSubjectBox.classList.add('hidden');
+                if (qaSearchBox) qaSearchBox.classList.add('hidden');
+                if (qbSearchBox) qbSearchBox.classList.add('hidden');
+                if (notesSearchBox) notesSearchBox.classList.add('hidden');
+                if (historySearchBox) historySearchBox.classList.remove('hidden');
+                if (mockSubjectBox) mockSubjectBox.classList.add('hidden');
+                if (mockSearchBox) mockSearchBox.classList.add('hidden');
+                if (modelSubjectBox) modelSubjectBox.classList.add('hidden');
+                if (modelSearchBox) modelSearchBox.classList.add('hidden');
+                if (subjectTestsTopicBox) subjectTestsTopicBox.classList.add('hidden');
+                if (subjectTestsSearchBox) subjectTestsSearchBox.classList.add('hidden');
+                if (librarySubjectBox) librarySubjectBox.classList.add('hidden');
+                if (librarySearchBox) librarySearchBox.classList.add('hidden');
+                if (coursesSubjectBox) coursesSubjectBox.classList.add('hidden');
+                if (coursesSearchBox) coursesSearchBox.classList.add('hidden');
+            } else if (isMockPage) {
+                headerTools.classList.remove('hidden');
+                headerTools.classList.add('flex');
+                if (qaSubjectBox) qaSubjectBox.classList.add('hidden');
+                if (qaSearchBox) qaSearchBox.classList.add('hidden');
+                if (qbSearchBox) qbSearchBox.classList.add('hidden');
+                if (notesSearchBox) notesSearchBox.classList.add('hidden');
+                if (historySearchBox) historySearchBox.classList.add('hidden');
+                if (mockSubjectBox) mockSubjectBox.classList.remove('hidden');
+                if (mockSearchBox) mockSearchBox.classList.remove('hidden');
+                if (modelSubjectBox) modelSubjectBox.classList.add('hidden');
+                if (modelSearchBox) modelSearchBox.classList.add('hidden');
+                if (subjectTestsTopicBox) subjectTestsTopicBox.classList.add('hidden');
+                if (subjectTestsSearchBox) subjectTestsSearchBox.classList.add('hidden');
+                if (librarySubjectBox) librarySubjectBox.classList.add('hidden');
+                if (librarySearchBox) librarySearchBox.classList.add('hidden');
+                if (coursesSubjectBox) coursesSubjectBox.classList.add('hidden');
+                if (coursesSearchBox) coursesSearchBox.classList.add('hidden');
+            } else if (isModelPage) {
+                headerTools.classList.remove('hidden');
+                headerTools.classList.add('flex');
+                if (qaSubjectBox) qaSubjectBox.classList.add('hidden');
+                if (qaSearchBox) qaSearchBox.classList.add('hidden');
+                if (qbSearchBox) qbSearchBox.classList.add('hidden');
+                if (notesSearchBox) notesSearchBox.classList.add('hidden');
+                if (historySearchBox) historySearchBox.classList.add('hidden');
+                if (mockSubjectBox) mockSubjectBox.classList.add('hidden');
+                if (mockSearchBox) mockSearchBox.classList.add('hidden');
+                if (modelSubjectBox) modelSubjectBox.classList.remove('hidden');
+                if (modelSearchBox) modelSearchBox.classList.remove('hidden');
+                if (subjectTestsTopicBox) subjectTestsTopicBox.classList.add('hidden');
+                if (subjectTestsSearchBox) subjectTestsSearchBox.classList.add('hidden');
+                if (librarySubjectBox) librarySubjectBox.classList.add('hidden');
+                if (librarySearchBox) librarySearchBox.classList.add('hidden');
+                if (coursesSubjectBox) coursesSubjectBox.classList.add('hidden');
+                if (coursesSearchBox) coursesSearchBox.classList.add('hidden');
+            } else if (isSubjectTestsPage) {
+                headerTools.classList.remove('hidden');
+                headerTools.classList.add('flex');
+                if (qaSubjectBox) qaSubjectBox.classList.add('hidden');
+                if (qaSearchBox) qaSearchBox.classList.add('hidden');
+                if (qbSearchBox) qbSearchBox.classList.add('hidden');
+                if (notesSearchBox) notesSearchBox.classList.add('hidden');
+                if (historySearchBox) historySearchBox.classList.add('hidden');
+                if (mockSubjectBox) mockSubjectBox.classList.add('hidden');
+                if (mockSearchBox) mockSearchBox.classList.add('hidden');
+                if (modelSubjectBox) modelSubjectBox.classList.add('hidden');
+                if (modelSearchBox) modelSearchBox.classList.add('hidden');
+                if (subjectTestsTopicBox) subjectTestsTopicBox.classList.remove('hidden');
+                if (subjectTestsSearchBox) subjectTestsSearchBox.classList.remove('hidden');
+                if (librarySubjectBox) librarySubjectBox.classList.add('hidden');
+                if (librarySearchBox) librarySearchBox.classList.add('hidden');
+                if (coursesSubjectBox) coursesSubjectBox.classList.add('hidden');
+                if (coursesSearchBox) coursesSearchBox.classList.add('hidden');
+            } else if (isLibraryPage) {
+                headerTools.classList.remove('hidden');
+                headerTools.classList.add('flex');
+                if (qaSubjectBox) qaSubjectBox.classList.add('hidden');
+                if (qaSearchBox) qaSearchBox.classList.add('hidden');
+                if (qbSearchBox) qbSearchBox.classList.add('hidden');
+                if (notesSearchBox) notesSearchBox.classList.add('hidden');
+                if (historySearchBox) historySearchBox.classList.add('hidden');
+                if (mockSubjectBox) mockSubjectBox.classList.add('hidden');
+                if (mockSearchBox) mockSearchBox.classList.add('hidden');
+                if (modelSubjectBox) modelSubjectBox.classList.add('hidden');
+                if (modelSearchBox) modelSearchBox.classList.add('hidden');
+                if (subjectTestsTopicBox) subjectTestsTopicBox.classList.add('hidden');
+                if (subjectTestsSearchBox) subjectTestsSearchBox.classList.add('hidden');
+                if (librarySubjectBox) librarySubjectBox.classList.remove('hidden');
+                if (librarySearchBox) librarySearchBox.classList.remove('hidden');
+                if (coursesSubjectBox) coursesSubjectBox.classList.add('hidden');
+                if (coursesSearchBox) coursesSearchBox.classList.add('hidden');
+            } else if (isCoursesPage) {
+                headerTools.classList.remove('hidden');
+                headerTools.classList.add('flex');
+                if (qaSubjectBox) qaSubjectBox.classList.add('hidden');
+                if (qaSearchBox) qaSearchBox.classList.add('hidden');
+                if (qbSearchBox) qbSearchBox.classList.add('hidden');
+                if (notesSearchBox) notesSearchBox.classList.add('hidden');
+                if (historySearchBox) historySearchBox.classList.add('hidden');
+                if (mockSubjectBox) mockSubjectBox.classList.add('hidden');
+                if (mockSearchBox) mockSearchBox.classList.add('hidden');
+                if (modelSubjectBox) modelSubjectBox.classList.add('hidden');
+                if (modelSearchBox) modelSearchBox.classList.add('hidden');
+                if (subjectTestsTopicBox) subjectTestsTopicBox.classList.add('hidden');
+                if (subjectTestsSearchBox) subjectTestsSearchBox.classList.add('hidden');
+                if (librarySubjectBox) librarySubjectBox.classList.add('hidden');
+                if (librarySearchBox) librarySearchBox.classList.add('hidden');
+                if (coursesSubjectBox) coursesSubjectBox.classList.remove('hidden');
+                if (coursesSearchBox) coursesSearchBox.classList.remove('hidden');
+            } else {
+                headerTools.classList.add('hidden');
+                headerTools.classList.remove('flex');
+            }
+        }
+    })();
+
+    function submitCoursesSubject(val) {
+        if (typeof window.filterCoursesWithSubject === 'function') {
+            window.filterCoursesWithSubject(val);
+        }
+    }
+
+    function submitCoursesHeaderSearch(val) {
+        const clearBtn = document.getElementById('courses-clear-search-btn');
+        if (clearBtn) {
+            if (val && val.trim().length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+        }
+        if (typeof window.filterCoursesWithSearch === 'function') {
+            window.filterCoursesWithSearch(val);
+        }
+    }
+
+    function clearCoursesHeaderSearch() {
+        const headerInput = document.getElementById('courses-search-input-header');
+        if (headerInput) {
+            headerInput.value = '';
+            submitCoursesHeaderSearch('');
+        }
+    }
+
+    function selectLibrarySubject(subject) {
+        const sel = document.getElementById('library-header-subject');
+        if (sel && sel.value !== subject) {
+            sel.value = subject;
+        }
+        window.currentSelectedLibrarySubject = subject;
+
+        const label = document.getElementById('library-filter-label');
+        if (label) {
+            label.textContent = subject === 'all' ? 'All Subjects' : subject;
+        }
+        const options = document.querySelectorAll('.lib-sub-option');
+        options.forEach(opt => {
+            const optSub = opt.getAttribute('data-subject');
+            const chk = opt.querySelector('.checkmark-icon');
+            if (optSub === subject) {
+                opt.className = 'lib-sub-option w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-semibold text-primary bg-primary/10 flex items-center justify-between transition-colors';
+                if (chk) chk.classList.remove('hidden');
+            } else {
+                opt.className = 'lib-sub-option w-full px-2.5 py-1.5 rounded-lg text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-between transition-colors';
+                if (chk) chk.classList.add('hidden');
+            }
+        });
+        const popover = document.getElementById('library-filter-popover');
+        if (popover) popover.classList.add('hidden');
+
+        if (typeof window.filterLibraryWithSubject === 'function') {
+            window.filterLibraryWithSubject(subject);
+        }
+    }
+
+    function toggleLibraryFilterDropdown(e) {
+        if (e) e.stopPropagation();
+        const popover = document.getElementById('library-filter-popover');
+        if (popover) popover.classList.toggle('hidden');
+    }
+
+    function submitLibraryHeaderSearch(val) {
+        const clearBtn = document.getElementById('library-clear-search-btn');
+        if (clearBtn) {
+            if (val && val.trim().length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+        }
+        if (typeof window.filterLibraryWithSearch === 'function') {
+            window.filterLibraryWithSearch(val);
+        }
+    }
+
+    function clearLibraryHeaderSearch() {
+        const headerInput = document.getElementById('library-search-input-header');
+        if (headerInput) {
+            headerInput.value = '';
+            submitLibraryHeaderSearch('');
+        }
+    }
+
+    document.addEventListener('click', function(e) {
+        const popover = document.getElementById('library-filter-popover');
+        const trigger = document.getElementById('library-filter-trigger');
+        if (popover && !popover.classList.contains('hidden')) {
+            if (trigger && !trigger.contains(e.target) && !popover.contains(e.target)) {
+                popover.classList.add('hidden');
+            }
+        }
+    });
+
+    function submitSubjectTestsTopic(val) {
+        if (typeof window.filterSubjectTestsWithTopic === 'function') {
+            window.filterSubjectTestsWithTopic(val);
+        }
+    }
+
+    function submitSubjectTestsHeaderSearch(val) {
+        const clearBtn = document.getElementById('subject-tests-clear-search-btn');
+        if (clearBtn) {
+            if (val && val.trim().length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+        }
+        if (typeof window.filterSubjectTestsWithSearch === 'function') {
+            window.filterSubjectTestsWithSearch(val);
+        }
+    }
+
+    function clearSubjectTestsHeaderSearch() {
+        const headerInput = document.getElementById('subject-tests-search-input-header');
+        if (headerInput) {
+            headerInput.value = '';
+            submitSubjectTestsHeaderSearch('');
+        }
+    }
+
+    function submitModelSubject(val) {
+        if (typeof window.filterModelWithSubject === 'function') {
+            window.filterModelWithSubject(val);
+        }
+    }
+
+    function submitModelHeaderSearch(val) {
+        const clearBtn = document.getElementById('model-clear-search-btn');
+        if (clearBtn) {
+            if (val && val.trim().length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+        }
+        if (typeof window.filterModelWithSearch === 'function') {
+            window.filterModelWithSearch(val);
+        }
+    }
+
+    function clearModelHeaderSearch() {
+        const headerInput = document.getElementById('model-search-input-header');
+        if (headerInput) {
+            headerInput.value = '';
+            submitModelHeaderSearch('');
+        }
+    }
+
+    function submitMockSubject(val) {
+        if (typeof window.filterMockWithSubject === 'function') {
+            window.filterMockWithSubject(val);
+        }
+    }
+
+    function submitMockHeaderSearch(val) {
+        const clearBtn = document.getElementById('mock-clear-search-btn');
+        if (clearBtn) {
+            if (val && val.trim().length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+        }
+        if (typeof window.filterMockWithSearch === 'function') {
+            window.filterMockWithSearch(val);
+        }
+    }
+
+    function clearMockHeaderSearch() {
+        const headerInput = document.getElementById('mock-search-input-header');
+        if (headerInput) {
+            headerInput.value = '';
+            submitMockHeaderSearch('');
+        }
+    }
+
+    function submitHistoryHeaderSearch(val) {
+        const clearBtn = document.getElementById('history-clear-search-btn');
+        if (clearBtn) {
+            if (val && val.trim().length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+        }
+        if (typeof window.filterHistoryWithQuery === 'function') {
+            window.filterHistoryWithQuery(val);
+        }
+    }
+
+    function clearHistoryHeaderSearch() {
+        const headerInput = document.getElementById('history-search-input-header');
+        if (headerInput) {
+            headerInput.value = '';
+            submitHistoryHeaderSearch('');
+        }
+    }
+
+    function submitNotesHeaderSearch(val) {
+        const clearBtn = document.getElementById('notes-clear-search-btn');
+        if (clearBtn) {
+            if (val && val.trim().length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+        }
+        const pageSearchInput = document.getElementById('explorer-search-input');
+        if (pageSearchInput) {
+            pageSearchInput.value = val;
+        }
+        if (window.explorer && typeof window.explorer.onSearch === 'function') {
+            window.explorer.onSearch(val);
+        }
+    }
+
+    function clearNotesHeaderSearch() {
+        const headerInput = document.getElementById('notes-search-input-header');
+        if (headerInput) {
+            headerInput.value = '';
+            submitNotesHeaderSearch('');
+        }
+    }
+
+    function submitQbHeaderSearch(val) {
+        const clearBtn = document.getElementById('qb-clear-search-btn');
+        if (clearBtn) {
+            if (val && val.trim().length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+        }
+        const pageSearchInput = document.getElementById('qb-search-input');
+        if (pageSearchInput) {
+            pageSearchInput.value = val;
+        }
+        if (window.qbExplorer && typeof qbExplorer.onSearch === 'function') {
+            qbExplorer.onSearch(val);
+        }
+    }
+
+    function clearQbHeaderSearch() {
+        const headerInput = document.getElementById('qb-search-input-header');
+        if (headerInput) {
+            headerInput.value = '';
+            submitQbHeaderSearch('');
+        }
+    }
+
+    function submitQaSubject(val) {
+        const form = document.getElementById('qa-filter-form');
+        if (form) {
+            let subInput = form.querySelector('input[name="subject"]');
+            if (!subInput) {
+                subInput = document.createElement('input');
+                subInput.type = 'hidden';
+                subInput.name = 'subject';
+                form.appendChild(subInput);
+            }
+            subInput.value = val;
+            form.submit();
+        } else {
+            const url = new URL(window.location.href);
+            url.searchParams.set('subject', val);
+            window.location.href = url.toString();
+        }
+    }
+</script>

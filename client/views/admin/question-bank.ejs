@@ -1,189 +1,657 @@
 <!DOCTYPE html>
-<html class="light" lang="bn">
-
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
 <head>
-    <title>কোশ্চেন ব্যাংক | ODDHAY Admin</title>
     <%- include('../partials/head') %>
-        <style>
-            :root {
-                --admin-sidebar-width: 280px;
-            }
-
-            .admin-sidebar {
-                width: var(--admin-sidebar-width);
-                height: 100vh;
-                position: fixed;
-                left: 0;
-                top: 0;
-                z-index: 100;
-            }
-
-            .admin-main {
-                margin-left: var(--admin-sidebar-width);
-                min-height: 100vh;
-            }
-
-            @media (max-width: 1024px) {
-                .admin-sidebar {
-                    transform: translateX(-100%);
-                }
-
-                .admin-main {
-                    margin-left: 0;
-                }
-
-                .admin-sidebar.active {
-                    transform: translateX(0);
-                }
-            }
-        </style>
+    <title>Question Bank | ODDHAY Command Center</title>
+    <style>
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+        .content-scroll { flex: 1; overflow-y: auto; padding: 0; position: relative; scroll-behavior: smooth; }
+        @keyframes slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @media (max-width: 1024px) { 
+            #adminSidebar { transform: translateX(-100%); } 
+            #adminSidebar.active { transform: translateX(0); box-shadow: 20px 0 50px rgba(0,0,0,0.2); }
+            .admin-main { margin-left: 0; } 
+        }
+    </style>
 </head>
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+    <div class="flex h-screen">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
+            <%- include('sidebar_content', { active: 'questions' }) %>
+        </aside>
 
-<body class="bg-[#f8fafc] dark:bg-[#0b1120] text-slate-900 dark:text-slate-100 font-sans">
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617] max-w-full overflow-x-hidden">
+            <%- include('header_v2', { pageTitle: 'Question Bank Archive' }) %>
 
-    <aside id="adminSidebar"
-        class="admin-sidebar bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 overflow-y-auto transition-transform duration-300">
-        <%- include('sidebar_content', { active: 'questions' }) %>
-    </aside>
-
-    <main class="admin-main">
-        <nav
-            class="h-20 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-10 sticky top-0 z-50">
-            <h1 class="text-xl font-black">🏛️ প্রশ্ন ব্যাংক কন্ট্রোল</h1>
-            <div class="flex items-center gap-6">
-                <button onclick="document.documentElement.classList.toggle('dark')"
-                    class="size-11 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-500 shadow-sm transition-all"><span
-                        class="material-symbols-outlined">dark_mode</span></button>
-            </div>
-        </nav>
-
-        <section class="p-10 max-w-[1600px] mx-auto">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
-                <div>
-                    <h2 class="text-4xl font-black tracking-tighter mb-2">বিগত বছরের <span
-                            class="text-primary">প্রশ্নসমূহ</span></h2>
-                    <p class="text-slate-500 dark:text-slate-400 font-bold text-sm">বোর্ড প্রশ্ন এবং প্রতিযোগিতামূলক
-                        পরীক্ষার প্রশ্নের সংগ্রহ পরিচালনা করুন।</p>
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5 max-w-full">
+                <!-- Archive Stats (Unified Container matching Exam Center) -->
+                <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/50 p-2">
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                        <div onclick="window.location.href='?board=all'" class="bg-slate-50/50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 flex flex-col group h-[80px] relative overflow-hidden transition-all hover:bg-white dark:hover:bg-slate-800/50 hover:shadow-md hover:border-primary/20 cursor-pointer">
+                            <span class="material-symbols-rounded absolute -right-3 -bottom-3 text-5xl text-blue-500 opacity-[0.05]">database</span>
+                            <div class="flex items-center gap-1 relative z-10">
+                                <span class="material-symbols-rounded text-[14px] text-blue-500">database</span>
+                                <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-tight">Total Archives</p>
+                            </div>
+                            <div class="flex-1 flex items-center">
+                                <h3 class="text-xl font-bold text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.totalArchive %></h3>
+                            </div>
+                        </div>
+                        <div onclick="window.location.href='?q=<%= filters.q %>&board=<%= filters.board %>&subject=<%= filters.subject %>&class=<%= filters.class %>&access=Paid'" class="bg-slate-50/50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 flex flex-col group h-[80px] relative overflow-hidden transition-all hover:bg-white dark:hover:bg-slate-800/50 hover:shadow-md hover:border-primary/20 cursor-pointer">
+                            <span class="material-symbols-rounded absolute -right-3 -bottom-3 text-5xl text-emerald-500 opacity-[0.05]">workspace_premium</span>
+                            <div class="flex items-center gap-1 relative z-10">
+                                <span class="material-symbols-rounded text-[14px] text-emerald-500">workspace_premium</span>
+                                <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-tight">Premium Content</p>
+                            </div>
+                            <div class="flex-1 flex items-center">
+                                <h3 class="text-xl font-bold text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.paidQuestionsCount %></h3>
+                            </div>
+                        </div>
+                        <div onclick="window.location.href='?q=<%= filters.q %>&board=<%= filters.board %>&subject=<%= filters.subject %>&access=Free'" class="bg-slate-50/50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 flex flex-col group h-[80px] relative overflow-hidden transition-all hover:bg-white dark:hover:bg-slate-800/50 hover:shadow-md hover:border-primary/20 cursor-pointer">
+                            <span class="material-symbols-rounded absolute -right-3 -bottom-3 text-5xl text-amber-500 opacity-[0.05]">money_off</span>
+                            <div class="flex items-center gap-1 relative z-10">
+                                <span class="material-symbols-rounded text-[14px] text-amber-500">money_off</span>
+                                <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-tight">Open Access</p>
+                            </div>
+                            <div class="flex-1 flex items-center">
+                                <h3 class="text-xl font-bold text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.freeQuestionsCount %></h3>
+                            </div>
+                        </div>
+                        <div class="bg-slate-50/50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-700/50 rounded-xl p-3 flex flex-col group h-[80px] relative overflow-hidden transition-all hover:bg-white dark:hover:bg-slate-800/50 hover:shadow-md hover:border-primary/20">
+                            <span class="material-symbols-rounded absolute -right-3 -bottom-3 text-5xl text-purple-500 opacity-[0.05]">groups</span>
+                            <div class="flex items-center gap-1 relative z-10">
+                                <span class="material-symbols-rounded text-[14px] text-purple-500">groups</span>
+                                <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-tight">Active Subscribers</p>
+                            </div>
+                            <div class="flex-1 flex items-center">
+                                <h3 class="text-xl font-bold text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.totalPaidStudents %></h3>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <% if (user.role==='admin' ) { %>
-                    <button onclick="document.getElementById('addQuestionModal').classList.remove('hidden')"
-                        class="px-8 py-4 bg-primary text-white rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-primary-dark transition-all shadow-xl shadow-primary/20 flex items-center gap-2">
-                        <span class="material-symbols-outlined text-[20px]">add</span> নতুন প্রশ্ন যোগ করুন
-                    </button>
-                    <% } %>
-            </div>
 
-            <div
-                class="bg-white dark:bg-[#0f172a] rounded-[3rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-slate-50 dark:bg-slate-800/50">
-                            <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">পরীক্ষার
-                                সাল ও বোর্ড</th>
-                            <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">বিষয় ও
-                                ক্লাস</th>
-                            <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">আপলোড
-                                করেছেন</th>
-                            <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">অ্যাকশন
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                        <% questions.forEach(question=> { %>
-                            <tr class="hover:bg-slate-50/30 dark:hover:bg-slate-800/10 transition-all">
-                                <td class="p-8">
-                                    <div class="flex items-center gap-4">
-                                        <div
-                                            class="size-10 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center font-black text-xs">
-                                            <%= question.year %>
-                                        </div>
-                                        <p class="font-black text-sm uppercase tracking-tighter">
-                                            <%= question.board %>
-                                        </p>
-                                    </div>
-                                </td>
-                                <td class="p-8">
-                                    <span class="text-xs font-black text-slate-700 dark:text-slate-300 uppercase block">
-                                        <%= question.subject %>
-                                    </span>
-                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                        <%= question.classLevel %>
-                                    </span>
-                                </td>
-                                <td class="p-8 text-xs font-bold text-slate-500">
-                                    <%= question.addedBy ? question.addedBy.name : 'সিস্টেম' %>
-                                </td>
-                                <td class="p-8">
-                                    <div class="flex gap-2">
-                                        <a href="<%= question.fileUrl %>" target="_blank"
-                                            class="size-9 flex items-center justify-center bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-primary transition-all shadow-sm"><span
-                                                class="material-symbols-outlined text-[20px]">download</span></a>
-                                        <% if (user.role==='admin' ) { %>
-                                            <button
-                                                class="size-9 flex items-center justify-center bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-rose-500 transition-all shadow-sm"><span
-                                                    class="material-symbols-outlined text-[20px]">delete</span></button>
-                                            <% } %>
-                                    </div>
-                                </td>
-                            </tr>
-                            <% }) %>
-                    </tbody>
-                </table>
-            </div>
-        </section>
-    </main>
+                <!-- Archive Inventory Container (matching quizzes.ejs) -->
+                <div class="bg-white dark:bg-[#0f172a] border-0 flex flex-col relative rounded-none shadow-sm mb-10">
+                    <!-- Filters Bar (Sticky matching quizzes.ejs) -->
+                    <div class="sticky top-0 z-30 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md px-4 py-3 border-b border-slate-100 dark:border-white/5 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-2 flex-1 min-w-[300px]">
+                            <!-- Search -->
+                            <form action="" method="GET" class="relative flex-1 max-w-[400px] flex items-center">
+                                <input type="text" name="q" value="<%= filters.q %>" placeholder="Search archive..." class="w-full pl-3 pr-10 h-10 rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[12px] font-bold outline-none focus:border-blue-500 transition-all">
+                                <span class="material-symbols-rounded absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px] pointer-events-none">search</span>
+                                <input type="hidden" name="board" value="<%= filters.board %>">
+                                <input type="hidden" name="class" value="<%= filters.class %>">
+                                <input type="hidden" name="subject" value="<%= filters.subject %>">
+                                <input type="hidden" name="access" value="<%= filters.access %>">
+                            </form>
 
-    <div id="addQuestionModal"
-        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] hidden flex items-center justify-center p-6">
-        <div class="bg-white dark:bg-[#0f172a] rounded-[3rem] w-full max-w-xl overflow-hidden shadow-2xl">
+                            <!-- Board Filter Dropdown -->
+                            <div class="relative w-[100px]">
+                                <select onchange="window.location.href='?q=<%= filters.q %>&class=<%= filters.class %>&subject=<%= filters.subject %>&access=<%= filters.access %>&board=' + this.value" class="w-full h-10 pl-3 pr-7 rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
+                                    <option value="all" <%= filters.board === 'all' ? 'selected' : '' %>>All Boards</option>
+                                    <% boards.forEach(board => { %>
+                                        <option value="<%= board %>" <%= filters.board === board ? 'selected' : '' %>><%= board %></option>
+                                    <% }) %>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                            </div>
+
+                            <!-- Class Filter Dropdown -->
+                            <div class="relative w-[100px]">
+                                <select onchange="window.location.href='?q=<%= filters.q %>&board=<%= filters.board %>&subject=<%= filters.subject %>&access=<%= filters.access %>&class=' + this.value" class="w-full h-10 pl-3 pr-7 rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
+                                    <option value="all" <%= filters.class === 'all' ? 'selected' : '' %>>All Class</option>
+                                    <% [6,7,8,9,10,11,12].forEach(c => { %>
+                                        <option value="<%= c %>" <%= filters.class == c ? 'selected' : '' %>>Class <%= c %></option>
+                                    <% }) %>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                            </div>
+
+                            <!-- Subject Filter Dropdown -->
+                            <div class="relative w-[100px]">
+                                <select onchange="window.location.href='?q=<%= filters.q %>&board=<%= filters.board %>&class=<%= filters.class %>&access=<%= filters.access %>&subject=' + this.value" class="w-full h-10 pl-3 pr-7 rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
+                                    <option value="all" <%= filters.subject === 'all' ? 'selected' : '' %>>All Subject</option>
+                                    <% subjects.forEach(sub => { %>
+                                        <option value="<%= sub %>" <%= filters.subject === sub ? 'selected' : '' %>><%= sub %></option>
+                                    <% }) %>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                            </div>
+
+                            <!-- Access Filter Dropdown -->
+                            <div class="relative w-[100px]">
+                                <select onchange="window.location.href='?q=<%= filters.q %>&board=<%= filters.board %>&class=<%= filters.class %>&subject=<%= filters.subject %>&access=' + this.value" class="w-full h-10 pl-3 pr-7 rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
+                                    <option value="all" <%= filters.access === 'all' ? 'selected' : '' %>>All Access</option>
+                                    <option value="Free" <%= filters.access === 'Free' ? 'selected' : '' %>>Free</option>
+                                    <option value="Paid" <%= filters.access === 'Paid' ? 'selected' : '' %>>Paid</option>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                            </div>
+
+                            <!-- Found Items Counter -->
+                            <div class="h-10 px-4 bg-primary/10 border border-primary/20 rounded-lg flex items-center transition-all">
+                                <span class="text-[11px] font-bold text-primary">Found <span><%= questions.length %></span> Matches</span>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center gap-2 ml-auto">
+                            <a href="<%= (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) ? '/superadmin/question-bank-approvals' : '/admin/question-bank-approvals' %>" class="h-10 px-4 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[10px] border border-amber-500/20 hover:bg-amber-500/20 transition-all flex items-center gap-1.5 relative">
+                                <span class="material-symbols-rounded text-sm">pending_actions</span> Pending Approvals
+                                <% if (stats && stats.pendingCount > 0) { %>
+                                    <span class="size-2 rounded-full bg-amber-500 animate-pulse"></span>
+                                    <span class="px-1.5 py-0.2 bg-amber-500 text-white text-[9px] rounded-full font-extrabold"><%= stats.pendingCount %></span>
+                                <% } %>
+                            </a>
+                            <button onclick="exportToCSV()" class="h-10 px-4 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-1.5">
+                                <span class="material-symbols-rounded text-sm">download</span> Export
+                            </button>
+                            <a href="/admin/add-question?mode=archive" class="h-10 px-4 rounded-lg bg-primary text-white font-bold text-[10px] shadow-lg shadow-primary/20 flex items-center gap-2 hover:bg-blue-600 transition-all">
+                                <span class="material-symbols-rounded text-sm">add_circle</span> New Question
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Table Wrapper (Directly inside container) -->
+                    <div class="table-wrapper overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                    <th class="pl-4 pr-1 text-center w-10">
+                                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="size-4 rounded border-slate-300 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                    </th>
+                                    <th class="pl-1 pr-3 py-2 text-[10px] font-bold text-slate-500 tracking-wider">Archive Name</th>
+                                    <th class="px-3 py-2 text-center text-[10px] font-bold text-slate-500 tracking-wider">Questions</th>
+                                    <th class="px-3 py-2 text-[10px] font-bold text-slate-500 tracking-wider">Board</th>
+                                    <th class="px-3 py-2 text-center text-[10px] font-bold text-slate-500 tracking-wider">Year</th>
+                                    <th class="px-3 py-2 text-[10px] font-bold text-slate-500 tracking-wider">Subject</th>
+                                    <th class="px-3 py-2 text-center text-[10px] font-bold text-slate-500 tracking-wider">Class</th>
+                                    <th class="px-3 py-2 text-center text-[10px] font-bold text-slate-500 tracking-wider">Access</th>
+                                    <th class="px-3 py-2 text-[10px] font-bold text-slate-500 tracking-wider">Author</th>
+                                    <th class="pr-4 py-2 text-right text-[10px] font-bold text-slate-500 tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-white/5">
+                                <% questions.forEach(item => { %>
+                                    <tr class="question-row hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-all cursor-pointer group" onclick="window.location.href='/admin/question-bank/<%= item._id %>'">
+                                        <td class="pl-4 pr-1 py-2" onclick="event.stopPropagation()">
+                                            <input type="checkbox" name="itemSelect" value="<%= item._id %>" id="cb-<%= item._id %>" onchange="toggleSelection(this)" class="item-cb size-4 rounded border-slate-300 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity checked:opacity-100">
+                                        </td>
+                                        <td class="pl-1 pr-3 py-2">
+                                            <div class="flex items-center gap-3">
+                                                <div class="size-8 rounded-lg overflow-hidden bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-500 border border-orange-100 dark:border-orange-500/20 shrink-0">
+                                                    <% if (item.fileUrl) { %>
+                                                        <span class="material-symbols-rounded text-base">picture_as_pdf</span>
+                                                    <% } else { %>
+                                                        <span class="material-symbols-rounded text-base">inventory_2</span>
+                                                    <% } %>
+                                                </div>
+                                                <div class="flex flex-col max-w-[200px]">
+                                                    <p class="text-[11px] font-bold text-slate-900 dark:text-white leading-tight truncate"><%= item.title || item.topic || (item.board ? item.board + ' Archive' : 'Question Bank') %></p>
+                                                    <p class="text-[9px] text-slate-400 font-medium mt-0.5"><%= item.year %> • <%= item.subject %></p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            <span class="px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-bold whitespace-nowrap">
+                                                <%= item.questionCount %> Qs
+                                            </span>
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300 whitespace-nowrap">
+                                                <%= item.board || 'General' %>
+                                            </span>
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                                                <%= item.year || '---' %>
+                                            </span>
+                                        </td>
+                                        <td class="px-3 py-2 text-[10px] font-bold text-primary whitespace-nowrap">
+                                            <%= item.subject %>
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            <span class="text-[10px] font-bold text-slate-500 whitespace-nowrap">Class <%= item.classLevel %></span>
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            <button onclick="editAccessModal(event, '<%= item._id %>', '<%= item.accessType %>', '<%= item.price || 0 %>', '<%= (typeof isSuperAdmin !== 'undefined' && isSuperAdmin) ? 'superadmin' : 'admin' %>')" class="group hover:scale-105 transition-transform" title="Click to edit access & price">
+                                                <% if (item.accessType === 'Paid') { %>
+                                                    <span class="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-bold border border-amber-100 dark:border-amber-500/20 whitespace-nowrap inline-flex items-center gap-1">
+                                                        <span class="material-symbols-rounded text-[11px]">payments</span>
+                                                        <span>Paid (৳<%= item.price || 0 %>)</span>
+                                                        <span class="material-symbols-rounded text-[10px] text-amber-500 opacity-80">edit</span>
+                                                    </span>
+                                                <% } else { %>
+                                                    <span class="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold border border-emerald-100 dark:border-emerald-500/20 whitespace-nowrap inline-flex items-center gap-1">
+                                                        <span>Free</span>
+                                                        <span class="material-symbols-rounded text-[10px] text-emerald-500 opacity-80">edit</span>
+                                                    </span>
+                                                <% } %>
+                                            </button>
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            <div class="flex items-center gap-2">
+                                                <div class="size-6 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
+                                                    <% const avatar = item.addedBy && (item.addedBy.profilePicture || item.addedBy.profileImage); %>
+                                                    <% if (avatar) { %>
+                                                        <img src="<%= avatar %>" class="size-full object-cover" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                                        <span class="hidden text-[9px] font-bold text-slate-400"><%= item.addedBy ? item.addedBy.name[0] : 'S' %></span>
+                                                    <% } else { %>
+                                                        <span class="text-[9px] font-bold text-slate-400"><%= item.addedBy ? item.addedBy.name[0] : 'S' %></span>
+                                                    <% } %>
+                                                </div>
+                                                <span class="text-[10px] font-bold text-slate-700 dark:text-slate-300 truncate max-w-[80px]"><%= item.addedBy ? item.addedBy.name : 'System' %></span>
+                                            </div>
+                                        </td>
+                                        <td class="pr-4 py-2" onclick="event.stopPropagation()">
+                                            <div class="flex items-center justify-end gap-1.5">
+                                                <% if (item.addedBy && item.addedBy._id && item.addedBy._id.toString() === user._id.toString()) { %>
+                                                <a href="/admin/edit-question-bank/<%= item._id %>" class="size-7 rounded bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-white transition-all flex items-center justify-center shadow-sm" title="Edit Metadata">
+                                                    <span class="material-symbols-rounded text-[18px]">edit</span>
+                                                </a>
+                                                <% } %>
+                                                <a href="/admin/question-bank/<%= item._id %>" class="px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold transition-all border border-blue-500/25 flex items-center gap-1 shadow-xs active:scale-95" title="Review All Questions in Archive">
+                                                    <span class="material-symbols-rounded text-sm flex items-center justify-center">rate_review</span>
+                                                    <span>Review</span>
+                                                </a>
+                                                <button onclick="event.stopPropagation(); deleteResource('<%= item._id %>')" class="size-7 rounded bg-rose-50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20 text-rose-500 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center shadow-sm" title="Delete Entry">
+                                                    <span class="material-symbols-rounded text-[18px]">delete</span>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination (At the down / bottom of container matching quizzes.ejs) -->
+                    <div class="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <p class="text-[9px] font-bold text-slate-500">Page <%= filters.page %> of <%= filters.totalPages %></p>
+                        <div class="flex items-center gap-0.5">
+                            <% for(var i=1; i<=filters.totalPages; i++) { %>
+                                <a href="?page=<%= i %>&q=<%= filters.q %>&board=<%= filters.board %>&class=<%= filters.class %>&subject=<%= filters.subject %>&access=<%= filters.access %>" class="size-7 rounded-md flex items-center justify-center text-[9px] font-bold<% if(filters.page === i) { %> bg-primary text-white shadow-lg shadow-primary/20<% } else { %> bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700<% } %> transition-all">
+                                    <%= i %>
+                                </a>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Action Bar -->
+                    <div id="bulkActions" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl text-slate-800 dark:text-white px-6 py-4 flex items-center gap-8 z-50 animate-slide-up border border-slate-200 dark:border-slate-800 rounded-3xl shadow-2xl shadow-slate-200/50 dark:shadow-black/50 min-w-[400px]">
+                        <div class="flex items-center gap-3">
+                            <div class="size-9 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                                <span class="material-symbols-rounded text-[22px]">check_circle</span>
+                            </div>
+                            <div class="flex flex-col">
+                                <span class="text-[13px] font-black tracking-tight leading-none"><span id="selectedCount" class="text-primary">0</span> Items Selected</span>
+                                <span class="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-wider">Ready for action</span>
+                            </div>
+                        </div>
+                        <div class="h-8 w-px bg-slate-200 dark:bg-slate-800"></div>
+                        <div class="flex items-center gap-3">
+                            <button onclick="handleBulkAction('delete')" class="h-10 px-6 bg-rose-500 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20 active:scale-95">Delete Permanently</button>
+                            <button onclick="clearSelection()" class="h-10 px-6 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        const selectedItems = new Set();
+        function toggleSelectAll() { selectAllRows(document.getElementById('selectAll').checked); }
+        function selectAllRows(force) {
+            document.querySelectorAll('.item-cb').forEach(cb => { cb.checked = force; if(force) selectedItems.add(cb.value); else selectedItems.delete(cb.value); });
+            const selectAllCb = document.getElementById('selectAll');
+            if(selectAllCb) selectAllCb.checked = force;
+            updateBulkUI();
+        }
+        function toggleRowSelection(id) { const cb = document.getElementById(`cb-${id}`); if (cb) { cb.checked = !cb.checked; toggleSelection(cb); } }
+        function toggleSelection(el) {
+            if(el.checked) selectedItems.add(el.value); else selectedItems.delete(el.value);
+            const selectAllCb = document.getElementById('selectAll');
+            if(selectAllCb) selectAllCb.checked = document.querySelectorAll('.item-cb').length === selectedItems.size;
+            updateBulkUI();
+        }
+        function updateBulkUI() {
+            const bar = document.getElementById('bulkActions');
+            const countEl = document.getElementById('selectedCount');
+            if(selectedItems.size > 0) { bar.classList.remove('hidden'); countEl.innerText = selectedItems.size; } else { bar.classList.add('hidden'); }
+        }
+        function clearSelection() {
+            selectedItems.clear();
+            document.querySelectorAll('.item-cb').forEach(i => i.checked = false);
+            document.getElementById('selectAll').checked = false;
+            updateBulkUI();
+        }
+
+        async function handleBulkAction(action) {
+            const res = await Swal.fire({ title: 'Bulk Action', text: `Apply ${action} to ${selectedItems.size} items?`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#137fec' });
+            if (!res.isConfirmed) return;
+            try {
+                const response = await fetch('/admin/question-bank/bulk-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, itemIds: Array.from(selectedItems) })
+                });
+                const data = await response.json();
+                if (data.success) location.reload();
+                else Swal.fire('Error', data.error || 'Failed', 'error');
+            } catch (err) { Swal.fire('Error', 'Network error', 'error'); }
+        }
+
+        async function deleteResource(id) {
+            try {
+                const res = await Swal.fire({ 
+                    title: 'Confirm Deletion', 
+                    text: 'This action cannot be undone and will remove all linked questions.', 
+                    icon: 'warning', 
+                    showCancelButton: true, 
+                    confirmButtonColor: '#f43f5e',
+                    confirmButtonText: 'Yes, Delete Archive'
+                });
+                
+                if (res.isConfirmed) { 
+                    window.location.href = `/admin/question-bank/${id}/delete`; 
+                }
+            } catch (err) {
+                console.error('Deletion UI Error:', err);
+            }
+        }
+
+        function exportToCSV() {
+            const rows = [['Board', 'Year', 'Subject', 'Class']];
+            // Extract from DOM
+            document.querySelectorAll('.question-row').forEach(tr => {
+                const board = tr.querySelectorAll('span')[1].innerText;
+                const year = tr.querySelectorAll('span')[2].innerText;
+                const subject = tr.querySelector('.text-primary').innerText;
+                const classLevel = tr.querySelectorAll('span')[3].innerText;
+                rows.push([board, year, subject, classLevel]);
+            });
+            const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", "question_bank.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+    <!-- Add Question Modal -->
+    <div id="addQuestionModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[250] hidden flex items-center justify-center p-6">
+        <div class="bg-white dark:bg-[#0b1120] rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl border border-white/10 relative animate-slide-up">
+            <button onclick="document.getElementById('addQuestionModal').classList.add('hidden')" class="absolute top-6 right-6 size-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all">
+                <span class="material-symbols-rounded text-lg">close</span>
+            </button>
+            
             <div class="p-10">
-                <div class="flex justify-between items-center mb-8">
-                    <h3 class="text-2xl font-black">প্রশ্ন ব্যাংক <span class="text-primary">আপডেট</span></h3>
-                    <button onclick="document.getElementById('addQuestionModal').classList.add('hidden')"
-                        class="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400"><span
-                            class="material-symbols-outlined">close</span></button>
+                <div class="flex items-center gap-4 mb-8">
+                    <div class="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+                        <span class="material-symbols-rounded text-[26px]">library_add</span>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-black text-slate-900 dark:text-white leading-tight">Question Archive Hub</h3>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Board & Entrance Exam Intelligence</p>
+                    </div>
                 </div>
-                <form action="/admin/add-question-bank" method="POST" enctype="multipart/form-data" class="space-y-6">
-                    <div class="grid grid-cols-2 gap-6">
+
+                <!-- Tabs -->
+                <div class="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-900/50 rounded-2xl mb-8">
+                    <button onclick="switchBankTab('matrix')" id="tab-matrix" class="flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all bg-white dark:bg-slate-800 text-primary shadow-sm">Digital Matrix</button>
+                    <button onclick="switchBankTab('upload')" id="tab-upload" class="flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all text-slate-500 hover:text-slate-700">Material Archive</button>
+                </div>
+
+                <!-- Digital Matrix Form (Manual) -->
+                <form id="matrixForm" onsubmit="submitBankMatrix(event)" class="space-y-6">
+                    <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-2">
-                            <label
-                                class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">সাল</label>
-                            <input type="text" name="year" placeholder="উদা: ২০২৪" required
-                                class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-6 py-3.5 text-sm font-bold focus:ring-2 focus:ring-primary/20">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Archive Context</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" name="board" placeholder="Board Name" required class="w-full h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                <input type="number" name="year" placeholder="Year" required class="w-full h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                            </div>
                         </div>
                         <div class="space-y-2">
-                            <label
-                                class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">বোর্ড</label>
-                            <input type="text" name="board" placeholder="উদা: ঢাকা বোর্ড" required
-                                class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-6 py-3.5 text-sm font-bold focus:ring-2 focus:ring-primary/20">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Curriculum Mapping</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <select name="subject" required class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                    <% ['Physics','Chemistry','Biology','Higher Mathematics','General Mathematics','Bangla','English','ICT','Accounting','Business Organization','Finance & Banking','Economics'].forEach(s => { %><option value="<%= s %>"><%= s %></option><% }) %>
+                                </select>
+                                <select name="classLevel" required class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                    <% [6,7,8,9,10,11,12].forEach(c => { %><option value="<%= c %>">Class <%= c %></option><% }) %>
+                                </select>
+                            </div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-6">
+
+                    <div class="grid grid-cols-2 gap-4">
                         <div class="space-y-2">
-                            <label
-                                class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">বিষয়</label>
-                            <input type="text" name="subject" required
-                                class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-6 py-3.5 text-sm font-bold focus:ring-2 focus:ring-primary/20">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Matrix Structure</label>
+                            <select name="questionType" id="bankEntryType" onchange="toggleBankMatrixUI(this.value)" class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                <option value="MCQ">MCQ (Single Choice)</option>
+                                <option value="Short">Short Answer</option>
+                                <option value="Medium">Medium Complexity</option>
+                                <option value="Comprehension">Comprehension Case</option>
+                            </select>
                         </div>
                         <div class="space-y-2">
-                            <label
-                                class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">ক্লাস</label>
-                            <input type="text" name="classLevel" required
-                                class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-6 py-3.5 text-sm font-bold focus:ring-2 focus:ring-primary/20">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Topic / Chapter</label>
+                            <input type="text" name="topic" placeholder="e.g. Optics" required class="w-full h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
                         </div>
                     </div>
+
                     <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">প্রশ্ন ফাইল
-                            (PDF)</label>
-                        <input type="file" name="question" required class="w-full text-xs font-black">
+                        <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Question Intelligence</label>
+                        <textarea name="questionText" required placeholder="Compose question vector..." class="w-full p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[14px] font-bold focus:border-primary outline-none transition-all" rows="2"></textarea>
                     </div>
-                    <button type="submit"
-                        class="w-full py-4 bg-primary text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-primary/20 transition-all mt-4">প্রশ্ন
-                        সেভ করুন</button>
+
+                    <!-- MCQ Options Area -->
+                    <div id="bankMcqArea" class="space-y-3">
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="text" name="options" placeholder="Option A" class="w-full h-10 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none">
+                            <input type="text" name="options" placeholder="Option B" class="w-full h-10 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none">
+                            <input type="text" name="options" placeholder="Option C" class="w-full h-10 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none">
+                            <input type="text" name="options" placeholder="Option D" class="w-full h-10 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none">
+                        </div>
+                        <div class="flex items-center gap-3 p-3 bg-emerald-500/5 rounded-2xl border border-emerald-500/10">
+                            <span class="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Correct Answer</span>
+                            <select name="correctAnswerIndex" class="flex-1 h-8 rounded-lg bg-white dark:bg-slate-900 border border-emerald-200 text-xs font-bold outline-none">
+                                <option value="0">Option A</option>
+                                <option value="1">Option B</option>
+                                <option value="2">Option C</option>
+                                <option value="3">Option D</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="bankNonMcqArea" class="hidden space-y-2">
+                        <label class="text-[10px] font-black uppercase tracking-widest text-emerald-600 ml-1 block">Expected Solution</label>
+                        <textarea name="correctAnswer" placeholder="Describe the model answer..." class="w-full p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 text-[13px] font-bold outline-none" rows="2"></textarea>
+                    </div>
+
+                    <button type="submit" class="w-full h-12 bg-primary text-white rounded-2xl font-black text-[11px] uppercase tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-primary/20">Verify & Commit to Matrix</button>
+                </form>
+
+                <!-- Material Archive Form (Upload) -->
+                <form id="uploadForm" action="/admin/add-question-bank" method="POST" enctype="multipart/form-data" class="hidden space-y-6">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Archive Context</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" name="board" placeholder="Board Name" required class="w-full h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                <input type="number" name="year" placeholder="Year" required class="w-full h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                            </div>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Subject & Class</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <select name="subject" required class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                    <% ['Physics','Chemistry','Biology','Higher Mathematics','General Mathematics','Bangla','English','ICT','Accounting','Business Organization','Finance & Banking','Economics'].forEach(s => { %><option value="<%= s %>"><%= s %></option><% }) %>
+                                </select>
+                                <select name="classLevel" required class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                    <% [6,7,8,9,10,11,12].forEach(c => { %><option value="<%= c %>">Class <%= c %></option><% }) %>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Access Model</label>
+                            <select name="accessType" class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                <option value="Free">Open Access (Free)</option>
+                                <option value="Paid">Premium (Paid)</option>
+                            </select>
+                        </div>
+                        <div class="space-y-2">
+                            <label class="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Material Asset (PDF)</label>
+                            <div class="relative h-11">
+                                <input type="file" name="file" required class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="updateFileName(this)">
+                                <div class="w-full h-full px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 flex items-center justify-between transition-all group-hover:border-primary">
+                                    <span id="fileNameDisplay" class="text-[11px] font-bold text-slate-400 truncate">Choose PDF File...</span>
+                                    <span class="material-symbols-rounded text-slate-400 text-lg">attach_file</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full h-12 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:opacity-90 transition-all shadow-xl shadow-slate-900/20 active:scale-95">Upload to Archive</button>
                 </form>
             </div>
         </div>
     </div>
-</body>
 
+    <script>
+        function switchBankTab(tab) {
+            const matrixForm = document.getElementById('matrixForm');
+            const uploadForm = document.getElementById('uploadForm');
+            const tabMatrix = document.getElementById('tab-matrix');
+            const tabUpload = document.getElementById('tab-upload');
+            
+            if(tab === 'matrix') {
+                matrixForm.classList.remove('hidden');
+                uploadForm.classList.add('hidden');
+                tabMatrix.className = "flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all bg-white dark:bg-slate-800 text-primary shadow-sm";
+                tabUpload.className = "flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all text-slate-500 hover:text-slate-700";
+            } else {
+                matrixForm.classList.add('hidden');
+                uploadForm.classList.remove('hidden');
+                tabUpload.className = "flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all bg-white dark:bg-slate-800 text-primary shadow-sm";
+                tabMatrix.className = "flex-1 h-10 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all text-slate-500 hover:text-slate-700";
+            }
+        }
+
+        function toggleBankMatrixUI(type) {
+            const mcqArea = document.getElementById('bankMcqArea');
+            const nonMcqArea = document.getElementById('bankNonMcqArea');
+            if(type === 'MCQ') {
+                mcqArea.classList.remove('hidden');
+                nonMcqArea.classList.add('hidden');
+            } else {
+                mcqArea.classList.add('hidden');
+                nonMcqArea.classList.remove('hidden');
+            }
+        }
+
+        function updateFileName(input) {
+            const display = document.getElementById('fileNameDisplay');
+            if (input.files && input.files[0]) {
+                display.innerText = input.files[0].name;
+                display.classList.remove('text-slate-400');
+                display.classList.add('text-primary');
+            } else {
+                display.innerText = 'Choose PDF File...';
+                display.classList.add('text-slate-400');
+            }
+        }
+
+        async function submitBankMatrix(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            
+            if(data.questionType === 'MCQ') {
+                data.options = Array.from(form.querySelectorAll('input[name="options"]')).map(i => i.value);
+            }
+
+            try {
+                Swal.fire({ title: 'Committing to Matrix...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const response = await fetch('/admin/add-question-matrix', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+                if(result.success) {
+                    Swal.fire('Success', 'Question added to matrix bank', 'success').then(() => {
+                        document.getElementById('addQuestionModal').classList.add('hidden');
+                        location.reload();
+                    });
+                } else {
+                    Swal.fire('Error', result.error, 'error');
+                }
+            } catch (err) { Swal.fire('Error', 'Network Error', 'error'); }
+        }
+
+        async function editAccessModal(e, bankId, currentAccess, currentPrice, rolePrefix) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const { value: formValues } = await Swal.fire({
+                title: 'Edit Access & Pricing',
+                html: `
+                    <div class="space-y-4 text-left p-2">
+                        <div>
+                            <label class="text-xs font-bold text-slate-500 block mb-1">Access Type</label>
+                            <select id="swal-accessType" class="w-full h-10 px-3 rounded-lg border border-slate-200 text-xs font-bold bg-white text-slate-800 outline-none focus:border-blue-500" onchange="document.getElementById('swal-price-container').style.display = this.value === 'Paid' ? 'block' : 'none'">
+                                <option value="Free" ${currentAccess === 'Free' ? 'selected' : ''}>Free (Open Access)</option>
+                                <option value="Paid" ${currentAccess === 'Paid' ? 'selected' : ''}>Paid (Premium)</option>
+                            </select>
+                        </div>
+                        <div id="swal-price-container" style="display: ${currentAccess === 'Paid' ? 'block' : 'none'};" class="mt-3">
+                            <label class="text-xs font-bold text-slate-500 block mb-1">Price (৳ BDT)</label>
+                            <input id="swal-price" type="number" min="0" value="${currentPrice}" placeholder="Enter price in BDT" class="w-full h-10 px-3 rounded-lg border border-slate-200 text-xs font-bold bg-white text-slate-800 outline-none focus:border-blue-500">
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Save Access & Price',
+                confirmButtonColor: '#137fec',
+                preConfirm: () => {
+                    const accessType = document.getElementById('swal-accessType').value;
+                    const price = document.getElementById('swal-price').value;
+                    return { accessType, price: parseFloat(price) || 0 };
+                }
+            });
+
+            if (formValues) {
+                try {
+                    const response = await fetch(`/${rolePrefix}/question-bank/${bankId}/update-access`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        body: JSON.stringify(formValues)
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        await Swal.fire({ icon: 'success', title: 'Access Updated', text: 'Question Bank access and price updated successfully.', timer: 1500, showConfirmButton: false });
+                        window.location.reload();
+                    } else {
+                        Swal.fire('Error', data.error || 'Failed to update access', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error', 'Network error', 'error');
+                }
+            }
+        }
+    </script>
+</body>
 </html>

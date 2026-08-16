@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title>Notes | ODDHAY Command Center</title>
+    <style>
+        :root {
+            --admin-sidebar-width: 260px;
+        }
+
+        .admin-main {
+            margin-left: var(--admin-sidebar-width);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .content-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+            position: relative;
+        }
+
+        @media (max-width: 1024px) {
+            .admin-sidebar {
+                transform: translateX(-100%);
+            }
+            .admin-main {
+                margin-left: 0;
+            }
+        }
+
+        .form-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748b;
+            margin-bottom: 5px;
+        }
+
+        .dark .form-label {
+            color: #94a3b8;
+        }
+
+        .form-input {
+            height: 42px;
+            width: 100%;
+            padding: 0 14px;
+            border-radius: 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e293b;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .dark .form-input {
+            background: #0f172a;
+            border-color: rgba(255, 255, 255, 0.08);
+            color: #e2e8f0;
+        }
+
+        .form-input:focus {
+            border-color: #137fec;
+        }
+
+        /* Notes List Mode Overrides for Perfect Organization */
+        body.notes-list-mode .notes-grid-container,
+        body.notes-list-mode #chapters-grid,
+        body.notes-list-mode #subject-folders-section > div {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 0.375rem !important;
+        }
+
+        body.notes-list-mode .subject-folder-card,
+        body.notes-list-mode .chapter-folder-card {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            text-align: left !important;
+            padding: 0.5rem 0.85rem !important;
+            gap: 0.75rem !important;
+            border-radius: 0.625rem !important;
+        }
+
+        body.notes-list-mode .subject-folder-card > div:first-child,
+        body.notes-list-mode .chapter-folder-card > div:first-child {
+            margin-bottom: 0 !important;
+            width: 2.25rem !important;
+            height: 2.25rem !important;
+            border-radius: 0.5rem !important;
+            flex-shrink: 0 !important;
+        }
+
+        body.notes-list-mode .subject-folder-card > div:last-child {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            flex: 1 !important;
+            min-width: 0 !important;
+            text-align: left !important;
+        }
+
+        body.notes-list-mode .note-card {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            padding: 0.5rem 0.85rem !important;
+            gap: 0.75rem !important;
+            border-radius: 0.625rem !important;
+        }
+
+        body.notes-list-mode .note-card > div:first-child {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 0.75rem !important;
+            min-width: 0 !important;
+            flex: 1 !important;
+            margin-bottom: 0 !important;
+        }
+
+        body.notes-list-mode .note-card > div:first-child > div:first-child {
+            margin-bottom: 0 !important;
+            width: 2.25rem !important;
+            height: 2.25rem !important;
+            border-radius: 0.5rem !important;
+        }
+
+        body.notes-list-mode .note-card h3 {
+            margin-bottom: 0 !important;
+            font-size: 0.8125rem !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            max-width: 340px !important;
+        }
+
+        body.notes-list-mode .note-card p {
+            display: none !important;
+        }
+
+        body.notes-list-mode .note-card > div:last-child {
+            padding-top: 0 !important;
+            border-top: none !important;
+            flex-shrink: 0 !important;
+            margin-top: 0 !important;
+        }
+
+        body.notes-list-mode .hidden,
+        body.notes-list-mode .subject-folder-card.hidden,
+        body.notes-list-mode .chapter-folder-card.hidden,
+        body.notes-list-mode .note-card.hidden,
+        body.notes-list-mode #chapters-container.hidden,
+        body.notes-list-mode #folders-container.hidden,
+        body.notes-list-mode #notes-content-container.hidden,
+        body.notes-list-mode #notes-grid-view.hidden {
+            display: none !important;
+        }
+
+        body.notes-list-mode #empty-folder-state:not(.hidden),
+        body.notes-list-mode #no-notes-found:not(.hidden) {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+    </style>
+</head>
+
+<body class="bg-white dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+    <div class="flex h-screen">
+        <aside id="adminSidebar"
+            class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100]">
+            <%- include('sidebar', { active: 'notes' }) %>
+        </aside>
+
+        <main class="admin-main flex-1 bg-white dark:bg-[#020617]">
+            <%- include('../admin/header_v2', { pageTitle: 'Notes' }) %>
+
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5">
+                
+                <% 
+                   const noteList = locals.notes || []; 
+                   const cFolders = locals.courseFolders || []; 
+                   const subList = locals.subjects || []; 
+                   const classList = locals.classes || [];
+                   const activeClass = locals.activeClass || 'all';
+                   const activeSubject = locals.activeSubject || 'all'; 
+                   const activeCourseId = locals.activeCourseId || null; 
+                   const statsData = locals.stats || {};
+                %>
+
+                <!-- Sticky Navigation Bar (Matching Student Panel UI + Teacher Extra Buttons) -->
+                <div class="sticky top-0 z-20 w-full bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur border-b border-slate-200 dark:border-slate-800 p-2.5 sm:p-3 shadow-none space-y-2">
+                    <div class="flex flex-col md:flex-row items-center justify-between gap-2.5 w-full">
+                        
+                        <!-- Left Side: Class Selector OR Breadcrumb Navigation -->
+                        <div class="flex items-center gap-2.5 w-full md:w-auto overflow-x-auto no-scrollbar">
+                            
+                            <!-- Class Selector Dropdown -->
+                            <div id="folder-selector-wrapper" class="<%= (activeClass !== 'all' || activeCourseId) ? 'hidden' : '' %> flex items-center gap-1.5 shrink-0">
+                                <span class="material-symbols-rounded text-indigo-500 text-lg flex items-center justify-center leading-none select-none">school</span>
+                                <span class="text-xs font-bold text-slate-500 dark:text-slate-400 select-none">Class:</span>
+                                <select name="class" onchange="window.location.href='/teacher/notes?class=' + encodeURIComponent(this.value)" class="min-w-[170px] sm:min-w-[200px] px-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none cursor-pointer shrink-0">
+                                    <option value="all" <%= activeClass === 'all' ? 'selected' : '' %>>All Classes</option>
+                                    <% classList.forEach(function(c) { %>
+                                        <option value="<%= c %>" <%= activeClass === c ? 'selected' : '' %>><%= c %></option>
+                                    <% }); %>
+                                </select>
+                            </div>
+
+                            <!-- Breadcrumb Navigation Bar -->
+                            <div id="breadcrumb-bar" class="<%= (activeClass !== 'all' || activeCourseId) ? '' : 'hidden' %> flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0">
+                                <a href="/teacher/notes" class="px-2 py-1 bg-slate-100 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-md transition-colors flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none">arrow_back</span>
+                                    <span>All Classes</span>
+                                </a>
+                                <span class="text-slate-300 dark:text-slate-600">/</span>
+                                <span id="breadcrumb-title" class="font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-indigo-500 text-sm flex items-center justify-center leading-none">school</span>
+                                    <span><%= activeClass !== 'all' ? activeClass : 'Course Files' %></span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Right Side: View Mode, Search & Action Buttons -->
+                        <div class="flex items-center gap-2 w-full md:w-auto shrink-0 justify-between md:justify-end">
+                            
+                            <!-- View Mode Toggle -->
+                            <div class="flex items-center bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60 shrink-0">
+                                <button type="button" id="view-mode-grid-btn" onclick="setViewMode('grid')" class="px-2 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-xs" title="Grid View">
+                                    <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none select-none">grid_view</span>
+                                </button>
+                                <button type="button" id="view-mode-list-btn" onclick="setViewMode('list')" class="px-2 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white" title="Compact List View">
+                                    <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none select-none">view_list</span>
+                                </button>
+                            </div>
+
+                            <!-- Search Input -->
+                            <div class="relative w-full md:w-44 shrink-0">
+                                <input type="text" id="notes-search-input" placeholder="Search notes..." autocomplete="off"
+                                    class="w-full pl-8 pr-8 py-1.5 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none focus:border-primary transition-all">
+                                <span class="material-symbols-rounded absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm flex items-center justify-center leading-none select-none pointer-events-none">search</span>
+                                <button type="button" id="clear-notes-search" onclick="clearNotesSearch()" class="hidden absolute right-2 top-1/2 -translate-y-1/2 size-5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                                    <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none">cancel</span>
+                                </button>
+                            </div>
+
+                            <!-- Action Buttons: New Folder & Add Note -->
+                            <div id="header-action-buttons" class="<%= (activeSubject !== 'all' || activeCourseId) ? '' : 'hidden' %> flex items-center gap-2 shrink-0">
+                                <button type="button" onclick="openAddFolderModal()" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer">
+                                    <span class="material-symbols-rounded text-sm leading-none">create_new_folder</span>
+                                    <span>New Folder</span>
+                                </button>
+
+                                <button type="button" onclick="openAddNoteModal()" class="px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer">
+                                    <span class="material-symbols-rounded text-sm leading-none">upload_file</span>
+                                    <span>Add Note</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MAIN WORKSPACE CONTENT CONTAINER -->
+                <div class="p-3 sm:p-4 space-y-3 flex-1 bg-white dark:bg-[#0f172a] min-h-[calc(100vh-65px)]">
+                    
+                    <!-- Search No Results State -->
+                    <div id="no-notes-found" class="hidden min-h-[calc(100vh-120px)] w-full bg-white dark:bg-[#0f172a] p-6 sm:p-12 flex flex-col items-center justify-center text-center shadow-none">
+                        <div class="size-16 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-center mb-3 text-slate-400">
+                            <span class="material-symbols-rounded text-3xl flex items-center justify-center leading-none select-none">search_off</span>
+                        </div>
+                        <h3 class="text-base font-bold text-slate-800 dark:text-white">No Notes Found</h3>
+                        <p class="text-xs font-medium text-slate-400 mt-1 max-w-sm mx-auto">
+                            Try refining your search keyword or selecting a different folder.
+                        </p>
+                        <button onclick="clearNotesSearch()" class="mt-4 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all">
+                            <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none select-none">refresh</span> Reset Search
+                        </button>
+                    </div>
+
+                    <!-- LEVEL 0: FOLDERS GRID VIEW (Assigned Class Folders) -->
+                    <% if (classList.length > 0) { %>
+                        <div id="folders-container" class="<%= (activeClass === 'all' && !activeCourseId) ? '' : 'hidden' %> space-y-4">
+                            <!-- Class Folders Grid -->
+                            <div id="subject-folders-section">
+                                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                                    <% classList.forEach(function(cls) { %>
+                                        <% 
+                                           const count = noteList.filter(n => {
+                                               if (!n.classLevel) return false;
+                                               if (Array.isArray(n.classLevel)) return n.classLevel.includes(cls);
+                                               return n.classLevel === cls;
+                                           }).length; 
+                                        %>
+                                        <a href="/teacher/notes?class=<%= encodeURIComponent(cls) %>"
+                                           class="subject-folder-card bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 hover:border-primary/50 dark:hover:border-primary/50 rounded-xl p-3.5 sm:p-4 flex flex-col items-center justify-center text-center transition-all duration-200 group shadow-none space-y-2"
+                                           data-search="<%= cls.toLowerCase().replace(/"/g, '&quot;') %>">
+                                            <div class="size-12 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-500 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                                <span class="material-symbols-rounded text-3xl flex items-center justify-center leading-none select-none">school</span>
+                                            </div>
+                                            <div class="w-full min-w-0">
+                                                <h4 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white truncate group-hover:text-primary transition-colors">
+                                                    <%= cls %>
+                                                </h4>
+                                            </div>
+                                        </a>
+                                    <% }); %>
+                                </div>
+                            </div>
+                        </div>
+                    <% } %>
+
+                    <!-- LEVEL 1 & 2: DYNAMIC CHAPTER FOLDERS & NOTES CONTAINER -->
+                    <div id="notes-content-container" class="<%= (activeClass !== 'all' || activeCourseId) ? '' : 'hidden' %> space-y-3">
+                        
+                        <!-- CHAPTER FOLDERS SECTION -->
+                        <div id="chapters-container" class="hidden">
+                            <div id="chapters-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                                <!-- Chapter Cards Rendered via JS -->
+                            </div>
+                        </div>
+
+                        <!-- NOTES GRID VIEW -->
+                        <div id="notes-grid-view">
+                            <div id="empty-folder-state" class="hidden min-h-[calc(100vh-120px)] w-full bg-white dark:bg-[#0f172a] p-6 sm:p-12 flex flex-col items-center justify-center text-center shadow-none">
+                                <div class="size-16 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-center mb-3 text-slate-400">
+                                    <span class="material-symbols-rounded text-3xl flex items-center justify-center leading-none select-none">folder_off</span>
+                                </div>
+                                <h3 class="text-base font-bold text-slate-800 dark:text-white">No Notes Found</h3>
+                                <p class="text-xs font-medium text-slate-400 mt-1 max-w-sm mx-auto">
+                                    No notes uploaded to this folder yet.
+                                </p>
+                                <button type="button" onclick="openAddNoteModal()" class="mt-4 px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shadow-sm transition-all cursor-pointer">
+                                    <span class="material-symbols-rounded text-sm leading-none">upload_file</span>
+                                    <span>Add Note</span>
+                                </button>
+                            </div>
+
+                            <% if (noteList.length > 0) { %>
+                            <div class="notes-grid-container grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                                <% noteList.forEach(function(note) { %>
+                                    <% 
+                                       const title = note.title || 'Untitled Note';
+                                       const subject = note.subject || 'General Academic';
+                                       const classLevelStr = Array.isArray(note.classLevel) ? note.classLevel.join(', ') : (note.classLevel || 'General');
+                                       const fileUrl = note.filePath || note.fileUrl || note.url || '#';
+                                       const isPdf = fileUrl.toLowerCase().endsWith('.pdf');
+                                       const isPaid = (note.accessType || '').toLowerCase() === 'paid';
+                                       const authorName = note.addedBy ? note.addedBy.name : (note.author || 'Instructor');
+                                       const courseTitle = note.course ? (note.course.title || note.course) : null;
+                                       const searchableText = [title, subject, classLevelStr, authorName, courseTitle || '', note.chapter || note.chapterTitle || ''].join(' ').toLowerCase();
+
+                                       const noteAuthorId = note.addedBy ? String(note.addedBy._id || note.addedBy) : '';
+                                       const isNoteOwner = Boolean(user && user._id && String(user._id) === noteAuthorId);
+                                    %>
+                                    <div class="note-card relative bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 sm:p-4 flex flex-col justify-between hover:border-primary/50 dark:hover:border-primary/50 transition-all duration-200 group shadow-none"
+                                         data-id="<%= note._id %>"
+                                         data-search="<%= searchableText.replace(/"/g, '&quot;') %>"
+                                         data-unlocked="<%= !isPaid ? 'true' : 'false' %>"
+                                         data-iscourse="<%= note.course ? 'true' : 'false' %>"
+                                         data-subject="<%= subject.toLowerCase().replace(/"/g, '&quot;') %>"
+                                         data-class-level="<%= classLevelStr.toLowerCase().replace(/"/g, '&quot;') %>"
+                                         data-chapter-name="<%= (note.chapter || note.chapterTitle || 'General Notes').replace(/"/g, '&quot;') %>"
+                                         data-parent-folder-id="<%= note.parentFolderId || '' %>">
+                                        
+                                        <!-- Selection Checkbox -->
+                                        <input type="checkbox" class="item-select-checkbox hidden absolute top-3 left-3 size-4.5 accent-primary cursor-pointer z-10" data-note-id="<%= note._id %>" data-owner="<%= isNoteOwner ? 'true' : 'false' %>" onchange="updateSelectedCount()">
+
+                                        <div>
+                                            <!-- Top 1st Line: Document Icon + Title + Class/Subject + Access Badge -->
+                                            <div class="flex items-start justify-between gap-2 mb-2">
+                                                <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                                    <div class="size-9 rounded-xl <%= isPaid ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 border border-amber-200 dark:border-amber-500/20' : 'bg-primary/10 text-primary border border-primary/20' %> flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                                                        <span class="material-symbols-rounded text-lg leading-none select-none"><%= isPdf ? 'picture_as_pdf' : 'description' %></span>
+                                                    </div>
+
+                                                    <div class="min-w-0 flex-1">
+                                                        <h3 class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white leading-tight group-hover:text-primary transition-colors truncate" title="<%= title %>">
+                                                            <%= title %>
+                                                        </h3>
+                                                        <p class="text-[10px] font-semibold text-slate-400 truncate mt-0.5 flex items-center gap-1">
+                                                            <span><%= classLevelStr %></span>
+                                                            <span>•</span>
+                                                            <span class="text-primary font-bold"><%= subject %></span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <span class="px-2 py-0.5 rounded text-[9px] font-bold shrink-0 <%= isPaid ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20' : 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20' %>">
+                                                    <%= isPaid ? 'Paid Note' : 'Free Note' %>
+                                                </span>
+                                            </div>
+
+                                            <% if (courseTitle) { %>
+                                                <div class="mb-2 px-2 py-1 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 text-[10px] font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5 truncate">
+                                                    <span class="material-symbols-rounded text-xs text-primary shrink-0">school</span>
+                                                    <span class="truncate"><%= courseTitle %></span>
+                                                </div>
+                                            <% } %>
+
+                                            <% if (note.description) { %>
+                                                <p class="text-[11px] font-medium text-slate-400 line-clamp-2 mb-2"><%= note.description %></p>
+                                            <% } %>
+                                        </div>
+
+                                        <!-- Teacher Actions Footer -->
+                                        <div class="pt-2.5 mt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                            <span class="text-[10px] font-medium text-slate-400 truncate">
+                                                By <%= authorName %>
+                                            </span>
+
+                                            <div class="flex items-center gap-1.5 shrink-0">
+                                                <!-- Preview Button -->
+                                                <button type="button" onclick="openNoteModal('<%= fileUrl %>', '<%= title.replace(/'/g, "\\'") %>')" class="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer">
+                                                    <span class="material-symbols-rounded text-xs leading-none">visibility</span>
+                                                    <span>View</span>
+                                                </button>
+
+                                                <% if (isNoteOwner) { %>
+                                                    <!-- Edit Button (Owner Only) -->
+                                                    <a href="/teacher/note-details/<%= note._id %>" class="px-2 py-1 rounded bg-blue-50 dark:bg-blue-500/10 hover:bg-blue-100 text-blue-600 dark:text-blue-400 text-[10px] font-bold transition-all flex items-center gap-1">
+                                                        <span class="material-symbols-rounded text-xs leading-none">edit</span>
+                                                        <span>Edit</span>
+                                                    </a>
+                                                    <!-- Delete Button (Owner Only) -->
+                                                    <button type="button" onclick="confirmDeleteNote(event, '<%= note._id %>')" class="p-1 rounded bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 text-rose-600 dark:text-rose-400 transition-all cursor-pointer" title="Delete Note">
+                                                        <span class="material-symbols-rounded text-xs flex items-center justify-center leading-none">delete</span>
+                                                    </button>
+                                                <% } else { %>
+                                                    <!-- Lock Indicator (Not Owner) -->
+                                                    <span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-400 text-[9px] font-semibold flex items-center gap-0.5" title="Read Only (Added by another teacher/admin)">
+                                                        <span class="material-symbols-rounded text-[10px]">lock</span>
+                                                        <span>Read-only</span>
+                                                    </span>
+                                                <% } %>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <% }); %>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- PDF Viewer Modal -->
+    <div id="note-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
+        <div class="bg-white dark:bg-[#0f172a] rounded-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800">
+            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 shrink-0">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="material-symbols-rounded text-primary text-xl flex items-center justify-center leading-none select-none">picture_as_pdf</span>
+                    <h3 id="note-modal-title" class="text-sm font-bold text-slate-800 dark:text-white truncate">Note Document</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                    <a id="note-modal-download" href="#" download class="px-2.5 py-1 bg-primary hover:bg-primary/90 text-white rounded text-xs font-bold transition-all flex items-center gap-1 shadow-xs">
+                        <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none">download</span>
+                        <span>Download</span>
+                    </a>
+                    <button onclick="closeNoteModal()" class="size-7 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center transition-colors">
+                        <span class="material-symbols-rounded text-base flex items-center justify-center leading-none">close</span>
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 w-full bg-slate-100 dark:bg-slate-950 relative">
+                <iframe id="note-modal-frame" src="" class="w-full h-full border-none"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Note Upload Modal -->
+    <div id="addNoteModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[250] hidden flex items-end sm:items-center justify-center p-4 transition-all">
+        <div class="bg-white dark:bg-[#0f172a] rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 relative flex flex-col max-h-[90vh]">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/5 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="size-9 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                        <span class="material-symbols-rounded text-primary text-[20px]">upload_file</span>
+                    </div>
+                    <div>
+                        <h3 class="text-[15px] font-bold text-slate-900 dark:text-white tracking-tight">Upload Note Material</h3>
+                        <p class="text-[10px] font-bold text-slate-400">Add a new lecture note or study PDF document</p>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('addNoteModal').classList.add('hidden')" class="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all">
+                    <span class="material-symbols-rounded text-[18px]">close</span>
+                </button>
+            </div>
+            <div class="overflow-y-auto flex-1">
+                <form id="addNoteForm" action="/teacher/add-note" method="POST" enctype="multipart/form-data" class="divide-y divide-slate-100 dark:divide-white/5">
+                    <input type="hidden" id="noteParentFolderId" name="parentFolderId" value="">
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <label class="form-label">Title <span class="text-rose-500">*</span></label>
+                            <input type="text" name="title" required placeholder="e.g., Physics Handnote — Vector Chapter" class="form-input w-full">
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label">Subject <span class="text-rose-500">*</span></label>
+                                <select name="subject" id="noteSubject" required class="form-input w-full cursor-pointer">
+                                    <option value="">Select subject</option>
+                                    <% subList.forEach(s => { %>
+                                        <option value="<%= s %>"><%= s %></option>
+                                    <% }) %>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Class Level <span class="text-rose-500">*</span></label>
+                                <select name="classLevel" id="noteClassLevel" required class="form-input w-full cursor-pointer">
+                                    <% const classOptions = (locals.classes && locals.classes.length > 0) ? locals.classes : ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'HSC 1st Year', 'HSC 2nd Year', 'Admission']; %>
+                                    <% classOptions.forEach(c => { %>
+                                        <option value="<%= c %>"><%= c %></option>
+                                    <% }); %>
+                                </select>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="chapter" id="noteChapter" value="">
+                        <input type="hidden" name="course" id="noteCoursePicker" value="">
+
+                        <div>
+                            <label class="form-label">Access Type</label>
+                            <select id="noteAccessType" name="accessType" class="form-input w-full cursor-pointer">
+                                <option value="Free">Free — Open Access</option>
+                                <option value="Paid">Paid — Premium Only</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="form-label">Attach PDF File <span class="text-rose-500">*</span></label>
+                            <input type="file" name="note" accept="application/pdf" required class="form-input w-full py-2">
+                        </div>
+                    </div>
+
+                    <div class="p-4 bg-slate-50 dark:bg-slate-900/60 flex items-center justify-end gap-2 shrink-0">
+                        <button type="button" onclick="document.getElementById('addNoteModal').classList.add('hidden')" class="px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-200">Cancel</button>
+                        <button type="submit" class="px-5 py-2 rounded-lg bg-primary hover:bg-primary/90 text-white text-xs font-bold shadow-md">Upload Document</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD FOLDER MODAL -->
+    <div id="addFolderModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="relative w-full max-w-sm bg-white dark:bg-[#0f172a] rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                    <span class="size-7.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-500 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center shrink-0">
+                        <span class="material-symbols-rounded text-base leading-none select-none">create_new_folder</span>
+                    </span>
+                    <span>Create New Folder</span>
+                </h3>
+                <button type="button" onclick="document.getElementById('addFolderModal').classList.add('hidden')" class="size-7 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer">
+                    <span class="material-symbols-rounded text-base leading-none">close</span>
+                </button>
+            </div>
+
+            <form id="addFolderForm" onsubmit="submitAddFolder(event)" class="p-3.5 sm:p-4 space-y-3">
+                <input type="hidden" id="folderParentId" name="parentId" value="">
+                <input type="hidden" id="folderSubject" name="subject" value="">
+                <input type="hidden" id="folderClassLevel" name="classLevel" value="">
+                
+                <div>
+                    <label class="form-label text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center gap-1.5">
+                        <span class="material-symbols-rounded text-amber-500 text-sm leading-none">folder</span>
+                        <span>Folder Name</span>
+                        <span class="text-rose-500">*</span>
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="folderName" name="name" placeholder="Folder Name" required autocomplete="off"
+                               class="w-full pl-9 pr-3 py-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all">
+                        <span class="material-symbols-rounded absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base leading-none select-none pointer-events-none">folder_open</span>
+                    </div>
+                </div>
+
+                <div class="pt-1 flex items-center justify-end gap-2">
+                    <button type="button" onclick="document.getElementById('addFolderModal').classList.add('hidden')" class="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md hover:shadow-amber-500/25 transition-all flex items-center gap-1.5 cursor-pointer">
+                        <span class="material-symbols-rounded text-sm leading-none">create_new_folder</span>
+                        <span>Create Folder</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal (Replaces browser confirm popup) -->
+    <div id="customConfirmModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[300] hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-[#0f172a] rounded-2xl max-w-sm w-full p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 animate-in fade-in zoom-in duration-200">
+            <div class="flex items-center gap-3">
+                <div id="confirm-modal-icon-wrapper" class="size-10 rounded-xl bg-rose-50 dark:bg-rose-500/10 text-rose-600 flex items-center justify-center border border-rose-200 dark:border-rose-500/20 shrink-0">
+                    <span class="material-symbols-rounded text-xl">delete</span>
+                </div>
+                <div>
+                    <h3 id="confirm-modal-title" class="text-sm font-bold text-slate-900 dark:text-white">Confirm Action</h3>
+                    <p id="confirm-modal-subtitle" class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Please confirm your action</p>
+                </div>
+            </div>
+
+            <p id="confirm-modal-body" class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed font-medium bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+                Are you sure you want to proceed?
+            </p>
+
+            <div class="flex items-center justify-end gap-2 pt-1">
+                <button type="button" id="confirm-modal-cancel-btn" class="px-3.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all cursor-pointer">
+                    Cancel
+                </button>
+                <button type="button" id="confirm-modal-ok-btn" class="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer">
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Alert Toast (Replaces browser alert popup) -->
+    <div id="customAlertModal" class="fixed top-4 right-4 z-[350] hidden max-w-sm w-full bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 shadow-2xl flex items-start gap-3 transition-all duration-300">
+        <div id="alert-modal-icon-bg" class="size-8 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+            <span id="alert-modal-icon" class="material-symbols-rounded text-lg">info</span>
+        </div>
+        <div class="flex-1 min-w-0">
+            <h4 id="alert-modal-title" class="text-xs font-bold text-slate-900 dark:text-white">Notice</h4>
+            <p id="alert-modal-msg" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">Alert message text</p>
+        </div>
+        <button type="button" onclick="closeCustomAlert()" class="size-6 text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center rounded-md cursor-pointer">
+            <span class="material-symbols-rounded text-sm">close</span>
+        </button>
+    </div>
+
+    <%- include('../partials/app-scripts') %>
+
+    <script>
+        window.customFolders = <%- JSON.stringify(customFolders || []) %>;
+        window.activeClass = <%- JSON.stringify(activeClass || 'all') %>;
+        window.activeSubject = <%- JSON.stringify(activeSubject || 'all') %>;
+        window.activeCourseId = <%- JSON.stringify(activeCourseId || null) %>;
+        window.assignedClasses = <%- JSON.stringify(classes || []) %>;
+        window.assignedSubjects = <%- JSON.stringify(subjects || []) %>;
+        window.currentQuickFilter = 'all';
+        window.activeChapterFilter = null;
+        window.activeFolderIdFilter = null;
+        window.folderNavStack = [];
+        window.isSelectMode = false;
+
+        // Custom UI Alert Notification (Replaces browser alert popup)
+        function showCustomAlert(msg, type = 'warning', title = 'Notice') {
+            const alertModal = document.getElementById('customAlertModal');
+            const alertMsg = document.getElementById('alert-modal-msg');
+            const alertTitle = document.getElementById('alert-modal-title');
+            const alertIcon = document.getElementById('alert-modal-icon');
+            const alertIconBg = document.getElementById('alert-modal-icon-bg');
+
+            if (!alertModal) return;
+
+            if (alertTitle) alertTitle.textContent = title;
+            if (alertMsg) alertMsg.textContent = msg;
+
+            if (type === 'danger' || type === 'error') {
+                alertIcon.textContent = 'error';
+                alertIconBg.className = 'size-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-500 flex items-center justify-center shrink-0';
+            } else if (type === 'success') {
+                alertIcon.textContent = 'check_circle';
+                alertIconBg.className = 'size-8 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0';
+            } else {
+                alertIcon.textContent = 'warning';
+                alertIconBg.className = 'size-8 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0';
+            }
+
+            alertModal.classList.remove('hidden');
+            setTimeout(() => { alertModal.classList.add('hidden'); }, 4000);
+        }
+
+        function closeCustomAlert() {
+            const alertModal = document.getElementById('customAlertModal');
+            if (alertModal) alertModal.classList.add('hidden');
+        }
+
+        // Custom UI Confirmation Dialog (Replaces browser confirm popup)
+        function showCustomConfirm({ title = 'Confirm Deletion', subtitle = 'Please confirm your action', body, onConfirm }) {
+            const modal = document.getElementById('customConfirmModal');
+            const titleEl = document.getElementById('confirm-modal-title');
+            const subEl = document.getElementById('confirm-modal-subtitle');
+            const bodyEl = document.getElementById('confirm-modal-body');
+            const cancelBtn = document.getElementById('confirm-modal-cancel-btn');
+            const okBtn = document.getElementById('confirm-modal-ok-btn');
+
+            if (!modal) return;
+
+            if (titleEl) titleEl.textContent = title;
+            if (subEl) subEl.textContent = subtitle;
+            if (bodyEl) bodyEl.textContent = body;
+
+            modal.classList.remove('hidden');
+
+            const handleCancel = () => {
+                modal.classList.add('hidden');
+                cancelBtn.removeEventListener('click', handleCancel);
+                okBtn.removeEventListener('click', handleOk);
+            };
+
+            const handleOk = () => {
+                modal.classList.add('hidden');
+                cancelBtn.removeEventListener('click', handleCancel);
+                okBtn.removeEventListener('click', handleOk);
+                if (typeof onConfirm === 'function') onConfirm();
+            };
+
+            cancelBtn.addEventListener('click', handleCancel);
+            okBtn.addEventListener('click', handleOk);
+        }
+
+        function confirmDeleteNote(event, noteId) {
+            event.preventDefault();
+            showCustomConfirm({
+                title: 'Delete Note File',
+                subtitle: 'Permanent deletion',
+                body: 'Are you sure you want to delete this note file? This action cannot be undone.',
+                onConfirm: () => {
+                    window.location.href = `/teacher/note/${noteId}/delete`;
+                }
+            });
+        }
+
+        function deleteCustomFolder(event, folderId) {
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+            showCustomConfirm({
+                title: 'Delete Folder',
+                subtitle: 'Permanent deletion',
+                body: 'Are you sure you want to delete this folder? All child notes will be unlinked.',
+                onConfirm: async () => {
+                    try {
+                        const res = await fetch(`/teacher/folder/${folderId}/delete`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            if (window.customFolders) {
+                                window.customFolders = window.customFolders.filter(f => String(f._id) !== String(folderId));
+                            }
+                            showCustomAlert('Folder deleted successfully.', 'success', 'Folder Deleted');
+                            filterLiveNotes();
+                        } else {
+                            showCustomAlert(data.error || 'Failed to delete folder', 'danger', 'Error');
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        showCustomAlert('Failed to delete folder', 'danger', 'Error');
+                    }
+                }
+            });
+        }
+
+        function openAddFolderModal(presetSubject = '', presetParentId = '') {
+            const modal = document.getElementById('addFolderModal');
+            if (!modal) return;
+
+            const subjInput = document.getElementById('folderSubject');
+            const classInput = document.getElementById('folderClassLevel');
+            const parentInput = document.getElementById('folderParentId');
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlSubj = urlParams.get('subject') || '';
+
+            const activeSubj = presetSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : (window.assignedSubjects && window.assignedSubjects[0] ? window.assignedSubjects[0] : 'General Academic'));
+            const activeParent = presetParentId || window.activeFolderIdFilter || '';
+
+            if (subjInput) subjInput.value = activeSubj;
+            if (parentInput) parentInput.value = activeParent;
+            if (classInput) {
+                const assignedClassesList = <%- JSON.stringify(locals.classes || []) %>;
+                classInput.value = assignedClassesList[0] || 'Class 10';
+            }
+
+            const folderNameInput = document.getElementById('folderName');
+            if (folderNameInput) folderNameInput.value = '';
+
+            modal.classList.remove('hidden');
+        }
+
+        async function submitAddFolder(e) {
+            e.preventDefault();
+            const name = document.getElementById('folderName').value.trim();
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlSubj = urlParams.get('subject') || '';
+
+            const subject = document.getElementById('folderSubject').value || urlSubj || (window.activeSubject !== 'all' ? window.activeSubject : (window.assignedSubjects && window.assignedSubjects[0] ? window.assignedSubjects[0] : 'General Academic'));
+            const classLevel = document.getElementById('folderClassLevel').value || '';
+            const parentId = document.getElementById('folderParentId').value || window.activeFolderIdFilter || '';
+
+            if (!name) {
+                showCustomAlert('Please enter a folder name.', 'warning', 'Missing Name');
+                return;
+            }
+
+            try {
+                const res = await fetch('/teacher/add-folder', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ name, subject, classLevel, parentId })
+                });
+                const data = await res.json();
+                if (data.success && data.folder) {
+                    document.getElementById('addFolderModal').classList.add('hidden');
+                    document.getElementById('folderName').value = '';
+                    
+                    if (!window.customFolders) window.customFolders = [];
+                    window.customFolders.push(data.folder);
+                    
+                    showCustomAlert('Folder created successfully.', 'success', 'Folder Created');
+                    filterLiveNotes();
+                } else {
+                    showCustomAlert(data.error || 'Failed to create folder', 'danger', 'Error');
+                }
+            } catch (err) {
+                console.error(err);
+                showCustomAlert('Failed to create folder', 'danger', 'Error');
+            }
+        }
+
+        function openAddNoteModal(presetSubject = '', presetCourseId = '', presetChapter = '') {
+            const modal = document.getElementById('addNoteModal');
+            if (!modal) return;
+            
+            const subjInput = document.getElementById('noteSubject');
+            const parentFolderInput = document.getElementById('noteParentFolderId');
+            const chapterInput = document.getElementById('noteChapter');
+
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlSubj = urlParams.get('subject') || '';
+
+            const activeSubj = presetSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : (window.assignedSubjects && window.assignedSubjects[0] ? window.assignedSubjects[0] : 'General Academic'));
+            const activeParentId = window.activeFolderIdFilter || '';
+            const activeChapter = presetChapter || window.activeChapterFilter || '';
+
+            if (subjInput) subjInput.value = activeSubj;
+            if (parentFolderInput) parentFolderInput.value = activeParentId;
+            if (chapterInput) chapterInput.value = activeChapter;
+
+            modal.classList.remove('hidden');
+        }
+
+        function openChapterFolder(chapterName, folderId) {
+            window.activeChapterFilter = chapterName;
+            window.activeFolderIdFilter = folderId || null;
+            window.folderNavStack.push({ name: chapterName, id: folderId || null });
+            filterLiveNotes();
+        }
+
+        function closeChapterFolder() {
+            if (window.folderNavStack.length > 0) {
+                window.folderNavStack.pop();
+            }
+            const current = window.folderNavStack[window.folderNavStack.length - 1];
+            if (current) {
+                window.activeChapterFilter = current.name;
+                window.activeFolderIdFilter = current.id;
+            } else {
+                window.activeChapterFilter = null;
+                window.activeFolderIdFilter = null;
+            }
+            filterLiveNotes();
+        }
+
+        function setQuickFilter(filterName) {
+            window.currentQuickFilter = filterName;
+            window.activeChapterFilter = null;
+            window.activeFolderIdFilter = null;
+            window.folderNavStack = [];
+
+            document.querySelectorAll('.quick-chip').forEach(chip => {
+                if (chip.getAttribute('data-chip') === filterName) {
+                    chip.classList.add('bg-primary', 'text-white', 'shadow-xs', 'font-bold');
+                    chip.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
+                } else {
+                    chip.classList.remove('bg-primary', 'text-white', 'shadow-xs', 'font-bold');
+                    chip.classList.add('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
+                }
+            });
+
+            filterLiveNotes();
+        }
+
+        function setViewMode(mode) {
+            try {
+                localStorage.setItem('oddhay_teacher_notes_view_mode', mode);
+            } catch(e) {}
+
+            const gridBtn = document.getElementById('view-mode-grid-btn');
+            const listBtn = document.getElementById('view-mode-list-btn');
+
+            if (mode === 'list') {
+                if (gridBtn) {
+                    gridBtn.classList.remove('bg-white', 'dark:bg-slate-700', 'text-slate-800', 'dark:text-white', 'shadow-xs');
+                    gridBtn.classList.add('text-slate-500', 'dark:text-slate-400');
+                }
+                if (listBtn) {
+                    listBtn.classList.add('bg-white', 'dark:bg-slate-700', 'text-slate-800', 'dark:text-white', 'shadow-xs');
+                    listBtn.classList.remove('text-slate-500', 'dark:text-slate-400');
+                }
+                document.body.classList.add('notes-list-mode');
+            } else {
+                if (listBtn) {
+                    listBtn.classList.remove('bg-white', 'dark:bg-slate-700', 'text-slate-800', 'dark:text-white', 'shadow-xs');
+                    listBtn.classList.add('text-slate-500', 'dark:text-slate-400');
+                }
+                if (gridBtn) {
+                    gridBtn.classList.add('bg-white', 'dark:bg-slate-700', 'text-slate-800', 'dark:text-white', 'shadow-xs');
+                    gridBtn.classList.remove('text-slate-500', 'dark:text-slate-400');
+                }
+                document.body.classList.remove('notes-list-mode');
+            }
+        }
+
+        function openNoteModal(url, title) {
+            const modal = document.getElementById('note-modal');
+            const frame = document.getElementById('note-modal-frame');
+            const titleEl = document.getElementById('note-modal-title');
+            const downloadBtn = document.getElementById('note-modal-download');
+            
+            if (modal && frame) {
+                titleEl.textContent = title || 'Note Document';
+                downloadBtn.href = url;
+                frame.src = url;
+                modal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        function closeNoteModal() {
+            const modal = document.getElementById('note-modal');
+            const frame = document.getElementById('note-modal-frame');
+            if (modal) {
+                modal.classList.add('hidden');
+                if (frame) frame.src = '';
+                document.body.style.overflow = '';
+            }
+        }
+
+        function filterLiveNotes() {
+            const searchInput = document.getElementById('notes-search-input');
+            const clearBtn = document.getElementById('clear-notes-search');
+            const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
+
+            const folderSelectorWrapper = document.getElementById('folder-selector-wrapper');
+            const foldersContainer = document.getElementById('folders-container');
+            const chaptersContainer = document.getElementById('chapters-container');
+            const chaptersGrid = document.getElementById('chapters-grid');
+            const chaptersCounter = document.getElementById('chapters-counter');
+            const notesContainer = document.getElementById('notes-content-container');
+            const breadcrumbBar = document.getElementById('breadcrumb-bar');
+            const breadcrumbTitle = document.getElementById('breadcrumb-title');
+            const notesCounter = document.getElementById('notes-counter');
+            const noResultsBox = document.getElementById('no-notes-found');
+            const emptyFolderState = document.getElementById('empty-folder-state');
+
+            if (clearBtn) {
+                if (query.length > 0) clearBtn.classList.remove('hidden');
+                else clearBtn.classList.add('hidden');
+            }
+
+            const subjectCards = document.querySelectorAll('.subject-folder-card');
+            const courseCards = document.querySelectorAll('.course-folder-card');
+            const noteCards = document.querySelectorAll('.note-card');
+
+            const isInitialFiltered = <%- JSON.stringify(activeClass !== 'all' || Boolean(activeCourseId)) %>;
+            const parentName = <%- JSON.stringify(activeClass !== 'all' ? activeClass : (activeCourseId ? 'Course Files' : 'Files')) %>;
+
+            const activeCourseId = <%- JSON.stringify(activeCourseId || '') %>;
+            const activeClass = <%- JSON.stringify(activeClass || 'all') %>;
+            const activeSubject = <%- JSON.stringify(activeSubject || 'all') %>;
+            const courseCurriculums = <%- JSON.stringify(locals.courseCurriculums || {}) %>;
+            const currentParentId = window.activeFolderIdFilter;
+
+            const headerActionBtns = document.getElementById('header-action-buttons');
+            const isSubfolderOrClassOpen = (activeClass !== 'all') || Boolean(activeCourseId) || Boolean(window.activeChapterFilter) || Boolean(window.activeFolderIdFilter);
+
+            if (headerActionBtns) {
+                if (isSubfolderOrClassOpen) {
+                    headerActionBtns.classList.remove('hidden');
+                } else {
+                    headerActionBtns.classList.add('hidden');
+                }
+            }
+
+            let visibleNotesCount = 0;
+            let visibleSubjectCount = 0;
+            let visibleCourseCount = 0;
+
+            const chapterMap = new Map();
+            const activeClassClean = activeClass.trim().toLowerCase();
+
+            // 1. First pass: Count notes for chapter badges (matching search & chip filter)
+            noteCards.forEach(card => {
+                const cardClass = (card.getAttribute('data-class-level') || '').trim().toLowerCase();
+                const isGeneral = !cardClass || cardClass === 'general academic' || cardClass === 'general' || cardClass === 'all';
+                const matchesClass = activeClass === 'all' || !activeClassClean || isGeneral || cardClass === activeClassClean || cardClass.includes(activeClassClean) || activeClassClean.includes(cardClass);
+                if (!matchesClass) return;
+
+                const isUnlocked = card.getAttribute('data-unlocked') === 'true';
+                const isCourse = card.getAttribute('data-iscourse') === 'true';
+                const chapName = card.getAttribute('data-chapter-name') || 'General Notes';
+                const searchable = card.getAttribute('data-search') || '';
+
+                let matchesChip = true;
+                if (window.currentQuickFilter === 'free') matchesChip = isUnlocked;
+                else if (window.currentQuickFilter === 'paid') matchesChip = !isUnlocked;
+                else if (window.currentQuickFilter === 'course') matchesChip = isCourse;
+
+                const matchesQuery = query.length === 0 || searchable.includes(query);
+
+                if (matchesChip && matchesQuery) {
+                    if (chapName && chapName !== 'General Notes' && chapName !== 'General Course Notes') {
+                        const key = chapName.trim().toLowerCase();
+                        chapterMap.set(key, (chapterMap.get(key) || 0) + 1);
+                    }
+                }
+            });
+
+            // 2. Build current level folders list
+            const isInsideSubfolder = Boolean(window.activeFolderIdFilter || window.activeChapterFilter);
+            const foldersMap = new Map();
+
+            // Aggregate custom folders created via Folder model for this class
+            if (window.customFolders && window.customFolders.length > 0) {
+                window.customFolders.forEach(f => {
+                    if (!f || !f.name || f.name === 'undefined' || f.name === 'null' || !f.name.trim()) return;
+                    if (activeClass === 'all' && !activeCourseId) return;
+
+                    const fClassClean = (f.classLevel || '').trim().toLowerCase();
+                    const matchesClass = !activeClassClean || fClassClean === activeClassClean || fClassClean.includes(activeClassClean) || activeClassClean.includes(fClassClean);
+                    if (matchesClass) {
+                        if (!isInsideSubfolder) {
+                            if (!f.parentId || f.parentId === 'null' || f.parentId === 'undefined' || f.parentId === '') {
+                                foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: null });
+                            }
+                        } else {
+                            if (window.activeFolderIdFilter && String(f.parentId) === String(window.activeFolderIdFilter)) {
+                                foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: f.parentId });
+                            }
+                        }
+                    }
+                });
+            }
+
+            if (!isInsideSubfolder) {
+                // COURSE ROOT LEVEL: If a specific course is open, collect top-level folders for that course
+                if (activeCourseId && courseCurriculums[activeCourseId]) {
+                    courseCurriculums[activeCourseId].forEach(f => {
+                        if (f && f.name && f.name !== 'undefined' && f.name !== 'null' && f.name.trim() !== '' && (!f.parentId || f.parentId === 'null' || f.parentId === 'undefined' || f.parentId === '')) {
+                            foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: null });
+                        }
+                    });
+                }
+
+                // Also include implicit chapter folders from noteCards at root level for this class
+                noteCards.forEach(card => {
+                    const cardClass = (card.getAttribute('data-class-level') || '').trim().toLowerCase();
+                    const matchesClass = activeClass === 'all' || !activeClassClean || cardClass === activeClassClean || cardClass.includes(activeClassClean) || activeClassClean.includes(cardClass);
+                    if (!matchesClass) return;
+
+                    const chap = card.getAttribute('data-chapter-name');
+                    if (chap && chap !== 'General Notes' && chap !== 'General Course Notes' && chap !== 'undefined' && chap !== 'null' && chap.trim() !== '') {
+                        const key = chap.trim().toLowerCase();
+                        if (!foldersMap.has(key)) {
+                            foldersMap.set(key, { _id: null, name: chap, parentId: null });
+                        }
+                    }
+                });
+            } else {
+                // INSIDE A SUB-FOLDER: Collect child sub-folders belonging to current parent folder
+                if (activeCourseId && courseCurriculums[activeCourseId]) {
+                    courseCurriculums[activeCourseId].forEach(f => {
+                        if (f && f.name && f.name !== 'undefined' && f.name !== 'null' && f.name.trim() !== '' && window.activeFolderIdFilter && String(f.parentId) === String(window.activeFolderIdFilter)) {
+                            foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: f.parentId });
+                        }
+                    });
+                }
+            }
+
+            let currentLevelFolders = Array.from(foldersMap.values()).filter(f => 
+                f && f.name && f.name.trim() !== '' && f.name !== 'undefined' && f.name !== 'null' && f.name !== 'General Notes'
+            );
+
+            // 3. Second pass: Filter note cards visibility based on current folder level
+            noteCards.forEach(card => {
+                const cardClass = (card.getAttribute('data-class-level') || '').trim().toLowerCase();
+                const isGeneral = !cardClass || cardClass === 'general academic' || cardClass === 'general' || cardClass === 'all';
+                const matchesClass = activeClass === 'all' || !activeClassClean || isGeneral || cardClass === activeClassClean || cardClass.includes(activeClassClean) || activeClassClean.includes(cardClass);
+
+                if (!matchesClass) {
+                    card.classList.add('hidden');
+                    return;
+                }
+
+                const isUnlocked = card.getAttribute('data-unlocked') === 'true';
+                const isCourse = card.getAttribute('data-iscourse') === 'true';
+                const chapName = card.getAttribute('data-chapter-name') || 'General Notes';
+                const parentFId = card.getAttribute('data-parent-folder-id') || '';
+                const searchable = card.getAttribute('data-search') || '';
+
+                let matchesChip = true;
+                if (window.currentQuickFilter === 'free') matchesChip = isUnlocked;
+                else if (window.currentQuickFilter === 'paid') matchesChip = !isUnlocked;
+                else if (window.currentQuickFilter === 'course') matchesChip = isCourse;
+
+                const matchesQuery = query.length === 0 || searchable.includes(query);
+
+                let matchesChapter = true;
+                if (window.activeFolderIdFilter) {
+                    matchesChapter = Boolean(parentFId && String(parentFId) === String(window.activeFolderIdFilter));
+                } else if (window.activeChapterFilter) {
+                    matchesChapter = (chapName && chapName.trim().toLowerCase() === window.activeChapterFilter.trim().toLowerCase());
+                } else if (isInitialFiltered) {
+                    // At Course or Subject root (no folder opened yet):
+                    // Hide notes that belong to any subfolder
+                    const hasExplicitParentFolder = Boolean(parentFId && parentFId !== '' && parentFId !== 'null');
+                    
+                    const matchesFolderByName = currentLevelFolders.some(f => 
+                        f.name && chapName && f.name.trim().toLowerCase() === chapName.trim().toLowerCase()
+                    );
+
+                    const matchesFolderById = currentLevelFolders.some(f => 
+                        f._id && parentFId && (f._id.toString() === parentFId.toString())
+                    );
+
+                    const belongsToSubfolder = hasExplicitParentFolder || matchesFolderByName || matchesFolderById;
+
+                    matchesChapter = !belongsToSubfolder;
+                }
+
+                if (matchesChip && matchesChapter && matchesQuery) {
+                    card.classList.remove('hidden');
+                    visibleNotesCount++;
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+
+            // 4. Handle global search filtering for Subject and Course cards
+            if (query.length > 0) {
+                subjectCards.forEach(card => {
+                    const searchable = card.getAttribute('data-search') || '';
+                    if (searchable.includes(query)) {
+                        card.classList.remove('hidden');
+                        visibleSubjectCount++;
+                    } else {
+                        card.classList.add('hidden');
+                    }
+                });
+
+                courseCards.forEach(card => {
+                    const searchable = card.getAttribute('data-search') || '';
+                    if (searchable.includes(query)) {
+                        card.classList.remove('hidden');
+                        visibleCourseCount++;
+                    } else {
+                        card.classList.add('hidden');
+                    }
+                });
+            } else {
+                subjectCards.forEach(card => card.classList.remove('hidden'));
+                courseCards.forEach(card => card.classList.remove('hidden'));
+                visibleSubjectCount = subjectCards.length;
+                visibleCourseCount = courseCards.length;
+            }
+
+            const subjectSection = document.getElementById('subject-folders-section');
+            if (subjectSection) {
+                if (visibleSubjectCount > 0) subjectSection.classList.remove('hidden');
+                else subjectSection.classList.add('hidden');
+            }
+
+            const courseSection = document.getElementById('course-folders-section');
+            if (courseSection) {
+                if (visibleCourseCount > 0) courseSection.classList.remove('hidden');
+                else courseSection.classList.add('hidden');
+            }
+
+            const hasActiveSearchOrFilter = query.length > 0 || window.currentQuickFilter !== 'all';
+            const isInsideCourseOrSubject = isInitialFiltered;
+
+            if (!isInsideCourseOrSubject && !hasActiveSearchOrFilter) {
+                // LEVEL 0: Main Subject & Course Folders View
+                if (foldersContainer) foldersContainer.classList.remove('hidden');
+                if (folderSelectorWrapper) folderSelectorWrapper.classList.remove('hidden');
+                if (breadcrumbBar) breadcrumbBar.classList.add('hidden');
+                if (chaptersContainer) chaptersContainer.classList.add('hidden');
+                if (notesContainer) notesContainer.classList.add('hidden');
+
+                const notesGridView = document.getElementById('notes-grid-view');
+                if (notesGridView) notesGridView.classList.add('hidden');
+                if (emptyFolderState) emptyFolderState.classList.add('hidden');
+                if (noResultsBox) noResultsBox.classList.add('hidden');
+
+            } else {
+                // LEVEL 1 & 2: Sub-Folders & Files View inside Subject or Nested Folder
+                if (foldersContainer) foldersContainer.classList.add('hidden');
+                if (folderSelectorWrapper) folderSelectorWrapper.classList.add('hidden');
+                if (breadcrumbBar) breadcrumbBar.classList.remove('hidden');
+                if (notesContainer) notesContainer.classList.remove('hidden');
+
+                const breadcrumbLink = breadcrumbBar.querySelector('a');
+                if (window.folderNavStack.length > 0) {
+                    const currentFolder = window.folderNavStack[window.folderNavStack.length - 1];
+                    const prevFolder = window.folderNavStack.length > 1 ? window.folderNavStack[window.folderNavStack.length - 2].name : parentName;
+                    if (breadcrumbTitle) breadcrumbTitle.textContent = currentFolder.name;
+                    if (breadcrumbLink) {
+                        breadcrumbLink.setAttribute('href', '#');
+                        breadcrumbLink.onclick = (e) => { e.preventDefault(); closeChapterFolder(); };
+                        breadcrumbLink.querySelector('span:last-child').textContent = prevFolder;
+                    }
+                } else {
+                    if (breadcrumbTitle) breadcrumbTitle.textContent = parentName;
+                    if (breadcrumbLink) {
+                        breadcrumbLink.setAttribute('href', '/teacher/notes');
+                        breadcrumbLink.onclick = null;
+                        breadcrumbLink.querySelector('span:last-child').textContent = 'All Folders';
+                    }
+                }
+
+                // Render Sub-folders if available at current level
+                if (currentLevelFolders && currentLevelFolders.length > 0) {
+                    if (chaptersContainer) chaptersContainer.classList.remove('hidden');
+                    if (chaptersGrid) {
+                        chaptersGrid.innerHTML = '';
+                        currentLevelFolders.forEach(f => {
+                            const chapName = f.name;
+                            const cardEl = document.createElement('div');
+                            cardEl.className = 'chapter-folder-card relative bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 hover:border-amber-500/50 rounded-xl p-3.5 flex items-center justify-between transition-all duration-200 group shadow-none cursor-pointer';
+                            cardEl.onclick = () => {
+                                openChapterFolder(chapName, f._id);
+                            };
+
+                            let deleteBtnHtml = '';
+                            if (f._id) {
+                                deleteBtnHtml = `
+                                    <button type="button" onclick="deleteCustomFolder(event, '${f._id}')" class="size-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 flex items-center justify-center transition-all z-10 shrink-0 cursor-pointer" title="Delete Folder">
+                                        <span class="material-symbols-rounded text-base leading-none">delete</span>
+                                    </button>
+                                `;
+                            }
+
+                            cardEl.innerHTML = `
+                                <div class="flex items-center gap-3 min-w-0 flex-1">
+                                    <div class="size-10 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-500 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                                        <span class="material-symbols-rounded text-xl leading-none select-none">folder</span>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <h4 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white truncate group-hover:text-amber-500 transition-colors">
+                                            ${chapName}
+                                        </h4>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1 shrink-0">
+                                    ${deleteBtnHtml}
+                                    <span class="material-symbols-rounded text-slate-300 dark:text-slate-600 group-hover:text-amber-500 group-hover:translate-x-0.5 transition-all text-xl leading-none select-none">chevron_right</span>
+                                </div>
+                            `;
+                            chaptersGrid.appendChild(cardEl);
+                        });
+                    }
+                } else {
+                    if (chaptersContainer) chaptersContainer.classList.add('hidden');
+                    if (chaptersGrid) chaptersGrid.innerHTML = '';
+                }
+
+                // Render Files container if matching notes exist or show empty state if no subfolders exist
+                const notesGridView = document.getElementById('notes-grid-view');
+                if (visibleNotesCount > 0) {
+                    if (notesGridView) notesGridView.classList.remove('hidden');
+                    if (emptyFolderState) emptyFolderState.classList.add('hidden');
+                    if (noResultsBox) noResultsBox.classList.add('hidden');
+                } else {
+                    if (query.length > 0) {
+                        if (notesGridView) notesGridView.classList.add('hidden');
+                        if (emptyFolderState) emptyFolderState.classList.add('hidden');
+                        if (noResultsBox) noResultsBox.classList.remove('hidden');
+                    } else {
+                        if (currentLevelFolders && currentLevelFolders.length > 0) {
+                            if (notesGridView) notesGridView.classList.add('hidden');
+                            if (emptyFolderState) emptyFolderState.classList.add('hidden');
+                            if (noResultsBox) noResultsBox.classList.add('hidden');
+                        } else {
+                            if (notesGridView) notesGridView.classList.remove('hidden');
+                            if (emptyFolderState) emptyFolderState.classList.remove('hidden');
+                            if (noResultsBox) noResultsBox.classList.add('hidden');
+                        }
+                    }
+                }
+            }
+        }
+
+        function clearNotesSearch() {
+            const searchInput = document.getElementById('notes-search-input');
+            if (searchInput) {
+                searchInput.value = '';
+                filterLiveNotes();
+                searchInput.focus();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                const savedMode = localStorage.getItem('oddhay_teacher_notes_view_mode') || 'grid';
+                setViewMode(savedMode);
+            } catch(e) {}
+
+            filterLiveNotes();
+
+            const searchInput = document.getElementById('notes-search-input');
+            if (searchInput) {
+                searchInput.addEventListener('input', filterLiveNotes);
+            }
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') closeNoteModal();
+            });
+        });
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title><%= bank.title %> | Question Bank View</title>
+</head>
+
+<body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300">
+    <%- include('partials/student-header') %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'questions' }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative">
+            
+            <% 
+               const bSubject = (bank.subject || 'Subject').trim();
+               const bBoard = (bank.board || 'Board Exam').trim();
+               const bYear = (bank.year || '').trim();
+
+               const boardWithYear = [bBoard, bYear].filter(Boolean).join(' ');
+               let bTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${boardWithYear}`;
+               if (bYear && !bTitle.includes(bYear)) {
+                   bTitle = `${bTitle} ${bYear}`;
+               }
+
+               const fileUrl = bank.fileUrl || bank.filePath || '#';
+               const isPdf = Boolean(fileUrl && fileUrl !== '#' && fileUrl !== 'undefined' && fileUrl.toLowerCase().endsWith('.pdf'));
+               const hasFile = Boolean(fileUrl && fileUrl !== '#' && fileUrl !== 'undefined');
+               const safeTitle = bTitle.replace(/'/g, "\\'");
+               const safeFileUrl = fileUrl.replace(/'/g, "\\'");
+            %>
+
+            <!-- TOP HEADER TOOLBAR ATTACHED TO SIDEBAR AND NAVBAR BORDERS -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 rounded-none p-2 sm:p-2.5 shrink-0 flex items-center justify-end gap-2.5">
+                
+                <!-- ACTION BUTTONS MOVED TO RIGHT SIDE -->
+                <div class="flex items-center gap-2 shrink-0 ml-auto">
+                    <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 shrink-0">
+                        <span class="material-symbols-rounded text-xs text-indigo-500">quiz</span>
+                        <span><%= questions.length %> Questions</span>
+                    </span>
+
+                    <a href="/question-bank/solve/<%= bank._id %>" class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-[11px] font-bold transition-all flex items-center gap-1.5 shadow-xs active:scale-95">
+                        <span class="material-symbols-rounded text-sm leading-none">play_arrow</span>
+                        <span>Take Exam</span>
+                    </a>
+
+                    <% if (hasFile) { %>
+                        <button type="button" onclick="openPdfModal('<%= safeFileUrl %>', '<%= safeTitle %>')" class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-medium transition-all flex items-center gap-1 border border-slate-200 dark:border-slate-700">
+                            <span class="material-symbols-rounded text-xs leading-none text-sky-500">visibility</span>
+                            <span>View PDF</span>
+                        </button>
+                        <% if (isPdf) { %>
+                            <a href="<%= fileUrl %>" download class="p-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-emerald-500/15 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all flex items-center justify-center border border-slate-200 dark:border-slate-700" title="Download PDF Asset">
+                                <span class="material-symbols-rounded text-xs leading-none">download</span>
+                            </a>
+                        <% } %>
+                    <% } %>
+                </div>
+
+            </div>
+
+            <!-- MAIN WORKSPACE CONTAINER -->
+            <div class="p-3 sm:p-4 max-w-5xl w-full mx-auto flex-1 flex flex-col space-y-4">
+
+                <!-- QUESTIONS FEED -->
+                <% if (questions.length === 0) { %>
+                    <div class="bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl p-10 text-center space-y-2">
+                        <span class="material-symbols-rounded text-5xl text-slate-300 dark:text-slate-700 leading-none">quiz</span>
+                        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300">No Questions Added Yet</h3>
+                        <p class="text-xs text-slate-400">This question bank does not have structured questions attached yet.</p>
+                    </div>
+                <% } else { %>
+                    <div class="space-y-4">
+                        <% questions.forEach(function(q, index) { %>
+                            <% 
+                               const qType = q.questionType || 'MCQ';
+                               const opts = Array.isArray(q.options) ? q.options : [];
+                               const correctIdx = typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : -1;
+                               const qMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : (qType === 'Medium' ? 2 : (qType === 'Comprehension' ? 10 : 1));
+                            %>
+                            <div class="bg-slate-50 dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+                                
+                                <!-- QUESTION HEADER & NUMBER BADGE -->
+                                <div class="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/60 dark:border-slate-800">
+                                    <span class="px-2.5 py-0.5 rounded-lg text-[11px] font-extrabold bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                                        <span>Question <%= index + 1 %></span>
+                                    </span>
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700">
+                                            <%= qType %>
+                                        </span>
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 flex items-center gap-1">
+                                            <span class="material-symbols-rounded text-[11px] leading-none">star</span>
+                                            <span><%= qMark %> <%= qMark === 1 ? 'Mark' : 'Marks' %></span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- QUESTION STATEMENT -->
+                                <div class="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200 leading-relaxed pt-1">
+                                    <%= q.questionText %>
+                                </div>
+
+                                <!-- MCQ OPTIONS GRID -->
+                                <% if (opts.length > 0) { %>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+                                        <% const letters = ['A', 'B', 'C', 'D', 'E', 'F']; %>
+                                        <% opts.forEach(function(optText, oIdx) { %>
+                                            <% const isCorrect = (oIdx === correctIdx) || (q.correctAnswer && q.correctAnswer.trim().toLowerCase() === optText.trim().toLowerCase()); %>
+                                            <div class="p-3 sm:p-3.5 rounded-xl border transition-all flex items-center justify-between gap-2.5 <%= isCorrect ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 shadow-xs' : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300' %>">
+                                                <div class="flex items-center gap-2.5 min-w-0">
+                                                    <span class="size-6 sm:size-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 <%= isCorrect ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400' %>">
+                                                        <%= letters[oIdx] || (oIdx + 1) %>
+                                                    </span>
+                                                    <span class="text-sm sm:text-[15px] leading-snug <%= isCorrect ? 'font-bold tracking-normal' : 'font-medium tracking-normal text-slate-800 dark:text-slate-200' %>">
+                                                        <%= optText %>
+                                                    </span>
+                                                </div>
+                                                <% if (isCorrect) { %>
+                                                    <span class="material-symbols-rounded text-emerald-500 text-base leading-none shrink-0" title="Correct Answer">check_circle</span>
+                                                <% } %>
+                                            </div>
+                                        <% }); %>
+                                    </div>
+                                <% } else if (q.correctAnswer) { %>
+                                    <!-- NON-MCQ CORRECT ANSWER -->
+                                    <div class="rounded-xl overflow-hidden border border-emerald-500/30 dark:border-emerald-500/25">
+                                        <!-- Label row above answer -->
+                                        <div class="px-3.5 py-2 bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center gap-1.5 border-b border-emerald-500/20">
+                                            <span class="material-symbols-rounded text-emerald-500 text-base leading-none">check_circle</span>
+                                            <span class="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400 tracking-wide">Correct Answer</span>
+                                        </div>
+                                        <!-- Answer text -->
+                                        <div class="px-4 py-3 bg-white dark:bg-slate-800/60">
+                                            <p class="text-sm sm:text-base font-medium text-slate-800 dark:text-slate-100 leading-relaxed">
+                                                <%= q.correctAnswer %>
+                                            </p>
+                                        </div>
+                                    </div>
+                                <% } %>
+
+                                <!-- EXPLANATION BOX -->
+                                <% const expText = String(q.explanation || q.explanationText || q.solution || '').trim(); %>
+                                <% if (expText !== '') { %>
+                                    <div class="bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 rounded-xl p-3.5 sm:p-4 space-y-1.5 mt-3">
+                                        <div class="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-bold text-xs sm:text-sm">
+                                            <span class="material-symbols-rounded text-base leading-none">lightbulb</span>
+                                            <span>Explanation</span>
+                                        </div>
+                                        <div class="text-sm sm:text-base font-medium text-slate-800 dark:text-slate-100 leading-relaxed pt-0.5">
+                                            <%= expText %>
+                                        </div>
+                                    </div>
+                                <% } %>
+
+                            </div>
+                        <% }); %>
+                    </div>
+                <% } %>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- PDF VIEWER MODAL -->
+    <div id="pdf-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/50">
+                <h3 id="pdf-modal-title" class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white truncate">Document Viewer</h3>
+                <button type="button" onclick="closePdfModal()" class="size-7 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-colors">
+                    <span class="material-symbols-rounded text-sm">close</span>
+                </button>
+            </div>
+            <div class="flex-1 bg-slate-100 dark:bg-slate-950 relative">
+                <iframe id="pdf-modal-frame" class="w-full h-full border-none" src="about:blank"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <!-- INTERACTIVE PRACTICE MODAL -->
+    <div id="practice-modal" class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-3 hidden">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-3xl h-[85vh] flex flex-col shadow-2xl overflow-hidden relative">
+            <div class="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-800/50 shrink-0">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="material-symbols-rounded text-indigo-500 text-lg">quiz</span>
+                    <h3 id="practice-modal-title" class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white truncate">Practice Exam</h3>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div id="practice-timer-container" class="hidden px-3 py-1 rounded-full bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-extrabold flex items-center gap-1.5 shrink-0">
+                        <span class="material-symbols-rounded text-sm">timer</span>
+                        <span id="practice-timer-text">00:00</span>
+                    </div>
+                    <button type="button" onclick="closePracticeModal()" class="size-7 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center transition-colors">
+                        <span class="material-symbols-rounded text-sm">close</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="practice-modal-body" class="flex-1 overflow-y-auto p-4 sm:p-6 no-scrollbar space-y-4">
+                <!-- Loaded dynamically via JS -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let practiceTimerInterval = null;
+
+        function openPdfModal(url, title) {
+            const modal = document.getElementById('pdf-modal');
+            const frame = document.getElementById('pdf-modal-frame');
+            const titleEl = document.getElementById('pdf-modal-title');
+            if (modal && frame) {
+                titleEl.textContent = title || 'Document Viewer';
+                frame.src = url;
+                modal.classList.remove('hidden');
+            }
+        }
+
+        function closePdfModal() {
+            const modal = document.getElementById('pdf-modal');
+            const frame = document.getElementById('pdf-modal-frame');
+            if (modal) {
+                modal.classList.add('hidden');
+                if (frame) frame.src = 'about:blank';
+            }
+        }
+
+        async function openPracticeModal(bankId, title, durationMinutes = 30) {
+            const modal = document.getElementById('practice-modal');
+            const body = document.getElementById('practice-modal-body');
+            const titleEl = document.getElementById('practice-modal-title');
+            const timerContainer = document.getElementById('practice-timer-container');
+
+            if (!modal || !body) return;
+
+            if (practiceTimerInterval) {
+                clearInterval(practiceTimerInterval);
+                practiceTimerInterval = null;
+            }
+
+            titleEl.textContent = 'Practice Exam — ' + title;
+            if (timerContainer) timerContainer.classList.add('hidden');
+
+            body.innerHTML = `
+                <div class="flex flex-col items-center justify-center p-12 space-y-3">
+                    <span class="material-symbols-rounded text-4xl text-indigo-500 animate-spin">progress_activity</span>
+                    <p class="text-xs font-bold text-slate-500">Loading exam questions...</p>
+                </div>
+            `;
+            modal.classList.remove('hidden');
+
+            try {
+                const res = await fetch('/api/question-bank/' + bankId + '/questions');
+                const data = await res.json();
+                if (data.success && data.questions && data.questions.length > 0) {
+                    renderInteractivePractice(data.questions, body);
+                    startPracticeTimer(durationMinutes);
+                } else {
+                    body.innerHTML = `
+                        <div class="p-8 text-center text-slate-500 text-xs font-bold">
+                            No practice MCQs found in this question bank.
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                body.innerHTML = `
+                    <div class="p-8 text-center text-rose-500 text-xs font-bold">
+                        Failed to load practice exam.
+                    </div>
+                `;
+            }
+        }
+
+        function startPracticeTimer(durationMinutes) {
+            const timerContainer = document.getElementById('practice-timer-container');
+            const timerText = document.getElementById('practice-timer-text');
+            if (!timerContainer || !timerText) return;
+
+            let remainingSeconds = (parseInt(durationMinutes) || 30) * 60;
+            timerContainer.classList.remove('hidden');
+
+            function updateDisplay() {
+                const mins = Math.floor(remainingSeconds / 60);
+                const secs = remainingSeconds % 60;
+                timerText.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            }
+
+            updateDisplay();
+
+            if (practiceTimerInterval) clearInterval(practiceTimerInterval);
+
+            practiceTimerInterval = setInterval(() => {
+                remainingSeconds--;
+                if (remainingSeconds <= 0) {
+                    clearInterval(practiceTimerInterval);
+                    practiceTimerInterval = null;
+                    timerText.textContent = "00:00";
+                    onPracticeTimeExpired();
+                } else {
+                    updateDisplay();
+                }
+            }, 1000);
+        }
+
+        function onPracticeTimeExpired() {
+            // Lock all practice options
+            const allBtns = document.querySelectorAll('.practice-opt-btn');
+            allBtns.forEach(btn => btn.disabled = true);
+
+            // Append Time Expired Banner
+            const body = document.getElementById('practice-modal-body');
+            if (body) {
+                const banner = document.createElement('div');
+                banner.className = "sticky top-0 z-20 p-4 mb-4 rounded-xl bg-rose-500 text-white font-extrabold text-xs shadow-lg flex items-center justify-between animate-bounce";
+                banner.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-rounded text-lg">alarm_off</span>
+                        <span>Time's Up! The exam duration has expired. Exam auto-submitted.</span>
+                    </div>
+                `;
+                body.prepend(banner);
+            }
+        }
+
+        function closePracticeModal() {
+            const modal = document.getElementById('practice-modal');
+            if (modal) modal.classList.add('hidden');
+            if (practiceTimerInterval) {
+                clearInterval(practiceTimerInterval);
+                practiceTimerInterval = null;
+            }
+        }
+
+        function renderInteractivePractice(questions, container) {
+            const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+            let html = '<div class="space-y-5 pb-4">';
+            
+            questions.forEach((q, idx) => {
+                const opts = Array.isArray(q.options) ? q.options : [];
+                const correctIdx = typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : -1;
+                const qType = q.questionType || 'MCQ';
+                const qMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : (qType === 'Medium' ? 2 : (qType === 'Comprehension' ? 10 : 1));
+
+                html += `
+                    <div class="bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 rounded-2xl p-4 space-y-3">
+                        <div class="flex items-center justify-between text-[11px] font-bold text-slate-400">
+                            <span>Question ${idx + 1} of ${questions.length}</span>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700">${qType}</span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20">${qMark} ${qMark === 1 ? 'Mark' : 'Marks'}</span>
+                            </div>
+                        </div>
+                        <div class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white leading-relaxed">
+                            ${q.questionText}
+                        </div>
+                `;
+
+                if (opts.length > 0) {
+                    html += `<div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">`;
+                    opts.forEach((optText, oIdx) => {
+                        const isCorrect = (oIdx === correctIdx) || (q.correctAnswer && q.correctAnswer.trim().toLowerCase() === optText.trim().toLowerCase());
+                        html += `
+                            <button type="button" onclick="checkPracticeAnswer(this, ${isCorrect})" class="practice-opt-btn p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-between transition-all hover:border-indigo-500 text-left">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <span class="size-5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center text-[10px] font-bold shrink-0">${letters[oIdx] || (oIdx + 1)}</span>
+                                    <span class="truncate">${optText}</span>
+                                </div>
+                                <span class="opt-status-icon material-symbols-rounded text-sm hidden shrink-0"></span>
+                            </button>
+                        `;
+                    });
+                    html += `</div>`;
+                }
+
+                if (q.explanation && q.explanation.trim() !== '') {
+                    html += `
+                        <div class="practice-exp-box hidden bg-amber-500/10 border border-amber-500/25 rounded-xl p-3 text-xs space-y-1 mt-2">
+                            <div class="flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-extrabold text-xs">
+                                <span class="material-symbols-rounded text-sm leading-none">lightbulb</span>
+                                <span>Explanation</span>
+                            </div>
+                            <p class="text-slate-700 dark:text-slate-300 font-medium">${q.explanation}</p>
+                        </div>
+                    `;
+                }
+
+                html += `</div>`;
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function checkPracticeAnswer(btn, isCorrect) {
+            const parentCard = btn.closest('.space-y-3');
+            const allBtns = parentCard.querySelectorAll('.practice-opt-btn');
+            allBtns.forEach(b => b.disabled = true);
+
+            const icon = btn.querySelector('.opt-status-icon');
+            if (isCorrect) {
+                btn.classList.add('bg-emerald-500/15', 'border-emerald-500', 'text-emerald-700', 'dark:text-emerald-300');
+                if (icon) {
+                    icon.textContent = 'check_circle';
+                    icon.classList.remove('hidden');
+                    icon.classList.add('text-emerald-500');
+                }
+            } else {
+                btn.classList.add('bg-rose-500/15', 'border-rose-500', 'text-rose-700', 'dark:text-rose-300');
+                if (icon) {
+                    icon.textContent = 'cancel';
+                    icon.classList.remove('hidden');
+                    icon.classList.add('text-rose-500');
+                }
+            }
+
+            const expBox = parentCard.querySelector('.practice-exp-box');
+            if (expBox) expBox.classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>

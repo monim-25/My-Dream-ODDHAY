@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= locals.user && user.theme === 'dark' ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title><%= (selectedSubject && selectedSubject !== 'all') ? 'Subject Tests / ' + selectedSubject : 'Subject Tests' %> | ODDHAY</title>
+</head>
+
+<body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <%- include('partials/student-header') %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'exams' }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-4 sm:p-6 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative space-y-4 pb-12">
+            
+            <!-- DYNAMIC COUNT BADGE BAR -->
+            <div class="max-w-6xl w-full mx-auto flex items-center justify-end">
+                <span class="px-3 py-1 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/20 text-xs font-semibold flex items-center gap-1.5">
+                    <span class="material-symbols-rounded text-sm leading-none">menu_book</span>
+                    <span id="subjectTestCountBadge">0 Exams Available</span>
+                </span>
+            </div>
+
+            <!-- SUBJECT EXAMS GRID -->
+            <div class="max-w-6xl w-full mx-auto">
+                <div id="subjectTestsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                    <% if (examList.length === 0) { %>
+                        <div class="col-span-full py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                            <span class="material-symbols-rounded text-3xl text-slate-400 leading-none">event_busy</span>
+                            <h3 class="text-xs font-bold text-slate-600 dark:text-slate-400">No Subject Exams Available</h3>
+                            <p class="text-[11px] text-slate-400">There are no exams uploaded for this subject yet.</p>
+                        </div>
+                    <% } else { %>
+                        <% examList.forEach(function(item) { %>
+                            <div class="exam-card bg-[#F2F6F9] dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 rounded-2xl p-3.5 flex flex-col justify-between hover:border-cyan-500/50 dark:hover:border-cyan-500/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group relative space-y-3" data-subject="<%= item.subject %>" data-topic="<%= (item.topic || '').toLowerCase() %>" data-title="<%= item.title.toLowerCase() %>">
+                                <div>
+                                    <div class="flex items-center justify-between gap-1.5 mb-2">
+                                        <div class="flex items-center gap-1 flex-wrap">
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/20">
+                                                <%= item.subject %>
+                                            </span>
+                                            <% if (item.topic) { %>
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
+                                                    <%= item.topic %>
+                                                </span>
+                                            <% } %>
+                                            <% if (item.duration && item.duration > 0) { %>
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700">
+                                                    <%= item.duration %> Mins
+                                                </span>
+                                            <% } %>
+                                        </div>
+                                    </div>
+
+                                    <h3 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white leading-snug line-clamp-2 group-hover:text-cyan-600 transition-colors">
+                                        <%= item.title %>
+                                    </h3>
+                                </div>
+
+                                <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200/70 dark:border-slate-700/50">
+                                    <div class="text-[10px] font-medium text-slate-400 flex items-center gap-1 truncate">
+                                        <span class="material-symbols-rounded text-xs text-cyan-500 leading-none select-none">topic</span>
+                                        <span class="truncate"><%= item.subtitle %></span>
+                                    </div>
+                                    <a href="<%= item.solveUrl %>" class="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-semibold transition-all flex items-center gap-1 shadow-2xs active:scale-95 shrink-0">
+                                        <span class="material-symbols-rounded text-sm leading-none">play_arrow</span>
+                                        <span>Take Exam</span>
+                                    </a>
+                                </div>
+                            </div>
+                        <% }); %>
+                    <% } %>
+                </div>
+
+                <!-- EMPTY SEARCH RESULT STATE -->
+                <div id="noResultsState" class="hidden py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                    <span class="material-symbols-rounded text-3xl text-slate-400 leading-none">search_off</span>
+                    <h3 class="text-xs font-bold text-slate-600 dark:text-slate-400">No Matching Subject Exams</h3>
+                    <p class="text-[11px] text-slate-400">Try adjusting your topic filter or search terms.</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+        const targetSubject = "<%= selectedSubject.toLowerCase().trim() %>";
+        let currentSubjectTopic = 'all';
+        let currentSubjectSearch = '';
+
+        window.filterSubjectTestsWithTopic = function(topic) {
+            currentSubjectTopic = (topic || 'all').toLowerCase().trim();
+            filterSubjectTests();
+        };
+
+        window.filterSubjectTestsWithSearch = function(search) {
+            currentSubjectSearch = (search || '').toLowerCase().trim();
+            filterSubjectTests();
+        };
+
+        function filterSubjectTests() {
+            const cards = document.querySelectorAll('.exam-card');
+            let visibleCount = 0;
+
+            cards.forEach(card => {
+                const cardSubject = (card.getAttribute('data-subject') || '').toLowerCase().trim();
+                const cardTopic = (card.getAttribute('data-topic') || '').toLowerCase().trim();
+                const cardTitle = (card.getAttribute('data-title') || '').toLowerCase().trim();
+
+                const matchesSubject = (targetSubject === 'all' || cardSubject === targetSubject || cardSubject.includes(targetSubject) || targetSubject.includes(cardSubject));
+                const matchesTopic = (currentSubjectTopic === 'all' || cardTopic === currentSubjectTopic || cardTopic.includes(currentSubjectTopic) || cardTitle.includes(currentSubjectTopic));
+                const matchesSearch = (currentSubjectSearch === '' || cardTitle.includes(currentSubjectSearch) || cardTopic.includes(currentSubjectSearch) || cardSubject.includes(currentSubjectSearch));
+
+                if (matchesSubject && matchesTopic && matchesSearch) {
+                    card.classList.remove('hidden');
+                    visibleCount++;
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+
+            const badgeEl = document.getElementById('subjectTestCountBadge');
+            if (badgeEl) {
+                badgeEl.textContent = `${visibleCount} Exams Available`;
+            }
+
+            const noResults = document.getElementById('noResultsState');
+            if (noResults) {
+                if (visibleCount === 0 && cards.length > 0) {
+                    noResults.classList.remove('hidden');
+                } else {
+                    noResults.classList.add('hidden');
+                }
+            }
+        }
+
+        window.onload = () => {
+            filterSubjectTests();
+        };
+    </script>
+</body>
+</html>

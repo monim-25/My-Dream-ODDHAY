@@ -1,129 +1,712 @@
 <!DOCTYPE html>
-<html class="light" lang="bn">
-
+<html lang="en" class="<%= locals.user && user.theme === 'dark' ? 'dark' : '' %>">
 <head>
-    <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>বোর্ড প্রশ্ন ব্যাংক | ODDHAY</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Lexend:wght@300..900&family=Noto+Sans+Bengali:wght@300..900&display=swap"
-        rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-        rel="stylesheet" />
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: { "primary": "#10b981" }, // Emerald theme for Question Bank
-                    fontFamily: { "display": ["Lexend", "Noto Sans Bengali", "sans-serif"] },
-                },
-            },
-        }
-    </script>
-    <style>
-        body {
-            font-family: 'Lexend', 'Noto Sans Bengali', sans-serif;
-        }
-
-        .pb-safe {
-            padding-bottom: env(safe-area-inset-bottom, 20px);
-        }
-    </style>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Question Bank | ODDHAY</title>
 </head>
 
-<body class="bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 min-h-screen pb-20">
-    <!-- Header -->
-    <header
-        class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-4 sticky top-0 z-50">
-        <div class="max-w-2xl mx-auto flex items-center gap-3">
-            <a href="/dashboard" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl">
-                <span class="material-symbols-outlined">arrow_back</span>
-            </a>
-            <h1 class="text-lg font-black">বোর্ড প্রশ্ন ব্যাংক</h1>
-        </div>
-    </header>
+<body class="bg-[#f8fafc] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300">
+    <%- include('partials/student-header') %>
 
-    <main class="max-w-2xl mx-auto p-4 py-6 space-y-4">
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'questions' }) %>
 
-        <!-- Filter/Search -->
-        <div class="flex gap-3">
-            <div class="relative flex-1">
-                <span class="material-symbols-outlined absolute left-4 top-3.5 text-slate-400">search</span>
-                <input type="text" placeholder="বিষয় বা সাল খুঁজুন..."
-                    class="w-full pl-12 pr-4 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:outline-none focus:border-primary font-bold">
-            </div>
-            <button class="px-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl">
-                <span class="material-symbols-outlined text-slate-500">filter_list</span>
-            </button>
-        </div>
-
-        <!-- Question Files Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <% if(questions && questions.length> 0) { %>
-                <% questions.forEach(q=> { %>
-                    <div
-                        class="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex gap-4 hover:border-primary transition-all group">
-                        <div
-                            class="size-16 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                            <span
-                                class="material-symbols-outlined text-3xl text-primary group-hover:scale-110 transition-transform">description</span>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <h3 class="font-black text-sm truncate">
-                                <%= q.subject %>
-                            </h3>
-                            <p class="text-xs text-slate-500 mb-2">
-                                <%= q.board %> | <%= q.year %>
-                            </p>
-                            <div class="flex gap-2">
-                                <a href="<%= q.fileUrl %>" target="_blank"
-                                    class="px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-[10px] font-bold hover:bg-primary hover:text-white transition-colors">
-                                    ডাউনলোড
-                                </a>
-                                <a href="/question-bank/solve/<%= q._id %>"
-                                    class="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
-                                    সমাধান দেখুন
-                                </a>
-                            </div>
-                        </div>
+        <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative">
+            
+            <!-- TOP HEADER TOOLBAR ATTACHED TO SIDEBAR AND NAVBAR BORDERS -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 rounded-none p-2.5 sm:p-3 shrink-0 space-y-1.5">
+                
+                <!-- 1ST LINE: SUBJECT, BOARD, YEAR DROPDOWNS, ACCESS PILLS & RESET BUTTON -->
+                <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar flex-wrap">
+                    
+                    <!-- SUBJECT DROPDOWN -->
+                    <div class="relative shrink-0 min-w-[125px] max-w-[135px]">
+                        <select id="qb-subject-select" onchange="qbExplorer.onSelectSubject(this.value)" 
+                                class="w-full pl-6 pr-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 outline-none focus:border-primary transition-all cursor-pointer truncate"
+                                style="appearance: none; -webkit-appearance: none; -moz-appearance: none;">
+                            <option value="all">All Subjects</option>
+                            <% (subjects || []).forEach(function(sub) { %>
+                                <option value="<%= sub %>" <%= activeSubject === sub ? 'selected' : '' %>><%= sub %></option>
+                            <% }); %>
+                        </select>
+                        <span class="material-symbols-rounded absolute left-1.5 top-1/2 -translate-y-1/2 text-primary text-xs leading-none select-none pointer-events-none flex items-center justify-center">menu_book</span>
                     </div>
-                    <% }) %>
-                        <% } else { %>
-                            <div class="col-span-full text-center py-12">
-                                <span class="material-symbols-outlined text-5xl text-slate-300 mb-4">folder_open</span>
-                                <h3 class="font-black text-lg mb-2">কোনো প্রশ্ন পাওয়া যায়নি</h3>
-                                <p class="text-sm text-slate-500 mb-4 text-center">অনুগ্রহ করে পরে আবার চেষ্টা করুন অথবা
-                                    অ্যাডমিন প্যানেল থেকে প্রশ্ন আপলোড করুন।</p>
+
+                    <!-- BOARD DROPDOWN -->
+                    <div class="relative shrink-0 min-w-[120px] max-w-[130px]">
+                        <select id="qb-board-select" onchange="qbExplorer.onSelectBoard(this.value)" 
+                                class="w-full pl-6 pr-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 outline-none focus:border-primary transition-all cursor-pointer truncate"
+                                style="appearance: none; -webkit-appearance: none; -moz-appearance: none;">
+                            <option value="all">All Boards</option>
+                            <% (boards || []).forEach(function(b) { %>
+                                <option value="<%= b %>" <%= activeBoard === b ? 'selected' : '' %>><%= b %></option>
+                            <% }); %>
+                        </select>
+                        <span class="material-symbols-rounded absolute left-1.5 top-1/2 -translate-y-1/2 text-primary text-xs leading-none select-none pointer-events-none flex items-center justify-center">account_balance</span>
+                    </div>
+
+                    <!-- YEAR DROPDOWN -->
+                    <div class="relative shrink-0 min-w-[115px] max-w-[125px]">
+                        <select id="qb-year-select" onchange="qbExplorer.onSelectYear(this.value)" 
+                                class="w-full pl-6 pr-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-bold rounded-lg border border-slate-200 dark:border-slate-700 outline-none focus:border-primary transition-all cursor-pointer truncate"
+                                style="appearance: none; -webkit-appearance: none; -moz-appearance: none;">
+                            <option value="all">All Years</option>
+                            <% (years || []).forEach(function(y) { %>
+                                <option value="<%= y %>" <%= activeYear === y ? 'selected' : '' %>><%= y %></option>
+                            <% }); %>
+                        </select>
+                        <span class="material-symbols-rounded absolute left-1.5 top-1/2 -translate-y-1/2 text-amber-500 text-xs leading-none select-none pointer-events-none flex items-center justify-center">calendar_today</span>
+                    </div>
+
+                    <!-- ACCESS FILTER PILLS (SEPARATE INDIVIDUAL BUTTONS WITHOUT CONTAINER BOX) -->
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button type="button" onclick="qbExplorer.onSelectAccess('free')" id="qb-tab-free" class="qb-access-tab px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-slate-800 dark:hover:text-white shrink-0">
+                            <span class="material-symbols-rounded text-xs text-emerald-500 leading-none">card_giftcard</span>
+                            <span>Free</span>
+                        </button>
+                        <button type="button" onclick="qbExplorer.onSelectAccess('paid')" id="qb-tab-paid" class="qb-access-tab px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-slate-800 dark:hover:text-white shrink-0">
+                            <span class="material-symbols-rounded text-xs text-amber-500 leading-none">diamond</span>
+                            <span>Paid</span>
+                        </button>
+                        <button type="button" onclick="qbExplorer.onSelectAccess('bought')" id="qb-tab-bought" class="qb-access-tab px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-slate-800 dark:hover:text-white shrink-0">
+                            <span class="material-symbols-rounded text-xs text-indigo-500 leading-none">verified_user</span>
+                            <span>My Archives</span>
+                        </button>
+                        <button type="button" onclick="qbExplorer.onSelectAccess('saved')" id="qb-tab-saved" class="qb-access-tab px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-slate-800 dark:hover:text-white shrink-0">
+                            <span class="material-symbols-rounded text-xs text-amber-500 leading-none" style="font-variation-settings: 'FILL' 1;">bookmark</span>
+                            <span>Saved</span>
+                        </button>
+                    </div>
+
+                    <!-- RESET BUTTON (BESIDE FILTERS, VISIBLE ONLY WHEN FILTERED OR SEARCHED) -->
+                    <% const hasInitialFilters = (activeSubject !== 'all' || activeBoard !== 'all' || activeYear !== 'all' || (search && search.trim().length > 0)); %>
+                    <button type="button" onclick="qbExplorer.resetAllFilters()" id="qb-reset-filters-btn" 
+                            class="<%= hasInitialFilters ? 'flex' : 'hidden' %> px-2.5 py-1 rounded-lg text-[11px] font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 hover:bg-rose-100 dark:hover:bg-rose-500/20 transition-all items-center gap-1 shrink-0 shadow-xs">
+                        <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center select-none">restart_alt</span>
+                        <span>Reset</span>
+                    </button>
+
+                </div>
+
+                <!-- 2ND LINE: BREADCRUMB ON LEFT & ITEMS COUNTER ON RIGHT -->
+                <div class="flex items-center justify-between gap-2 text-xs font-bold text-slate-700 dark:text-slate-200 overflow-x-auto no-scrollbar pt-0.5">
+                    <div id="qb-breadcrumb-container" class="flex items-center gap-1.5 min-w-0">
+                        <span class="font-bold text-slate-800 dark:text-white">All Question Archives</span>
+                    </div>
+
+                    <!-- ITEMS COUNTER BADGE -->
+                    <span id="qb-items-counter" class="text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-200/60 dark:border-slate-700/60 shrink-0">
+                        <%= questions.length %> Items
+                    </span>
+                </div>
+
+            </div>
+
+            <!-- MAIN WORKSPACE CONTAINER FOR CARDS -->
+            <div id="qb-workspace-content" class="p-1.5 sm:p-3 flex-1 flex flex-col space-y-3">
+                
+                <!-- QUESTION PAPERS GRID MATCHING NOTES CARDS -->
+                <div id="qb-cards-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                    <% questions.forEach(function(q) { %>
+                        <% 
+                           const qTitle = q.title || ((q.subject || 'Subject') + ' - ' + (q.board || 'Board Exam'));
+                           const qBoard = (q.board || 'General Board').trim();
+                           const qSubject = (q.subject || 'General Academic').trim();
+                           const qYear = (q.year || '').trim();
+                           const qClass = Array.isArray(q.classLevel) ? q.classLevel.join(', ') : (q.classLevel || userClass);
+                           const fileUrl = q.fileUrl || q.filePath || '#';
+                           const isPdf = Boolean(fileUrl && fileUrl !== '#' && fileUrl !== 'undefined' && fileUrl.toLowerCase().endsWith('.pdf'));
+                           const hasFile = Boolean(fileUrl && fileUrl !== '#' && fileUrl !== 'undefined');
+                           const searchable = [qTitle, qBoard, qSubject, qYear, qClass].join(' ').toLowerCase();
+                           const safeTitle = qTitle.replace(/'/g, "\\'");
+                           const safeFileUrl = fileUrl.replace(/'/g, "\\'");
+                        %>
+                        <div class="qb-paper-card bg-slate-100/90 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between hover:border-primary/50 dark:hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group relative"
+                             data-id="<%= q._id %>"
+                             data-search="<%= searchable %>"
+                             data-board="<%= qBoard.toLowerCase() %>"
+                             data-subject="<%= qSubject.toLowerCase() %>"
+                             data-year="<%= qYear.toLowerCase() %>"
+                             data-class="<%= qClass.toLowerCase() %>"
+                             data-free="<%= q.isFree ? 'true' : 'false' %>"
+                             data-paid="<%= !q.isFree ? 'true' : 'false' %>"
+                             data-bought="<%= q.isBought ? 'true' : 'false' %>"
+                             data-saved="<%= q.isSaved ? 'true' : 'false' %>">
+                            
+                            <div>
+                                <!-- BADGES & SAVE HEADER -->
+                                <div class="flex items-center justify-between gap-1.5 mb-2">
+                                    <div class="flex items-center gap-1 flex-wrap">
+                                        <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20">
+                                            <%= qSubject %>
+                                        </span>
+                                        <% if (qYear) { %>
+                                            <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                                <%= qYear %>
+                                            </span>
+                                        <% } %>
+                                        <% if (!q.isFree) { %>
+                                            <% if (q.isBought) { %>
+                                                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-200 dark:border-teal-500/20 flex items-center gap-0.5">
+                                                    <span class="material-symbols-rounded text-[11px] text-teal-500">verified</span>
+                                                    <span>Purchased</span>
+                                                </span>
+                                            <% } else { %>
+                                                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 flex items-center gap-0.5">
+                                                    <span class="material-symbols-rounded text-[11px] text-amber-500">diamond</span>
+                                                    <span>Paid (৳<%= q.price || 0 %>)</span>
+                                                </span>
+                                            <% } %>
+                                        <% } else { %>
+                                            <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 flex items-center gap-0.5">
+                                                <span class="material-symbols-rounded text-[11px] text-emerald-500">auto_awesome</span>
+                                                <span>Free</span>
+                                            </span>
+                                        <% } %>
+                                    </div>
+
+                                    <!-- SAVE / BOOKMARK BUTTON -->
+                                    <button type="button" onclick="qbExplorer.toggleSave(event, '<%= q._id %>', this)" 
+                                            class="qb-save-btn size-7 rounded-lg bg-slate-100 dark:bg-slate-800/80 hover:bg-amber-50 dark:hover:bg-amber-500/20 text-slate-400 hover:text-amber-500 transition-all flex items-center justify-center border border-slate-200 dark:border-slate-700 shrink-0" 
+                                            title="<%= q.isSaved ? 'Remove from Saved' : 'Save Question Bank' %>">
+                                        <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center select-none <%= q.isSaved ? 'text-amber-500' : '' %>"
+                                              style="<%= q.isSaved ? "font-variation-settings: 'FILL' 1;" : "font-variation-settings: 'FILL' 0;" %>">
+                                            <%= q.isSaved ? 'bookmark' : 'bookmark_border' %>
+                                        </span>
+                                    </button>
+                                </div>
+
+                                <!-- CARD TITLE -->
+                                <% if (!q.isFree && !q.isBought) { %>
+                                    <h3 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white leading-snug line-clamp-2 mb-2">
+                                        <%= qTitle %>
+                                    </h3>
+                                <% } else { %>
+                                    <a href="/question-bank/view/<%= q._id %>" class="block mb-2 group/title">
+                                        <h3 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white leading-snug line-clamp-2 group-hover/title:text-primary transition-colors">
+                                            <%= qTitle %>
+                                        </h3>
+                                    </a>
+                                <% } %>
+
+                                <!-- BOARD & PRACTICE INFO -->
+                                <div class="space-y-1 mb-3 text-[10px] font-medium text-slate-400">
+                                    <p class="flex items-center gap-1 truncate">
+                                        <span class="material-symbols-rounded text-xs text-primary leading-none flex items-center justify-center select-none">account_balance</span>
+                                        <span class="truncate"><%= qBoard %></span>
+                                    </p>
+                                    <% if (q.hasPractice) { %>
+                                        <p class="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-bold truncate">
+                                            <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center select-none">quiz</span>
+                                            <span><%= q.questionCount %> MCQs</span>
+                                        </p>
+                                    <% } %>
+                                </div>
                             </div>
-                            <% } %>
-        </div>
 
-    </main>
+                            <!-- CARD ACTIONS -->
+                            <div class="pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                                <% if (!q.isFree && !q.isBought) { %>
+                                    <!-- Locked Paid State: Show Buy / Unlock Button Only -->
+                                    <a href="/question-bank/checkout/<%= q._id %>" class="w-full px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 hover:to-orange-600 text-white text-[11px] font-black transition-all duration-200 flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 hover:shadow-amber-500/30 hover:-translate-y-0.5 active:scale-95 group">
+                                        <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center select-none group-hover:scale-110 transition-transform">shopping_cart</span>
+                                        <span>Purchase ৳<%= q.price || 0 %></span>
+                                    </a>
+                                <% } else { %>
+                                    <!-- Unlocked / Free State -> View (always opens view page), Download (if PDF), Solve (if MCQs) -->
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="flex items-center gap-1.5 flex-1">
+                                            <a href="/question-bank/view/<%= q._id %>" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-500/10 via-blue-500/10 to-indigo-500/10 hover:from-sky-500/20 hover:via-blue-500/20 hover:to-indigo-500/20 text-sky-600 dark:text-sky-400 text-[11px] font-extrabold transition-all duration-200 flex items-center justify-center gap-1.5 border border-sky-500/25 hover:border-sky-500/40 shadow-xs hover:shadow-sky-500/10 hover:-translate-y-0.5 active:scale-95 flex-1 group">
+                                                <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center select-none group-hover:scale-110 transition-transform">visibility</span>
+                                                <span>View</span>
+                                            </a>
+                                            <% if (isPdf) { %>
+                                                <a href="<%= fileUrl %>" download class="p-1.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 hover:bg-emerald-500/15 text-slate-600 dark:text-slate-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all duration-200 flex items-center justify-center border border-slate-200 dark:border-slate-700/80 hover:border-emerald-500/30 hover:-translate-y-0.5 active:scale-95 group" title="Download PDF Asset">
+                                                    <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center select-none group-hover:scale-110 transition-transform">download</span>
+                                                </a>
+                                            <% } %>
+                                        </div>
+                                        <% if (q.hasPractice) { %>
+                                            <a href="/question-bank/solve/<%= q._id %>" class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-500 hover:from-emerald-500 hover:via-teal-500 hover:to-emerald-400 text-white text-[11px] font-extrabold transition-all duration-200 flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/25 hover:shadow-lg hover:shadow-emerald-600/40 hover:-translate-y-0.5 active:scale-95 group">
+                                                <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center select-none group-hover:scale-110 transition-transform">play_arrow</span>
+                                                <span>Take Exam</span>
+                                            </a>
+                                        <% } %>
+                                    </div>
+                                <% } %>
+                            </div>
 
-    <!-- Mobile Bottom Nav -->
-    <nav
-        class="fixed bottom-0 left-0 right-0 z-[100] bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 lg:hidden pb-safe">
-        <div class="flex items-center justify-around h-16">
-            <a href="/dashboard" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">home</span>
-                <span class="text-[9px] font-black">হোম</span>
-            </a>
-            <a href="/messages" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">mail</span>
-                <span class="text-[9px] font-black">মেসেজ</span>
-            </a>
-            <a href="/downloads" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">download</span>
-                <span class="text-[9px] font-black">ডাউনলোড</span>
-            </a>
-            <a href="/profile" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">person</span>
-                <span class="text-[9px] font-black">প্রোফাইল</span>
-            </a>
+                        </div>
+                    <% }); %>
+                </div>
+
+                <!-- EMPTY STATE -->
+                <div id="qb-empty-state" class="hidden py-10 text-center bg-white dark:bg-[#0f172a] rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                    <div class="size-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-2">
+                        <span class="material-symbols-rounded text-xl leading-none flex items-center justify-center select-none">search_off</span>
+                    </div>
+                    <h3 class="text-xs font-bold text-slate-800 dark:text-white">No Question Papers Found</h3>
+                    <p class="text-[10px] font-medium text-slate-400 mt-0.5">Try adjusting your search or filter selection</p>
+                    <button onclick="qbExplorer.resetAllFilters()" class="mt-2.5 px-3 py-1 rounded-lg bg-primary hover:bg-primary/90 text-white text-xs font-bold transition-colors">
+                        Reset Filters
+                    </button>
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+    <!-- PDF PREVIEW MODAL -->
+    <div id="qb-pdf-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-3 lg:p-6">
+        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-4xl h-[85vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
+                <div class="flex items-center gap-2 truncate pr-2">
+                    <span class="material-symbols-rounded text-primary text-xl leading-none flex items-center justify-center select-none">picture_as_pdf</span>
+                    <h3 id="qb-modal-title" class="font-bold text-xs sm:text-sm text-slate-800 dark:text-white truncate">Question Paper Document</h3>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <a id="qb-modal-download" href="#" download class="px-3 py-1 rounded-lg bg-primary hover:bg-primary/90 text-white text-xs font-bold transition-colors flex items-center gap-1">
+                        <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center select-none">download</span>
+                        <span>Download</span>
+                    </a>
+                    <button onclick="qbExplorer.closePdfModal()" class="size-7 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-rose-500 flex items-center justify-center transition-colors">
+                        <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center select-none">close</span>
+                    </button>
+                </div>
+            </div>
+            <div class="flex-1 bg-slate-100 dark:bg-slate-900 overflow-hidden relative">
+                <iframe id="qb-modal-iframe" src="" class="w-full h-full border-none"></iframe>
+            </div>
         </div>
-    </nav>
+    </div>
+
+    <!-- INTERACTIVE SOLVE & PRACTICE MODAL -->
+    <div id="qb-practice-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-3 lg:p-6">
+        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-indigo-50 dark:bg-indigo-500/10">
+                <div class="flex items-center gap-2 truncate pr-2">
+                    <span class="material-symbols-rounded text-indigo-600 dark:text-indigo-400 text-xl leading-none flex items-center justify-center select-none">quiz</span>
+                    <div>
+                        <h3 id="qb-practice-title" class="font-bold text-xs sm:text-sm text-slate-800 dark:text-white truncate">Interactive Solve & Practice</h3>
+                        <p id="qb-practice-progress" class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">Loading questions...</p>
+                    </div>
+                </div>
+                <button onclick="qbExplorer.closePracticeModal()" class="size-7 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-rose-500 flex items-center justify-center transition-colors shrink-0">
+                    <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center select-none">close</span>
+                </button>
+            </div>
+
+            <div id="qb-practice-body" class="p-4 lg:p-5 overflow-y-auto flex-1 space-y-3 no-scrollbar">
+                <!-- Question content dynamically loaded via JS -->
+            </div>
+        </div>
+    </div>
+
+    <%- include('partials/student-bottom-nav', { activePage: 'questions' }) %>
+    <%- include('partials/app-scripts') %>
+
+    <script>
+        class QuestionBankExplorer {
+            constructor() {
+                const headerNavInput = document.getElementById('qb-search-input-header');
+                const initialSearch = (headerNavInput && headerNavInput.value) || '<%= (locals.search || "").replace(/'/g, "\\'") %>';
+                this.searchQuery = (initialSearch || '').trim().toLowerCase();
+                this.selectedSubject = '<%= activeSubject || "all" %>'.trim();
+                this.selectedBoard = '<%= activeBoard || "all" %>'.trim();
+                this.selectedYear = '<%= activeYear || "all" %>'.trim();
+                this.selectedAccess = 'all';
+                this.userClass = '<%= userClass %>'.trim().toLowerCase();
+
+                this.init();
+            }
+
+            init() {
+                const headerNavInput = document.getElementById('qb-search-input-header');
+                if (headerNavInput && !headerNavInput.value && this.searchQuery) {
+                    headerNavInput.value = this.searchQuery;
+                }
+                const clearBtn = document.getElementById('qb-clear-search-btn');
+                if (clearBtn) {
+                    if (this.searchQuery.length > 0) clearBtn.classList.remove('hidden');
+                    else clearBtn.classList.add('hidden');
+                }
+                this.render();
+            }
+
+            onSearch(val) {
+                this.searchQuery = (val || '').trim().toLowerCase();
+                const clearBtn = document.getElementById('qb-clear-search-btn');
+                if (clearBtn) {
+                    if (this.searchQuery.length > 0) clearBtn.classList.remove('hidden');
+                    else clearBtn.classList.add('hidden');
+                }
+                this.render();
+            }
+
+            clearSearch() {
+                const input = document.getElementById('qb-search-input');
+                if (input) input.value = '';
+                const navInput = document.getElementById('qb-search-input-header');
+                if (navInput) navInput.value = '';
+                const navClearBtn = document.getElementById('qb-clear-search-btn');
+                if (navClearBtn) navClearBtn.classList.add('hidden');
+                this.onSearch('');
+            }
+
+            onSelectSubject(val) {
+                this.selectedSubject = (val || 'all').trim();
+                this.render();
+            }
+
+            onSelectBoard(val) {
+                this.selectedBoard = (val || 'all').trim();
+                this.render();
+            }
+
+            onSelectYear(val) {
+                this.selectedYear = (val || 'all').trim();
+                this.render();
+            }
+
+            onSelectAccess(val) {
+                const targetVal = (val || '').trim().toLowerCase();
+                if (this.selectedAccess === targetVal) {
+                    this.selectedAccess = 'all';
+                } else {
+                    this.selectedAccess = targetVal;
+                }
+
+                document.querySelectorAll('.qb-access-tab').forEach(tab => {
+                    tab.className = 'qb-access-tab px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700 shrink-0';
+                });
+
+                if (this.selectedAccess !== 'all') {
+                    const activeTab = document.getElementById('qb-tab-' + this.selectedAccess);
+                    if (activeTab) {
+                        activeTab.className = 'qb-access-tab px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 bg-slate-800 dark:bg-white text-white dark:text-slate-900 border border-slate-800 dark:border-white shadow-xs shrink-0';
+                    }
+                }
+                this.render();
+            }
+
+            async toggleSave(e, bankId, btn) {
+                if (e) { e.preventDefault(); e.stopPropagation(); }
+                try {
+                    const response = await fetch(`/api/question-bank/${bankId}/save`, { method: 'POST' });
+                    const data = await response.json();
+                    if (data.success) {
+                        const card = btn.closest('.qb-paper-card');
+                        if (card) {
+                            card.setAttribute('data-saved', data.isSaved ? 'true' : 'false');
+                        }
+                        const icon = btn.querySelector('.material-symbols-rounded');
+                        if (icon) {
+                            if (data.isSaved) {
+                                icon.textContent = 'bookmark';
+                                icon.classList.add('text-amber-500');
+                                icon.style.fontVariationSettings = "'FILL' 1";
+                                btn.title = 'Remove from Saved';
+                            } else {
+                                icon.textContent = 'bookmark_border';
+                                icon.classList.remove('text-amber-500');
+                                icon.style.fontVariationSettings = "'FILL' 0";
+                                btn.title = 'Save Question Bank';
+                            }
+                        }
+                        if (this.selectedAccess === 'saved') this.render();
+                    }
+                } catch (err) {
+                    console.error('Bookmark error:', err);
+                }
+            }
+
+            resetAllFilters() {
+                this.clearSearch();
+                this.selectedSubject = 'all';
+                this.selectedBoard = 'all';
+                this.selectedYear = 'all';
+                this.onSelectAccess('all');
+
+                const subjSelect = document.getElementById('qb-subject-select');
+                if (subjSelect) subjSelect.value = 'all';
+
+                const boardSelect = document.getElementById('qb-board-select');
+                if (boardSelect) boardSelect.value = 'all';
+
+                const yearSelect = document.getElementById('qb-year-select');
+                if (yearSelect) yearSelect.value = 'all';
+
+                this.render();
+            }
+
+            render() {
+                const cards = document.querySelectorAll('.qb-paper-card');
+                let visibleCount = 0;
+
+                cards.forEach(card => {
+                    const searchable = card.getAttribute('data-search') || '';
+                    const board = card.getAttribute('data-board') || '';
+                    const subject = card.getAttribute('data-subject') || '';
+                    const year = card.getAttribute('data-year') || '';
+                    const isFree = card.getAttribute('data-free') === 'true';
+                    const isPaid = card.getAttribute('data-paid') === 'true';
+                    const isBought = card.getAttribute('data-bought') === 'true';
+                    const isSaved = card.getAttribute('data-saved') === 'true';
+
+                    // 1. Search Query Filter (Multi-keyword smart match)
+                    let matchesSearch = true;
+                    if (this.searchQuery) {
+                        const terms = this.searchQuery.toLowerCase().split(/\s+/).filter(Boolean);
+                        matchesSearch = terms.every(term => searchable.includes(term));
+                    }
+
+                    // 2. Subject Filter
+                    let matchesSubject = true;
+                    if (this.selectedSubject !== 'all') {
+                        const targetSub = this.selectedSubject.toLowerCase().trim();
+                        const cleanCardSub = subject.toLowerCase().trim();
+
+                        matchesSubject = cleanCardSub === targetSub || 
+                                         cleanCardSub.includes(targetSub) || 
+                                         targetSub.includes(cleanCardSub) ||
+                                         (targetSub.includes('math') && cleanCardSub.includes('math')) ||
+                                         (targetSub.includes('bangla') && cleanCardSub.includes('bangla')) ||
+                                         (targetSub.includes('english') && cleanCardSub.includes('english')) ||
+                                         searchable.includes(targetSub);
+                    }
+
+                    // 3. Board Filter
+                    let matchesBoard = true;
+                    if (this.selectedBoard !== 'all') {
+                        const targetBoard = this.selectedBoard.toLowerCase();
+                        matchesBoard = board.includes(targetBoard) || searchable.includes(targetBoard);
+                    }
+
+                    // 4. Year Filter
+                    let matchesYear = true;
+                    if (this.selectedYear !== 'all') {
+                        matchesYear = year === this.selectedYear.toLowerCase();
+                    }
+
+                    // 5. Access Filter (All, Free, Paid, Bought, Saved)
+                    let matchesAccess = true;
+                    if (this.selectedAccess === 'free') {
+                        matchesAccess = isFree;
+                    } else if (this.selectedAccess === 'paid') {
+                        matchesAccess = isPaid;
+                    } else if (this.selectedAccess === 'bought') {
+                        matchesAccess = isBought && !isFree;
+                    } else if (this.selectedAccess === 'saved') {
+                        matchesAccess = isSaved;
+                    }
+
+                    if (matchesSearch && matchesSubject && matchesBoard && matchesYear && matchesAccess) {
+                        card.classList.remove('hidden');
+                        visibleCount++;
+                    } else {
+                        card.classList.add('hidden');
+                    }
+                });
+
+                // Update Breadcrumb & Counters
+                const counterEl = document.getElementById('qb-items-counter');
+                if (counterEl) counterEl.textContent = visibleCount + (visibleCount === 1 ? ' Item' : ' Items');
+
+                const breadcrumbContainer = document.getElementById('qb-breadcrumb-container');
+                if (breadcrumbContainer) {
+                    let parts = [];
+                    if (this.selectedAccess !== 'all') {
+                        let accessLabel = 'Free';
+                        if (this.selectedAccess === 'free') accessLabel = 'Free';
+                        else if (this.selectedAccess === 'paid') accessLabel = 'Paid';
+                        else if (this.selectedAccess === 'bought') accessLabel = 'My Archives';
+                        else if (this.selectedAccess === 'saved') accessLabel = 'Saved';
+                        parts.push(`Filter: ${accessLabel}`);
+                    }
+                    if (this.selectedSubject !== 'all') parts.push(`Subject: ${this.selectedSubject}`);
+                    if (this.selectedBoard !== 'all') parts.push(`Board: ${this.selectedBoard}`);
+                    if (this.selectedYear !== 'all') parts.push(`Year: ${this.selectedYear}`);
+                    if (this.searchQuery) parts.push(`Search: "${this.searchQuery}"`);
+
+                    let text = parts.length > 0 ? parts.join(' / ') : 'All Question Archives';
+                    breadcrumbContainer.innerHTML = `<span class="font-bold text-slate-800 dark:text-white">${text}</span>`;
+                }
+
+                // Empty State
+                const emptyState = document.getElementById('qb-empty-state');
+                if (emptyState) {
+                    if (visibleCount === 0) emptyState.classList.remove('hidden');
+                    else emptyState.classList.add('hidden');
+                }
+
+                // Update Reset Button Visibility
+                this.updateResetButtonVisibility();
+            }
+
+            updateResetButtonVisibility() {
+                const resetBtn = document.getElementById('qb-reset-filters-btn');
+                if (!resetBtn) return;
+                const isFiltered = Boolean(
+                    (this.searchQuery && this.searchQuery.trim().length > 0) ||
+                    (this.selectedSubject && this.selectedSubject !== 'all') ||
+                    (this.selectedBoard && this.selectedBoard !== 'all') ||
+                    (this.selectedYear && this.selectedYear !== 'all') ||
+                    (this.selectedAccess && this.selectedAccess !== 'all')
+                );
+                if (isFiltered) {
+                    resetBtn.classList.remove('hidden');
+                    resetBtn.classList.add('flex');
+                } else {
+                    resetBtn.classList.add('hidden');
+                    resetBtn.classList.remove('flex');
+                }
+            }
+
+            openPdfModal(url, title) {
+                const modal = document.getElementById('qb-pdf-modal');
+                const iframe = document.getElementById('qb-modal-iframe');
+                const titleEl = document.getElementById('qb-modal-title');
+                const downloadBtn = document.getElementById('qb-modal-download');
+
+                if (!modal || !iframe) return;
+
+                titleEl.textContent = title || 'Question Paper Document';
+                const isPdf = url && url !== '#' && url.toLowerCase().endsWith('.pdf');
+
+                if (url && url !== '#') {
+                    iframe.src = url;
+                } else {
+                    iframe.src = 'about:blank';
+                }
+
+                if (isPdf) {
+                    downloadBtn.href = url;
+                    downloadBtn.classList.remove('hidden');
+                } else {
+                    downloadBtn.classList.add('hidden');
+                }
+
+                modal.classList.remove('hidden');
+            }
+
+            closePdfModal() {
+                const modal = document.getElementById('qb-pdf-modal');
+                const iframe = document.getElementById('qb-modal-iframe');
+                if (modal) modal.classList.add('hidden');
+                if (iframe) iframe.src = 'about:blank';
+            }
+
+            async openPracticeModal(bankId, title) {
+                const modal = document.getElementById('qb-practice-modal');
+                const titleEl = document.getElementById('qb-practice-title');
+                const progressEl = document.getElementById('qb-practice-progress');
+                const bodyEl = document.getElementById('qb-practice-body');
+
+                if (!modal || !bodyEl) return;
+
+                titleEl.textContent = title;
+                progressEl.textContent = 'Loading questions...';
+                bodyEl.innerHTML = '<div class="py-6 text-center"><span class="material-symbols-rounded animate-spin text-2xl text-indigo-500 flex items-center justify-center select-none">sync</span></div>';
+                modal.classList.remove('hidden');
+
+                try {
+                    const res = await fetch('/api/question-bank/' + bankId + '/questions');
+                    const data = await res.json();
+
+                    if (data.success && data.questions && data.questions.length > 0) {
+                        progressEl.textContent = `${data.questions.length} Practice Questions`;
+                        this.renderPracticeQuestions(data.questions, bodyEl);
+                    } else {
+                        progressEl.textContent = 'No practice questions found';
+                        bodyEl.innerHTML = `
+                            <div class="py-6 text-center space-y-1.5">
+                                <span class="material-symbols-rounded text-2xl text-slate-400 flex items-center justify-center select-none">quiz</span>
+                                <p class="text-xs font-bold text-slate-500">No practice questions attached to this paper yet.</p>
+                            </div>
+                        `;
+                    }
+                } catch (err) {
+                    console.error('Practice load error:', err);
+                    progressEl.textContent = 'Failed to load questions';
+                    bodyEl.innerHTML = '<div class="py-6 text-center text-xs font-bold text-rose-500">Error loading questions.</div>';
+                }
+            }
+
+            renderPracticeQuestions(questions, container) {
+                let html = '';
+                questions.forEach((q, idx) => {
+                    const options = q.options || [];
+                    html += `
+                        <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/60 space-y-2.5">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold">
+                                    Question ${idx + 1}
+                                </span>
+                                <span class="text-[10px] font-bold text-slate-400">${q.questionType || 'MCQ'}</span>
+                            </div>
+                            <h4 class="font-bold text-xs sm:text-sm text-slate-800 dark:text-white leading-relaxed">
+                                ${q.questionText}
+                            </h4>
+                    `;
+
+                    if (options.length > 0) {
+                        html += `<div class="grid grid-cols-1 gap-1.5 pt-0.5">`;
+                        options.forEach((opt, optIdx) => {
+                            const isCorrect = optIdx === q.correctAnswerIndex || opt === q.correctAnswer;
+                            html += `
+                                <button onclick="qbExplorer.checkOption(this, ${isCorrect}, '${(q.explanation || '').replace(/'/g, "\\'")}')" class="w-full text-left p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-indigo-500 transition-all text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-between group">
+                                    <span>${opt}</span>
+                                    <span class="material-symbols-rounded text-sm opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center select-none">radio_button_unchecked</span>
+                                </button>
+                            `;
+                        });
+                        html += `</div>`;
+                    }
+
+                    html += `<div class="qb-explanation-box hidden p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-xs text-emerald-800 dark:text-emerald-300 font-medium"></div>`;
+                    html += `</div>`;
+                });
+                container.innerHTML = html;
+            }
+
+            checkOption(btn, isCorrect, explanation) {
+                const parent = btn.closest('.space-y-2\\.5') || btn.closest('.space-y-3');
+                if (!parent) return;
+
+                const buttons = parent.querySelectorAll('button');
+                buttons.forEach(b => b.disabled = true);
+
+                const explBox = parent.querySelector('.qb-explanation-box');
+
+                if (isCorrect) {
+                    btn.className = 'w-full text-left p-2 rounded-xl border border-emerald-500 bg-emerald-500 text-white text-xs font-bold flex items-center justify-between shadow-xs';
+                    if (explBox) {
+                        explBox.innerHTML = `<strong>Correct Answer!</strong> ${explanation || ''}`;
+                        explBox.classList.remove('hidden');
+                    }
+                } else {
+                    btn.className = 'w-full text-left p-2 rounded-xl border border-rose-500 bg-rose-500 text-white text-xs font-bold flex items-center justify-between shadow-xs';
+                    if (explBox) {
+                        explBox.innerHTML = `<strong>Incorrect!</strong> ${explanation || 'Please review the correct option.'}`;
+                        explBox.classList.remove('hidden');
+                    }
+                }
+            }
+
+            closePracticeModal() {
+                const modal = document.getElementById('qb-practice-modal');
+                if (modal) modal.classList.add('hidden');
+            }
+        }
+
+        window.qbExplorer = new QuestionBankExplorer();
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!window.qbExplorer) {
+                window.qbExplorer = new QuestionBankExplorer();
+            }
+        });
+    </script>
 </body>
-
 </html>

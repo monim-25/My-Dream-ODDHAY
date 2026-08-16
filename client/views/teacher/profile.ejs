@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title>Professional Profile | Teacher Studio</title>
+    <style>
+        :root {
+            --admin-sidebar-width: 260px;
+        }
+
+        .admin-sidebar {
+            width: var(--admin-sidebar-width);
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 100;
+        }
+
+        .admin-main {
+            margin-left: var(--admin-sidebar-width);
+            min-height: 100vh;
+            transition: all 0.3s ease;
+        }
+
+        .profile-avatar-container {
+            position: relative;
+            display: inline-block;
+        }
+
+        .avatar-upload-btn {
+            position: absolute;
+            bottom: 4px;
+            right: 4px;
+            width: 32px;
+            height: 32px;
+            background: #3b82f6;
+            color: white;
+            border-radius: 0; /* Square as per user preference */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 3px solid white;
+            transition: transform 0.2s;
+        }
+
+        .dark .avatar-upload-btn {
+            border-color: #1e293b;
+        }
+
+        .avatar-upload-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .content-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2px; /* High density */
+        }
+
+        input, textarea, select {
+            border-radius: 0 !important; /* Force square */
+        }
+
+        .btn-studio {
+            background: #000000;
+            color: #ffffff;
+            border-radius: 0;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .dark .btn-studio {
+            background: #ffffff;
+            color: #000000;
+        }
+    </style>
+</head>
+
+<body class="bg-[#F8F8FF] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans min-h-screen antialiased">
+    <div class="flex">
+        <!-- Sidebar -->
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
+            <%- include('sidebar', { active: 'profile' }) %>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main flex-1 ml-[260px] bg-[#F8F8FF] dark:bg-[#020617] flex flex-col min-h-screen">
+            <%- include('../admin/header_v2', { pageTitle: 'Profile Studio', statusColor: 'bg-blue-500' }) %>
+
+            <!-- Success Popup -->
+            <div id="successPopup" class="fixed top-24 right-8 z-[110] transform translate-x-full opacity-0 transition-all duration-500 pointer-events-none">
+                <div class="bg-emerald-500 text-white px-6 py-3.5 rounded-none shadow-xl flex items-center gap-3 border border-emerald-400/20">
+                    <span class="material-symbols-rounded text-lg">check_circle</span>
+                    <span class="text-sm font-bold tracking-tight">Profile updated successfully</span>
+                </div>
+            </div>
+
+            <div class="content-scroll flex flex-col gap-px bg-slate-200 dark:bg-white/5 border-l border-slate-900/10 dark:border-white/5">
+                <form action="/teacher/profile/update" method="POST" class="flex flex-col gap-px">
+                    
+                    <!-- Error Alerts -->
+                    <div id="errorAlert" class="hidden bg-orange-50 dark:bg-orange-500/5 border-b border-orange-100 dark:border-orange-500/10 p-4 flex items-center gap-3 text-orange-600 dark:text-orange-400">
+                        <span class="material-symbols-rounded text-xl">warning</span>
+                        <p id="errorText" class="text-xs font-bold uppercase tracking-tight"></p>
+                    </div>
+                    
+                    <!-- Header Card -->
+                    <div class="bg-white dark:bg-[#0b1120] p-8 flex flex-col md:flex-row items-center gap-10 relative">
+                        <div class="profile-avatar-container shrink-0">
+                            <div class="size-32 lg:size-40 rounded-none bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-4xl font-black text-slate-200 border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+                                <img id="profilePreview" 
+                                     src="<%= user.profilePicture || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=f1f5f9&color=64748b` %>" 
+                                     class="w-full h-full object-cover">
+                            </div>
+                            <label for="avatarInput" class="avatar-upload-btn shadow-md">
+                                <span class="material-symbols-rounded text-[18px]">photo_camera</span>
+                            </label>
+                            <input type="file" id="avatarInput" class="hidden" accept="image/*" onchange="uploadAvatar(this)">
+                        </div>
+
+                        <div class="text-center md:text-left flex-1">
+                            <div class="flex flex-col gap-3">
+                                <div>
+                                    <h1 class="text-3xl font-black tracking-tight text-slate-900 dark:text-white mb-1"><%= user.name %></h1>
+                                    <p class="text-sm font-semibold text-slate-500"><%= user.designation || '' %></p>
+                                </div>
+                                
+                                <div class="flex flex-col items-center md:items-start gap-2">
+                                    <div class="inline-flex items-center px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 text-[11px] font-bold text-blue-600 rounded-none leading-none">
+                                        Instructor
+                                    </div>
+                                    <div class="inline-flex items-center px-3 py-1.5 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-500 dark:text-slate-400 rounded-none leading-none">
+                                        <%= user.email %><%= user.phone ? ' • ' + user.phone : '' %>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="hidden lg:flex items-start justify-end gap-6 flex-1">
+                            <!-- Expertise Stack (Dynamic Grid) -->
+                            <div class="grid <%= expertise.length > 2 ? 'grid-cols-2' : 'grid-cols-1' %> gap-2">
+                                <% if (expertise && expertise.length > 0) { %>
+                                    <% expertise.forEach(exp => { %>
+                                        <div class="px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 text-right min-w-[160px]">
+                                            <p class="text-[9px] font-bold text-slate-400 mb-0.5"><%= exp.classLevel %> :</p>
+                                            <p class="text-[11px] font-black text-slate-900 dark:text-white line-clamp-1"><%= exp.subjects %></p>
+                                        </div>
+                                    <% }) %>
+                                <% } %>
+                            </div>
+
+                            <!-- Tenure Stack -->
+                            <div class="flex flex-col gap-2">
+                                <div class="px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 text-center min-w-[140px]">
+                                    <p class="text-[9px] font-bold text-slate-400 mb-0.5">Experience</p>
+                                    <p class="text-xs font-black text-slate-900 dark:text-white"><%= user.experience || 'N/A' %></p>
+                                </div>
+                                <div class="px-4 py-2 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 text-center min-w-[140px]">
+                                    <p class="text-[9px] font-bold text-slate-400 mb-0.5">Member since</p>
+                                    <p class="text-sm font-black text-slate-900 dark:text-white text-[10px]"><%= new Date(user.createdAt).toLocaleDateString() %></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Main Form Sections -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-slate-200 dark:bg-white/10">
+                        
+                        <!-- Account Details -->
+                        <div class="bg-white dark:bg-[#0b1120] p-6 lg:p-8 space-y-6">
+                            <h3 class="text-sm font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 leading-none">
+                                <span class="material-symbols-rounded text-xl text-blue-500 leading-none">account_circle</span>
+                                Account details
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="space-y-1.5">
+                                    <label class="text-[11px] font-bold text-slate-500">Full name</label>
+                                    <input type="text" name="name" value="<%= user.name %>" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none" required>
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="text-[11px] font-bold text-slate-500">Professional designation</label>
+                                    <input type="text" name="designation" value="<%= user.designation %>" placeholder="e.g. Senior Physics Instructor" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="text-[11px] font-bold text-slate-500">Email address</label>
+                                    <input type="email" value="<%= user.email %>" class="w-full h-11 px-4 bg-slate-100 dark:bg-white/10 border border-slate-200 dark:border-slate-800 text-sm font-medium text-slate-500 cursor-not-allowed outline-none" readonly>
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="text-[11px] font-bold text-slate-500">Teaching experience</label>
+                                    <input type="text" name="experience" value="<%= user.experience %>" placeholder="e.g. 5+ Years" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Social Branding -->
+                        <div class="bg-white dark:bg-[#0b1120] p-6 lg:p-8 space-y-6">
+                            <h3 class="text-sm font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 leading-none">
+                                <span class="material-symbols-rounded text-xl text-blue-500 leading-none">share</span>
+                                Social branding
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="space-y-1.5">
+                                    <label class="text-[11px] font-bold text-slate-500">Facebook URL</label>
+                                    <input type="text" name="socialLinks[facebook]" value="<%= user.socialLinks?.facebook %>" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none">
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="text-[11px] font-bold text-slate-500">LinkedIn profile</label>
+                                    <input type="text" name="socialLinks[linkedin]" value="<%= user.socialLinks?.linkedin %>" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Academic History -->
+                        <div class="bg-white dark:bg-[#0b1120] p-6 lg:p-8 space-y-6 lg:col-span-2">
+                            <h3 class="text-sm font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 leading-none">
+                                <span class="material-symbols-rounded text-xl text-blue-500 leading-none">history_edu</span>
+                                Academic history
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div class="space-y-4">
+                                    <div class="space-y-1.5">
+                                        <label class="text-[11px] font-bold text-slate-500">School name</label>
+                                        <input type="text" name="schoolName" value="<%= user.schoolName %>" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none">
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <label class="text-[11px] font-bold text-slate-500">SSC GPA</label>
+                                        <input type="text" name="sscGpa" value="<%= user.sscGpa %>" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none">
+                                    </div>
+                                </div>
+                                <div class="space-y-4">
+                                    <div class="space-y-1.5">
+                                        <label class="text-[11px] font-bold text-slate-500">College name</label>
+                                        <input type="text" name="collegeName" value="<%= user.collegeName %>" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none">
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <label class="text-[11px] font-bold text-slate-500">HSC GPA</label>
+                                        <input type="text" name="hscGpa" value="<%= user.hscGpa %>" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none">
+                                    </div>
+                                </div>
+                                <div class="space-y-4">
+                                    <div class="space-y-1.5">
+                                        <label class="text-[11px] font-bold text-slate-500">University name</label>
+                                        <input type="text" name="universityName" value="<%= user.universityName %>" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none">
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <label class="text-[11px] font-bold text-slate-500">University CGPA</label>
+                                        <input type="text" name="cgpa" value="<%= user.cgpa %>" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bio and Achievements -->
+                        <div class="bg-white dark:bg-[#0b1120] p-6 lg:p-8 space-y-6 lg:col-span-2">
+                            <h3 class="text-sm font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 leading-none">
+                                <span class="material-symbols-rounded text-xl text-blue-500 leading-none">article</span>
+                                Bio and achievements
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="space-y-1.5">
+                                    <label class="text-[11px] font-bold text-slate-500">Professional bio</label>
+                                    <textarea name="bio" rows="4" class="w-full p-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none resize-none"><%= user.bio %></textarea>
+                                </div>
+                                <div class="space-y-1.5">
+                                    <label class="text-[11px] font-bold text-slate-500">Key achievements</label>
+                                    <textarea name="achievements" rows="4" class="w-full p-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none resize-none"><%= user.achievements %></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Address Info & Save Action -->
+                        <div class="bg-white dark:bg-[#0b1120] p-6 lg:p-8 space-y-8 lg:col-span-2 border-b lg:border-none border-slate-100 dark:border-white/5">
+                            <div class="space-y-6">
+                                <h3 class="text-sm font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 leading-none">
+                                    <span class="material-symbols-rounded text-xl text-blue-500 leading-none">location_on</span>
+                                    Location details
+                                </h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div class="space-y-1.5">
+                                        <label class="text-[11px] font-bold text-slate-500">Present address</label>
+                                        <textarea name="presentAddress" rows="2" class="w-full p-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none resize-none"><%= user.presentAddress %></textarea>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <label class="text-[11px] font-bold text-slate-500">Permanent address</label>
+                                        <textarea name="permanentAddress" rows="2" class="w-full p-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none resize-none"><%= user.permanentAddress %></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex justify-end pt-6 border-t border-slate-50 dark:border-white/5">
+                                <button type="submit" class="h-12 px-14 btn-studio flex items-center justify-center gap-3 text-sm shadow-sm">
+                                    Save
+                                    <span class="material-symbols-rounded text-[20px] leading-none">done_all</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Security Section (Standalone Card) -->
+                <form action="/teacher/profile/change-password" method="POST" class="mt-4">
+                    <div class="bg-white dark:bg-[#0b1120] p-8 space-y-6 border-y lg:border border-slate-100 dark:border-white/5 shadow-sm">
+                        <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-8">
+                            <div class="space-y-6 flex-1">
+                                <h3 class="text-sm font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-3 leading-none">
+                                    <span class="material-symbols-rounded text-xl text-blue-500 leading-none">security</span>
+                                    Change password
+                                </h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div class="space-y-1.5">
+                                        <label class="text-[11px] font-bold text-slate-500">Current password</label>
+                                        <input type="password" name="oldPassword" placeholder="••••••••" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none" required>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <label class="text-[11px] font-bold text-slate-500">New password</label>
+                                        <input type="password" name="newPassword" placeholder="••••••••" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none" required>
+                                    </div>
+                                    <div class="space-y-1.5">
+                                        <label class="text-[11px] font-bold text-slate-500">Confirm new password</label>
+                                        <input type="password" name="confirmPassword" placeholder="••••••••" class="w-full h-11 px-4 bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-slate-800 text-sm font-medium focus:border-blue-500 transition-all outline-none" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="shrink-0">
+                                <button type="submit" class="h-11 px-10 btn-studio flex items-center justify-center gap-2 text-xs">
+                                    Update Password
+                                    <span class="material-symbols-rounded text-[18px] leading-none">lock_reset</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Handle Success and Error Popups
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // Success Handling
+            const success = urlParams.get('success');
+            if (success) {
+                const popup = document.getElementById('successPopup');
+                const successText = popup.querySelector('span:last-child');
+                
+                if (success === 'profile_updated') successText.textContent = 'Profile updated successfully';
+                if (success === 'password_updated') successText.textContent = 'Password updated successfully';
+
+                popup.classList.remove('translate-x-full', 'opacity-0');
+                popup.classList.add('translate-x-0', 'opacity-100');
+                
+                setTimeout(() => {
+                    popup.classList.add('translate-x-full', 'opacity-0');
+                    popup.classList.remove('translate-x-0', 'opacity-100');
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }, 3000);
+            }
+
+            // Error Handling
+            const error = urlParams.get('error');
+            if (error) {
+                const errorAlert = document.getElementById('errorAlert');
+                const errorText = document.getElementById('errorText');
+                const messages = {
+                    'invalid_current_password': 'Current password is incorrect',
+                    'password_mismatch': 'New passwords do not match',
+                    'password_too_short': 'Password must be at least 6 characters',
+                    'default': 'An error occurred during update'
+                };
+                
+                errorText.textContent = messages[error] || messages['default'];
+                errorAlert.classList.remove('hidden');
+                
+                // Remove error param after 5 seconds or on next interaction
+                setTimeout(() => {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                }, 5000);
+            }
+        });
+
+        async function uploadAvatar(input) {
+            if (!input.files || !input.files[0]) return;
+            
+            const formData = new FormData();
+            formData.append('profileImage', input.files[0]);
+
+            try {
+                const response = await fetch('/admin/profile/upload-avatar', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('profilePreview').src = data.filePath;
+                    // Show upload success popup
+                    const popup = document.getElementById('successPopup');
+                    popup.querySelector('span:last-child').textContent = 'Profile picture updated';
+                    popup.classList.remove('translate-x-full', 'opacity-0');
+                    popup.classList.add('translate-x-0', 'opacity-100');
+                    setTimeout(() => {
+                        popup.classList.add('translate-x-full', 'opacity-0');
+                        popup.classList.remove('translate-x-0', 'opacity-100');
+                    }, 3000);
+                } else {
+                    alert('Upload failed: ' + data.error);
+                }
+            } catch (err) {
+                console.error('Upload error:', err);
+            }
+        }
+    </script>
+</body>
+
+</html>

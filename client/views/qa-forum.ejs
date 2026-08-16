@@ -1,197 +1,190 @@
 <!DOCTYPE html>
-<html class="light" lang="bn">
-
+<html lang="en" class="<%= locals.user && user.theme === 'dark' ? 'dark' : '' %>">
 <head>
-    <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>Q&A ফোরাম | ODDHAY</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Lexend:wght@300..900&family=Noto+Sans+Bengali:wght@300..900&display=swap"
-        rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-        rel="stylesheet" />
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: { "primary": "#aa33ff" }, // Purple theme for Q&A
-                    fontFamily: { "display": ["Lexend", "Noto Sans Bengali", "sans-serif"] },
-                },
-            },
-        }
-    </script>
-    <style>
-        body {
-            font-family: 'Lexend', 'Noto Sans Bengali', sans-serif;
-        }
-
-        .pb-safe {
-            padding-bottom: env(safe-area-inset-bottom, 20px);
-        }
-    </style>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Q&A Community Forum | ODDHAY</title>
 </head>
 
-<body class="bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 min-h-screen pb-20">
-    <!-- Header -->
-    <header
-        class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-4 sticky top-0 z-50">
-        <div class="max-w-2xl mx-auto flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <a href="/dashboard" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl">
-                    <span class="material-symbols-outlined">arrow_back</span>
-                </a>
-                <h1 class="text-lg font-black">Q&A ফোরাম</h1>
-            </div>
-            <button onclick="openAskModal()"
-                class="px-4 py-2 bg-primary text-white rounded-xl text-xs font-black flex items-center gap-1">
-                <span class="material-symbols-outlined text-sm">add_comment</span> প্রশ্ন করুন
-            </button>
-        </div>
-    </header>
+<body class="bg-[#f8fafc] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300">
+    <%- include('partials/student-header') %>
 
-    <main class="max-w-2xl mx-auto p-4 py-6 space-y-4">
+    <div class="flex-1 flex overflow-hidden">
+        <%- include('partials/student-sidebar', { activePage: 'qa-forum' }) %>
 
-        <!-- Search -->
-        <div class="relative">
-            <span class="material-symbols-outlined absolute left-4 top-3.5 text-slate-400">search</span>
-            <input type="text" placeholder="প্রশ্ন খুঁজুন..."
-                class="w-full pl-12 pr-4 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:outline-none focus:border-primary font-bold">
-        </div>
-
-        <!-- Filter Tabs -->
-        <div class="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            <a href="/qa-forum"
-                class="px-4 py-2 rounded-xl bg-primary text-white text-xs font-black whitespace-nowrap">সব প্রশ্ন</a>
-            <a href="/qa-forum?filter=my"
-                class="px-4 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-primary transition-colors text-xs font-black whitespace-nowrap">আমার
-                প্রশ্ন</a>
-            <a href="/qa-forum?filter=solved"
-                class="px-4 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-primary transition-colors text-xs font-black whitespace-nowrap">সমাধান
-                করা</a>
-        </div>
-
-        <!-- Questions List -->
-        <div class="space-y-4">
-            <% if(questions && questions.length> 0) { %>
-                <% questions.forEach(q=> { %>
-                    <div
-                        class="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
-                        <div class="flex items-start justify-between gap-4 mb-3">
-                            <div class="flex items-center gap-3">
-                                <div
-                                    class="size-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-black text-slate-500">
-                                    <%= q.askedByName ? q.askedByName[0] : 'U' %>
-                                </div>
-                                <div>
-                                    <p class="text-xs font-bold text-slate-500">
-                                        <%= q.askedByName || 'Unknown' %>
-                                    </p>
-                                    <p class="text-[10px] text-slate-400">
-                                        <%= new Date(q.createdAt).toLocaleDateString() %>
-                                    </p>
-                                </div>
-                            </div>
-                            <span
-                                class="px-2 py-1 rounded-lg text-[10px] font-bold <%= q.status === 'resolved' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600' %>">
-                                <%= q.status==='resolved' ? 'সমাধান করা হয়েছে' : 'অমীমাংসিত' %>
-                            </span>
-                        </div>
-
-                        <h3 class="font-black text-sm mb-3">
-                            <%= q.question %>
-                        </h3>
-
-                        <% if(q.answer) { %>
-                            <div
-                                class="bg-slate-50 dark:bg-slate-800 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
-                                <div class="flex items-center gap-2 mb-1">
-                                    <span class="material-symbols-outlined text-emerald-500 text-sm">verified</span>
-                                    <p class="text-[10px] font-bold text-emerald-500">শিক্ষকের উত্তর</p>
-                                </div>
-                                <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                                    <%= q.answer %>
-                                </p>
-                            </div>
-                            <% } else { %>
-                                <div class="flex items-center gap-2 text-slate-400">
-                                    <span class="material-symbols-outlined text-sm">pending</span>
-                                    <p class="text-[10px] font-bold">উত্তরের জন্য অপেক্ষা করা হচ্ছে...</p>
-                                </div>
-                                <% } %>
-                    </div>
-                    <% }) %>
-                        <% } else { %>
-                            <div class="text-center py-12">
-                                <span class="material-symbols-outlined text-5xl text-slate-300 mb-4">forum</span>
-                                <h3 class="font-black text-lg mb-2">কোনো প্রশ্ন নেই</h3>
-                                <p class="text-sm text-slate-500 mb-4">আপনার কোনো প্রশ্ন থাকলে নির্দ্বিধায় পোস্ট করুন।
-                                </p>
-                            </div>
-                            <% } %>
-        </div>
-
-    </main>
-
-    <!-- Ask Modal -->
-    <div id="askModal" class="fixed inset-0 bg-black/50 z-[200] hidden items-center justify-center p-4">
-        <div class="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-md">
-            <h3 class="text-lg font-black mb-4">নতুন প্রশ্ন করুন</h3>
-            <form action="/qa-forum/ask" method="POST" class="space-y-4">
+        <main class="flex-1 overflow-y-auto p-2 lg:p-3 space-y-2.5 no-scrollbar bg-[#f8fafc] dark:bg-[#0b1120]">
+            
+            <!-- Page Header & Ask Button -->
+            <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-3.5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 mb-1">আপনার প্রশ্ন</label>
+                    <h1 class="text-lg lg:text-xl font-black text-slate-800 dark:text-white leading-tight">Q&A Discussion Forum</h1>
+                    <p class="text-[10px] font-semibold text-slate-400">Ask questions, share solutions, and get answers from experts</p>
+                </div>
+                <button onclick="openAskModal()" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors w-fit">
+                    <span class="material-symbols-rounded text-base">add_comment</span> Ask Question
+                </button>
+            </div>
+
+            <!-- Filters -->
+            <div class="flex flex-col sm:flex-row gap-2 items-center justify-between bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-2 shadow-sm">
+                <div class="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/60 rounded-lg w-full sm:w-auto">
+                    <a href="/qa-forum" class="px-3 py-1 rounded-md text-[10px] font-bold uppercase transition-all <%= !query.filter ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200' %>">
+                        All Questions
+                    </a>
+                    <a href="/qa-forum?filter=my" class="px-3 py-1 rounded-md text-[10px] font-bold uppercase transition-all <%= query.filter === 'my' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200' %>">
+                        My Questions
+                    </a>
+                    <a href="/qa-forum?filter=solved" class="px-3 py-1 rounded-md text-[10px] font-bold uppercase transition-all <%= query.filter === 'solved' ? 'bg-white dark:bg-slate-700 text-primary shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200' %>">
+                        Resolved
+                    </a>
+                </div>
+            </div>
+
+            <!-- Questions List -->
+            <div class="space-y-2.5">
+                <% if(questions && questions.length > 0) { %>
+                    <% questions.forEach((q)=> { %>
+                        <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-4 shadow-sm hover:border-purple-500/30 transition-all flex flex-col md:flex-row gap-4">
+                            <!-- Votes / Status -->
+                            <div class="flex md:flex-col items-center justify-between md:justify-center gap-2 border-b md:border-b-0 md:border-r border-slate-100 dark:border-slate-800 pb-2 md:pb-0 md:pr-4 shrink-0">
+                                <div class="flex items-center md:flex-col gap-1 text-center">
+                                    <span class="text-xs font-black text-slate-800 dark:text-white">0</span>
+                                    <span class="text-[9px] font-bold text-slate-400 uppercase">Votes</span>
+                                </div>
+                                <div class="flex items-center md:flex-col gap-1 text-center">
+                                    <span class="text-xs font-black text-purple-600 dark:text-purple-400">0</span>
+                                    <span class="text-[9px] font-bold text-slate-400 uppercase">Answers</span>
+                                </div>
+                            </div>
+
+                            <!-- Question Content -->
+                            <div class="flex-1 space-y-2">
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <div class="size-6 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden border border-slate-200 dark:border-slate-700 shrink-0">
+                                            <img src="https://ui-avatars.com/api/?name=<%= encodeURIComponent(q.askedByName || 'User') %>&background=random" class="w-full h-full object-cover">
+                                        </div>
+                                        <span class="text-xs font-bold text-slate-700 dark:text-slate-200"><%= q.askedByName || 'Student' %></span>
+                                        <span class="size-1 rounded-full bg-slate-300 dark:bg-slate-700"></span>
+                                        <span class="text-[9px] font-bold text-slate-400">
+                                            <%= new Date(q.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) %>
+                                        </span>
+                                    </div>
+
+                                    <span class="px-2 py-0.5 rounded text-[8px] font-bold uppercase <%= q.status === 'resolved' ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 border border-emerald-200/50' : 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 border border-amber-200/50' %>">
+                                        <%= q.status === 'resolved' ? 'Solved' : 'Pending' %>
+                                    </span>
+                                </div>
+
+                                <a href="/qa-forum/question/<%= q._id %>" class="block group">
+                                    <h3 class="text-sm font-bold text-slate-800 dark:text-white leading-snug group-hover:text-purple-600 transition-colors">
+                                        <%= q.question %>
+                                    </h3>
+                                </a>
+
+                                <% if(q.answer) { %>
+                                    <div class="p-2.5 bg-emerald-50/70 dark:bg-emerald-500/5 border border-emerald-200/60 dark:border-emerald-500/20 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300">
+                                        <div class="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] uppercase mb-1">
+                                            <span class="material-symbols-rounded text-sm">verified</span> Expert Solution
+                                        </div>
+                                        <%= q.answer %>
+                                    </div>
+                                <% } %>
+
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                                    <div class="flex gap-1.5">
+                                        <% (q.tags || ['General']).forEach(tag => { %>
+                                            <span class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-[8px] font-bold text-slate-500 dark:text-slate-400 rounded">#<%= tag %></span>
+                                        <% }) %>
+                                    </div>
+                                    <a href="/qa-forum/question/<%= q._id %>" class="text-xs font-bold text-purple-600 hover:underline flex items-center gap-1">
+                                        View Discussion <span class="material-symbols-rounded text-sm">arrow_forward</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    <% }) %>
+                <% } else { %>
+                    <div class="py-10 text-center bg-white dark:bg-[#0f172a] rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                        <span class="material-symbols-rounded text-4xl text-slate-300 mb-1">forum</span>
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">No questions posted in the forum yet</h3>
+                        <button onclick="openAskModal()" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-colors inline-flex items-center gap-1">
+                            Ask First Question
+                        </button>
+                    </div>
+                <% } %>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Ask Question Modal -->
+    <div id="askModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-white dark:bg-[#0f172a] rounded-xl w-full max-w-lg shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="size-8 rounded-lg bg-purple-600 text-white flex items-center justify-center">
+                        <span class="material-symbols-rounded text-base">live_help</span>
+                    </div>
+                    <h3 class="text-sm font-bold text-slate-800 dark:text-white">Ask a New Question</h3>
+                </div>
+                <button onclick="closeAskModal()" class="p-1 text-slate-400 hover:text-slate-600 rounded-lg">
+                    <span class="material-symbols-rounded text-lg">close</span>
+                </button>
+            </div>
+
+            <form action="/qa-forum/ask" method="POST" class="p-4 space-y-3">
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Your Question Details</label>
                     <textarea name="question" rows="4" required
-                        class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold"
-                        placeholder="এখানে বিস্তারিত লিখুন..."></textarea>
+                        class="w-full p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 focus:border-purple-500 text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
+                        placeholder="Write your detailed question here..."></textarea>
                 </div>
 
-                <div class="flex gap-3 pt-2">
-                    <button type="button" onclick="closeAskModal()"
-                        class="flex-1 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl font-bold text-sm">বাতিল</button>
-                    <button type="submit" class="flex-1 py-3 bg-primary text-white rounded-xl font-bold text-sm">পোস্ট
-                        করুন</button>
+                <div>
+                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Subject</label>
+                    <select class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 focus:border-purple-500 text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none">
+                        <option>General</option>
+                        <option>Math</option>
+                        <option>Physics</option>
+                        <option>Chemistry</option>
+                        <option>English</option>
+                    </select>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeAskModal()" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-colors shadow-sm">
+                        Submit Question
+                    </button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Mobile Bottom Nav -->
-    <nav
-        class="fixed bottom-0 left-0 right-0 z-[100] bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 lg:hidden pb-safe">
-        <div class="flex items-center justify-around h-16">
-            <a href="/dashboard" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">home</span>
-                <span class="text-[9px] font-black">হোম</span>
-            </a>
-            <a href="/messages" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">mail</span>
-                <span class="text-[9px] font-black">মেসেজ</span>
-            </a>
-            <a href="/downloads" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">download</span>
-                <span class="text-[9px] font-black">ডাউনলোড</span>
-            </a>
-            <a href="/profile" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">person</span>
-                <span class="text-[9px] font-black">প্রোফাইল</span>
-            </a>
-        </div>
-    </nav>
+    <%- include('partials/student-bottom-nav', { activePage: 'qa-forum' }) %>
+    <%- include('partials/app-scripts') %>
 
     <script>
         function openAskModal() {
-            document.getElementById('askModal').classList.remove('hidden');
-            document.getElementById('askModal').classList.add('flex');
+            const modal = document.getElementById('askModal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
+
         function closeAskModal() {
-            document.getElementById('askModal').classList.add('hidden');
-            document.getElementById('askModal').classList.remove('flex');
+            const modal = document.getElementById('askModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
         }
-        document.getElementById('askModal').addEventListener('click', function (e) {
+
+        document.getElementById('askModal')?.addEventListener('click', function (e) {
             if (e.target === this) closeAskModal();
         });
     </script>
 </body>
-
 </html>

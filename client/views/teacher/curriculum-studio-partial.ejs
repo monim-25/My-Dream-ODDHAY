@@ -1,0 +1,2734 @@
+
+
+<style>
+    /* Checkbox & Select All visibility based on selection mode */
+    #curriculum-tree-container:not(.selection-active) .node-select-col {
+        display: none !important;
+    }
+    #curriculum-tree-container:not(.selection-active) #selectAllHeader {
+        display: none !important;
+    }
+    /* Cursor pointer for all rows when selection is active */
+    #curriculum-tree-container.selection-active .group {
+        cursor: pointer !important;
+    }
+</style>
+
+<!-- Tree View Container -->
+<div id="curriculum-tree-container" class="space-y-4">
+    <div class="py-20 text-center">
+        <div class="inline-block size-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-xs font-bold text-slate-400 mt-4">Loading Curriculum Studio...</p>
+    </div>
+</div>
+
+<!-- In-Page Video Player Panel (slides in over the curriculum tree, same page chrome) -->
+<div id="videoPlayerPanel" class="hidden -mx-5 -mt-5">
+
+    <!-- Main Layout: Top row (video | playlist), Bottom (metadata + comments) -->
+    <div class="max-w-[1600px] w-full mx-auto flex flex-col gap-2">
+        
+        <!-- TOP ROW: Video (left) | Playlist (right) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
+            <!-- LEFT: Video Player & Metadata -->
+            <div class="lg:col-span-7 flex flex-col">
+                <div class="overflow-hidden">
+                    <div class="w-full aspect-video bg-black">
+                        <video id="playerVideoEl" controls class="w-full h-full object-contain hidden" controlsList="nodownload"></video>
+                        <iframe id="playerIframeEl" class="w-full h-full border-0 hidden" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+                        <div id="playerEmptyState" class="w-full h-full flex items-center justify-center bg-slate-900">
+                            <span class="material-symbols-rounded text-slate-600 text-6xl">play_circle</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- METADATA BLOCK -->
+                <div class="space-y-4 py-4 px-4 md:px-6">
+                    <h2 class="text-xl font-medium text-slate-900 dark:text-white leading-snug flex items-center gap-2">
+                        <span id="playerVideoTitle">Lesson Title</span>
+                        <button type="button" onclick="openEditAssetModal(activePlayingNodeId)" class="p-1 hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 hover:text-primary transition-all rounded-none inline-flex items-center justify-center shrink-0" title="Edit Lesson Title & Description">
+                            <span class="material-symbols-rounded text-base leading-none">edit</span>
+                        </button>
+                    </h2>
+
+                    <div class="flex items-center gap-5 pb-3 border-b border-slate-100 dark:border-white/5">
+                        <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                            <span class="material-symbols-rounded text-[16px] text-slate-400">visibility</span>
+                            <span id="playerVideoViews">0</span> views
+                        </div>
+                        <div class="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                            <span class="material-symbols-rounded text-[16px] text-slate-400">comment</span>
+                            <span id="playerVideoComments">0</span> comments
+                        </div>
+                    </div>
+
+                    <div class="pt-3 pb-1 flex items-center gap-3">
+                        <div class="size-10 rounded-full overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800 shrink-0">
+                            <img id="playerAuthorAvatar" src="/images/default-avatar.png" class="size-full object-cover" alt="Author">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h4 id="playerAuthorName" class="text-[15px] font-semibold text-slate-800 dark:text-slate-200 leading-tight">Instructor Name</h4>
+                        </div>
+                    </div>
+
+                    <div class="relative group !mt-3 p-3 bg-slate-50 dark:bg-white/5 rounded-md border border-slate-100 dark:border-white/10">
+                        <p id="playerVideoDesc" class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium line-clamp-2 whitespace-pre-wrap break-words">
+                            No description available for this lesson.
+                        </p>
+                        <button id="descToggleBtn" type="button" class="hidden text-[12px] font-bold text-primary hover:underline mt-1" onclick="toggleDescription()">
+                            Details
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: Course Playlist -->
+            <div class="hidden lg:flex lg:col-span-5 flex-col">
+                <div class="flex flex-col sticky top-6" style="max-height: calc(100vh - 100px);">
+                    <div class="flex items-center justify-between p-3 border-b border-slate-100 dark:border-white/5 shrink-0 gap-2">
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <span class="material-symbols-rounded text-slate-400 text-[18px]">playlist_play</span>
+                            <h3 class="text-xs font-bold text-slate-800 dark:text-white hidden sm:block">Course Playlist</h3>
+                            <span id="playlistCountBadge" class="px-1.5 py-0.5 bg-slate-100 dark:bg-white/5 text-slate-500 rounded-full text-[9px] font-bold"></span>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0 w-40 md:w-52">
+                            <div class="relative flex-1">
+                                <span class="material-symbols-rounded absolute left-2.5 top-1/2 -translate-y-1/2 text-[14px] text-slate-400">search</span>
+                                <input type="text" id="playlistSearchInput" oninput="filterPlaylist()" placeholder="Search..." class="w-full pl-8 pr-3 py-1.5 text-[11px] bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all text-slate-700 dark:text-slate-300 placeholder-slate-400">
+                            </div>
+                            <button type="button" onclick="filterPlaylist()" class="size-7 flex items-center justify-center shrink-0 bg-slate-900 dark:bg-white hover:bg-primary dark:hover:bg-primary text-white dark:text-slate-900 dark:hover:text-white rounded-full transition-all shadow-sm">
+                                <span class="material-symbols-rounded text-[14px]">search</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="playlistContainer" class="flex-1 overflow-y-auto p-2 space-y-0.5 min-h-[300px]">
+                        <div class="flex flex-col items-center justify-center text-center py-12 opacity-60">
+                            <span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600 mb-3">playlist_play</span>
+                            <p class="text-xs font-medium text-slate-500">No lessons yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BOTTOM AREA: Comments -->
+        <div class="flex flex-col gap-2 px-4 md:px-6 pb-6">
+            <!-- COMMENTS BLOCK -->
+            <div class="py-2">
+                <div class="flex items-center gap-4 mb-4 pb-3 border-b border-slate-100 dark:border-white/5 flex-wrap">
+                    <div class="flex items-center gap-2 shrink-0">
+                        <span class="material-symbols-rounded text-slate-400">forum</span>
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-white">Comments</h3>
+                        <span id="commentsCountBadge" class="px-2 py-0.5 bg-slate-100 dark:bg-white/5 text-slate-500 rounded-full text-[10px] font-bold">0</span>
+                    </div>
+                    <% if (hasEditAccess) { %>
+                                                        <button type="button" id="toggleCommentsBtn" onclick="toggleNodeCommentsSetting()" class="text-xs font-bold px-3 py-1 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10 transition-all rounded-none flex items-center gap-1.5 shrink-0">
+                        <span class="material-symbols-rounded text-[15px]" id="toggleCommentsIcon">chat</span>
+                        <span id="toggleCommentsText">Turn off/on</span>
+                                                        </button>
+                                                        <% } %>
+                </div>
+                <div id="commentsDisabledBanner" class="hidden p-2.5 mb-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/30 text-amber-800 dark:text-amber-300 text-xs font-semibold rounded-none flex items-center gap-2 shrink-0">
+                    <span class="material-symbols-rounded text-[16px]">info</span>
+                    <span>Comments are currently turned off for students.</span>
+                </div>
+                <form id="commentForm" onsubmit="submitComment(event)" class="mb-4 shrink-0">
+                    <textarea id="commentInput" rows="2" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px';" placeholder="Add a public comment..." required class="w-full text-sm p-2.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 focus:outline-none focus:border-primary rounded-none resize-y text-slate-800 dark:text-white leading-relaxed min-h-[50px]"></textarea>
+                    <div class="flex justify-end mt-2">
+                        <button type="submit" class="px-4 py-1.5 bg-primary hover:bg-primary/95 text-white text-[11px] font-bold uppercase tracking-wider rounded-none shadow transition-all">Comment</button>
+                    </div>
+                </form>
+                <div id="commentsList" class="space-y-4 pr-1">
+                    <div class="flex flex-col items-center justify-center text-center pt-10 pb-6 opacity-60">
+                        <span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600 mb-3">chat_bubble_outline</span>
+                        <p class="text-xs font-medium text-slate-500">No comments yet</p>
+                        <p class="text-[10px] text-slate-400 mt-1">Be the first to share your thoughts!</p>
+                    </div>
+                </div>
+                <div id="loadMoreCommentsContainer" class="mt-4 pt-2 text-center hidden shrink-0">
+                    <button type="button" onclick="loadNextCommentsPage()" class="w-full py-2 border border-slate-200 dark:border-white/10 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-all rounded-none uppercase tracking-wider">
+                        Load More Comments
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Folder Composer Modal -->
+<div id="folderModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-900/60 dark:bg-[#000]/80 backdrop-blur-sm transition-all duration-300">
+    <div class="w-full max-w-lg bg-white dark:bg-[#0b1120] border border-slate-200 dark:border-white/10 rounded-none shadow-2xl p-8 relative">
+        <button type="button" onclick="closeFolderModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+            <span class="material-symbols-rounded">close</span>
+        </button>
+        
+        <h3 id="folderModalTitle" class="text-base font-bold text-slate-800 dark:text-white mb-6">Create Folder</h3>
+        
+        <form id="folderForm" onsubmit="handleFolderSubmit(event)" class="space-y-4">
+            <input type="hidden" id="folderParentId" name="parentId">
+            <input type="hidden" id="folderNodeId" name="nodeId">
+            
+            <div>
+                <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Folder Name</label>
+                <input type="text" id="folderName" name="name" required placeholder="e.g. Chapter 1: Introduction"
+                       class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+            </div>
+            
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="closeFolderModal()" 
+                        class="px-4 py-2 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-xs font-bold uppercase tracking-wider rounded-none hover:bg-slate-50 dark:hover:bg-white/5 transition-all">
+                    Cancel
+                </button>
+                <button type="submit" 
+                        class="px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold uppercase tracking-wider rounded-none hover:bg-primary dark:hover:bg-primary dark:hover:text-white transition-all">
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Unified Asset Composer Modal -->
+<div id="assetModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-900/60 dark:bg-[#000]/80 backdrop-blur-sm transition-all duration-300">
+    <div class="w-full max-w-lg bg-white dark:bg-[#0b1120] border border-slate-200 dark:border-white/10 rounded-none shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+        <button type="button" onclick="closeAssetModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+            <span class="material-symbols-rounded">close</span>
+        </button>
+        
+        <h3 id="assetModalTitle" class="text-base font-bold text-slate-800 dark:text-white mb-1">Add Content</h3>
+        <p id="assetModalSubtext" class="text-xs font-semibold text-slate-400 mb-4">Curriculum Asset</p>
+        
+        <!-- Type Tabs Selector -->
+        <div id="assetTypeTabs" class="grid grid-cols-4 gap-1 p-1 bg-slate-100 dark:bg-white/5 rounded-none mb-6">
+            <button type="button" onclick="setAssetType('video')" id="tab-type-video"
+                    class="py-2 text-xs font-semibold text-center transition-all rounded-none bg-slate-900 dark:bg-white text-white dark:text-slate-900">
+                Video Lesson
+            </button>
+            <button type="button" onclick="setAssetType('note')" id="tab-type-note"
+                    class="py-2 text-xs font-semibold text-center transition-all rounded-none text-slate-500 hover:text-slate-800 dark:hover:text-white">
+                Note
+            </button>
+            <button type="button" onclick="setAssetType('liveClass')" id="tab-type-liveClass"
+                    class="py-2 text-xs font-semibold text-center transition-all rounded-none text-slate-500 hover:text-slate-800 dark:hover:text-white">
+                Live Class
+            </button>
+            <button type="button" onclick="setAssetType('quiz')" id="tab-type-quiz"
+                    class="py-2 text-xs font-semibold text-center transition-all rounded-none text-slate-500 hover:text-slate-800 dark:hover:text-white">
+                Exam
+            </button>
+        </div>
+        
+        <form id="assetForm" onsubmit="handleAssetSubmit(event)" class="space-y-4" enctype="multipart/form-data">
+            <input type="hidden" id="assetParentId" name="parentId">
+            <input type="hidden" id="assetNodeId" name="nodeId">
+            <input type="hidden" id="assetType" name="type" value="video">
+            
+            <!-- Asset Title -->
+            <div>
+                <label id="assetTitleLabel" class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Title</label>
+                <input type="text" id="assetTitle" name="name" required placeholder="e.g. Introduction to Friction forces"
+                       class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+            </div>
+            
+            <!-- Dynamic Fields: Video -->
+            <div id="fields-video" class="space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Video File</label>
+                        <div class="relative">
+                            <input type="file" id="videoFile" name="video" accept="video/*" onchange="updateSelectedFileName(this, 'videoFileNameDisplay')" class="hidden">
+                            <button type="button" onclick="document.getElementById('videoFile').click()" class="w-full flex items-center justify-between px-3 py-2 text-xs border border-dashed border-slate-300 dark:border-white/20 bg-slate-50 dark:bg-[#0b1120] hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200 rounded-none transition-all cursor-pointer">
+                                <span class="flex items-center gap-1.5 truncate">
+                                    <span class="material-symbols-rounded text-base text-primary">upload_file</span>
+                                    <span id="videoFileNameDisplay" class="truncate font-medium text-slate-600 dark:text-slate-300">Browse Video...</span>
+                                </span>
+                                <span class="px-2 py-0.5 bg-primary text-white font-semibold text-xs rounded-none shrink-0">Browse</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label id="videoPathLabel" class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Video URL</label>
+                        <input type="text" id="videoPath" name="videoPath" placeholder="e.g. /uploads/videos/file.mp4"
+                               class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Thumbnail Image</label>
+                        <div class="relative">
+                            <input type="file" id="thumbnailFile" name="thumbnail" accept="image/*" onchange="updateSelectedFileName(this, 'thumbnailFileNameDisplay')" class="hidden">
+                            <button type="button" onclick="document.getElementById('thumbnailFile').click()" class="w-full flex items-center justify-between px-3 py-2 text-xs border border-dashed border-slate-300 dark:border-white/20 bg-slate-50 dark:bg-[#0b1120] hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200 rounded-none transition-all cursor-pointer">
+                                <span class="flex items-center gap-1.5 truncate">
+                                    <span class="material-symbols-rounded text-base text-rose-500">add_photo_alternate</span>
+                                    <span id="thumbnailFileNameDisplay" class="truncate font-medium text-slate-600 dark:text-slate-300">Browse Thumbnail...</span>
+                                </span>
+                                <span class="px-2 py-0.5 bg-slate-800 dark:bg-white dark:text-slate-900 text-white font-semibold text-xs rounded-none shrink-0">Browse</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Thumbnail URL</label>
+                        <input type="text" id="thumbnailPath" name="thumbnailPath" placeholder="e.g. /uploads/thumbnails/cover.jpg"
+                               class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div id="durationFieldContainer">
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Duration</label>
+                        <input type="text" id="videoDuration" name="duration" placeholder="e.g. 15:30"
+                               class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Description</label>
+                        <input type="text" id="videoDescription" name="description" placeholder="Short summary..."
+                               class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+                    </div>
+                </div>
+                <!-- Live Thumbnail & Video Source Preview Box -->
+                <div id="videoAssetPreviewContainer" class="hidden p-2.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 rounded-none flex items-center gap-3">
+                    <div id="thumbnailPreviewBox" class="hidden size-14 rounded-none overflow-hidden bg-black shrink-0 border border-slate-200 dark:border-white/10 relative">
+                        <img id="thumbnailPreviewImg" src="" class="size-full object-cover">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate" id="videoSourceText">Video Source</p>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate" id="thumbnailSourceText">Thumbnail Image</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Dynamic Fields: Note -->
+            <div id="fields-note" class="hidden space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label id="noteUploadLabel" class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Note File</label>
+                        <div class="relative">
+                            <input type="file" id="noteFile" name="note" accept="application/pdf,image/*" onchange="updateSelectedFileName(this, 'noteFileNameDisplay')" class="hidden">
+                            <button type="button" onclick="document.getElementById('noteFile').click()" class="w-full flex items-center justify-between px-3 py-2 text-xs border border-dashed border-slate-300 dark:border-white/20 bg-slate-50 dark:bg-[#0b1120] hover:bg-slate-100 dark:hover:bg-white/5 text-slate-700 dark:text-slate-200 rounded-none transition-all cursor-pointer">
+                                <span class="flex items-center gap-1.5 truncate">
+                                    <span class="material-symbols-rounded text-base text-emerald-500">picture_as_pdf</span>
+                                    <span id="noteFileNameDisplay" class="truncate font-medium text-slate-600 dark:text-slate-300">Browse Note...</span>
+                                </span>
+                                <span class="px-2 py-0.5 bg-emerald-600 text-white font-semibold text-xs rounded-none shrink-0">Browse</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label id="notePathLabel" class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">File URL</label>
+                        <input type="text" id="filePath" name="filePath" placeholder="e.g. /uploads/notes/slide.pdf"
+                               class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Dynamic Fields: Live Class -->
+            <div id="fields-liveClass" class="hidden space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Live Type</label>
+                        <select id="liveMode" class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all" onchange="toggleLiveMode()">
+                            <option value="instant">Instant Live</option>
+                            <option value="schedule">Schedule Live</option>
+                        </select>
+                    </div>
+                    <div id="meetingUrlContainer">
+                        <label id="liveUrlLabel" class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Meeting URL</label>
+                        <input type="text" id="meetingUrl" name="meetingUrl" placeholder="Auto-generated if blank"
+                               class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+                    </div>
+                </div>
+                <div id="scheduleTimeContainer" class="hidden">
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Scheduled Date & Time</label>
+                    <input type="datetime-local" id="liveDate" name="date"
+                           class="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Description <span class="text-slate-400 font-normal normal-case">(optional)</span></label>
+                    <textarea id="liveDescription" name="description" rows="3" placeholder="Enter Description here"
+                              class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all resize-none leading-relaxed"></textarea>
+                </div>
+            </div>
+            
+            <!-- Dynamic Fields: Quiz -->
+            <div id="fields-quiz" class="hidden space-y-4">
+                <div id="bankSelectContainer">
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Select Question Bank</label>
+                    <select id="bankSelect" name="bankId" onchange="toggleBankSelect()"
+                            class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+                        <option value="">-- Choose Bank (Optional) --</option>
+                    </select>
+                </div>
+                <div id="quizSelectContainer">
+                    <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Select Previous Exam</label>
+                    <select id="quizSelect" name="quizId" onchange="toggleQuizSelect()"
+                            class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+                        <option value="">-- Choose Previous Exam (Optional) --</option>
+                    </select>
+                </div>
+                <div id="makeQuizBtnContainer">
+                    <button type="button" onclick="goToMakeQuiz('<%= course._id %>')" class="inline-block px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold uppercase tracking-wider rounded-none hover:bg-primary dark:hover:bg-primary dark:hover:text-white transition-all">
+                        Make Quize
+                    </button>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Exam Type</label>
+                        <select id="quizMode" name="quizMode" class="w-full px-3 py-2 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all" onchange="toggleQuizMode()">
+                            <option value="instant">Instant Exam</option>
+                            <option value="schedule">Scheduled Exam</option>
+                        </select>
+                    </div>
+                    <div id="quizScheduleTimeContainer" class="hidden">
+                        <label class="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Scheduled Date & Time</label>
+                        <input type="datetime-local" id="quizDate" name="quizDate"
+                               class="w-full px-3 py-1.5 text-xs border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0b1120] text-slate-800 dark:text-white rounded-none focus:outline-none focus:border-primary transition-all">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div id="uploadProgressContainer" class="hidden space-y-1.5 pt-2">
+                <div class="flex items-center justify-between text-[10px] font-bold">
+                    <span class="text-primary uppercase tracking-widest animate-pulse">Uploading file...</span>
+                    <span id="uploadPercent" class="font-mono text-slate-600 dark:text-slate-400">0%</span>
+                </div>
+                <div class="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-none overflow-hidden">
+                    <div id="uploadProgressBar" class="h-full bg-primary transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-white/5">
+                <button type="button" onclick="closeAssetModal()" 
+                        class="px-4 py-2 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-xs font-semibold rounded-none hover:bg-slate-50 dark:hover:bg-white/5 transition-all">
+                    Cancel
+                </button>
+                <button type="submit" id="assetSubmitBtn" 
+                        class="px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-semibold rounded-none hover:bg-primary dark:hover:bg-primary dark:hover:text-white transition-all">
+                    Save
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Recursive Delete Confirmation Modal -->
+<div id="deleteModal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-900/60 dark:bg-[#000]/80 backdrop-blur-sm transition-all duration-300">
+    <div class="w-full max-w-sm bg-white dark:bg-[#0b1120] border border-red-500/20 dark:border-red-500/30 rounded-none shadow-2xl p-6 relative">
+        <div class="size-12 bg-red-50 dark:bg-red-500/10 text-red-500 flex items-center justify-center mb-4">
+            <span class="material-symbols-rounded text-2xl">warning</span>
+        </div>
+        
+        <h3 class="text-base font-bold text-slate-800 dark:text-white mb-2">Delete Curriculum Element?</h3>
+        <p id="deleteModalText" class="text-xs text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+            Are you sure you want to delete this folder? This action is permanent and will recursively delete all nested sub-folders and child assets.
+        </p>
+        
+        <div class="flex justify-end gap-2">
+            <button type="button" onclick="closeDeleteModal()" 
+                    class="px-4 py-2 border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-xs font-bold uppercase tracking-wider rounded-none hover:bg-slate-50 dark:hover:bg-white/5 transition-all">
+                Cancel
+            </button>
+            <button type="button" id="confirmDeleteBtn"
+                    class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold uppercase tracking-wider rounded-none transition-all">
+                Confirm Delete
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Dropdown popover menu for adding assets -->
+<div id="assetTypePopover" class="absolute hidden z-50 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/10 shadow-xl rounded-none py-2 min-w-[180px] animate-fade-in">
+    <button type="button" onclick="triggerAssetCompose('video')" class="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-3">
+        <span class="material-symbols-rounded text-[20px] leading-none flex-shrink-0 text-blue-500 flex items-center justify-center">play_circle</span>
+        <span>Video Lesson</span>
+    </button>
+    <button type="button" onclick="triggerAssetCompose('note')" class="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-3">
+        <span class="material-symbols-rounded text-[20px] leading-none flex-shrink-0 text-emerald-500 flex items-center justify-center">description</span>
+        <span>Resource Note</span>
+    </button>
+    <button type="button" onclick="triggerAssetCompose('liveClass')" class="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-3">
+        <span class="material-symbols-rounded text-[20px] leading-none flex-shrink-0 text-purple-500 flex items-center justify-center">podcasts</span>
+        <span>Live Class</span>
+    </button>
+    <button type="button" onclick="triggerAssetCompose('quiz')" class="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-3">
+        <span class="material-symbols-rounded text-[20px] leading-none flex-shrink-0 text-amber-500 flex items-center justify-center">psychology</span>
+        <span>Link Exam</span>
+    </button>
+</div>
+
+<script>
+    const currentUserId = '<%= user._id %>';
+    let openCommentReplies = new Set();
+    const currentCourseId = '<%= course._id %>';
+    const currentCourseSubject = '<%= course.subject %>';
+    const currentCourseClass = '<%= course.classLevel %>';
+    let curriculumNodes = [];
+    let currentFolderId = null;
+    let activePopoverParentId = null;
+    let redirectQuizCreatedId = new URLSearchParams(window.location.search).get('quizCreatedId') || '';
+    let selectionMode = false;
+    let activePlayingNodeId = null;
+
+    // Initialize state from URL hash if present
+    let pendingVideoNodeId = null;
+    const initialHash = window.location.hash;
+    if (initialHash && initialHash.startsWith('#folder-')) {
+        currentFolderId = initialHash.replace('#folder-', '');
+    } else if (initialHash && initialHash.startsWith('#video-')) {
+        pendingVideoNodeId = initialHash.replace('#video-', '');
+    }
+
+    function filterPlaylist() {
+        const input = document.getElementById('playlistSearchInput');
+        const filter = input.value.toLowerCase();
+        const playlistContainer = document.getElementById('playlistContainer');
+        if (!playlistContainer) return;
+        
+        const items = playlistContainer.querySelectorAll('div.group');
+        let visibleCount = 0;
+        
+        items.forEach(item => {
+            const textContent = item.textContent || item.innerText;
+            if (textContent.toLowerCase().includes(filter)) {
+                item.style.display = "";
+                visibleCount++;
+            } else {
+                item.style.display = "none";
+            }
+        });
+        
+        // Show empty state if nothing found
+        let emptyState = playlistContainer.querySelector('.empty-playlist-msg');
+        if (visibleCount === 0 && items.length > 0) {
+            if (!emptyState) {
+                const msg = document.createElement('div');
+                msg.className = 'empty-playlist-msg flex flex-col items-center justify-center text-center py-12 opacity-60';
+                msg.innerHTML = '<span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600 mb-3">search_off</span><p class="text-xs font-medium text-slate-500">No matching lessons found</p>';
+                playlistContainer.appendChild(msg);
+            }
+        } else if (emptyState) {
+            emptyState.remove();
+        }
+    }
+
+    function stopVideoPlayback() {
+        const videoEl = document.getElementById('playerVideoEl');
+        const iframeEl = document.getElementById('playerIframeEl');
+        if (videoEl) {
+            if (activePlayingNodeId && videoEl.currentTime > 0) {
+                localStorage.setItem(`video-progress-${currentUserId}-${activePlayingNodeId}`, videoEl.currentTime);
+            }
+            videoEl.onerror = null; // Clean up error handler before clearing src to prevent stray alerts
+            videoEl.pause();
+            videoEl.src = '';
+        }
+        if (iframeEl) {
+            iframeEl.src = '';
+        }
+        activePlayingNodeId = null;
+    }
+
+    // Sync state with browser back/forward navigation
+    window.addEventListener('hashchange', () => {
+        const hash = window.location.hash;
+        if (hash && hash.startsWith('#folder-')) {
+            currentFolderId = hash.replace('#folder-', '');
+            stopVideoPlayback();
+            // Show tree, hide player
+            document.getElementById('videoPlayerPanel').classList.add('hidden');
+            document.getElementById('curriculum-tree-container').classList.remove('hidden');
+            renderCurriculumTree();
+        } else if (hash && hash.startsWith('#video-')) {
+            // Restore video player from hash (do NOT increment views!)
+            const nodeId = hash.replace('#video-', '');
+            const node = curriculumNodes.find(n => n._id === nodeId);
+            if (node && node.videoPath) {
+                playVideoNode(node, true, false);
+            }
+        } else {
+            // Back to root — show tree
+            currentFolderId = null;
+            stopVideoPlayback();
+            const panel = document.getElementById('videoPlayerPanel');
+            const tree = document.getElementById('curriculum-tree-container');
+            if (panel && !panel.classList.contains('hidden')) {
+                panel.classList.add('hidden');
+                tree.classList.remove('hidden');
+            }
+            renderCurriculumTree();
+        }
+    });
+
+    // Fetch and Render Curriculum Tree
+    async function fetchAndRenderCurriculum() {
+        try {
+            const res = await fetch(`/teacher/course/${currentCourseId}/curriculum`);
+            const data = await res.json();
+            curriculumNodes = data.nodes || [];
+            
+            // Sync player metadata instantly if currently playing
+            if (activePlayingNodeId) {
+                const node = curriculumNodes.find(n => n._id === activePlayingNodeId);
+                if (node) {
+                    document.getElementById('playerVideoTitle').innerText = node.name || 'Untitled Lesson';
+                    const descEl = document.getElementById('playerVideoDesc');
+                    const descToggleBtn = document.getElementById('descToggleBtn');
+                    descEl.innerText = node.description || 'No detailed description is available for this video lesson.';
+                    
+                    // Reset description clamp state cleanly
+                    descEl.classList.add('line-clamp-2');
+                    descToggleBtn.innerText = 'Details';
+                    
+                    // Trigger length check for clamp details toggle
+                    if (descEl.scrollHeight > descEl.clientHeight || (node.description || '').length > 150) {
+                        descToggleBtn.classList.remove('hidden');
+                    } else {
+                        descToggleBtn.classList.add('hidden');
+                    }
+                }
+            }
+
+            // Restore video player if hash pointed to a video
+            if (pendingVideoNodeId) {
+                const node = curriculumNodes.find(n => n._id === pendingVideoNodeId);
+                if (node && node.videoPath) {
+                    playVideoNode(node, true, false);
+                }
+                pendingVideoNodeId = null;
+            } else {
+                renderCurriculumTree();
+            }
+        } catch (e) {
+            console.error('Failed to load curriculum:', e);
+        }
+    }
+
+    // Recursive child node collector
+    function getRecursiveChildNodeIds(nodes, parentId) {
+        let childIds = [];
+        const children = nodes.filter(n => String(n.parentId || '') === String(parentId));
+        children.forEach(child => {
+            childIds.push(child._id);
+            childIds = childIds.concat(getRecursiveChildNodeIds(nodes, child._id.toString()));
+        });
+        return childIds;
+    }
+
+    function openFolder(folderId) {
+        currentFolderId = folderId || null;
+        if (currentFolderId) {
+            window.location.hash = 'folder-' + currentFolderId;
+        } else {
+            // Remove hash from URL without page jump or pushState clutter
+            history.replaceState("", document.title, window.location.pathname + window.location.search);
+        }
+        renderCurriculumTree();
+    }
+
+    // Render Drill-down View in DOM
+    function renderCurriculumTree() {
+        const container = document.getElementById('curriculum-tree-container');
+        if (!container) return;
+        
+        let html = '';
+        
+        // Build Toolbar (Breadcrumb + Actions)
+        const currentFolder = currentFolderId ? curriculumNodes.find(n => n._id === currentFolderId) : null;
+        const parentId = currentFolder ? currentFolder.parentId : null;
+        
+        let actionButtonsHtml = '';
+        if (typeof hasEditAccess !== "undefined" && hasEditAccess && (!currentFolder || !currentFolder.isReadonly)) {
+            actionButtonsHtml = `
+                <button type="button" onclick="toggleSelectionMode()" class="text-sm font-bold text-slate-600 hover:text-primary flex items-center gap-2 transition-colors">
+                    <span class="material-symbols-rounded text-[22px]" id="selectionIcon">${selectionMode ? 'close' : 'checklist'}</span>
+                    <span id="selectionText">${selectionMode ? 'Cancel Selection' : 'Select Items'}</span>
+                </button>
+                <button type="button" onclick="openFolderModal('${currentFolderId || ''}')" class="text-sm font-bold text-slate-600 hover:text-primary flex items-center gap-2 transition-colors">
+                    <span class="material-symbols-rounded text-[22px]">create_new_folder</span> New Folder
+                </button>
+                <button type="button" onclick="openAssetDropdown('${currentFolderId || ''}', event)" class="text-sm font-bold text-slate-600 hover:text-primary flex items-center gap-2 transition-colors">
+                    <span class="material-symbols-rounded text-[22px]">add_circle</span> Add Content
+                </button>
+            `;
+        }
+
+        html += `
+            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-white/10 bg-[#FFFFFF] dark:bg-[#0b1120]">
+                <div class="flex items-center gap-3">
+                    ${currentFolderId ? `
+                        <button type="button" onclick="openFolder('${parentId || ''}')" class="p-1.5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-none transition-all text-slate-500">
+                            <span class="material-symbols-rounded text-[18px]">arrow_back</span>
+                        </button>
+                        <span class="text-base font-bold text-slate-800 dark:text-white flex items-center gap-2 font-sans">
+                            <span class="material-symbols-rounded text-amber-500 text-xl">folder_open</span>
+                            ${currentFolder.name}
+                        </span>
+                    ` : `
+                        <div class="flex items-center gap-1 px-2">
+                            ${ '<%= user.role %>' === 'teacher' ? `
+                            <a href="/teacher/course/<%= typeof course !== 'undefined' ? course._id : '' %>#content" class="p-1.5 hover:bg-slate-200 dark:hover:bg-white/10 rounded-none transition-all text-slate-500">
+                                <span class="material-symbols-rounded text-[18px]">arrow_back</span>
+                            </a>
+                            ` : '' }
+                            <div class="flex flex-col">
+                                <span class="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                    <span class="material-symbols-rounded text-slate-500 text-2xl">folder_copy</span>
+                                    Folder
+                                </span>
+                                <span class="text-[11px] font-bold text-slate-400 mt-0.5">${curriculumNodes.filter(n => n.type !== 'folder').length} Total Files</span>
+                            </div>
+                        </div>
+                    `}
+                </div>
+                <div class="flex items-center gap-6">
+                    ${actionButtonsHtml}
+                </div>
+            </div>
+        `;
+
+        const items = curriculumNodes.filter(n => (currentFolderId ? n.parentId === currentFolderId : !n.parentId));
+        let listHtml = '';
+        
+        if (items.length > 0) {
+            // Sort folders first, then items by creation time (reverse chronological: newest/last-made first)
+            items.sort((a, b) => {
+                // If both have order fields and they differ, sort by order
+                if (a.order !== b.order) {
+                    return (a.order || 0) - (b.order || 0);
+                }
+                
+                const timeA = parseInt(a._id.toString().substring(0, 8), 16);
+                const timeB = parseInt(b._id.toString().substring(0, 8), 16);
+                return timeB - timeA;
+            });
+
+            // Add batch selection header control
+            if (<%= typeof hasEditAccess !== "undefined" && hasEditAccess ? "true" : "false" %>) {
+                html += `
+                <div id="selectAllHeader" class="flex items-center justify-between px-4 py-2.5 bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-white/10 text-[11px] font-bold text-slate-500 rounded-none mb-3 mt-4">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this)" class="size-4 rounded border-slate-300 accent-primary cursor-pointer">
+                        <label for="selectAllCheckbox" class="cursor-pointer select-none">Select All</label>
+                    </div>
+                    <div id="batchActionBar" class="hidden flex items-center gap-3">
+                        <span id="selectedCountText" class="text-slate-600 dark:text-slate-400 font-bold">0 selected</span>
+                        <button type="button" onclick="deleteSelectedNodes()" class="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-none text-[10px] font-bold shadow transition-all">
+                            <span class="material-symbols-rounded text-xs">delete</span>
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+            }
+
+            items.forEach(node => {
+                const isFolder = node.type === 'folder';
+                let icon = 'folder';
+                let typeLabel = 'Folder';
+                let detailHtml = '';
+                
+                if (isFolder) {
+                    const childIds = getRecursiveChildNodeIds(curriculumNodes, node._id.toString());
+                    const fileCount = curriculumNodes.filter(n => childIds.includes(n._id) && n.type !== 'folder').length;
+                    typeLabel = `${fileCount} Files`;
+                }
+                
+                if (node.type === 'video') {
+                    icon = 'play_circle';
+                    typeLabel = 'Video Lesson';
+                    detailHtml = node.duration ? `<span class="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-none font-mono font-bold">${node.duration}</span>` : '';
+                } else if (node.type === 'note') {
+                    icon = 'description';
+                    typeLabel = 'Note';
+                    if (node.filePath) {
+                        const ext = node.filePath.split('.').pop().toLowerCase();
+                        const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext);
+                        detailHtml = `<a href="${node.filePath}" target="_blank" class="text-[9px] text-emerald-500 hover:underline flex items-center gap-0.5 font-bold"><span class="material-symbols-rounded text-xs">${isImage ? 'image' : 'picture_as_pdf'}</span>View File</a>`;
+                    }
+                } else if (node.type === 'liveClass') {
+                    icon = 'podcasts';
+                    const isScheduled = node.date && new Date(node.date) > new Date();
+                    const isEnded = node.videoPath || node.isRecorded;
+                    
+                    if (isEnded) {
+                        typeLabel = 'Video Lesson';
+                        icon = 'play_circle';
+                        detailHtml = node.duration ? `<span class="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-none font-mono font-bold">${node.duration}</span>` : `<span class="text-[10px] text-slate-500 font-bold">Recorded Video</span>`;
+                    } else if (isScheduled) {
+                        typeLabel = 'scheduled Live Class';
+                        detailHtml = `
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-[10px] text-slate-500 font-bold countdown-timer" data-time="${node.date}"></span>
+                                <a href="/live/${node.meetingUrl}" target="_blank" class="text-[9px] text-primary hover:underline flex items-center gap-0.5 font-bold"><span class="material-symbols-rounded text-xs">link</span>Join</a>
+                            </div>
+                        `;
+                    } else {
+                        typeLabel = 'Live Class';
+                        detailHtml = `
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-[10px] text-rose-500 font-bold">Live Now</span>
+                                <a href="/live/${node.meetingUrl}" target="_blank" class="text-[9px] text-primary hover:underline flex items-center gap-0.5 font-bold"><span class="material-symbols-rounded text-xs">link</span>Join</a>
+                            </div>
+                        `;
+                    }
+                } else if (node.type === 'quiz') {
+                    icon = 'psychology';
+                    const isScheduled = node.date && new Date(node.date) > new Date();
+                    
+                    if (isScheduled) {
+                        typeLabel = 'scheduled Quize';
+                        detailHtml = `
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-[10px] text-slate-500 font-bold countdown-timer" data-time="${node.date}"></span>
+                                <span class="text-[9px] px-1.5 py-0.5 bg-amber-50 dark:bg-amber-500/10 text-amber-500 rounded-none font-bold">${node.quizId ? (node.quizId.title || 'Quiz') : 'Quiz'}</span>
+                            </div>
+                        `;
+                    } else {
+                        typeLabel = 'Assessment';
+                        detailHtml = `<span class="text-[9px] px-1.5 py-0.5 bg-amber-50 dark:bg-amber-500/10 text-amber-500 rounded-none font-bold">${node.quizId ? (node.quizId.title || 'Quiz') : 'Quiz'}</span>`;
+                    }
+                }
+                
+                let inlineActions = `<div class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0 ml-auto pl-4">`;
+                if (!hasEditAccess) { 
+                    // Do not show edit actions
+                } else if (node.isReadonly) {
+                    inlineActions += `<span title="Restricted Access" class="material-symbols-rounded text-slate-300 dark:text-slate-600 text-[18px]">lock</span>`;
+                } else if (isFolder) {
+                    inlineActions += `
+                        <button type="button" onclick="openRenameModal('${node._id}', '${node.name.replace(/'/g, "\\'")}')" title="Rename Folder" class="size-8 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 hover:text-primary transition-all rounded-none">
+                            <span class="material-symbols-rounded text-[18px]">edit</span>
+                        </button>
+                        <button type="button" onclick="confirmDeleteNode('${node._id}', '${node.name.replace(/'/g, "\\'")}', true)" title="Delete Folder" class="size-8 flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-all rounded-none">
+                            <span class="material-symbols-rounded text-[18px]">delete</span>
+                        </button>
+                    `;
+                } else {
+                    inlineActions += `
+                        <button type="button" onclick="openEditAssetModal('${node._id}')" title="Edit Resource" class="size-8 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 hover:text-primary transition-all rounded-none">
+                            <span class="material-symbols-rounded text-[18px]">edit</span>
+                        </button>
+                        <button type="button" onclick="confirmDeleteNode('${node._id}', '${node.name.replace(/'/g, "\\'")}', false)" title="Delete Resource" class="size-8 flex items-center justify-center hover:bg-red-50 dark:hover:bg-red-500/10 text-slate-500 hover:text-red-500 transition-all rounded-none">
+                            <span class="material-symbols-rounded text-[18px]">delete</span>
+                        </button>
+                    `;
+                }
+                inlineActions += `</div>`;
+
+                const nodeStyle = isFolder 
+                    ? `bg-[#FFFFFF] dark:bg-[#0b1120] hover:bg-slate-50 dark:hover:bg-white/5 cursor-pointer`
+                    : `bg-[#F8FAFC] dark:bg-[#1e293b] hover:bg-slate-100 dark:hover:bg-white/10 ml-6`;
+                    
+                const clickAction = `onclick="handleRowClick('${node._id}', event, ${isFolder})"`;
+
+                listHtml += `
+                    <div ${clickAction} data-node-id="${node._id}" class="group flex items-center p-4 border border-slate-200 dark:border-white/10 bg-white dark:bg-[#0b1120] hover:bg-slate-50 dark:hover:bg-white/5 transition-all shadow-sm rounded-none">
+                        ${typeof hasEditAccess !== "undefined" && hasEditAccess ? `
+                        <div class="drag-handle mr-2 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing px-1 hidden lg:flex items-center">
+                            <span class="material-symbols-rounded text-lg">drag_indicator</span>
+                        </div>
+                        ` : ''}
+                        <div class="node-select-col flex items-center gap-3 mr-2 shrink-0">
+                            <input type="checkbox" class="node-select-checkbox size-4 accent-primary cursor-pointer" data-id="${node._id}" ${node.isReadonly ? 'disabled title="Restricted"' : ''} onclick="event.stopPropagation(); handleCheckboxChange();">
+                        </div>
+                        <div class="flex items-center gap-4 min-w-0 flex-1">
+                            <span class="material-symbols-rounded ${isFolder ? 'text-amber-500' : 'text-slate-400 dark:text-slate-500'} shrink-0 text-[28px]">${icon}</span>
+                            <div class="min-w-0 flex-1">
+                                <h5 class="text-sm font-bold text-slate-800 dark:text-white truncate leading-normal font-sans">${node.name}</h5>
+                                <div class="flex items-center gap-2.5 mt-1">
+                                    <span class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">${typeLabel}</span>
+                                    ${detailHtml}
+                                </div>
+                            </div>
+                        </div>
+                        ${inlineActions}
+                    </div>
+                `;
+            });
+        }
+        
+        html += `<div class="space-y-3 mt-6" id="curriculum-list">${listHtml}</div>`;
+        
+        container.innerHTML = `<div>${html}</div>`;
+        
+        // Initialize SortableJS
+        if (typeof hasEditAccess !== "undefined" && hasEditAccess) {
+            const listEl = document.getElementById('curriculum-list');
+            if (listEl) {
+                Sortable.create(listEl, {
+                    animation: 150,
+                    handle: '.drag-handle', // We'll add this to the row
+                    onEnd: function (evt) {
+                        const itemEls = listEl.children;
+                        const newOrder = [];
+                        for (let i = 0; i < itemEls.length; i++) {
+                            const id = itemEls[i].getAttribute('data-node-id');
+                            if (id) newOrder.push(id);
+                        }
+                        updateNodesOrder(newOrder);
+                    }
+                });
+            }
+        }
+    }
+
+    // Folder Modal Actions
+    function openFolderModal(parentId = null) {
+        document.getElementById('folderForm').reset();
+        document.getElementById('folderParentId').value = parentId || '';
+        document.getElementById('folderNodeId').value = '';
+        document.getElementById('folderModalTitle').innerText = parentId ? 'Create Sub-folder' : 'Create Folder';
+        document.getElementById('folderModal').classList.remove('hidden');
+    }
+
+    function openRenameModal(nodeId, currentName) {
+        document.getElementById('folderForm').reset();
+        document.getElementById('folderParentId').value = '';
+        document.getElementById('folderNodeId').value = nodeId;
+        document.getElementById('folderName').value = currentName;
+        document.getElementById('folderModalTitle').innerText = 'Rename Folder';
+        document.getElementById('folderModal').classList.remove('hidden');
+    }
+
+    function closeFolderModal() {
+        document.getElementById('folderModal').classList.add('hidden');
+    }
+
+    async function handleFolderSubmit(event) {
+        event.preventDefault();
+        const nodeId = document.getElementById('folderNodeId').value;
+        const parentId = document.getElementById('folderParentId').value;
+        const name = document.getElementById('folderName').value;
+        
+        const isEdit = !!nodeId;
+        const url = isEdit 
+            ? `/teacher/course/${currentCourseId}/curriculum/node/${nodeId}`
+            : `/teacher/course/${currentCourseId}/curriculum/node`;
+            
+        const method = isEdit ? 'PUT' : 'POST';
+        const body = isEdit ? { name } : { name, type: 'folder', parentId };
+
+        try {
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (data.success) {
+                closeFolderModal();
+                fetchAndRenderCurriculum();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Server error saving folder');
+        }
+    }
+
+    // Asset Dropdown Popover
+    function openAssetDropdown(folderId, event) {
+        event.stopPropagation();
+        activePopoverParentId = folderId;
+        const popover = document.getElementById('assetTypePopover');
+        popover.classList.remove('hidden');
+        popover.style.top = event.clientY + window.scrollY + 'px';
+        popover.style.left = event.clientX + window.scrollX - 120 + 'px';
+    }
+
+    window.addEventListener('click', () => {
+        const popover = document.getElementById('assetTypePopover');
+        if (popover) popover.classList.add('hidden');
+    });
+
+    async function triggerAssetCompose(type) {
+        document.getElementById('assetForm').reset();
+        document.getElementById('assetParentId').value = activePopoverParentId || '';
+        document.getElementById('assetNodeId').value = '';
+        
+        const titleEl = document.getElementById('assetModalTitle');
+        const tabsEl = document.getElementById('assetTypeTabs');
+        const subtextEl = document.getElementById('assetModalSubtext');
+        const titleLabelEl = document.getElementById('assetTitleLabel');
+        const videoPathLabelEl = document.getElementById('videoPathLabel');
+        const durationEl = document.getElementById('durationFieldContainer');
+        const submitBtnEl = document.getElementById('assetSubmitBtn');
+        const noteUploadLabelEl = document.getElementById('noteUploadLabel');
+        const notePathLabelEl = document.getElementById('notePathLabel');
+        
+        // Reset defaults
+        titleEl.innerText = 'Add Content';
+        if (tabsEl) tabsEl.classList.remove('hidden');
+        if (subtextEl) subtextEl.classList.remove('hidden');
+        if (titleLabelEl) titleLabelEl.innerText = 'Title';
+        if (videoPathLabelEl) videoPathLabelEl.innerText = 'Video URL';
+        if (durationEl) durationEl.classList.remove('hidden');
+        if (submitBtnEl) submitBtnEl.innerText = 'Save';
+        if (noteUploadLabelEl) noteUploadLabelEl.innerText = 'Note File';
+        if (notePathLabelEl) notePathLabelEl.innerText = 'File URL';
+        
+        if (type === 'video') {
+            titleEl.innerText = 'Add Video';
+            if (tabsEl) tabsEl.classList.add('hidden');
+            if (subtextEl) subtextEl.classList.add('hidden');
+            if (titleLabelEl) titleLabelEl.innerText = 'Title';
+            if (videoPathLabelEl) videoPathLabelEl.innerText = 'Video URL';
+            if (durationEl) durationEl.classList.add('hidden');
+            if (submitBtnEl) submitBtnEl.innerText = 'Save';
+        } else if (type === 'note') {
+            titleEl.innerText = 'Add Note';
+            if (tabsEl) tabsEl.classList.add('hidden');
+            if (subtextEl) subtextEl.classList.add('hidden');
+            if (titleLabelEl) titleLabelEl.innerText = 'Title';
+            if (noteUploadLabelEl) noteUploadLabelEl.innerText = 'Note File';
+            if (notePathLabelEl) notePathLabelEl.innerText = 'File URL';
+            if (submitBtnEl) submitBtnEl.innerText = 'Save';
+        } else if (type === 'liveClass') {
+            titleEl.innerText = 'Live Class';
+            if (tabsEl) tabsEl.classList.add('hidden');
+            if (subtextEl) subtextEl.classList.add('hidden');
+            if (titleLabelEl) titleLabelEl.innerText = 'Title';
+            
+            setTimeout(toggleLiveMode, 0); // Defer to ensure elements are rendered
+        } else if (type === 'quiz') {
+            titleEl.innerText = 'Quiz';
+            if (tabsEl) tabsEl.classList.add('hidden');
+            if (subtextEl) subtextEl.classList.add('hidden');
+            if (titleLabelEl) titleLabelEl.innerText = 'Title';
+            if (submitBtnEl) submitBtnEl.innerText = 'Save';
+            
+            await fetchQuestionBanks();
+            await fetchQuizzes();
+            
+            setTimeout(() => {
+                toggleBankSelect();
+                toggleQuizSelect();
+                toggleQuizMode();
+            }, 0);
+        }
+        
+        setAssetType(type);
+        
+        document.getElementById('assetModal').classList.remove('hidden');
+    }
+
+    function setAssetType(type) {
+        document.getElementById('assetType').value = type;
+        ['video', 'note', 'liveClass', 'quiz'].forEach(t => {
+            const btn = document.getElementById(`tab-type-${t}`);
+            if (btn) {
+                if (t === type) {
+                    btn.className = "py-2 text-[10px] font-bold uppercase tracking-wider text-center transition-all rounded-none bg-slate-900 dark:bg-white text-white dark:text-slate-900";
+                } else {
+                    btn.className = "py-2 text-[10px] font-bold uppercase tracking-wider text-center transition-all rounded-none text-slate-500 hover:text-slate-800 dark:hover:text-white";
+                }
+            }
+            
+            const container = document.getElementById(`fields-${t}`);
+            if (container) {
+                if (t === type) {
+                    container.classList.remove('hidden');
+                } else {
+                    container.classList.add('hidden');
+                }
+            }
+        });
+    }
+
+    function toggleLiveMode() {
+        const mode = document.getElementById('liveMode').value;
+        const timeContainer = document.getElementById('scheduleTimeContainer');
+        const submitBtn = document.getElementById('assetSubmitBtn');
+        const urlContainer = document.getElementById('meetingUrlContainer');
+        const meetingUrlInput = document.getElementById('meetingUrl');
+        
+        // Always hide URL input for live class as the platform generates it
+        if (urlContainer) urlContainer.classList.add('hidden');
+        
+        // Auto generate room ID if empty
+        if (!meetingUrlInput.value) {
+            meetingUrlInput.value = Math.random().toString(36).substring(2, 12);
+        }
+        
+        if (mode === 'instant') {
+            if (timeContainer) timeContainer.classList.add('hidden');
+            if (submitBtn) submitBtn.innerText = 'Start live';
+        } else {
+            if (timeContainer) timeContainer.classList.remove('hidden');
+            if (submitBtn) submitBtn.innerText = 'Save schedule';
+        }
+    }
+
+    function toggleBankSelect() {
+        const bankSelect = document.getElementById('bankSelect');
+        const quizSelect = document.getElementById('quizSelect');
+        const quizSelectContainer = document.getElementById('quizSelectContainer');
+        const makeQuizBtnContainer = document.getElementById('makeQuizBtnContainer');
+        
+        if (bankSelect && bankSelect.value) {
+            if (quizSelect) quizSelect.value = ''; // Clear quiz selection
+            if (quizSelectContainer) quizSelectContainer.classList.add('hidden');
+            if (makeQuizBtnContainer) makeQuizBtnContainer.classList.add('hidden');
+        } else {
+            if (quizSelectContainer) quizSelectContainer.classList.remove('hidden');
+            if (makeQuizBtnContainer && (!quizSelect || !quizSelect.value)) {
+                makeQuizBtnContainer.classList.remove('hidden');
+            }
+        }
+    }
+
+    function toggleQuizSelect() {
+        const quizSelect = document.getElementById('quizSelect');
+        const bankSelect = document.getElementById('bankSelect');
+        const bankSelectContainer = document.getElementById('bankSelectContainer');
+        const makeQuizBtnContainer = document.getElementById('makeQuizBtnContainer');
+        
+        if (quizSelect && quizSelect.value) {
+            if (bankSelect) bankSelect.value = ''; // Clear bank selection
+            if (bankSelectContainer) bankSelectContainer.classList.add('hidden');
+            
+            // If it's the freshly created quiz, keep the Done button container visible
+            if (redirectQuizCreatedId && quizSelect.value === redirectQuizCreatedId) {
+                if (makeQuizBtnContainer) makeQuizBtnContainer.classList.remove('hidden');
+            } else {
+                if (makeQuizBtnContainer) makeQuizBtnContainer.classList.add('hidden');
+            }
+        } else {
+            if (bankSelectContainer) bankSelectContainer.classList.remove('hidden');
+            if (makeQuizBtnContainer && (!bankSelect || !bankSelect.value)) {
+                makeQuizBtnContainer.classList.remove('hidden');
+            }
+        }
+    }
+
+    function goToMakeQuiz(courseId) {
+        const title = document.getElementById('assetTitle').value || '';
+        window.location.href = `/teacher/course/${courseId}/edit/make-quiz?title=${encodeURIComponent(title)}`;
+    }
+
+    async function fetchQuizzes() {
+        try {
+            const res = await fetch(`/teacher/api/quizzes?classLevel=${encodeURIComponent(currentCourseClass)}&subject=${encodeURIComponent(currentCourseSubject)}`);
+            const data = await res.json();
+            const select = document.getElementById('quizSelect');
+            if (select) {
+                select.innerHTML = '<option value="">-- Choose Previous Exam (Optional) --</option>';
+                (data.quizzes || []).forEach(q => {
+                    select.insertAdjacentHTML('beforeend', `<option value="${q._id}">${q.title}</option>`);
+                });
+                
+                // Auto-select newly created quiz if query parameter exists
+                if (redirectQuizCreatedId) {
+                    select.value = redirectQuizCreatedId;
+                    
+                    // Prefill name with newly created quiz title
+                    const createdQuiz = (data.quizzes || []).find(q => q._id === redirectQuizCreatedId);
+                    if (createdQuiz) {
+                        const assetTitle = document.getElementById('assetTitle');
+                        if (assetTitle) assetTitle.value = createdQuiz.title;
+                    }
+                    
+                    // Render green "Done" button
+                    const makeQuizBtnContainer = document.getElementById('makeQuizBtnContainer');
+                    if (makeQuizBtnContainer) {
+                        makeQuizBtnContainer.innerHTML = `
+                            <button type="button" disabled class="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 dark:bg-emerald-500 text-white text-xs font-bold uppercase tracking-wider rounded-none cursor-default opacity-90 shadow-sm border border-emerald-500/10">
+                                <span class="material-symbols-rounded text-[14px]">check_circle</span> Done
+                            </button>
+                        `;
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch quizzes:', err);
+        }
+    }
+
+    function toggleQuizMode() {
+        const mode = document.getElementById('quizMode').value;
+        const timeContainer = document.getElementById('quizScheduleTimeContainer');
+        
+        if (mode === 'instant') {
+            if (timeContainer) timeContainer.classList.add('hidden');
+        } else {
+            if (timeContainer) timeContainer.classList.remove('hidden');
+        }
+    }
+
+    async function fetchQuestionBanks() {
+        try {
+            const res = await fetch(`/teacher/api/question-banks`);
+            const data = await res.json();
+            const select = document.getElementById('bankSelect');
+            if (select) {
+                select.innerHTML = '<option value="">-- Choose Bank (Optional) --</option>';
+                (data.banks || []).forEach(b => {
+                    select.insertAdjacentHTML('beforeend', `<option value="${b._id}">${b.board} ${b.year} - ${b.subject}</option>`);
+                });
+            }
+        } catch (err) {
+            console.error('Failed to fetch question banks:', err);
+        }
+    }
+
+    function updateSelectedFileName(input, displayId) {
+        const display = document.getElementById(displayId);
+        if (!display) return;
+        if (input.files && input.files.length > 0) {
+            const file = input.files[0];
+            display.innerText = file.name;
+            display.classList.add('text-primary', 'font-bold');
+
+            // Live image preview when browsing thumbnail file
+            if (displayId === 'thumbnailFileNameDisplay' && file.type.startsWith('image/')) {
+                const imgEl = document.getElementById('thumbnailPreviewImg');
+                const boxEl = document.getElementById('thumbnailPreviewBox');
+                const container = document.getElementById('videoAssetPreviewContainer');
+                const thumbText = document.getElementById('thumbnailSourceText');
+                if (imgEl && boxEl && container) {
+                    imgEl.src = URL.createObjectURL(file);
+                    boxEl.classList.remove('hidden');
+                    container.classList.remove('hidden');
+                    if (thumbText) thumbText.innerText = 'New Image Selected: ' + file.name;
+                }
+            }
+            if (displayId === 'videoFileNameDisplay') {
+                const container = document.getElementById('videoAssetPreviewContainer');
+                const vidText = document.getElementById('videoSourceText');
+                if (container) container.classList.remove('hidden');
+                if (vidText) vidText.innerText = 'Video Selected: ' + file.name;
+            }
+        } else {
+            const defaultText = displayId.includes('video') ? 'Browse Video...' : (displayId.includes('thumbnail') ? 'Browse Thumbnail...' : 'Browse Note...');
+            display.innerText = defaultText;
+            display.classList.remove('text-primary', 'font-bold');
+        }
+    }
+
+    function resetFileNameDisplays() {
+        ['videoFileNameDisplay', 'thumbnailFileNameDisplay', 'noteFileNameDisplay'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                const defaultText = id.includes('video') ? 'Browse Video...' : (id.includes('thumbnail') ? 'Browse Thumbnail...' : 'Browse Note...');
+                el.innerText = defaultText;
+                el.classList.remove('text-primary', 'font-bold');
+            }
+        });
+        const container = document.getElementById('videoAssetPreviewContainer');
+        if (container) container.classList.add('hidden');
+        const thumbBox = document.getElementById('thumbnailPreviewBox');
+        if (thumbBox) thumbBox.classList.add('hidden');
+    }
+
+    function closeAssetModal() {
+        document.getElementById('assetModal').classList.add('hidden');
+        document.getElementById('uploadProgressContainer').classList.add('hidden');
+        resetFileNameDisplays();
+    }
+
+    async function openEditAssetModal(nodeId) {
+        const node = curriculumNodes.find(n => n._id === nodeId);
+        if (!node) return;
+        
+        document.getElementById('assetForm').reset();
+        document.getElementById('assetParentId').value = '';
+        document.getElementById('assetNodeId').value = nodeId;
+        document.getElementById('assetModalTitle').innerText = 'Edit Resource';
+        document.getElementById('assetTitle').value = node.name;
+        
+        // Hide subtext, type tabs, and duration fields inside edit resource form
+        const subtext = document.getElementById('assetModalSubtext');
+        if (subtext) subtext.classList.add('hidden');
+        const tabs = document.getElementById('assetTypeTabs');
+        if (tabs) tabs.classList.add('hidden');
+        const durationField = document.getElementById('durationFieldContainer');
+        if (durationField) durationField.classList.add('hidden');
+        
+        setAssetType(node.type);
+        
+        if (node.type === 'video') {
+            document.getElementById('videoPath').value = node.videoPath || '';
+            const thumbPathInput = document.getElementById('thumbnailPath');
+            if (thumbPathInput) thumbPathInput.value = node.thumbnail || '';
+            document.getElementById('videoDuration').value = node.duration || '';
+            document.getElementById('videoDescription').value = node.description || '';
+
+            // Update Image & Video Source Preview Box
+            const previewContainer = document.getElementById('videoAssetPreviewContainer');
+            const thumbBox = document.getElementById('thumbnailPreviewBox');
+            const thumbImg = document.getElementById('thumbnailPreviewImg');
+            const vidText = document.getElementById('videoSourceText');
+            const thumbText = document.getElementById('thumbnailSourceText');
+
+            let hasPreview = false;
+            if (node.videoPath) {
+                const fileName = node.videoPath.split('/').pop();
+                document.getElementById('videoFileNameDisplay').innerText = fileName;
+                document.getElementById('videoFileNameDisplay').classList.add('text-primary', 'font-bold');
+                if (vidText) vidText.innerText = 'Video: ' + fileName;
+                hasPreview = true;
+            }
+            if (node.thumbnail) {
+                const thumbName = node.thumbnail.split('/').pop();
+                document.getElementById('thumbnailFileNameDisplay').innerText = thumbName;
+                document.getElementById('thumbnailFileNameDisplay').classList.add('text-primary', 'font-bold');
+                if (thumbImg) thumbImg.src = node.thumbnail;
+                if (thumbBox) thumbBox.classList.remove('hidden');
+                if (thumbText) thumbText.innerText = 'Thumbnail: ' + thumbName;
+                hasPreview = true;
+            }
+            if (previewContainer) {
+                if (hasPreview) previewContainer.classList.remove('hidden');
+                else previewContainer.classList.add('hidden');
+            }
+        } else if (node.type === 'note') {
+            document.getElementById('filePath').value = node.filePath || '';
+        } else if (node.type === 'liveClass') {
+            document.getElementById('meetingUrl').value = node.meetingUrl || '';
+            if (node.date) {
+                const localDate = new Date(node.date);
+                const tzOffset = localDate.getTimezoneOffset() * 60000;
+                const localISODate = new Date(localDate.getTime() - tzOffset).toISOString().slice(0, 16);
+                document.getElementById('liveDate').value = localISODate;
+            }
+        } else if (node.type === 'quiz') {
+            await fetchQuizzes();
+            document.getElementById('quizSelect').value = node.quizId ? (node.quizId._id || node.quizId) : '';
+            toggleQuizSelect();
+            if (node.quizId) {
+                const quizObj = node.quizId;
+                if (quizObj.scheduledAt && new Date(quizObj.scheduledAt) > new Date(node.createdAt || Date.now() - 5000)) {
+                    const localDate = new Date(quizObj.scheduledAt);
+                    const tzOffset = localDate.getTimezoneOffset() * 60000;
+                    const localISODate = new Date(localDate.getTime() - tzOffset).toISOString().slice(0, 16);
+                    document.getElementById('quizDate').value = localISODate;
+                    document.getElementById('quizMode').value = 'schedule';
+                } else {
+                    document.getElementById('quizMode').value = 'instant';
+                    document.getElementById('quizDate').value = '';
+                }
+            } else {
+                document.getElementById('quizMode').value = 'instant';
+                document.getElementById('quizDate').value = '';
+            }
+            toggleQuizMode();
+        }
+        
+        document.getElementById('assetModal').classList.remove('hidden');
+    }
+
+    async function handleAssetSubmit(event) {
+        event.preventDefault();
+        const form = document.getElementById('assetForm');
+        const formData = new FormData(form);
+        
+        const nodeId = document.getElementById('assetNodeId').value;
+        const isEdit = !!nodeId;
+        const type = document.getElementById('assetType').value;
+        
+        const fileInputVideo = document.getElementById('videoFile');
+        const fileInputNote = document.getElementById('noteFile');
+
+        if (!isEdit && type === 'video' && fileInputVideo.files.length > 0) {
+            const file = fileInputVideo.files[0];
+            try {
+                const durationStr = await new Promise((resolve) => {
+                    const video = document.createElement('video');
+                    video.preload = 'metadata';
+                    video.onloadedmetadata = function() {
+                        window.URL.revokeObjectURL(video.src);
+                        const h = Math.floor(video.duration / 3600);
+                        const m = Math.floor((video.duration % 3600) / 60).toString().padStart(2, '0');
+                        const s = Math.floor(video.duration % 60).toString().padStart(2, '0');
+                        resolve(h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`);
+                    };
+                    video.onerror = () => resolve('');
+                    video.src = URL.createObjectURL(file);
+                });
+                if (durationStr) {
+                    formData.append('duration', durationStr);
+                }
+            } catch (e) {
+                console.error("Duration extraction failed:", e);
+            }
+        }
+
+        const url = isEdit 
+            ? `/teacher/course/${currentCourseId}/curriculum/node/${nodeId}`
+            : `/teacher/course/${currentCourseId}/curriculum/node`;
+            
+        const method = isEdit ? 'PUT' : 'POST';
+        
+        const xhr = new XMLHttpRequest();
+        xhr.open(method, url);
+        
+        const progressContainer = document.getElementById('uploadProgressContainer');
+        const progressBar = document.getElementById('uploadProgressBar');
+        const progressPercent = document.getElementById('uploadPercent');
+        
+        const fileInputThumbnail = document.getElementById('thumbnailFile');
+        const hasFile = (type === 'video' && ((fileInputVideo && fileInputVideo.files.length > 0) || (fileInputThumbnail && fileInputThumbnail.files.length > 0))) ||
+                        (type === 'note' && fileInputNote && fileInputNote.files.length > 0);
+                                     
+        if (hasFile) {
+            progressContainer.classList.remove('hidden');
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percent = Math.round((e.loaded / e.total) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressPercent.innerText = percent + '%';
+                }
+            };
+        }
+        
+        xhr.onload = function() {
+            const progressContainer = document.getElementById('uploadProgressContainer');
+            const progressBar = document.getElementById('uploadProgressBar');
+            const progressPercent = document.getElementById('uploadPercent');
+            
+            if (xhr.status >= 200 && xhr.status < 300) {
+                const res = JSON.parse(xhr.responseText);
+                if (res.success) {
+                    const statusText = document.querySelector('#uploadProgressContainer span.animate-pulse');
+                    if (statusText) {
+                        statusText.innerText = 'Uploading Successful!';
+                        statusText.classList.remove('animate-pulse');
+                        statusText.classList.add('text-emerald-500');
+                    }
+                    // Check if it's an instant live class to redirect immediately
+                    const liveMode = document.getElementById('liveMode')?.value;
+                    if (type === 'liveClass' && liveMode === 'instant' && res.node && res.node.meetingUrl) {
+                        if (statusText) {
+                            statusText.innerText = 'Redirecting to Live Room...';
+                            statusText.classList.remove('animate-pulse');
+                            statusText.classList.add('text-emerald-500');
+                        }
+                        setTimeout(() => {
+                            window.location.href = `/live/${res.node.meetingUrl}`;
+                        }, 1000);
+                        return;
+                    }
+
+                    setTimeout(() => {
+                        closeAssetModal();
+                        fetchAndRenderCurriculum();
+                        // Reset progress after closing
+                        if (progressContainer) progressContainer.classList.add('hidden');
+                        if (progressBar) progressBar.style.width = '0%';
+                        if (progressPercent) progressPercent.innerText = '0%';
+                        if (statusText) {
+                            statusText.innerText = 'Uploading file...';
+                            statusText.classList.add('animate-pulse');
+                            statusText.classList.remove('text-emerald-500');
+                        }
+                    }, 1500);
+                } else {
+                    alert('Error: ' + (res.error || 'Server error saving asset'));
+                    if (progressContainer) progressContainer.classList.add('hidden');
+                }
+            } else {
+                alert('Request failed');
+                if (progressContainer) progressContainer.classList.add('hidden');
+            }
+        };
+        
+        xhr.onerror = function() {
+            alert('Network error during transfer');
+            progressContainer.classList.add('hidden');
+        };
+        
+        xhr.send(formData);
+    }
+
+    let activeDeleteNodeId = null;
+    let selectedNodeIds = [];
+    
+    function confirmDeleteNode(nodeId, nodeName, isFolder) {
+        activeDeleteNodeId = nodeId;
+        const modalText = document.getElementById('deleteModalText');
+        if (isFolder) {
+            modalText.innerText = `Are you sure you want to delete "${nodeName}"? This folder and all its recursively nested sub-folders and child assets will be deleted permanently.`;
+        } else {
+            modalText.innerText = `Are you sure you want to delete the resource asset "${nodeName}"? This action cannot be undone.`;
+        }
+        
+        document.getElementById('confirmDeleteBtn').onclick = handleDeleteConfirm;
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').classList.add('hidden');
+        activeDeleteNodeId = null;
+        selectedNodeIds = [];
+    }
+
+    async function handleDeleteConfirm() {
+        if (!activeDeleteNodeId) return;
+        try {
+            const res = await fetch(`/teacher/course/${currentCourseId}/curriculum/node/${activeDeleteNodeId}`, {
+                method: 'DELETE'
+            });
+            const data = await res.json();
+            if (data.success) {
+                closeDeleteModal();
+                fetchAndRenderCurriculum();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to delete node');
+        }
+    }
+
+    setInterval(() => {
+        document.querySelectorAll('.countdown-timer').forEach(el => {
+            const time = new Date(el.getAttribute('data-time')).getTime();
+            const now = new Date().getTime();
+            const diff = time - now;
+            
+            if (diff <= 0) {
+                el.innerText = 'Starting...';
+                el.classList.remove('countdown-timer');
+            } else {
+                const hours = Math.floor(diff / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                
+                el.innerText = `${hours}h ${minutes}m ${seconds}s`;
+            }
+        });
+    }, 1000);
+
+    window.addEventListener('DOMContentLoaded', () => {
+        fetchAndRenderCurriculum();
+        
+        // Auto-open quiz composer modal if redirected from quiz editor
+        if (redirectQuizCreatedId) {
+            triggerAssetCompose('quiz');
+            // Immediately clean up URL query parameters so page refresh/nav back doesn't auto-open composer again
+            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            window.history.replaceState({ path: cleanUrl }, '', cleanUrl);
+        }
+
+        // Setup HTML5 video progress saver & restore speed settings listeners
+        const videoEl = document.getElementById('playerVideoEl');
+        if (videoEl) {
+            let lastSavedTime = 0;
+            let lastServerSyncTime = 0;
+            videoEl.addEventListener('timeupdate', () => {
+                if (!activePlayingNodeId) return;
+                const now = videoEl.currentTime;
+                // Save locally every 2 seconds
+                if (Math.abs(now - lastSavedTime) > 2) {
+                    localStorage.setItem(`video-progress-${currentUserId}-${activePlayingNodeId}`, now);
+                    lastSavedTime = now;
+                }
+                
+                // Sync to server every 10 seconds
+                if (Math.abs(now - lastServerSyncTime) > 10 && typeof currentCourseId !== 'undefined') {
+                    lastServerSyncTime = now;
+                    const isCompleted = videoEl.duration && (videoEl.duration - now) < 5;
+                    fetch(`/api/course/${currentCourseId}/progress/${activePlayingNodeId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ progress: now, completed: isCompleted })
+                    }).catch(console.error);
+                }
+            });
+            videoEl.addEventListener('pause', () => {
+                if (activePlayingNodeId) {
+                    localStorage.setItem(`video-progress-${currentUserId}-${activePlayingNodeId}`, videoEl.currentTime);
+                    if (typeof currentCourseId !== 'undefined') {
+                        const isCompleted = videoEl.duration && (videoEl.duration - videoEl.currentTime) < 5;
+                        fetch(`/api/course/${currentCourseId}/progress/${activePlayingNodeId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ progress: videoEl.currentTime, completed: isCompleted })
+                        }).catch(console.error);
+                    }
+                }
+            });
+            // Keep playback rate synced if changed via native video controls three-dot menu
+            videoEl.addEventListener('ratechange', () => {
+                if (videoEl.playbackRate) {
+                    localStorage.setItem('video-speed', videoEl.playbackRate.toString());
+                }
+            });
+        }
+
+        // Periodically poll for new comments silently to enable live updates
+        setInterval(() => {
+            if (!activePlayingNodeId) return;
+            
+            // Do not poll if user is actively writing a new comment or interacting with reply/edit forms
+            const mainInput = document.getElementById('commentInput');
+            if (mainInput && document.activeElement === mainInput && mainInput.value.trim() !== '') return;
+            
+            const openForms = document.querySelectorAll('[id^="reply-form-"]:not(.hidden), [id^="edit-comment-form-"]:not(.hidden), [id^="edit-reply-form-"]:not(.hidden)');
+            if (openForms.length > 0) return;
+            
+            // Silently poll the current comments state without rendering the loading spinner
+            loadNodeComments(activePlayingNodeId, false, true);
+        }, 5000); // Check for live comments every 5 seconds
+    });
+
+
+
+    // Bulk Delete Handlers
+    function toggleSelectionMode() {
+        selectionMode = !selectionMode;
+        const container = document.getElementById('curriculum-tree-container');
+        const btnText = document.getElementById('selectionText');
+        const btnIcon = document.getElementById('selectionIcon');
+        
+        if (selectionMode) {
+            container.classList.add('selection-active');
+            if (btnText) btnText.innerText = 'Cancel Selection';
+            if (btnIcon) btnIcon.innerText = 'close';
+        } else {
+            container.classList.remove('selection-active');
+            if (btnText) btnText.innerText = 'Select Items';
+            if (btnIcon) btnIcon.innerText = 'checklist';
+            
+            // Clear selections
+            const checkboxes = document.querySelectorAll('.node-select-checkbox');
+            checkboxes.forEach(cb => cb.checked = false);
+            const selectAll = document.getElementById('selectAllCheckbox');
+            if (selectAll) selectAll.checked = false;
+            
+            handleCheckboxChange();
+        }
+    }
+
+    function handleCheckboxChange() {
+        const checkboxes = document.querySelectorAll('.node-select-checkbox');
+        const checked = document.querySelectorAll('.node-select-checkbox:checked');
+        const selectAll = document.getElementById('selectAllCheckbox');
+        const batchBar = document.getElementById('batchActionBar');
+        const selectedCount = document.getElementById('selectedCountText');
+
+        if (checked.length > 0) {
+            if (batchBar) batchBar.classList.remove('hidden');
+            if (selectedCount) selectedCount.innerText = `${checked.length} selected`;
+            if (selectAll) {
+                selectAll.checked = (checked.length === checkboxes.length);
+            }
+        } else {
+            if (batchBar) batchBar.classList.add('hidden');
+            if (selectAll) selectAll.checked = false;
+        }
+    }
+
+    function toggleSelectAll(selectAllCheckbox) {
+        const isChecked = selectAllCheckbox.checked;
+        const checkboxes = document.querySelectorAll('.node-select-checkbox');
+        checkboxes.forEach(cb => {
+            cb.checked = isChecked;
+        });
+        handleCheckboxChange();
+    }
+
+    function handleRowClick(nodeId, event, isFolder) {
+        // If clicking a button or checkbox, let the browser handle it naturally
+        if (event.target.closest('button') || event.target.closest('input[type="checkbox"]')) {
+            return;
+        }
+        
+        if (selectionMode) {
+            event.preventDefault();
+            
+            // Find the checkbox inside this row and toggle it!
+            const row = event.currentTarget;
+            const cb = row.querySelector('.node-select-checkbox');
+            if (cb) {
+                cb.checked = !cb.checked;
+                handleCheckboxChange();
+            }
+        } else {
+            // Standard action
+            if (isFolder) {
+                openFolder(nodeId);
+            } else {
+                const node = curriculumNodes.find(n => n._id === nodeId);
+                if (node) {
+                    playVideoNode(node, false, true);
+                }
+            }
+        }
+    }
+
+    function deleteSelectedNodes() {
+        const checked = document.querySelectorAll('.node-select-checkbox:checked');
+        if (checked.length === 0) return;
+
+        const count = checked.length;
+        selectedNodeIds = Array.from(checked).map(cb => cb.getAttribute('data-id'));
+
+        const modalText = document.getElementById('deleteModalText');
+        if (modalText) {
+            modalText.innerText = `Are you sure you want to delete the ${count} selected items?`;
+        }
+
+        document.getElementById('confirmDeleteBtn').onclick = handleBulkDeleteConfirm;
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    async function handleBulkDeleteConfirm() {
+        if (selectedNodeIds.length === 0) return;
+        try {
+            const res = await fetch(`/teacher/course/${currentCourseId}/curriculum/nodes/batch-delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ nodeIds: selectedNodeIds })
+            });
+            const data = await res.json();
+            if (data.success) {
+                closeDeleteModal();
+                if (selectionMode) {
+                    toggleSelectionMode();
+                }
+                fetchAndRenderCurriculum();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Failed to delete selected items');
+        }
+    }
+
+    // Video Player (in-page panel, same sidebar/navbar chrome)
+    const courseInstructorName = `<%= course.instructor ? course.instructor.name.replace(/'/g, "\\'") : 'Course Mentor' %>`;
+    const courseInstructorAvatar = `<%= course.instructor ? (course.instructor.profileImage || course.instructor.profilePicture || '/images/default-avatar.png') : '/images/default-avatar.png' %>`;
+
+    function playVideoNode(node, skipHash = false, incrementView = false) {
+        if (typeof node === 'string') {
+            node = curriculumNodes.find(n => String(n._id) === String(node));
+            if (!node) return;
+        }
+
+        const panel = document.getElementById('videoPlayerPanel');
+        const tree = document.getElementById('curriculum-tree-container');
+        const videoEl = document.getElementById('playerVideoEl');
+        const iframeEl = document.getElementById('playerIframeEl');
+        const emptyState = document.getElementById('playerEmptyState');
+
+        const url = node.videoPath;
+        const title = node.name;
+        const description = node.description || '';
+        const nodeId = node._id;
+        
+        console.log("Playing node:", node.name, "Type:", node.type, "URL:", url);
+
+        if (!url) {
+            console.error("No video path found for this node");
+            // If it's a note or quiz, maybe we shouldn't even call playVideoNode!
+            if (node.type === 'note' && node.filePath) {
+                window.open(node.filePath, '_blank');
+                return;
+            } else if (node.type === 'quiz') {
+                const qId = (node.quizId && node.quizId._id) ? node.quizId._id : (node.quizId || node._id);
+                window.open(`/teacher/quiz-details/${qId}`, '_blank');
+                return;
+            } else if (node.type === 'liveClass') {
+                window.open(`/live/${node.meetingUrl || node._id}`, '_blank');
+                return;
+            }
+            alert('This item does not have a valid video attached.');
+            return;
+        }
+
+        // Extract Author Info
+        let authorName = courseInstructorName;
+        let authorAvatar = courseInstructorAvatar;
+        
+        if (node.addedBy) {
+            authorName = node.addedBy.name || authorName;
+            authorAvatar = node.addedBy.profileImage || node.addedBy.profilePicture || authorAvatar;
+        }
+
+        // Reset elements
+        videoEl.onerror = null; // Clean up error handler before resetting src to prevent stray alerts
+        videoEl.classList.add('hidden');
+        videoEl.src = '';
+        iframeEl.classList.add('hidden');
+        iframeEl.src = '';
+        emptyState.classList.add('hidden');
+
+        // Detect URL type and load
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+            let embedUrl = url;
+            if (url.includes('watch?v=')) {
+                embedUrl = 'https://www.youtube.com/embed/' + url.split('v=')[1].split('&')[0] + '?autoplay=1';
+            } else if (url.includes('youtu.be/')) {
+                embedUrl = 'https://www.youtube.com/embed/' + url.split('youtu.be/')[1].split('?')[0] + '?autoplay=1';
+            }
+            iframeEl.src = embedUrl;
+            iframeEl.classList.remove('hidden');
+        } else if (url.includes('vimeo.com')) {
+            const videoId = url.split('vimeo.com/')[1].split('?')[0];
+            iframeEl.src = 'https://player.vimeo.com/video/' + videoId + '?autoplay=1';
+            iframeEl.classList.remove('hidden');
+        } else {
+            videoEl.src = url;
+            videoEl.classList.remove('hidden');
+            
+            // Restore playback speed state
+            const currentSpeed = parseFloat(localStorage.getItem('video-speed') || '1.0');
+            videoEl.playbackRate = currentSpeed;
+            
+            // Add error handling to notify if the browser can't decode the video format
+            videoEl.onerror = function() {
+                // Only show alert if src is actually valid and not empty or during a deliberate state reset
+                if (videoEl.src && videoEl.src !== window.location.href) {
+                    alert('Error: The browser cannot play this video format. Make sure it is a standard MP4 (H.264 codec).');
+                }
+            };
+            
+            videoEl.load();
+            
+            // Resume watch progress from localStorage
+            const savedProgress = localStorage.getItem(`video-progress-${currentUserId}-${nodeId}`);
+            if (savedProgress) {
+                const resumeTime = parseFloat(savedProgress);
+                videoEl.addEventListener('loadedmetadata', function onLoaded() {
+                    // Only resume if user had progress left and wasn't at the very end of the video
+                    if (resumeTime < videoEl.duration - 5) {
+                        videoEl.currentTime = resumeTime;
+                    }
+                    videoEl.removeEventListener('loadedmetadata', onLoaded);
+                });
+            }
+            
+            videoEl.play().catch((e) => { 
+                console.error("Video playback error:", e);
+                if(e.name !== 'NotAllowedError' && e.name !== 'AbortError') {
+                    alert('Video playback error: ' + e.message);
+                }
+            });
+        }
+
+        // Populate metadata
+        document.getElementById('playerVideoTitle').innerText = title || 'Untitled Lesson';
+        
+        const descEl = document.getElementById('playerVideoDesc');
+        const descToggleBtn = document.getElementById('descToggleBtn');
+        descEl.innerText = description || 'No detailed description is available for this video lesson.';
+        
+        // Reset description state
+        descEl.classList.add('line-clamp-2');
+        descToggleBtn.innerText = 'Details';
+        
+        // Use a short timeout to let the browser render the text so we can check its height
+        setTimeout(() => {
+            if (descEl.scrollHeight > descEl.clientHeight || description.length > 150) {
+                descToggleBtn.classList.remove('hidden');
+            } else {
+                descToggleBtn.classList.add('hidden');
+            }
+        }, 50);
+        // Set active playing node
+        activePlayingNodeId = nodeId;
+
+        document.getElementById('playerVideoViews').innerText = formatCount(node.views || 0);
+        document.getElementById('playerVideoComments').innerText = '0';
+        document.getElementById('playerAuthorName').innerText = authorName;
+        document.getElementById('playerAuthorAvatar').src = authorAvatar;
+
+        // Async views tracking and comments fetch
+        if (incrementView) {
+            incrementNodeView(nodeId);
+        }
+        loadNodeComments(nodeId);
+        renderCoursePlaylist();
+
+        // Write hash so refresh restores this video
+        if (!skipHash && nodeId) {
+            window.location.hash = 'video-' + nodeId;
+        }
+
+        // Switch views
+        tree.classList.add('hidden');
+        panel.classList.remove('hidden');
+        
+        // Scroll to top of content
+        const scrollArea = document.getElementById('content-scroll-area') || document.querySelector('.content-scroll');
+        if (scrollArea) scrollArea.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function closeVideoPlayer() {
+        const panel = document.getElementById('videoPlayerPanel');
+        const tree = document.getElementById('curriculum-tree-container');
+        
+        stopVideoPlayback();
+        
+        panel.classList.add('hidden');
+        tree.classList.remove('hidden');
+
+        // Clear video hash from URL cleanly (no page jump)
+        history.replaceState('', document.title, window.location.pathname + window.location.search);
+    }
+
+    function toggleDescription() {
+        const descEl = document.getElementById('playerVideoDesc');
+        const btn = document.getElementById('descToggleBtn');
+        
+        if (descEl.classList.contains('line-clamp-2')) {
+            descEl.classList.remove('line-clamp-2');
+            btn.innerText = 'Show less';
+        } else {
+            descEl.classList.add('line-clamp-2');
+            btn.innerText = 'Details';
+        }
+    }
+
+    // Format views and comments counts dynamically (e.g. 1.2k)
+    function formatCount(num) {
+        if (!num) return '0';
+        num = parseInt(num, 10);
+        if (isNaN(num)) return '0';
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'm';
+        }
+        if (num >= 1000) {
+            return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+        }
+        return num.toString();
+    }
+
+    async function incrementNodeView(nodeId) {
+        try {
+            const res = await fetch(`/api/curriculum/node/${nodeId}/view`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('playerVideoViews').innerText = formatCount(data.views);
+                const cachedNode = curriculumNodes.find(n => n._id === nodeId);
+                if (cachedNode) cachedNode.views = data.views;
+            }
+        } catch (err) {
+            console.error('Error incrementing views:', err);
+        }
+    }
+
+    let commentsSkip = 0;
+    const commentsLimit = 10;
+    let commentsHasMore = false;
+    let loadedCommentsArray = [];
+
+    async function loadNodeComments(nodeId, append = false, isSilent = false) {
+        const list = document.getElementById('commentsList');
+        const badge = document.getElementById('commentsCountBadge');
+        const playerBadge = document.getElementById('playerVideoComments');
+        const loadMoreContainer = document.getElementById('loadMoreCommentsContainer');
+        
+        if (!append && !isSilent) {
+            commentsSkip = 0;
+            loadedCommentsArray = [];
+            list.innerHTML = `
+                <div class="flex items-center justify-center py-10">
+                    <div class="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
+                </div>
+            `;
+        }
+
+        try {
+            const res = await fetch(`/api/curriculum/node/${nodeId}/comments?limit=${commentsLimit}&skip=${commentsSkip}`);
+            const data = await res.json();
+            if (data.success && data.comments) {
+                commentsHasMore = data.hasMore;
+                
+                if (append) {
+                    loadedCommentsArray = loadedCommentsArray.concat(data.comments);
+                } else {
+                    loadedCommentsArray = data.comments;
+                }
+
+                // Update counts with premium compact formatting
+                badge.innerText = formatCount(loadedCommentsArray.length);
+                playerBadge.innerText = formatCount(loadedCommentsArray.length);
+
+                // Update Comments Settings Toggle UI & disabled state banner
+                updateCommentsSettingUI(data.commentsDisabled);
+
+                if (loadedCommentsArray.length === 0) {
+                    list.innerHTML = `
+                        <div class="flex flex-col items-center justify-center text-center pt-10 pb-6 opacity-60">
+                            <span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600 mb-3">chat_bubble_outline</span>
+                            <p class="text-xs font-medium text-slate-500">No comments yet</p>
+                            <p class="text-[10px] text-slate-400 mt-1">Be the first to share your thoughts!</p>
+                        </div>
+                    `;
+                    if (loadMoreContainer) loadMoreContainer.classList.add('hidden');
+                    return;
+                }
+
+                renderCommentsList(loadedCommentsArray);
+
+                if (loadMoreContainer) {
+                    if (commentsHasMore) {
+                        loadMoreContainer.classList.remove('hidden');
+                    } else {
+                        loadMoreContainer.classList.add('hidden');
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error loading comments:', err);
+            if (!isSilent) {
+                list.innerHTML = `<p class="text-xs text-rose-500 text-center py-4">Failed to load comments</p>`;
+            }
+        }
+    }
+
+    function updateCommentsSettingUI(disabled) {
+        const btn = document.getElementById('toggleCommentsBtn');
+        const icon = document.getElementById('toggleCommentsIcon');
+        const text = document.getElementById('toggleCommentsText');
+        const banner = document.getElementById('commentsDisabledBanner');
+
+        // Always keep the same class/color as requested
+        if (btn) {
+            btn.className = "text-xs font-bold px-3 py-1 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10 transition-all rounded-none flex items-center gap-1.5 shrink-0";
+        }
+        if (text) {
+            text.innerText = disabled ? "Turn on" : "Turn off";
+        }
+
+        if (disabled) {
+            if (icon) icon.innerText = "comments_disabled";
+            if (banner) banner.classList.remove('hidden');
+        } else {
+            if (icon) icon.innerText = "chat";
+            if (banner) banner.classList.add('hidden');
+        }
+    }
+
+    async function toggleNodeCommentsSetting() {
+        if (!activePlayingNodeId) return;
+        const btn = document.getElementById('toggleCommentsBtn');
+        if (btn) btn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/curriculum/node/${activePlayingNodeId}/toggle-comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                updateCommentsSettingUI(data.commentsDisabled);
+            } else {
+                alert(data.error || 'Failed to toggle comments setting');
+            }
+        } catch (err) {
+            console.error('Error toggling comments setting:', err);
+            alert('Failed to toggle comments setting');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    async function toggleCommentHighlight(commentId) {
+        try {
+            const res = await fetch(`/api/curriculum/comment/${commentId}/toggle-highlight`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Refresh active node comments to see highlighted floating at top
+                if (activePlayingNodeId) {
+                    loadNodeComments(activePlayingNodeId, false, true);
+                }
+            } else {
+                alert(data.error || 'Failed to update highlight status');
+            }
+        } catch (err) {
+            console.error('Error toggling highlight status:', err);
+            alert('Failed to update highlight status');
+        }
+    }
+
+    // switchSidebarTab — toggles between Comments and Playlist tabs in the right sidebar
+    function switchSidebarTab(tabName) {
+        const commentsTab = document.getElementById('commentsTabContent');
+        const playlistTab = document.getElementById('playlistTabContent');
+        const btnComments = document.getElementById('tabBtnComments');
+        const btnPlaylist = document.getElementById('tabBtnPlaylist');
+
+        if (tabName === 'comments') {
+            if (commentsTab) commentsTab.classList.remove('hidden');
+            if (playlistTab) playlistTab.classList.add('hidden');
+            if (btnComments) btnComments.className = "flex-1 py-3 text-xs font-bold text-center border-r border-slate-100 dark:border-white/5 transition-all text-slate-800 dark:text-white bg-white dark:bg-[#0b1120] flex items-center justify-center gap-1.5 rounded-none";
+            if (btnPlaylist) btnPlaylist.className = "flex-1 py-3 text-xs font-bold text-center transition-all text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center gap-1.5 rounded-none";
+        } else {
+            if (commentsTab) commentsTab.classList.add('hidden');
+            if (playlistTab) playlistTab.classList.remove('hidden');
+            if (btnComments) btnComments.className = "flex-1 py-3 text-xs font-bold text-center border-r border-slate-100 dark:border-white/5 transition-all text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center gap-1.5 rounded-none";
+            if (btnPlaylist) btnPlaylist.className = "flex-1 py-3 text-xs font-bold text-center transition-all text-slate-800 dark:text-white bg-white dark:bg-[#0b1120] flex items-center justify-center gap-1.5 rounded-none";
+            // Render playlist when switching to it
+            renderCoursePlaylist();
+        }
+    }
+
+    function renderCoursePlaylist() {
+        const playlistContainer = document.getElementById('playlistContainer');
+        if (!playlistContainer) return;
+
+        if (!curriculumNodes || curriculumNodes.length === 0) {
+            playlistContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center py-10 opacity-60">
+                    <span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600 mb-3">video_library</span>
+                    <p class="text-xs font-medium text-slate-500">No lessons available</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Get all videos (both standalone and those inside folders)
+        const allVideos = curriculumNodes.filter(n => 
+            n.type === 'video' || (n.type === 'liveClass' && n.videoPath)
+        ).sort((a, b) => {
+            const timeA = parseInt(a._id.toString().substring(0, 8), 16);
+            const timeB = parseInt(b._id.toString().substring(0, 8), 16);
+            return timeA - timeB;
+        });
+
+        let html = '';
+
+        // Render all videos in a flat, continuous list
+        allVideos.forEach(node => {
+            const isActive = node._id === activePlayingNodeId;
+            const activeClass = isActive ? 'bg-[#EAE9ED] dark:bg-white/10 rounded-md' : 'hover:bg-[#EAE9ED]/60 dark:hover:bg-white/5 rounded-md';
+            const iconColor = isActive ? 'text-black dark:text-white' : 'text-slate-400';
+            const activeTextClass = isActive ? 'text-black dark:text-white font-medium' : 'text-black dark:text-slate-300 font-medium';
+            
+            html += `
+                <div onclick="playVideoNode('${node._id}', false, true)" class="group flex items-center gap-3 p-2.5 cursor-pointer transition-all ${activeClass}">
+                    <span class="material-symbols-rounded shrink-0 text-[22px] flex items-center justify-center ${iconColor}">play_circle</span>
+                    <div class="min-w-0 flex-1 flex flex-col justify-center">
+                        <p class="text-[13px] ${activeTextClass} truncate leading-tight">${node.name}</p>
+                        <span class="text-[10px] text-slate-500 font-medium mt-0.5">${node.duration || 'Video'}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        if (html === '') {
+            playlistContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center py-10 opacity-60">
+                    <span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600 mb-3">video_library</span>
+                    <p class="text-xs font-medium text-slate-500">No video lessons in this course</p>
+                </div>
+            `;
+        } else {
+            playlistContainer.innerHTML = html;
+        }
+
+        // Update playlist lesson count badge
+        const totalVideos = allVideos.length;
+        const badgeEl = document.getElementById('playlistCountBadge');
+        if (badgeEl) badgeEl.textContent = totalVideos > 0 ? `${totalVideos} lessons` : '';
+    }
+
+    function renderCommentsList(comments) {
+        const list = document.getElementById('commentsList');
+        
+        list.innerHTML = comments.map(c => {
+            const dateStr = new Date(c.createdAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+            const avatar = c.userAvatar || '/images/default-avatar.png';
+            const badgeClass = c.user && c.user.role === 'teacher' ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 dark:bg-white/5 text-slate-500';
+            const badgeText = c.user && c.user.role === 'teacher' ? 'Mentor' : '';
+
+            const timeAgo = (date) => {
+                const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+                let interval = Math.floor(seconds / 31536000);
+                if (interval >= 1) return interval === 1 ? '1 year ago' : interval + ' years ago';
+                interval = Math.floor(seconds / 2592000);
+                if (interval >= 1) return interval === 1 ? '1 month ago' : interval + ' months ago';
+                interval = Math.floor(seconds / 86400);
+                if (interval >= 1) return interval === 1 ? '1 day ago' : interval + ' days ago';
+                interval = Math.floor(seconds / 3600);
+                if (interval >= 1) return interval === 1 ? '1 hour ago' : interval + ' hours ago';
+                interval = Math.floor(seconds / 60);
+                if (interval >= 1) return interval === 1 ? '1 minute ago' : interval + ' minutes ago';
+                return seconds < 10 ? 'just now' : seconds + ' seconds ago';
+            };
+            const dateDisplay = `${dateStr} <span class="text-slate-300 dark:text-white/10 mx-1">&bull;</span> ${timeAgo(c.createdAt)}`;
+
+            const repliesHTML = (c.replies || []).map(r => {
+                const rDateStr = new Date(r.createdAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+                const rRelativeTime = timeAgo(r.createdAt);
+                const rAvatar = r.userAvatar || '/images/default-avatar.png';
+                const isRMentor = r.user && r.user.role === 'teacher';
+                const rBadgeClass = isRMentor ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 dark:bg-white/5 text-slate-500';
+                const rBadgeText = isRMentor ? 'Mentor' : '';
+                const isReplyAuthor = r.user && (r.user._id === currentUserId || r.user === currentUserId);                 return `
+                    <div class="flex gap-3">
+                        <div class="size-8 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-white/10 bg-slate-50">
+                            <img src="${rAvatar}" class="size-full object-cover" alt="${r.userName}">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-1.5 flex-wrap relative">
+                                <span class="text-sm font-bold text-slate-800 dark:text-slate-200">${r.userName}</span>
+                                ${rBadgeText ? `<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-none shrink-0 ${rBadgeClass}">${rBadgeText}</span>` : ''}
+                                <span class="text-[11px] text-slate-400 shrink-0">${rDateStr} <span class="text-slate-300 dark:text-white/10 mx-1">&bull;</span> ${rRelativeTime}</span>
+                                
+                                <!-- Perfectly placed inline three-dot trigger outside text inherited shrink rules -->
+                                <div class="relative shrink-0 inline-block align-middle ml-0.5">
+                                    <button type="button" onclick="toggleCommentDropdown(event, '${r._id}')" class="p-0.5 hover:bg-slate-100 dark:hover:bg-white/5 text-black dark:text-white rounded-none transition-all flex items-center justify-center font-extrabold" title="Options">
+                                        <span class="material-symbols-rounded text-sm font-bold leading-none" style="font-weight: 800; color: #000000;">more_vert</span>
+                                    </button>
+                                    <div id="dropdown-${r._id}" class="hidden absolute left-0 mt-1 w-28 bg-[#FFFFFF] dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-lg rounded-none py-0.5 z-30">
+                                        ${isReplyAuthor ? `
+                                            <button type="button" onclick="triggerEditReply('${c._id}', '${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5">
+                                                <span class="material-symbols-rounded text-[14px]">edit</span> Edit
+                                            </button>
+                                            <% if (hasEditAccess) { %><button type="button" onclick="triggerDeleteReply('${c._id}', '${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5">
+                                                <span class="material-symbols-rounded text-[14px]">delete</span> Delete
+                                            </button><% } %>
+                                        ` : `
+                                            <button type="button" onclick="triggerReportComment('${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5">
+                                                <span class="material-symbols-rounded text-[14px]">flag</span> Report
+                                            </button>
+                                        `}
+                                    </div>
+                                </div>
+                            </div>
+                            ${renderExpandableText(r.text, r._id)}
+                            
+                            <div class="flex items-center gap-3 mt-1">
+                                <button type="button" onclick="toggleReplyForm('${r._id}', '${r.userName}')" class="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-[13px]">reply</span> Reply
+                                </button>
+                            </div>
+
+                            <div id="reply-form-${r._id}" class="hidden mt-2 w-full max-w-[350px]">
+                                <form onsubmit="submitReply(event, '${c._id}', '${r._id}')" class="flex gap-2 items-start w-full">
+                                    <textarea required rows="1" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px';" placeholder="Write a reply..." class="flex-1 text-xs p-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 focus:outline-none focus:border-primary rounded-none resize-y text-slate-800 dark:text-white leading-relaxed w-full min-h-[36px]"></textarea>
+                                    <div class="flex gap-1 shrink-0">
+                                        <button type="button" onclick="toggleReplyForm('${r._id}', '', true)" class="px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 rounded-none">Cancel</button>
+                                        <button type="submit" class="px-2.5 py-1 bg-primary hover:bg-primary/95 text-white text-[9px] font-bold uppercase tracking-wider rounded-none">Reply</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div id="edit-reply-form-${r._id}" class="hidden mt-2 w-full max-w-[350px]">
+                                <form onsubmit="submitEditReply(event, '${c._id}', '${r._id}')" class="flex gap-2 items-start w-full">
+                                    <textarea required rows="1" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px';" class="flex-1 text-xs p-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 focus:outline-none focus:border-primary rounded-none resize-y text-slate-800 dark:text-white leading-relaxed w-full min-h-[36px]">${escapeHTML(r.text)}</textarea>
+                                    <div class="flex gap-1 shrink-0">
+                                        <button type="button" onclick="toggleEditReplyForm('${c._id}', '${r._id}', true)" class="px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 rounded-none">Cancel</button>
+                                        <button type="submit" class="px-2.5 py-1 bg-primary hover:bg-primary/95 text-white text-[9px] font-bold uppercase tracking-wider rounded-none">Save</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            const isRepliesOpen = openCommentReplies.has(c._id);
+            const repliesBlock = (c.replies || []).length > 0 
+                ? `
+                    <button type="button" onclick="toggleRepliesList('${c._id}')" id="toggle-replies-btn-${c._id}" class="text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center gap-1 mt-2">
+                        <span class="material-symbols-rounded text-sm">${isRepliesOpen ? 'unfold_less' : 'unfold_more'}</span> ${isRepliesOpen ? 'Hide replies' : `View ${c.replies.length} ${c.replies.length === 1 ? 'reply' : 'replies'}`}
+                    </button>
+                    <div id="replies-block-${c._id}" class="${isRepliesOpen ? '' : 'hidden'} pl-6 border-l border-slate-100 dark:border-white/5 mt-2.5 space-y-2.5">
+                        ${repliesHTML}
+                    </div>
+                  ` 
+                : '';
+
+            const isCommentAuthor = c.user && (c.user._id === currentUserId || c.user === currentUserId);
+
+            const highlightClass = "";
+
+            return `
+                <div class="flex gap-3 group border-b border-slate-100 dark:border-white/5 pb-3">
+                    <div class="size-8 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-white/10 bg-slate-50">
+                        <img src="${avatar}" class="size-full object-cover" alt="${c.userName}">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-2 w-full relative">
+                            <div class="flex items-center gap-1.5 flex-wrap min-w-0">
+                                <span class="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">${c.userName}</span>
+                                ${badgeText ? `<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-none shrink-0 ${badgeClass}">${badgeText}</span>` : ''}
+                                ${c.highlighted ? `<span class="text-[9px] font-bold bg-yellow-400 dark:bg-yellow-500 text-slate-900 dark:text-slate-950 px-1.5 py-0.5 rounded-none shrink-0 flex items-center gap-0.5"><span class="material-symbols-rounded text-[11px] font-bold">push_pin</span>Highlighted</span>` : ''}
+                                <span class="text-[11px] text-slate-400 shrink-0">${dateDisplay}</span>
+                            </div>
+                            
+                            <!-- Three Dot Dropdown Menu (on the far right, bold & black-colored) -->
+                            <div class="relative shrink-0">
+                                <button type="button" onclick="toggleCommentDropdown(event, '${c._id}')" class="p-1 hover:bg-slate-100 dark:hover:bg-white/5 text-black dark:text-white rounded-none transition-all flex items-center justify-center font-extrabold" title="Options">
+                                    <span class="material-symbols-rounded text-sm font-bold leading-none" style="font-weight: 800; color: #000000;">more_vert</span>
+                                </button>
+                                <div id="dropdown-${c._id}" class="hidden absolute right-0 mt-1 w-32 bg-[#FFFFFF] dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-lg rounded-none py-0.5 z-30">
+                                    <button type="button" onclick="toggleCommentHighlight('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5">
+                                        <span class="material-symbols-rounded text-[14px]">${c.highlighted ? 'explore_off' : 'push_pin'}</span> ${c.highlighted ? 'Unhighlight' : 'Highlight'}
+                                    </button>
+                                    ${isCommentAuthor ? `
+                                        <button type="button" onclick="triggerEditComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5">
+                                            <span class="material-symbols-rounded text-[14px]">edit</span> Edit
+                                        </button>
+                                        <% if (hasEditAccess) { %><button type="button" onclick="triggerDeleteComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5">
+                                            <span class="material-symbols-rounded text-[14px]">delete</span> Delete
+                                        </button><% } %>
+                                    ` : `
+                                        <button type="button" onclick="triggerReportComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5">
+                                            <span class="material-symbols-rounded text-[14px]">flag</span> Report
+                                        </button>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+                        ${renderExpandableText(c.text, c._id)}
+                        
+                        <div class="flex items-center gap-3 mt-1">
+                            <button type="button" onclick="toggleReplyForm('${c._id}', '${c.userName}')" class="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">
+                                <span class="material-symbols-rounded text-[13px]">reply</span> Reply
+                            </button>
+                        </div>
+                        
+                        <div id="reply-form-${c._id}" class="hidden mt-2 pl-4 w-full max-w-[350px]">
+                            <form onsubmit="submitReply(event, '${c._id}', '${c._id}')" class="flex gap-2 items-start w-full">
+                                <textarea required rows="1" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px';" placeholder="Write a reply..." class="flex-1 text-xs p-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 focus:outline-none focus:border-primary rounded-none resize-y text-slate-800 dark:text-white leading-relaxed w-full min-h-[36px]"></textarea>
+                                <div class="flex gap-1 shrink-0">
+                                    <button type="button" onclick="toggleReplyForm('${c._id}', '', true)" class="px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 rounded-none">Cancel</button>
+                                    <button type="submit" class="px-2.5 py-1 bg-primary hover:bg-primary/95 text-white text-[9px] font-bold uppercase tracking-wider rounded-none">Reply</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div id="edit-comment-form-${c._id}" class="hidden mt-2 w-full max-w-[350px]">
+                            <form onsubmit="submitEditComment(event, '${c._id}')" class="flex gap-2 items-start w-full">
+                                <textarea required rows="1" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px';" class="flex-1 text-xs p-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 focus:outline-none focus:border-primary rounded-none resize-y text-slate-800 dark:text-white leading-relaxed w-full min-h-[36px]">${escapeHTML(c.text)}</textarea>
+                                <div class="flex gap-1 shrink-0">
+                                    <button type="button" onclick="toggleEditCommentForm('${c._id}', true)" class="px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 rounded-none">Cancel</button>
+                                    <button type="submit" class="px-2.5 py-1 bg-primary hover:bg-primary/95 text-white text-[9px] font-bold uppercase tracking-wider rounded-none">Save</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        ${repliesBlock}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function toggleRepliesList(commentId) {
+        const block = document.getElementById(`replies-block-${commentId}`);
+        const btn = document.getElementById(`toggle-replies-btn-${commentId}`);
+        if (block && btn) {
+            const isHidden = block.classList.contains('hidden');
+            if (isHidden) {
+                block.classList.remove('hidden');
+                openCommentReplies.add(commentId);
+                btn.innerHTML = `<span class="material-symbols-rounded text-sm">unfold_less</span> Hide replies`;
+            } else {
+                block.classList.add('hidden');
+                openCommentReplies.delete(commentId);
+                const count = block.querySelectorAll('.pl-6 > div, div.flex.gap-3').length || block.children.length;
+                btn.innerHTML = `<span class="material-symbols-rounded text-sm">unfold_more</span> View ${count} ${count === 1 ? 'reply' : 'replies'}`;
+            }
+        }
+    }
+
+    async function loadNextCommentsPage() {
+        if (!activePlayingNodeId || !commentsHasMore) return;
+        commentsSkip += commentsLimit;
+        await loadNodeComments(activePlayingNodeId, true);
+    }
+
+    async function submitComment(e) {
+        e.preventDefault();
+        if (!activePlayingNodeId) return;
+
+        const input = document.getElementById('commentInput');
+        const text = input.value.trim();
+        if (!text) return;
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = 'Posting...';
+
+        try {
+            const res = await fetch(`/api/curriculum/node/${activePlayingNodeId}/comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, courseId: currentCourseId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                input.value = '';
+                await loadNodeComments(activePlayingNodeId);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            console.error('Error posting comment:', err);
+            alert('Failed to post comment');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
+
+    function toggleReplyForm(formId, replyToUser = '', forceHide = false) {
+        const formDiv = document.getElementById(`reply-form-${formId}`);
+        if (formDiv) {
+            if (forceHide) {
+                formDiv.classList.add('hidden');
+                const textarea = formDiv.querySelector('textarea');
+                if (textarea) textarea.value = '';
+            } else {
+                const isHidden = formDiv.classList.contains('hidden');
+                if (isHidden) {
+                    // Close all other reply forms first to prevent UI clutter
+                    document.querySelectorAll('[id^="reply-form-"]').forEach(el => {
+                        if (el.id !== `reply-form-${formId}`) {
+                            el.classList.add('hidden');
+                            const ta = el.querySelector('textarea');
+                            if (ta) ta.value = '';
+                        }
+                    });
+
+                    formDiv.classList.remove('hidden');
+                    const textarea = formDiv.querySelector('textarea');
+                    if (textarea) {
+                        if (replyToUser) {
+                            textarea.value = `@${replyToUser} `;
+                        } else {
+                            textarea.value = '';
+                        }
+                        textarea.focus();
+                    }
+                } else {
+                    formDiv.classList.add('hidden');
+                    const textarea = formDiv.querySelector('textarea');
+                    if (textarea) textarea.value = '';
+                }
+            }
+        }
+    }
+
+    async function submitReply(e, commentId, formId) {
+        e.preventDefault();
+        const formDiv = document.getElementById(`reply-form-${formId}`);
+        const textarea = formDiv ? formDiv.querySelector('textarea') : null;
+        if (!textarea) return;
+        const text = textarea.value.trim();
+        if (!text) return;
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = '...';
+
+        try {
+            const res = await fetch(`/api/curriculum/comment/${commentId}/reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            if (data.success) {
+                textarea.value = '';
+                openCommentReplies.add(commentId);
+                toggleReplyForm(formId, '', true);
+                if (activePlayingNodeId) {
+                    await loadNodeComments(activePlayingNodeId);
+                }
+            } else {
+                alert('Error posting reply: ' + (data.error || 'Server error'));
+            }
+        } catch (err) {
+            console.error('Error posting reply:', err);
+            alert('Failed to post reply');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
+
+    function toggleEditCommentForm(commentId, forceHide = false) {
+        const formDiv = document.getElementById(`edit-comment-form-${commentId}`);
+        if (formDiv) {
+            if (forceHide) {
+                formDiv.classList.add('hidden');
+            } else {
+                const isHidden = formDiv.classList.contains('hidden');
+                if (isHidden) {
+                    formDiv.classList.remove('hidden');
+                    const textarea = formDiv.querySelector('textarea');
+                    if (textarea) textarea.focus();
+                } else {
+                    formDiv.classList.add('hidden');
+                }
+            }
+        }
+    }
+
+    function toggleEditReplyForm(commentId, replyId, forceHide = false) {
+        const formDiv = document.getElementById(`edit-reply-form-${replyId}`);
+        if (formDiv) {
+            if (forceHide) {
+                formDiv.classList.add('hidden');
+            } else {
+                const isHidden = formDiv.classList.contains('hidden');
+                if (isHidden) {
+                    formDiv.classList.remove('hidden');
+                    const textarea = formDiv.querySelector('textarea');
+                    if (textarea) textarea.focus();
+                } else {
+                    formDiv.classList.add('hidden');
+                }
+            }
+        }
+    }
+
+    async function submitEditComment(e, commentId) {
+        e.preventDefault();
+        const textarea = e.target.querySelector('textarea');
+        const text = textarea.value.trim();
+        if (!text) return;
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = '...';
+
+        try {
+            const res = await fetch(`/api/curriculum/comment/${commentId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            if (data.success) {
+                toggleEditCommentForm(commentId, true);
+                if (activePlayingNodeId) {
+                    await loadNodeComments(activePlayingNodeId);
+                }
+            } else {
+                alert('Error editing comment: ' + (data.error || 'Server error'));
+            }
+        } catch (err) {
+            console.error('Error editing comment:', err);
+            alert('Failed to edit comment');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
+
+    async function submitEditReply(e, commentId, replyId) {
+        e.preventDefault();
+        const textarea = e.target.querySelector('textarea');
+        const text = textarea.value.trim();
+        if (!text) return;
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = '...';
+
+        try {
+            const res = await fetch(`/api/curriculum/comment/${commentId}/reply/${replyId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            if (data.success) {
+                toggleEditReplyForm(commentId, replyId, true);
+                if (activePlayingNodeId) {
+                    await loadNodeComments(activePlayingNodeId);
+                }
+            } else {
+                alert('Error editing reply: ' + (data.error || 'Server error'));
+            }
+        } catch (err) {
+            console.error('Error editing reply:', err);
+            alert('Failed to edit reply');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
+
+    // Global outside click listener to auto-close all dropdowns
+    document.addEventListener('click', () => {
+        document.querySelectorAll('[id^="dropdown-"]').forEach(el => el.classList.add('hidden'));
+        const playerSettings = document.getElementById('playerSettingsDropdown');
+        if (playerSettings) playerSettings.classList.add('hidden');
+    });
+
+    function toggleCommentDropdown(e, id) {
+        e.stopPropagation();
+        const dropdown = document.getElementById(`dropdown-${id}`);
+        if (dropdown) {
+            const isHidden = dropdown.classList.contains('hidden');
+            // Hide all others
+            document.querySelectorAll('[id^="dropdown-"]').forEach(el => el.classList.add('hidden'));
+            if (isHidden) {
+                dropdown.classList.remove('hidden');
+            }
+        }
+    }
+
+    function renderExpandableText(text, id) {
+        const escaped = escapeHTML(text);
+        if (text.length <= 220) {
+            return `<p class="text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed whitespace-pre-wrap">${escaped}</p>`;
+        }
+        const shortText = escapeHTML(text.substring(0, 220));
+        return `
+            <div id="text-container-${id}" class="mt-1">
+                <p id="text-short-${id}" class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap">${shortText}... <button type="button" onclick="toggleCommentTextExpand('${id}')" class="text-xs text-primary font-bold hover:underline inline ml-1">Read more</button></p>
+                <p id="text-full-${id}" class="hidden text-sm text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap">${escaped} <button type="button" onclick="toggleCommentTextExpand('${id}')" class="text-xs text-primary font-bold hover:underline inline ml-1">Read less</button></p>
+            </div>
+        `;
+    }
+
+    function toggleCommentTextExpand(id) {
+        const shortEl = document.getElementById(`text-short-${id}`);
+        const fullEl = document.getElementById(`text-full-${id}`);
+        if (shortEl && fullEl) {
+            if (shortEl.classList.contains('hidden')) {
+                shortEl.classList.remove('hidden');
+                fullEl.classList.add('hidden');
+            } else {
+                shortEl.classList.add('hidden');
+                fullEl.classList.remove('hidden');
+            }
+        }
+    }
+
+    function triggerEditComment(id) {
+        toggleEditCommentForm(id);
+    }
+
+    function triggerEditReply(commentId, replyId) {
+        toggleEditReplyForm(commentId, replyId);
+    }
+
+    function triggerDeleteComment(commentId) {
+        const modalText = document.getElementById('deleteModalText');
+        if (modalText) {
+            modalText.innerText = `Are you sure you want to delete this comment? This action is permanent and cannot be undone.`;
+        }
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        if (confirmBtn) {
+            confirmBtn.onclick = async () => {
+                const originalText = confirmBtn.innerText;
+                confirmBtn.disabled = true;
+                confirmBtn.innerText = 'Deleting...';
+                try {
+                    const res = await fetch(`/api/curriculum/comment/${commentId}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        closeDeleteModal();
+                        if (activePlayingNodeId) {
+                            await loadNodeComments(activePlayingNodeId);
+                        }
+                    } else {
+                        alert('Error deleting comment: ' + (data.error || 'Server error'));
+                    }
+                } catch (err) {
+                    console.error('Error deleting comment:', err);
+                    alert('Failed to delete comment');
+                } finally {
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerText = originalText;
+                }
+            };
+        }
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    function triggerDeleteReply(commentId, replyId) {
+        const modalText = document.getElementById('deleteModalText');
+        if (modalText) {
+            modalText.innerText = `Are you sure you want to delete this reply? This action is permanent and cannot be undone.`;
+        }
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        if (confirmBtn) {
+            confirmBtn.onclick = async () => {
+                const originalText = confirmBtn.innerText;
+                confirmBtn.disabled = true;
+                confirmBtn.innerText = 'Deleting...';
+                try {
+                    const res = await fetch(`/api/curriculum/comment/${commentId}/reply/${replyId}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        closeDeleteModal();
+                        if (activePlayingNodeId) {
+                            await loadNodeComments(activePlayingNodeId);
+                        }
+                    } else {
+                        alert('Error deleting reply: ' + (data.error || 'Server error'));
+                    }
+                } catch (err) {
+                    console.error('Error deleting reply:', err);
+                    alert('Failed to delete reply');
+                } finally {
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerText = originalText;
+                }
+            };
+        }
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    function triggerReportComment(id) {
+        alert('Comment has been reported to the site administrator. Thank you.');
+    }
+
+    function escapeHTML(str) {
+        return str.replace(/[&<>'"]/g, 
+            tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+        );
+    }
+
+    async function updateNodesOrder(newOrder) {
+        try {
+            const res = await fetch(`/teacher/course/${currentCourseId}/curriculum/reorder`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ nodeIds: newOrder })
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Update local curriculumNodes array with new orders
+                newOrder.forEach((id, index) => {
+                    const node = curriculumNodes.find(n => n._id === id);
+                    if (node) node.order = index;
+                });
+            } else {
+                alert('Error reordering items: ' + (data.message || 'Unknown error'));
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Network error while reordering');
+        }
+    }
+</script>

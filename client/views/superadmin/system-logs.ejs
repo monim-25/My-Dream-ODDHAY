@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+        <title>System Logs | ODDHAY Command Center</title>
+        <style>
+            :root { --admin-sidebar-width: 260px; }
+            .admin-main { margin-left: var(--admin-sidebar-width); height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+            .content-scroll { flex: 1; overflow-y: auto; padding: 0; position: relative; }
+            @media (max-width: 1024px) { .admin-sidebar { transform: translateX(-100%); } .admin-main { margin-left: 0; } }
+            .log-badge { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+            .log-badge:hover { transform: translateY(-1px); }
+            .action-btn { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+            .action-btn:hover { transform: translateY(-1px); }
+        </style>
+</head>
+
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+
+    <div class="flex h-screen">
+        <aside id="adminSidebar"
+            class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
+            <%- include('sidebar_content', { active: 'logs' }) %>
+        </aside>
+
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617] w-full">
+            <%- include('header_v2', { pageTitle: 'System Logs' }) %>
+
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5">
+                    <!-- Summary Section - Unified Container -->
+                    <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/50 p-2">
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-1 shrink-0">
+                            <!-- Activity Flow Chart -->
+                            <div class="lg:col-span-2 bg-white dark:bg-[#0b1120] rounded-md border border-slate-100 dark:border-white/5 flex flex-col min-h-[220px]">
+                                <div class="px-3 py-2 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+                                    <h3 class="text-[13px] font-bold text-slate-900 dark:text-white tracking-tight">Activity Flow</h3>
+                                    <p class="text-[10px] font-bold text-slate-400 tracking-wide">Last 15 Days Volume</p>
+                                </div>
+                                <div class="p-3 h-[180px] relative w-full">
+                                    <canvas id="activityChartCanvas"></canvas>
+                                </div>
+                            </div>
+
+                            <!-- Stat Cards Grid -->
+                            <div class="grid grid-cols-2 grid-rows-2 gap-1 h-full overflow-hidden">
+                                <!-- Total Activity -->
+                                <a href="/superadmin/logs<%= filters.type !== 'total' ? '?type=total' : '' %>"
+                                    class="p-3 flex flex-col group h-full bg-blue-50/40 dark:bg-blue-500/10 border border-blue-100/20 dark:border-blue-500/20 rounded-md shadow-sm hover:bg-blue-100/40 dark:hover:bg-blue-500/20 transition-all relative overflow-hidden <%= filters.type === 'total' ? 'ring-2 ring-blue-500 z-10' : '' %>">
+                                    <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-blue-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">history</span>
+                                    <p class="text-[11px] font-bold text-blue-600 tracking-tight flex items-center gap-1.5 mb-1 relative z-10">
+                                        <span class="material-symbols-rounded text-[14px]">history</span> Total Activity
+                                    </p>
+                                    <div class="flex-1 flex items-center relative z-10">
+                                        <h3 class="text-xl font-black tracking-tight text-slate-900 dark:text-white leading-none"><%= stats.total %></h3>
+                                    </div>
+                                </a>
+                                <!-- Today's Log -->
+                                <a href="/superadmin/logs<%= filters.type !== 'today' ? '?type=today' : '' %>"
+                                    class="p-3 flex flex-col group h-full bg-indigo-50/40 dark:bg-indigo-500/10 border border-indigo-100/20 dark:border-indigo-500/20 rounded-md shadow-sm hover:bg-indigo-100/40 dark:hover:bg-indigo-500/20 transition-all relative overflow-hidden <%= filters.type === 'today' ? 'ring-2 ring-indigo-500 z-10' : '' %>">
+                                    <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-indigo-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">today</span>
+                                    <p class="text-[11px] font-bold text-indigo-600 tracking-tight flex items-center gap-1.5 mb-1 relative z-10">
+                                        <span class="material-symbols-rounded text-[14px]">today</span> Today's Log
+                                    </p>
+                                    <div class="flex-1 flex items-center relative z-10">
+                                        <h3 class="text-xl font-black tracking-tight text-slate-900 dark:text-white leading-none"><%= stats.today %></h3>
+                                    </div>
+                                </a>
+                                <!-- Success -->
+                                <a href="/superadmin/logs<%= filters.type !== 'success' ? '?type=success' : '' %>"
+                                    class="p-3 flex flex-col group h-full bg-emerald-50/40 dark:bg-emerald-500/10 border border-emerald-100/20 dark:border-emerald-500/20 rounded-md shadow-sm hover:bg-emerald-100/40 dark:hover:bg-emerald-500/20 transition-all relative overflow-hidden <%= filters.type === 'success' ? 'ring-2 ring-emerald-500 z-10' : '' %>">
+                                    <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-emerald-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">check_circle</span>
+                                    <p class="text-[11px] font-bold text-emerald-600 tracking-tight flex items-center gap-1.5 mb-1 relative z-10">
+                                        <span class="material-symbols-rounded text-[14px]">check_circle</span> Success
+                                    </p>
+                                    <div class="flex-1 flex items-center relative z-10">
+                                        <h3 class="text-xl font-black tracking-tight text-slate-900 dark:text-white leading-none"><%= stats.success %></h3>
+                                    </div>
+                                </a>
+                                <!-- Critical -->
+                                <a href="/superadmin/logs<%= filters.type !== 'critical' ? '?type=critical' : '' %>"
+                                    class="p-3 flex flex-col group h-full bg-rose-50/40 dark:bg-rose-500/10 border border-rose-100/20 dark:border-rose-500/20 rounded-md shadow-sm hover:bg-rose-100/40 dark:hover:bg-rose-500/20 transition-all relative overflow-hidden <%= filters.type === 'critical' ? 'ring-2 ring-rose-500 z-10' : '' %>">
+                                    <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-rose-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">warning</span>
+                                    <p class="text-[11px] font-bold text-rose-600 tracking-tight flex items-center gap-1.5 mb-1 relative z-10">
+                                        <span class="material-symbols-rounded text-[14px]">warning</span> Critical
+                                    </p>
+                                    <div class="flex-1 flex items-center relative z-10">
+                                        <h3 class="text-xl font-black tracking-tight text-slate-900 dark:text-white leading-none"><%= stats.critical %></h3>
+                                    </div>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Log Table Container -->
+                    <div class="bg-white dark:bg-[#0b1120] border border-slate-200 dark:border-slate-700/50 rounded-md relative flex flex-col mt-0.5">
+                        <!-- Search & Filter Header (Sticky) -->
+                        <div class="sticky top-[-0.5rem] z-50 px-3 py-2 border-b border-slate-50 dark:border-slate-700/50 bg-white dark:bg-slate-800 rounded-t-md shadow-sm">
+                            <div class="flex items-center gap-2">
+                                <form action="/superadmin/logs" method="GET" class="flex-1 flex items-center gap-2">
+                                    <input type="hidden" name="type" value="<%= filters.type %>">
+                                    <div class="relative flex-1 max-w-[500px]">
+                                        <input type="text" name="q" value="<%= filters.q || '' %>"
+                                            placeholder="Search logs by user, action or details..."
+                                            class="w-full pl-3 pr-10 h-10 rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[12px] font-bold outline-none focus:border-blue-500 transition-all text-slate-900 dark:text-white placeholder:text-slate-400">
+                                        <button type="submit" class="material-symbols-rounded absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px] hover:text-blue-500 transition-colors">search</button>
+                                    </div>
+
+                                    <select name="action"
+                                        onchange="this.form.submit()"
+                                        class="h-10 px-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50 text-[11px] font-bold text-slate-600 dark:text-slate-300 focus:ring-1 focus:ring-blue-500 cursor-pointer min-w-[120px]">
+                                        <option value="all" <%=filters.action==='all' ? 'selected' : '' %>>All Activities</option>
+                                        <option value="CREATE" <%=filters.action==='CREATE' ? 'selected' : '' %>>Add / Create</option>
+                                        <option value="UPDATE" <%=filters.action==='UPDATE' ? 'selected' : '' %>>Update</option>
+                                        <option value="DELETE" <%=filters.action==='DELETE' ? 'selected' : '' %>>Delete</option>
+                                        <option value="FREE" <%=filters.action==='FREE' ? 'selected' : '' %>>Free Access</option>
+                                        <option value="PAID" <%=filters.action==='PAID' ? 'selected' : '' %>>Payment / Paid</option>
+                                        <option value="SETTING" <%=filters.action==='SETTING' ? 'selected' : '' %>>Settings</option>
+                                        <option value="APPROVE" <%=filters.action==='APPROVE' ? 'selected' : '' %>>Approve</option>
+                                        <option value="REJECT" <%=filters.action==='REJECT' ? 'selected' : '' %>>Reject</option>
+                                        <option value="LOGIN" <%=filters.action==='LOGIN' ? 'selected' : '' %>>Login</option>
+                                    </select>
+                                </form>
+
+                                <button onclick="exportLogs()"
+                                    class="h-10 px-4 bg-slate-50/50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-300 rounded-md font-bold text-[11px] flex items-center gap-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200 dark:border-slate-700">
+                                    <span class="material-symbols-rounded text-lg text-emerald-500">download</span> Export
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Table Area -->
+                        <table class="w-full text-left">
+                            <thead class="sticky top-[48px] z-40 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
+                                <tr class="group">
+                                    <th class="pl-4 pr-1 py-2 w-10">
+                                        <input type="checkbox" id="selectAllLogs" onchange="toggleAllLogs()"
+                                            class="size-4 rounded border-slate-300 cursor-pointer accent-primary opacity-0 group-hover:opacity-100 transition-opacity checked:opacity-100">
+                                    </th>
+                                    <th class="pl-2 pr-4 py-2 text-[10px] font-bold text-slate-500">Timestamp</th>
+                                    <th class="px-4 py-2 text-[10px] font-bold text-slate-500">Performed By</th>
+                                    <th class="px-4 py-2 text-[10px] font-bold text-slate-500">Event Type</th>
+                                    <th class="px-4 py-2 text-[10px] font-bold text-slate-500">Details</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                <% logs.forEach(l=> { %>
+                                    <tr class="log-row hover:bg-slate-50 dark:hover:bg-white/5 transition-all cursor-pointer group"
+                                        onclick="handleRowClick(event, '<%= l._id %>')"
+                                        ondblclick="toggleRowSelection('<%= l._id %>')">
+                                        <td class="pl-4 pr-1 py-2" onclick="event.stopPropagation()">
+                                            <input type="checkbox" class="log-checkbox size-4 rounded border-slate-300 opacity-0 group-hover:opacity-100 transition-opacity checked:opacity-100 accent-primary" 
+                                                value="<%= l._id %>" id="cb-<%= l._id %>" onchange="updateSelection(this)">
+                                        </td>
+                                        <td class="pl-2 pr-4 py-2">
+                                            <div class="flex flex-col">
+                                                <span class="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-none">
+                                                    <%= new Date(l.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }) %>
+                                                </span>
+                                                <span class="text-[9px] text-slate-400 font-bold tracking-tight mt-0.5">
+                                                    <%= new Date(l.createdAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) %>
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-2">
+                                            <div class="flex items-center gap-2.5">
+                                                <div class="size-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold text-[10px] text-slate-500 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                                    <%= l.performedBy ? l.performedBy.name[0].toUpperCase() : 'S' %>
+                                                </div>
+                                                <div class="flex flex-col">
+                                                    <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-none">
+                                                        <%= l.performedBy ? l.performedBy.name : 'System' %>
+                                                    </p>
+                                                    <p class="text-[9px] text-slate-400 font-bold tracking-tight">
+                                                        <%= l.performedBy ? l.performedBy.role : 'Automatic' %>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-2">
+                                            <% 
+                                                let colorClass = 'bg-slate-50 text-slate-500 border-slate-200';
+                                                if (['CREATE', 'FREE'].includes(l.action)) colorClass = 'bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:border-emerald-500/20';
+                                                if (['UPDATE', 'APPROVE', 'LOGIN', 'SETTING'].includes(l.action)) colorClass = 'bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/10 dark:border-blue-500/20';
+                                                if (['DELETE', 'REJECT'].includes(l.action)) colorClass = 'bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-500/10 dark:border-rose-500/20';
+                                                if (l.action === 'PAID') colorClass = 'bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/10 dark:border-amber-500/20';
+                                            %>
+                                            <span class="px-2 py-0.5 rounded-md text-[9px] font-black border <%= colorClass %>">
+                                                <%= l.action %>
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-2">
+                                            <div class="flex flex-col max-w-md">
+                                                <p class="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-tight line-clamp-1 group-hover:line-clamp-none transition-all">
+                                                    <%= l.actionDetails %>
+                                                </p>
+                                                <p class="text-[9px] text-slate-400 font-bold tracking-tight mt-0.5">
+                                                    Entity: <span class="text-slate-500"><%= l.entityType %></span>
+                                                </p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <% }) %>
+                            </tbody>
+                        </table>
+
+                        <!-- Empty State -->
+                        <% if (logs.length === 0) { %>
+                            <div class="flex flex-col items-center justify-center py-20 text-slate-400">
+                                <span class="material-symbols-rounded text-4xl mb-2 opacity-20">history</span>
+                                <p class="text-[11px] font-bold tracking-tight">No activity logs found matching the filters</p>
+                            </div>
+                        <% } %>
+
+                        <!-- Pagination -->
+                        <div class="px-3 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                            <p class="text-[9px] font-bold text-slate-500">Page <%= filters.page %> of <%= filters.totalPages %></p>
+                            <div class="flex items-center gap-0.5">
+                                <% if (filters.page > 1) { %>
+                                    <a href="/superadmin/logs?page=<%= filters.page - 1 %>&action=<%= filters.action %>&type=<%= filters.type %>&q=<%= filters.q %>"
+                                        class="size-7 rounded-md flex items-center justify-center text-[9px] font-bold bg-white dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+                                        <span class="material-symbols-rounded text-sm">chevron_left</span>
+                                    </a>
+                                <% } %>
+
+                                <% for(let i=1; i <=filters.totalPages; i++) { %>
+                                    <% if (i===1 || i===filters.totalPages || (i>= filters.page - 2 && i <= filters.page + 2)) { %>
+                                        <a href="/superadmin/logs?page=<%= i %>&action=<%= filters.action %>&type=<%= filters.type %>&q=<%= filters.q %>"
+                                            class="size-7 rounded-md flex items-center justify-center text-[9px] font-bold transition-all shadow-sm <%= filters.page === i ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700' %>">
+                                            <%= i %>
+                                        </a>
+                                    <% } else if (i===filters.page - 3 || i===filters.page + 3) { %>
+                                        <span class="size-7 flex items-center justify-center text-[9px] font-bold text-slate-400">...</span>
+                                    <% } %>
+                                <% } %>
+
+                                <% if (filters.page < filters.totalPages) { %>
+                                    <a href="/superadmin/logs?page=<%= filters.page + 1 %>&action=<%= filters.action %>&type=<%= filters.type %>&q=<%= filters.q %>"
+                                        class="size-7 rounded-md flex items-center justify-center text-[9px] font-bold bg-white dark:bg-slate-800 text-slate-600 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all shadow-sm">
+                                        <span class="material-symbols-rounded text-sm">chevron_right</span>
+                                    </a>
+                                <% } %>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Action Bar -->
+                    <div id="bulkBar" class="hidden sticky bottom-4 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl text-slate-800 dark:text-white px-6 py-3 flex items-center justify-between z-50 border border-slate-200 dark:border-slate-700 mx-4 rounded-2xl shadow-xl transition-all duration-300 transform translate-y-10 opacity-0">
+                        <div class="flex items-center gap-6">
+                            <div class="flex items-center gap-2">
+                                <div class="size-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <span class="material-symbols-rounded text-primary text-lg">history</span>
+                                </div>
+                                <span class="text-[12px] font-bold tracking-tight">Selected <span id="selectedCount" class="text-primary">0</span> logs</span>
+                            </div>
+                            <div class="h-6 w-px bg-slate-200 dark:bg-white/10"></div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="exportSelectedLogs()" class="flex items-center gap-2 px-4 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-all text-[11px] font-bold">
+                                    <span class="material-symbols-rounded text-sm">download</span> Export Selected
+                                </button>
+                                <button onclick="clearSelection()" class="px-4 py-1.5 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10 transition-all text-[11px] font-bold">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+        </main>
+    </div>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        let selectedLogs = new Set();
+
+        function toggleAdminSidebar() {
+            document.getElementById('adminSidebar').classList.toggle('active');
+        }
+
+        function toggleRowSelection(id) {
+            const cb = document.getElementById('cb-' + id);
+            if (cb) {
+                cb.checked = !cb.checked;
+                updateSelection(cb);
+            }
+        }
+
+        function handleRowClick(event, id) {
+            // Single click for potential future detail view
+            // Double click handles selection
+        }
+
+        function updateSelection(checkbox) {
+            const id = checkbox.value;
+            const row = checkbox.closest('.log-row');
+            
+            if (checkbox.checked) {
+                selectedLogs.add(id);
+                row.classList.add('bg-slate-50', 'dark:bg-white/5');
+            } else {
+                selectedLogs.delete(id);
+                row.classList.remove('bg-slate-50', 'dark:bg-white/5');
+            }
+            
+            updateBulkBar();
+        }
+
+        function toggleAllLogs() {
+            const isChecked = document.getElementById('selectAllLogs').checked;
+            document.querySelectorAll('.log-checkbox').forEach(cb => {
+                cb.checked = isChecked;
+                updateSelection(cb);
+            });
+        }
+
+        function updateBulkBar() {
+            const bar = document.getElementById('bulkBar');
+            const count = document.getElementById('selectedCount');
+            
+            if (selectedLogs.size > 0) {
+                bar.classList.remove('hidden');
+                setTimeout(() => {
+                    bar.classList.remove('translate-y-10', 'opacity-0');
+                    bar.classList.add('translate-y-0', 'opacity-100');
+                }, 10);
+                count.innerText = selectedLogs.size;
+            } else {
+                bar.classList.add('translate-y-10', 'opacity-0');
+                setTimeout(() => bar.classList.add('hidden'), 300);
+            }
+        }
+
+        function clearSelection() {
+            selectedLogs.clear();
+            document.getElementById('selectAllLogs').checked = false;
+            document.querySelectorAll('.log-checkbox').forEach(cb => {
+                cb.checked = false;
+                updateSelection(cb);
+            });
+            updateBulkBar();
+        }
+
+        function exportSelectedLogs() {
+            // Implement CSV export for selected items only
+            alert(`Exporting ${selectedLogs.size} logs...`);
+        }
+
+        function exportLogs() {
+            const table = document.querySelector('tbody');
+            if (!table) return;
+            
+            const rows = table.querySelectorAll('.log-row');
+            if (rows.length === 0) {
+                alert("No logs to export!");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Date,Time,User,Role,Action,Details,Entity\n";
+
+            rows.forEach(row => {
+                const cols = row.querySelectorAll('td');
+                if (cols.length < 5) return;
+
+                const dateText = cols[1].querySelector('span:nth-child(1)').innerText.trim();
+                const timeText = cols[1].querySelector('span:nth-child(2)').innerText.trim();
+                const userName = cols[2].querySelector('p:nth-child(1)').innerText.trim();
+                const userRole = cols[2].querySelector('p:nth-child(2)').innerText.trim();
+                const action = cols[3].innerText.trim();
+                const details = cols[4].querySelector('p:nth-child(1)').innerText.trim().replace(/"/g, '""');
+                const entityText = cols[4].querySelector('p:nth-child(2) span').innerText.trim();
+
+                const rowData = [
+                    `"${dateText}"`,
+                    `"${timeText}"`,
+                    `"${userName}"`,
+                    `"${userRole}"`,
+                    `"${action}"`,
+                    `"${details}"`,
+                    `"${entityText}"`
+                ].join(",");
+                
+                csvContent += rowData + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `oddhay_system_logs_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const chartData = <%- JSON.stringify(typeof activityChart !== 'undefined' ? activityChart : []) %>;
+            if (chartData && chartData.length > 0) {
+                const ctx = document.getElementById('activityChartCanvas');
+                if (ctx) {
+                    const isDark = document.documentElement.classList.contains('dark');
+                    const gridColor = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)';
+                    const textColor = isDark ? '#94a3b8' : '#64748b';
+                    
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: chartData.map(d => d.date),
+                            datasets: [{
+                                label: 'Activity Logs',
+                                data: chartData.map(d => d.count),
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                                borderWidth: 2,
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0,
+                                pointHoverRadius: 4,
+                                pointBackgroundColor: '#3b82f6'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    mode: 'index',
+                                    intersect: false,
+                                    backgroundColor: isDark ? 'rgba(15, 23, 42, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                                    titleColor: isDark ? '#fff' : '#0f172a',
+                                    bodyColor: isDark ? '#cbd5e1' : '#475569',
+                                    borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+                                    borderWidth: 1,
+                                    padding: 10,
+                                    displayColors: false,
+                                }
+                            },
+                            scales: {
+                                x: {
+                                    grid: { display: false },
+                                    ticks: { color: textColor, font: { size: 9, family: "'Inter', sans-serif" }, maxTicksLimit: 6 }
+                                },
+                                y: {
+                                    border: { display: false },
+                                    grid: { color: gridColor },
+                                    ticks: { color: textColor, stepSize: 1, font: { size: 9, family: "'Inter', sans-serif" } },
+                                    beginAtZero: true
+                                }
+                            },
+                            interaction: { mode: 'nearest', axis: 'x', intersect: false }
+                        }
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

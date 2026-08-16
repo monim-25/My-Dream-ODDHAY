@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title>Compose Batch | ODDHAY Command Center</title>
+    <style>
+        :root {
+            --admin-sidebar-width: 260px;
+        }
+
+        .admin-main {
+            margin-left: var(--admin-sidebar-width);
+            min-height: 100vh;
+            transition: all 0.3s ease;
+        }
+
+        .form-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 0.5rem;
+            display: block;
+            letter-spacing: -0.01em;
+        }
+
+        .dark .form-label {
+            color: #94a3b8;
+        }
+
+        .form-input {
+            width: 100%;
+            height: 42px;
+            padding: 0 0.85rem;
+            font-size: 11.5px;
+            font-weight: 700;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+            outline: none;
+            transition: all 0.2s ease;
+            appearance: none;
+        }
+
+        .dark .form-input {
+            background: #020617;
+            border: 1px solid #334155;
+            color: #f1f5f9;
+        }
+
+        .form-input::placeholder {
+            color: #94a3b8;
+            font-weight: 500;
+            opacity: 0.8;
+            font-size: 12px;
+        }
+
+        .form-input:hover {
+            border-color: #94a3b8;
+        }
+
+        .dark .form-input:hover {
+            border-color: #475569;
+        }
+
+        .form-input:focus {
+            border-color: #1e293b;
+        }
+
+        .dark .form-input:focus {
+            border-color: #f1f5f9;
+        }
+
+        /* Multi-select Styles */
+        .multi-select-container {
+            position: relative;
+        }
+
+        .multi-select-trigger {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding: 4px 0.85rem;
+            min-height: 42px;
+            height: auto;
+            align-items: center;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 0.9rem;
+            padding-right: 2.2rem;
+        }
+
+        .multi-select-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 0.5rem;
+            margin-top: 4px;
+            max-height: 240px;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .dark .multi-select-dropdown {
+            background: #0f172a;
+            border-color: #334155;
+        }
+
+        .multi-select-option {
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            transition: background 0.15s ease;
+        }
+
+        .multi-select-option:hover {
+            background: #f8fafc;
+        }
+
+        .dark .multi-select-option:hover {
+            background: #1e293b;
+        }
+
+        .multi-select-pill {
+            background: #f1f5f9;
+            color: #475569;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 9.5px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .dark .multi-select-pill {
+            background: #1e293b;
+            color: #cbd5e1;
+            border-color: #334155;
+        }
+
+        .multi-select-pill span {
+            cursor: pointer;
+            opacity: 0.6;
+        }
+
+        .multi-select-pill span:hover {
+            opacity: 1;
+            color: #ef4444;
+        }
+
+        @media (max-width: 1024px) {
+            .admin-main { margin-left: 0; }
+        }
+    </style>
+</head>
+
+<body class="bg-[#F8F8FF] dark:bg-[#0b1120] text-slate-700 dark:text-slate-300 font-sans min-h-screen antialiased">
+    <div class="flex">
+        <!-- Sidebar -->
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100] lg:translate-x-0 -translate-x-full">
+            <%- include('sidebar_content', { active: 'courses' }) %>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main flex-1 flex flex-col w-full">
+            <%- include('header_v2', { pageTitle: 'Compose Batch' }) %>
+
+            <section class="flex-1 flex flex-col bg-[#F8F8FF] dark:bg-[#0b1120] border-l border-slate-900/10 dark:border-white/5">
+                <form action="/admin/add-course" method="POST" enctype="multipart/form-data" class="w-full" id="courseForm">
+                    <div class="divide-y divide-slate-100 dark:divide-white/5 bg-white dark:bg-[#0f172a]">
+                        <!-- Messages -->
+                        <% if (locals.success || locals.error) { %>
+                        <div class="p-6 pb-0">
+                            <% if (locals.success) { %>
+                                <div class="bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-3 py-2.5 rounded-lg flex items-center gap-2 text-[12px] font-bold">
+                                    <span class="material-symbols-rounded text-[16px]">check_circle</span>
+                                    <%= success %>
+                                </div>
+                            <% } %>
+                            <% if (locals.error) { %>
+                                <div class="bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 px-3 py-2.5 rounded-lg flex items-center gap-2 text-[12px] font-bold">
+                                    <span class="material-symbols-rounded text-[16px]">error</span>
+                                    <%= error %>
+                                </div>
+                            <% } %>
+                        </div>
+                        <% } %>
+
+                        <!-- Step 1 -->
+                        <div class="p-6">
+                            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-6 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[20px] text-blue-500">badge</span> Course Details
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+                                <div class="md:col-span-2">
+                                    <label class="form-label">Course Title</label>
+                                    <input type="text" name="title" required placeholder="Enter course title here...." class="form-input">
+                                </div>
+                                
+                                <!-- Multi-select Class Level -->
+                                <div class="multi-select-container" data-name="classLevel">
+                                    <label class="form-label">Class Levels</label>
+                                    <div class="form-input multi-select-trigger" onclick="toggleDropdown(this)">
+                                        <span class="placeholder text-slate-400 font-medium text-[11px]">Select Classes</span>
+                                    </div>
+                                    <div class="multi-select-dropdown">
+                                        <% ((typeof globalAcademicClasses !== 'undefined' ? globalAcademicClasses : []).map(c => c.name)).forEach(opt => { %>
+                                            <div class="multi-select-option" onclick="toggleOption(this, '<%= opt %>')">
+                                                <input type="checkbox" name="classLevel[]" value="<%= opt %>" class="hidden">
+                                                <span class="w-4 h-4 border border-slate-300 dark:border-slate-600 rounded flex items-center justify-center transition-all">
+                                                    <span class="material-symbols-rounded text-[12px] text-white hidden">check</span>
+                                                </span>
+                                                <%= opt %>
+                                            </div>
+                                        <% }) %>
+                                    </div>
+                                </div>
+
+                                <!-- Multi-select Subject -->
+                                <div class="multi-select-container" data-name="subject">
+                                    <label class="form-label">Academic Subjects</label>
+                                    <div class="form-input multi-select-trigger" onclick="toggleDropdown(this)">
+                                        <span class="placeholder text-slate-400 font-medium text-[11px]">Select Subjects</span>
+                                    </div>
+                                    <div class="multi-select-dropdown">
+                                        <% ([...new Set((typeof globalAcademicClasses !== 'undefined' ? globalAcademicClasses : []).flatMap(c => c.subjects || []))]).forEach(opt => { %>
+                                            <div class="multi-select-option" onclick="toggleOption(this, '<%= opt %>')">
+                                                <input type="checkbox" name="subject[]" value="<%= opt %>" class="hidden">
+                                                <span class="w-4 h-4 border border-slate-300 dark:border-slate-600 rounded flex items-center justify-center transition-all">
+                                                    <span class="material-symbols-rounded text-[12px] text-white hidden">check</span>
+                                                </span>
+                                                <%= opt %>
+                                            </div>
+                                        <% }) %>
+                                    </div>
+                                </div>
+
+                                <!-- Multi-select Category -->
+                                <div class="multi-select-container" data-name="category">
+                                    <label class="form-label">Categories</label>
+                                    <div class="form-input multi-select-trigger" onclick="toggleDropdown(this)">
+                                        <span class="placeholder text-slate-400 font-medium text-[11px]">Select Categories</span>
+                                    </div>
+                                    <div class="multi-select-dropdown">
+                                        <% ['Academic', 'Skill Development', 'Admission', 'Islamic', 'Science', 'Commerce', 'Arts'].forEach(opt => { %>
+                                            <div class="multi-select-option" onclick="toggleOption(this, '<%= opt %>')">
+                                                <input type="checkbox" name="category[]" value="<%= opt %>" class="hidden">
+                                                <span class="w-4 h-4 border border-slate-300 dark:border-slate-600 rounded flex items-center justify-center transition-all">
+                                                    <span class="material-symbols-rounded text-[12px] text-white hidden">check</span>
+                                                </span>
+                                                <%= opt %>
+                                            </div>
+                                        <% }) %>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="form-label">Difficulty</label>
+                                    <select name="difficulty" class="form-input cursor-pointer" style="font-size: 11px;">
+                                        <option value="Beginner">Beginner</option>
+                                        <option value="Intermediate">Intermediate</option>
+                                        <option value="Advanced">Advanced</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="form-label">Search Tags</label>
+                                    <input type="text" name="tags" placeholder="Enter search tags here...." class="form-input">
+                                </div>
+                                <!-- Search-based Teacher Authorization -->
+                                <div class="md:col-span-4 mt-2">
+                                    <label class="form-label">Authorized Teachers (Search by Email, Phone, or ID)</label>
+                                    <div class="flex gap-2 mb-4">
+                                        <div class="flex-1 relative">
+                                            <span class="material-symbols-rounded absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">person_search</span>
+                                            <input type="text" id="teacherSearchInput" placeholder="Enter teacher email, phone, or database ID..." class="form-input !pl-10">
+                                        </div>
+                                        <button type="button" onclick="searchAndAddTeacher()" class="h-[42px] px-6 bg-slate-100 dark:bg-slate-800 hover:bg-blue-500 hover:text-white text-slate-600 dark:text-slate-300 rounded-lg font-bold text-[11px] transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-700">
+                                            <span class="material-symbols-rounded text-[18px]">add</span>
+                                            Add Teacher
+                                        </button>
+                                        <button type="button" onclick="browseTeachersByClass()" class="h-[42px] px-6 bg-slate-100 dark:bg-slate-800 hover:bg-emerald-500 hover:text-white text-slate-600 dark:text-slate-300 rounded-lg font-bold text-[11px] transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-700">
+                                            <span class="material-symbols-rounded text-[18px]">group</span>
+                                            Browse teachers
+                                        </button>
+
+                                    </div>
+                                    <div id="authorizedTeachersList" class="flex flex-wrap gap-2 min-h-[42px] p-3 bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-300 dark:border-slate-700 rounded-xl">
+                                        <!-- Selected teachers will appear here as pills -->
+                                        <div class="no-teachers-hint text-[10px] text-slate-400 font-bold italic flex items-center gap-2 py-1">
+                                            <span class="material-symbols-rounded text-[14px]">info</span>
+                                            No teachers authorized yet.
+                                        </div>
+                                    </div>
+
+                                    <div id="browseTeachersContainer" class="hidden mt-2 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 max-h-[300px] flex flex-col">
+                                        <div class="flex items-center justify-between mb-3 shrink-0">
+                                            <h4 class="text-[12px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2"><span class="material-symbols-rounded text-[16px] text-emerald-500">group</span> Teachers in Selected Classes</h4>
+                                            <button type="button" onclick="document.getElementById('browseTeachersContainer').classList.add('hidden')" class="text-slate-400 hover:text-rose-500 transition-colors">
+                                                <span class="material-symbols-rounded text-[18px]">close</span>
+                                            </button>
+                                        </div>
+                                        <div id="browseTeachersLoading" class="hidden text-[10px] text-slate-400 font-bold italic shrink-0">Loading teachers...</div>
+                                        <div id="browseTeachersList" class="flex flex-col gap-2 overflow-y-auto pr-2 custom-scrollbar"></div>
+                                    </div>
+
+                                    <div id="teacherSearchFeedback" class="mt-2 text-[10px] font-bold hidden"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2 -->
+                        <div class="p-6">
+                            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-6 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[20px] text-emerald-500">payments</span> Commercial Model
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+                                <div>
+                                    <label class="form-label">Access Type</label>
+                                    <div class="flex gap-1">
+                                        <label class="flex-1">
+                                            <input type="radio" name="accessType" value="free" class="hidden peer" onchange="togglePricing(false)">
+                                            <div class="h-10 flex items-center justify-center border border-slate-300 dark:border-slate-700 rounded-lg cursor-pointer text-[11px] font-bold peer-checked:bg-blue-500 peer-checked:text-white peer-checked:border-blue-500 transition-all">Free</div>
+                                        </label>
+                                        <label class="flex-1">
+                                            <input type="radio" name="accessType" value="paid" class="hidden peer" checked onchange="togglePricing(true)">
+                                            <div class="h-10 flex items-center justify-center border border-slate-300 dark:border-slate-700 rounded-lg cursor-pointer text-[11px] font-bold peer-checked:bg-blue-500 peer-checked:text-white peer-checked:border-blue-500 transition-all">Paid</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div id="pricingGrid">
+                                    <label class="form-label">Regular Price</label>
+                                    <input type="number" name="price" placeholder="Enter regular price here...." class="form-input">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3 -->
+                        <div class="p-6">
+                            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-6 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[20px] text-amber-500">movie</span> Assets & Media
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+                                <div class="md:col-span-6">
+                                    <label class="form-label">Trailer URL</label>
+                                    <input type="url" name="trailerUrl" placeholder="Enter trailer URL here...." class="form-input">
+                                    
+                                    <div class="mt-6">
+                                        <label class="form-label">Course Thumbnail</label>
+                                        <div class="relative aspect-video bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center overflow-hidden group shadow-sm">
+                                            <input type="file" name="thumbnail" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-10" id="thumbnailInput">
+                                            <div id="previewContainer" class="absolute inset-0 bg-cover bg-center hidden"></div>
+                                            <span class="material-symbols-rounded text-slate-300 group-hover:text-blue-500 transition-colors">add_photo_alternate</span>
+                                            <p class="text-[11px] font-bold text-slate-400 mt-2">Upload Image</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="md:col-span-6">
+                                    <label class="form-label">Full Course Description</label>
+                                    <textarea name="description" rows="10" placeholder="Enter course description here...." class="form-input h-auto py-4 text-[12px] font-medium leading-relaxed"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: Course Routine & Schedule -->
+                        <div class="p-6">
+                            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-6 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[20px] text-indigo-500">calendar_month</span> Course Routine & Schedule
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+                                <!-- Routine Slots Builder -->
+                                <div class="md:col-span-8">
+                                    <label class="form-label mb-3">Weekly Class Schedule</label>
+                                    <div id="routineSlotsContainer" class="space-y-3">
+                                        <!-- Slots will be added here -->
+                                        <div class="routine-slot group bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex flex-wrap items-end gap-3 relative">
+                                            <div class="flex-1 min-w-[120px]">
+                                                <label class="text-[10px] font-bold text-slate-400 mb-1 block">Day</label>
+                                                <select name="routine[0][day]" class="form-input">
+                                                    <option value="Saturday">Saturday</option>
+                                                    <option value="Sunday">Sunday</option>
+                                                    <option value="Monday">Monday</option>
+                                                    <option value="Tuesday">Tuesday</option>
+                                                    <option value="Wednesday">Wednesday</option>
+                                                    <option value="Thursday">Thursday</option>
+                                                    <option value="Friday">Friday</option>
+                                                </select>
+                                            </div>
+                                            <div class="flex-1 min-w-[100px]">
+                                                <label class="text-[10px] font-bold text-slate-400 mb-1 block">Start Time</label>
+                                                <input type="time" name="routine[0][startTime]" class="form-input">
+                                            </div>
+                                            <div class="flex-1 min-w-[100px]">
+                                                <label class="text-[10px] font-bold text-slate-400 mb-1 block">End Time</label>
+                                                <input type="time" name="routine[0][endTime]" class="form-input">
+                                            </div>
+                                            <div class="flex-[1.5] min-w-[150px]">
+                                                <label class="text-[10px] font-bold text-slate-400 mb-1 block">Topic / Note</label>
+                                                <input type="text" name="routine[0][note]" placeholder="e.g., Live Class" class="form-input">
+                                            </div>
+                                            <button type="button" onclick="removeRoutineSlot(this)" class="size-[42px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 hover:border-rose-200 transition-all flex items-center justify-center">
+                                                <span class="material-symbols-rounded text-[20px]">delete</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button type="button" onclick="addRoutineSlot()" class="mt-4 px-6 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-500 hover:text-white text-slate-600 dark:text-slate-300 font-bold text-[11px] transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-700">
+                                        <span class="material-symbols-rounded text-[18px]">add_circle</span>
+                                        Add Schedule Slot
+                                    </button>
+                                </div>
+
+                                <div class="md:col-span-4">
+                                    <label class="form-label">Routine Image (Optional)</label>
+                                    <div class="relative aspect-[4/5] bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 rounded-lg flex flex-col items-center justify-center overflow-hidden group shadow-sm">
+                                        <input type="file" name="routineImage" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-20" id="routineImageInput">
+                                        
+                                        <!-- Image Preview Overlay -->
+                                        <div id="routinePreviewContainer" class="absolute inset-0 z-10 bg-white dark:bg-slate-900 hidden">
+                                            <!-- To be filled by JS -->
+                                        </div>
+
+                                        <!-- Empty State -->
+                                        <div class="text-center p-4">
+                                            <span class="material-symbols-rounded text-slate-300 group-hover:text-indigo-500 transition-colors text-4xl">calendar_view_day</span>
+                                            <p class="text-[11px] font-bold text-slate-400 mt-2">Upload Routine Image</p>
+                                            <p class="text-[9px] text-slate-400/60 mt-1">Students can download this</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 5: Curriculum Architecture -->
+                        <div class="p-6">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
+                                    <span class="material-symbols-rounded text-[20px] text-emerald-500">account_tree</span> Curriculum Architecture
+                                </h3>
+                                <button type="button" onclick="addChapterSlot()" class="h-9 px-4 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-sm">add_circle</span> Add Chapter
+                                </button>
+                            </div>
+                            
+                            <div id="chapterSlotsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <!-- Default empty slot -->
+                                <div class="chapter-slot group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex items-center gap-3 relative animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div class="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-focus-within:bg-emerald-500 group-focus-within:text-white transition-all">
+                                        <span class="material-symbols-rounded text-sm">segment</span>
+                                    </div>
+                                    <div class="flex-1">
+                                        <input type="text" name="chapters[0][title]" required placeholder="Chapter 01: Introduction..." class="form-input border-0 bg-transparent px-0 h-8 focus:ring-0">
+                                    </div>
+                                    <button type="button" onclick="openChapterTeachersModal(this, 0)" class="h-8 px-3 rounded-lg text-slate-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-[16px]">person_add</span>
+                                    <span class="text-[10px] font-bold">Teachers</span>
+                                </button>
+<button type="button" onclick="this.closest('.chapter-slot').remove()" class="size-8 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all flex items-center justify-center">
+                                        <span class="material-symbols-rounded text-[18px]">close</span>
+                                    </button>
+<div class="chapter-teachers-container hidden"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-800 flex items-center gap-3">
+                                <div class="size-6 rounded-full bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                                    <span class="material-symbols-rounded text-[14px]">info</span>
+                                </div>
+                                <p class="text-[10px] font-bold text-slate-500 tracking-tight">Defining chapters here creates a structured index where you can later deploy videos, notes, and quizzes.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Action Bar -->
+                    <div class="p-6 border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-slate-900/30">
+                        <div class="flex items-center justify-end gap-4">
+                            <a href="/admin/my-courses" class="text-[12px] font-bold text-slate-400 hover:text-slate-600 transition-all px-4">Cancel</a>
+                            <button type="submit" class="h-11 px-10 bg-black dark:bg-white text-white dark:text-black rounded-lg font-bold text-[12px] transition-all shadow-sm hover:opacity-90 active:scale-[0.98]">
+                                Launch Course
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </section>
+        
+<!-- Chapter Teachers Modal -->
+<div id="chapterTeachersModal" class="fixed inset-0 z-[100] hidden items-center justify-center">
+    <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onclick="closeChapterTeachersModal()"></div>
+    <div class="relative w-[400px] max-w-[90%] bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-6 animate-in zoom-in-95 duration-200">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span class="material-symbols-rounded text-blue-500">person_add</span>
+                Assign Teachers to Chapter
+            </h3>
+            <button type="button" onclick="closeChapterTeachersModal()" class="text-slate-400 hover:text-rose-500 transition-colors">
+                <span class="material-symbols-rounded">close</span>
+            </button>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-4">Select teachers from the authorized list below.</p>
+        <div id="chapterTeachersList" class="flex flex-col gap-2 max-h-[300px] overflow-y-auto mb-4 custom-scrollbar">
+        </div>
+        <div class="flex justify-end gap-2">
+            <button type="button" onclick="closeChapterTeachersModal()" class="px-4 py-2 rounded-lg bg-blue-500 text-white font-bold text-[11px] hover:bg-blue-600 transition-all">Done</button>
+        </div>
+    </div>
+</div>
+
+</main>
+    </div>
+
+    <script>
+        function togglePricing(isPaid) {
+            const grid = document.getElementById('pricingGrid');
+            grid.style.opacity = isPaid ? '1' : '0.4';
+            grid.querySelectorAll('input').forEach(i => i.disabled = !isPaid);
+        }
+
+        // Multi-select Logic
+        function toggleDropdown(trigger) {
+            const dropdown = trigger.nextElementSibling;
+            const isOpen = dropdown.style.display === 'block';
+            
+            // Close all other dropdowns
+            document.querySelectorAll('.multi-select-dropdown').forEach(d => d.style.display = 'none');
+            
+            dropdown.style.display = isOpen ? 'none' : 'block';
+            event.stopPropagation();
+        }
+
+        function toggleOption(option, value, name) {
+            const checkbox = option.querySelector('input');
+            const checkIcon = option.querySelector('.material-symbols-rounded');
+            const container = option.closest('.multi-select-container');
+            const trigger = container.querySelector('.multi-select-trigger');
+            
+            checkbox.checked = !checkbox.checked;
+            
+            if (checkbox.checked) {
+                option.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
+                checkIcon.classList.remove('hidden');
+                checkIcon.parentElement.classList.add('bg-blue-500', 'border-blue-500');
+            } else {
+                option.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+                checkIcon.classList.add('hidden');
+                checkIcon.parentElement.classList.remove('bg-blue-500', 'border-blue-500');
+            }
+            
+            updatePills(container);
+            event.stopPropagation();
+        }
+
+        function updatePills(container) {
+            const trigger = container.querySelector('.multi-select-trigger');
+            const checkboxes = container.querySelectorAll('input:checked');
+            const placeholder = trigger.querySelector('.placeholder');
+            
+            // Clear existing pills except placeholder
+            const existingPills = trigger.querySelectorAll('.multi-select-pill');
+            existingPills.forEach(p => p.remove());
+            
+            if (checkboxes.length > 0) {
+                placeholder.style.display = 'none';
+                checkboxes.forEach(cb => {
+                    const pill = document.createElement('div');
+                    pill.className = 'multi-select-pill';
+                    const label = cb.getAttribute('data-label') || cb.value;
+                    pill.innerHTML = `${label} <span class="material-symbols-rounded text-[10px]" onclick="removePill(event, this, '${cb.value}')">close</span>`;
+                    trigger.appendChild(pill);
+                });
+            } else {
+                placeholder.style.display = 'block';
+            }
+        }
+
+        function removePill(event, span, value) {
+            event.stopPropagation();
+            const container = span.closest('.multi-select-container');
+            const checkbox = container.querySelector(`input[value="${value}"]`);
+            const option = checkbox.closest('.multi-select-option');
+            
+            checkbox.checked = false;
+            option.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+            const checkIcon = option.querySelector('.material-symbols-rounded');
+            checkIcon.classList.add('hidden');
+            checkIcon.parentElement.classList.remove('bg-blue-500', 'border-blue-500');
+            
+            updatePills(container);
+        }
+
+        // Close dropdowns on outside click
+        window.onclick = function(event) {
+            if (!event.target.closest('.multi-select-container')) {
+                document.querySelectorAll('.multi-select-dropdown').forEach(d => d.style.display = 'none');
+            }
+        }
+
+        // Search and Add Teacher Logic
+        
+        async function browseTeachersByClass() {
+            const container = document.getElementById('browseTeachersContainer');
+            const loading = document.getElementById('browseTeachersLoading');
+            const list = document.getElementById('browseTeachersList');
+            
+            const isAdmin = window.location.pathname.startsWith('/admin');
+            const baseUrl = isAdmin ? '/admin/api' : '/superadmin/api';
+            
+            const classCheckboxes = document.querySelectorAll('input[name="classLevel[]"]:checked, input[name="classes"]:checked, input[name="classes[]"]:checked');
+            const classSelects = document.querySelectorAll('select[name="applicableClass"], select[name="classLevel"], select[name="class"]');
+            
+            let selectedClasses = [];
+            classCheckboxes.forEach(cb => selectedClasses.push(cb.value));
+            classSelects.forEach(sel => { if(sel.value) selectedClasses.push(sel.value); });
+            
+            if (selectedClasses.length === 0) {
+                if (typeof showFeedback === 'function') showFeedback('Please select at least one Class Level first', 'error');
+                return;
+            }
+            
+            container.classList.remove('hidden');
+            list.innerHTML = '';
+            loading.classList.remove('hidden');
+            
+            try {
+                const query = encodeURIComponent(selectedClasses.join(','));
+                const res = await fetch(`${baseUrl}/teachers-by-class?classes=${query}`);
+                const teachers = await res.json();
+                
+                loading.classList.add('hidden');
+                
+                if (teachers.length === 0) {
+                    list.innerHTML = '<div class="text-[10px] text-slate-400 font-bold italic">No teachers found for the selected classes.</div>';
+                    return;
+                }
+                
+                teachers.forEach(teacher => {
+                    const isAdded = document.querySelector(`input[name="permittedTeachers[]"][value="${teacher._id}"]`);
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center justify-between p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shrink-0';
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <img src="${teacher.profileImage || teacher.profilePicture || '/images/default-avatar.png'}" class="w-8 h-8 rounded-full object-cover">
+                            <div class="flex flex-col leading-none">
+                                <span class="text-[11px] font-bold text-slate-900 dark:text-white">${teacher.name}</span>
+                                <span class="text-[9px] text-slate-400 font-medium">${teacher.email} | ${teacher.phone || 'No phone'}</span>
+                            </div>
+                        </div>
+                        <button type="button" class="add-btn h-8 px-4 ${isAdded ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 text-white'} rounded text-[10px] font-bold transition-all" ${isAdded ? 'disabled' : ''}>
+                            ${isAdded ? 'Added' : 'Add'}
+                        </button>
+                    `;
+                    if (!isAdded) {
+                        div.querySelector('.add-btn').onclick = (e) => {
+                            if (typeof addTeacherPill === 'function') addTeacherPill(teacher);
+                            e.target.textContent = 'Added';
+                            e.target.disabled = true;
+                            e.target.className = 'add-btn h-8 px-4 bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed rounded text-[10px] font-bold transition-all';
+                        };
+                    }
+                    list.appendChild(div);
+                });
+            } catch (err) {
+                loading.classList.add('hidden');
+                list.innerHTML = '<div class="text-[10px] text-rose-500 font-bold italic">Error loading teachers.</div>';
+            }
+        }
+
+        async function searchAndAddTeacher() {
+            const input = document.getElementById('teacherSearchInput');
+            const feedback = document.getElementById('teacherSearchFeedback');
+            const query = input.value.trim();
+            
+            if (!query) return;
+            
+            // Check for duplicates
+            const existing = document.querySelector(`input[name="permittedTeachers[]"][value="${query}"]`);
+            if (existing) {
+                showFeedback('Teacher already added', 'error');
+                return;
+            }
+
+            try {
+                showFeedback('Searching...', 'info');
+                const res = await fetch(`/admin/api/search-teacher?query=${encodeURIComponent(query)}`);
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    showFeedback(data.error || 'Teacher not found', 'error');
+                    return;
+                }
+
+                // Check for duplicates again with ID
+                if (document.querySelector(`input[name="permittedTeachers[]"][value="${data._id}"]`)) {
+                    showFeedback('Teacher already added', 'error');
+                    return;
+                }
+
+                addTeacherPill(data);
+                input.value = '';
+                showFeedback('Teacher authorized successfully', 'success');
+            } catch (err) {
+                showFeedback('Failed to search teacher', 'error');
+            }
+        }
+
+        function addTeacherPill(teacher) {
+            const list = document.getElementById('authorizedTeachersList');
+            const hint = list.querySelector('.no-teachers-hint');
+            if (hint) hint.remove();
+
+            const pill = document.createElement('div');
+            pill.className = 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 pl-1 pr-3 py-1 rounded-full flex items-center gap-2 shadow-sm animate-in fade-in zoom-in duration-200';
+            pill.innerHTML = `
+                <img src="${teacher.profileImage || teacher.profilePicture || '/images/default-avatar.png'}" class="w-6 h-6 rounded-full object-cover">
+                <div class="flex flex-col leading-none">
+                    <span class="text-[10px] font-bold text-slate-900 dark:text-white">${teacher.name}</span>
+                    <span class="text-[8px] text-slate-400 font-medium">${teacher.email}</span>
+                </div>
+                <input type="hidden" name="permittedTeachers[]" value="${teacher._id}">
+                <button type="button" onclick="this.parentElement.remove(); checkEmptyTeachers();" class="w-4 h-4 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all">
+                    <span class="material-symbols-rounded text-[10px]">close</span>
+                </button>
+            `;
+            list.appendChild(pill);
+        }
+
+        function checkEmptyTeachers() {
+            const list = document.getElementById('authorizedTeachersList');
+            if (list.children.length === 0) {
+                list.innerHTML = `
+                    <div class="no-teachers-hint text-[10px] text-slate-400 font-bold italic flex items-center gap-2 py-1">
+                        <span class="material-symbols-rounded text-[14px]">info</span>
+                        No teachers authorized yet.
+                    </div>
+                `;
+            }
+        }
+
+        function showFeedback(msg, type) {
+            const feedback = document.getElementById('teacherSearchFeedback');
+            feedback.textContent = msg;
+            feedback.className = `mt-2 text-[10px] font-bold ${type === 'error' ? 'text-rose-500' : (type === 'success' ? 'text-emerald-500' : 'text-blue-500')}`;
+            feedback.classList.remove('hidden');
+            if (type !== 'info') setTimeout(() => feedback.classList.add('hidden'), 3000);
+        }
+
+        // Thumbnail Preview
+        document.getElementById('thumbnailInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const preview = document.getElementById('previewContainer');
+                    preview.style.backgroundImage = `url(${e.target.result})`;
+                    preview.classList.remove('hidden');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Routine Management
+        let routineSlotCount = 1;
+        function addRoutineSlot() {
+            const container = document.getElementById('routineSlotsContainer');
+            const slot = document.createElement('div');
+            slot.className = 'routine-slot group bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex flex-wrap items-end gap-3 relative animate-in fade-in slide-in-from-top-2 duration-200';
+            slot.innerHTML = `
+                <div class="flex-1 min-w-[120px]">
+                    <label class="text-[10px] font-bold text-slate-400 mb-1 block">Day</label>
+                    <select name="routine[${routineSlotCount}][day]" class="form-input">
+                        <option value="Saturday">Saturday</option>
+                        <option value="Sunday">Sunday</option>
+                        <option value="Monday">Monday</option>
+                        <option value="Tuesday">Tuesday</option>
+                        <option value="Wednesday">Wednesday</option>
+                        <option value="Thursday">Thursday</option>
+                        <option value="Friday">Friday</option>
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[100px]">
+                    <label class="text-[10px] font-bold text-slate-400 mb-1 block">Start Time</label>
+                    <input type="time" name="routine[${routineSlotCount}][startTime]" class="form-input">
+                </div>
+                <div class="flex-1 min-w-[100px]">
+                    <label class="text-[10px] font-bold text-slate-400 mb-1 block">End Time</label>
+                    <input type="time" name="routine[${routineSlotCount}][endTime]" class="form-input">
+                </div>
+                <div class="flex-[1.5] min-w-[150px]">
+                    <label class="text-[10px] font-bold text-slate-400 mb-1 block">Topic / Note</label>
+                    <input type="text" name="routine[${routineSlotCount}][note]" placeholder="e.g., Live Class" class="form-input">
+                </div>
+                <button type="button" onclick="removeRoutineSlot(this)" class="size-[42px] rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 hover:border-rose-200 transition-all flex items-center justify-center">
+                    <span class="material-symbols-rounded text-[20px]">delete</span>
+                </button>
+            `;
+            container.appendChild(slot);
+            routineSlotCount++;
+        }
+
+        function removeRoutineSlot(btn) {
+            const container = document.getElementById('routineSlotsContainer');
+            if (container.children.length > 1) {
+                btn.closest('.routine-slot').remove();
+            } else {
+                alert("At least one schedule slot is required.");
+            }
+        }
+
+        // Curriculum Management
+        let chapterCount = 1;
+        function addChapterSlot() {
+            const container = document.getElementById('chapterSlotsContainer');
+            const slot = document.createElement('div');
+            slot.className = 'chapter-slot group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-xl flex items-center gap-3 relative animate-in fade-in slide-in-from-top-2 duration-200';
+            slot.innerHTML = `
+                <div class="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-focus-within:bg-emerald-500 group-focus-within:text-white transition-all">
+                    <span class="material-symbols-rounded text-sm">segment</span>
+                </div>
+                <div class="flex-1">
+                    <input type="text" name="chapters[${chapterCount}][title]" required placeholder="New Chapter / Module Title..." class="form-input border-0 bg-transparent px-0 h-8 focus:ring-0">
+                </div>
+
+                    <button type="button" onclick="openChapterTeachersModal(this, ${chapterCount})" class="h-8 px-3 rounded-lg text-slate-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all flex items-center gap-1">
+                        <span class="material-symbols-rounded text-[16px]">person_add</span>
+                        <span class="text-[10px] font-bold">Teachers</span>
+                    </button>
+                    <div class="chapter-teachers-container hidden"></div>
+
+<button type="button" onclick="this.closest('.chapter-slot').remove()" class="size-8 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all flex items-center justify-center">
+                    <span class="material-symbols-rounded text-[18px]">close</span>
+                </button>
+            `;
+            container.appendChild(slot);
+            chapterCount++;
+        }
+
+        // Routine Image Preview
+        document.getElementById('routineImageInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const previewContainer = document.getElementById('routinePreviewContainer');
+                    previewContainer.innerHTML = `
+                        <img src="${e.target.result}" class="w-full h-full object-cover" id="routinePreviewImg">
+                        <div class="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white transition-opacity group-hover:bg-black/60">
+                            <span class="material-symbols-rounded text-3xl mb-2">edit</span>
+                            <p class="text-[10px] font-bold uppercase tracking-widest">Change Routine</p>
+                        </div>
+                    `;
+                    previewContainer.classList.remove('hidden');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+    
+        let currentChapterSlot = null;
+        let currentChapterIndex = 0;
+
+        function openChapterTeachersModal(btn, idx) {
+            currentChapterSlot = btn.closest('.chapter-slot');
+            currentChapterIndex = idx;
+            
+            const authorizedInputs = document.querySelectorAll('input[name="permittedTeachers[]"]');
+            const list = document.getElementById('chapterTeachersList');
+            list.innerHTML = '';
+            
+            if (authorizedInputs.length === 0) {
+                list.innerHTML = '<div class="text-[11px] text-rose-500 font-bold p-2 bg-rose-50 dark:bg-rose-500/10 rounded-lg">No authorized teachers found. Please add teachers to the course first.</div>';
+            } else {
+                let container = currentChapterSlot.querySelector('.chapter-teachers-container');
+                if (!container) {
+                    container = document.createElement('div');
+                    container.className = 'chapter-teachers-container hidden';
+                    currentChapterSlot.appendChild(container);
+                }
+                
+                const existingInputs = container.querySelectorAll('input[name="chapters[' + idx + '][permittedTeachers][]"]');
+                const selectedIds = Array.from(existingInputs).map(inp => inp.value);
+                
+                authorizedInputs.forEach(inp => {
+                    const tId = inp.value;
+                    const pill = inp.closest('div');
+                    
+                    let name = 'Unknown';
+                    let email = '';
+                    let imgSrc = '/images/default-avatar.png';
+                    
+                    if (pill) {
+                        const nameEl = pill.querySelector('.flex-col > span:first-child');
+                        const emailEl = pill.querySelector('.flex-col > span:nth-child(2)');
+                        const imgEl = pill.querySelector('img');
+                        if (nameEl) name = nameEl.textContent.trim();
+                        if (emailEl) email = emailEl.textContent.trim();
+                        if (imgEl) imgSrc = imgEl.src;
+                    }
+                    
+                    const isChecked = selectedIds.includes(tId) ? 'checked' : '';
+                    
+                    const div = document.createElement('label');
+                    div.className = 'flex items-center gap-3 p-2 rounded-lg border border-slate-200 dark:border-slate-800 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors';
+                    div.innerHTML = `
+                        <input type="checkbox" value="${tId}" ${isChecked} class="form-checkbox text-blue-500 rounded border-slate-300 dark:border-slate-600 focus:ring-0 w-4 h-4" onchange="toggleChapterTeacher(this.value, this.checked)">
+                        <img src="${imgSrc}" class="w-8 h-8 rounded-full object-cover">
+                        <div class="flex flex-col">
+                            <span class="text-[11px] font-bold text-slate-900 dark:text-white leading-tight">${name}</span>
+                            <span class="text-[9px] text-slate-500">${email}</span>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+            }
+            
+            const modal = document.getElementById('chapterTeachersModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeChapterTeachersModal() {
+            const modal = document.getElementById('chapterTeachersModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function toggleChapterTeacher(tId, isChecked) {
+            if (!currentChapterSlot) return;
+            let container = currentChapterSlot.querySelector('.chapter-teachers-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'chapter-teachers-container hidden';
+                currentChapterSlot.appendChild(container);
+            }
+            
+            const nameAttr = `chapters[${currentChapterIndex}][permittedTeachers][]`;
+            
+            if (isChecked) {
+                if (!container.querySelector(`input[value="${tId}"]`)) {
+                    const inp = document.createElement('input');
+                    inp.type = 'hidden';
+                    inp.name = nameAttr;
+                    inp.value = tId;
+                    container.appendChild(inp);
+                }
+            } else {
+                const inp = container.querySelector(`input[value="${tId}"]`);
+                if (inp) inp.remove();
+            }
+        }
+
+</script>
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const globalAcademicClasses = <%- typeof globalAcademicClasses !== 'undefined' ? JSON.stringify(globalAcademicClasses) : '[]' %>;
+        if (!globalAcademicClasses || globalAcademicClasses.length === 0) return;
+
+        function updateDynamicSubjects() {
+            const classCheckboxes = document.querySelectorAll('input[name="classLevel[]"]:checked, input[name="classes"]:checked, input[name="classes[]"]:checked, input[name="targetClass"]:checked');
+            const classSelects = document.querySelectorAll('select[name="applicableClass"], select[name="classLevel"], select[name="class"], select[name="targetClass"]');
+            
+            let selectedClasses = [];
+            classCheckboxes.forEach(cb => selectedClasses.push(cb.value));
+            classSelects.forEach(sel => { if(sel.value) selectedClasses.push(sel.value); });
+
+            let allowedSubjects = new Set();
+            if (selectedClasses.length === 0) {
+                globalAcademicClasses.forEach(c => (c.subjects || []).forEach(s => allowedSubjects.add(s)));
+            } else {
+                globalAcademicClasses.forEach(c => {
+                    const normalizedClass = c.name.replace('Class ', '');
+                    if (selectedClasses.includes(c.name) || selectedClasses.includes(normalizedClass)) {
+                        (c.subjects || []).forEach(s => allowedSubjects.add(s));
+                    }
+                });
+            }
+
+            const subjectCheckboxes = document.querySelectorAll('input[name="subject[]"], input[name="subjects"], input[name="subjects[]"], input[name="targetSubject"]');
+            subjectCheckboxes.forEach(cb => {
+                const optDiv = cb.closest('.multi-select-option');
+                if (optDiv) {
+                    if (allowedSubjects.has(cb.value)) {
+                        optDiv.style.display = 'flex';
+                    } else {
+                        optDiv.style.display = 'none';
+                        if (cb.checked) {
+                            cb.checked = false;
+                            const checkIcon = optDiv.querySelector('.material-symbols-rounded');
+                            if (checkIcon) checkIcon.classList.add('hidden');
+                            optDiv.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+                            if(checkIcon && checkIcon.parentElement) checkIcon.parentElement.classList.remove('bg-blue-500', 'border-blue-500');
+                        }
+                    }
+                }
+            });
+
+            const subjectSelects = document.querySelectorAll('select[name="subject"], select[name="targetSubject"]');
+            subjectSelects.forEach(sel => {
+                const options = sel.querySelectorAll('option');
+                let hasValidSelected = false;
+                options.forEach(opt => {
+                    if (!opt.value) return; 
+                    if (allowedSubjects.has(opt.value)) {
+                        opt.style.display = '';
+                        if (sel.value === opt.value) hasValidSelected = true;
+                    } else {
+                        opt.style.display = 'none';
+                    }
+                });
+                if (!hasValidSelected && sel.value) sel.value = '';
+            });
+            
+            document.querySelectorAll('.multi-select-container').forEach(container => {
+                const classLevelNames = ['classLevel', 'classes', 'targetClass', 'applicableClass'];
+                const subjectNames = ['subject', 'subjects', 'targetSubject', 'applicableSubject'];
+                const dataName = container.getAttribute('data-name');
+                if (dataName && subjectNames.includes(dataName)) {
+                    const triggerSpan = container.querySelector('.multi-select-trigger span');
+                    const checkedBox = container.querySelectorAll('input[type="checkbox"]:checked');
+                    if (triggerSpan) {
+                        if (checkedBox.length === 0) {
+                            triggerSpan.textContent = 'Select Subjects';
+                            triggerSpan.classList.add('text-slate-400');
+                            triggerSpan.classList.remove('text-slate-700', 'dark:text-slate-200');
+                        } else {
+                            triggerSpan.textContent = Array.from(checkedBox).map(cb => cb.value).join(', ');
+                            triggerSpan.classList.remove('text-slate-400');
+                            triggerSpan.classList.add('text-slate-700', 'dark:text-slate-200');
+                        }
+                    }
+                }
+            });
+        }
+
+        document.querySelectorAll('select[name="applicableClass"], select[name="classLevel"], select[name="class"], select[name="targetClass"]').forEach(sel => {
+            sel.addEventListener('change', updateDynamicSubjects);
+        });
+
+        const observer = new MutationObserver(mutations => {
+            let shouldUpdate = false;
+            mutations.forEach(m => {
+                const container = m.target.closest('.multi-select-container');
+                if (container) {
+                    const dataName = container.getAttribute('data-name') || '';
+                    if (['classLevel', 'classes', 'targetClass', 'applicableClass'].includes(dataName) || container.querySelector('input[name="targetClass"]')) {
+                        shouldUpdate = true;
+                    }
+                }
+            });
+            if (shouldUpdate) updateDynamicSubjects();
+        });
+
+        document.querySelectorAll('.multi-select-dropdown').forEach(dropdown => {
+            observer.observe(dropdown, { attributes: true, subtree: true, attributeFilter: ['class'] });
+        });
+
+        setTimeout(updateDynamicSubjects, 100);
+    });
+</script>
+</body>
+</html>

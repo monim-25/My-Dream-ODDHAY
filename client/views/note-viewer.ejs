@@ -33,6 +33,10 @@
         </div>
 
         <div class="flex items-center gap-3">
+            <button id="saveNoteBtn" onclick="toggleSaveCurrentNote()" class="btn-secondary !py-2 !px-3.5 !text-xs flex items-center gap-1.5 transition-all">
+                <span class="material-symbols-outlined text-sm" id="saveNoteIcon">bookmark_border</span>
+                <span id="saveNoteText">সেভ করুন</span>
+            </button>
             <a href="<%= note.fileUrl %>" download class="btn-secondary !py-2 !px-4 !text-xs flex items-center gap-2">
                 <span class="material-symbols-outlined text-sm">download</span> ডাউনলোড
             </a>
@@ -82,10 +86,62 @@
     </main>
 
     <script>
-        // Reveal animation logic if needed
-        document.addEventListener('DOMContentLoaded', () => {
-            // Reader Specific Logic
-        });
+        const noteId = '<%= note._id %>';
+        const noteTitle = '<%= note.title.replace(/'/g, "\\'") %>';
+        const noteLink = '/note-viewer/' + noteId;
+        let isSaved = false;
+
+        function checkSavedState() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('oddhay_saved_notes') || '[]');
+                isSaved = saved.includes(noteId);
+                updateSaveUI();
+            } catch(e) {}
+        }
+
+        function updateSaveUI() {
+            const icon = document.getElementById('saveNoteIcon');
+            const text = document.getElementById('saveNoteText');
+            const btn = document.getElementById('saveNoteBtn');
+
+            if (isSaved) {
+                if (icon) icon.textContent = 'bookmark';
+                if (text) text.textContent = 'সেভ করা হয়েছে';
+                if (btn) btn.classList.add('bg-amber-50', 'dark:bg-amber-950/40', 'text-amber-600', 'border-amber-200');
+            } else {
+                if (icon) icon.textContent = 'bookmark_border';
+                if (text) text.textContent = 'সেভ করুন';
+                if (btn) btn.classList.remove('bg-amber-50', 'dark:bg-amber-950/40', 'text-amber-600', 'border-amber-200');
+            }
+        }
+
+        function toggleSaveCurrentNote() {
+            let saved = JSON.parse(localStorage.getItem('oddhay_saved_notes') || '[]');
+            const index = saved.indexOf(noteId);
+
+            if (index > -1) {
+                saved.splice(index, 1);
+                isSaved = false;
+                fetch('/api/remove-bookmark', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ link: noteLink })
+                }).catch(e => {});
+            } else {
+                saved.push(noteId);
+                isSaved = true;
+                fetch('/api/save-bookmark', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title: noteTitle, link: noteLink, itemType: 'note' })
+                }).catch(e => {});
+            }
+
+            localStorage.setItem('oddhay_saved_notes', JSON.stringify(saved));
+            updateSaveUI();
+        }
+
+        document.addEventListener('DOMContentLoaded', checkSavedState);
     </script>
 </body>
 

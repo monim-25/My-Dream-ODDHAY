@@ -1,97 +1,296 @@
 <!DOCTYPE html>
-<html class="light" lang="bn">
-
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
 <head>
-    <title>আমার পেমেন্ট | ODDHAY</title>
     <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Payment History | ODDHAY</title>
+    <style>
+        @media print {
+            header, aside, nav, .print-hide, .student-header, .bottom-nav {
+                display: none !important;
+            }
+            body {
+                background: white !important;
+                color: black !important;
+            }
+            main {
+                padding: 0 !important;
+                overflow: visible !important;
+            }
+            .printable-invoice-modal {
+                position: static !important;
+                display: block !important;
+                background: white !important;
+                box-shadow: none !important;
+                border: none !important;
+                width: 100% !important;
+                max-width: 100% !important;
+            }
+        }
+    </style>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen">
-    <%- include('partials/nav') %>
+<body class="bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <%- include('partials/student-header') %>
 
-        <div class="pt-24 pb-16 px-4 max-w-4xl mx-auto">
-            <div class="mb-8 flex items-center justify-between">
-                <div>
-                    <h1 class="text-2xl font-black flex items-center gap-2">
-                        <span class="material-symbols-outlined text-primary">receipt_long</span>
-                        আমার পেমেন্ট
-                    </h1>
-                    <p class="text-slate-400 text-sm font-bold mt-1">আপনার সকল পেমেন্টের ইতিহাস</p>
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'payments' }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-0 m-0 space-y-0 no-scrollbar bg-[#FFFFFF] dark:bg-[#0b1120] relative">
+            
+            <% const u = locals.user || {}; %>
+            <% const pList = locals.payments || []; %>
+            <% const st = locals.stats || {}; %>
+
+            <!-- 1. FINANCIAL SUMMARY BANNER (ATTACHED FLUSH TO SIDEBAR & NAVBAR) -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200/80 dark:border-slate-800/80 p-4 sm:p-5 shadow-none print-hide flex items-center justify-between gap-3.5">
+                <div class="flex items-center gap-3.5">
+                    <div class="size-11 rounded-lg flex items-center justify-center border shrink-0 text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200/60 dark:border-emerald-500/20">
+                        <span class="material-symbols-rounded text-2xl leading-none flex items-center justify-center">payments</span>
+                    </div>
+                    <div class="min-w-0">
+                        <h4 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white leading-none mb-1">৳ <%= st.totalSpent || 0 %></h4>
+                        <p class="text-[11.5px] font-medium text-slate-400 truncate">Total Completed Transactions</p>
+                    </div>
                 </div>
-                <a href="/courses" class="btn-primary !py-2 !px-4 !text-xs">নতুন কোর্স কিনুন</a>
+
+                <div class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20 text-xs font-bold shrink-0">
+                    <span class="material-symbols-rounded text-base leading-none flex items-center justify-center">receipt_long</span>
+                    <span><%= pList.length %> Invoices</span>
+                </div>
             </div>
 
-            <% if (payments.length===0) { %>
-                <div class="card-smart text-center py-20">
-                    <span class="material-symbols-outlined text-6xl text-slate-300 mb-4 block">receipt_long</span>
-                    <p class="font-black text-slate-400 text-lg mb-2">কোনো পেমেন্ট নেই</p>
-                    <p class="text-slate-400 text-sm mb-6">আপনি এখনো কোনো কোর্স কেনেননি।</p>
-                    <a href="/courses" class="btn-primary">কোর্স দেখুন</a>
+            <!-- 2. PAYMENT RECORDS LIST AREA (ATTACHED FLUSH) -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200/80 dark:border-slate-800/80 p-4 sm:p-5">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-2.5 mb-3.5">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-rounded text-primary text-lg leading-none flex items-center justify-center">receipt_long</span>
+                        <h3 class="font-bold text-sm text-slate-800 dark:text-slate-200">Payment Records</h3>
+                    </div>
+                    <span class="text-xs font-medium text-slate-400">All Transactions</span>
                 </div>
+
+                <% if (pList.length === 0) { %>
+                    <div class="py-12 text-center bg-slate-50 dark:bg-slate-800/30 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
+                        <span class="material-symbols-rounded text-4xl text-slate-300 mb-2 flex items-center justify-center leading-none">receipt_long</span>
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-1">No Payment Records Found</h3>
+                        <p class="text-xs font-medium text-slate-400 mb-4 max-w-sm mx-auto">You have not completed any course subscriptions or payment transactions yet.</p>
+                        <a href="/courses" class="inline-flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-bold text-xs shadow-xs transition-all">
+                            <span class="material-symbols-rounded text-base leading-none flex items-center justify-center">shopping_bag</span> Explore Courses
+                        </a>
+                    </div>
                 <% } else { %>
-                    <div class="space-y-4">
-                        <% payments.forEach(function(p) { %>
-                            <div class="card-smart flex items-center gap-5">
-                                <!-- Course thumbnail -->
-                                <div
-                                    class="size-16 rounded-2xl overflow-hidden flex-shrink-0 bg-slate-100 dark:bg-slate-800">
-                                    <% if (p.course?.thumbnail) { %>
-                                        <img src="<%= p.course.thumbnail %>" class="w-full h-full object-cover">
+                    <div class="space-y-2.5">
+                        <% pList.forEach(function(p) { %>
+                            <% const isApproved = p.status === 'approved' || p.status === 'success'; %>
+                            <% const isPending = p.status === 'pending'; %>
+                            <% const rawMethod = (p.paymentMethod || 'online').toLowerCase(); %>
+                            <% const pMethodFormatted = rawMethod === 'bkash' ? 'bKash' : rawMethod === 'nagad' ? 'Nagad' : rawMethod === 'rocket' ? 'Rocket' : 'Online Payment'; %>
+                            
+                            <% const itemTitle = (p.itemType === 'note' || p.note) ? (p.note?.title ? ('Note: ' + p.note.title) : 'Note Document') : (p.course?.title || 'Course Subscription'); %>
+                            
+                            <!-- Payment Item Card -->
+                            <div class="p-3.5 rounded-lg bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-700/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-3.5 transition-all hover:border-slate-300 dark:hover:border-slate-600">
+                                
+                                <!-- Left: Thumbnail & Details -->
+                                <div class="flex items-center gap-3.5 min-w-0 w-full md:w-auto">
+                                    <div class="size-12 rounded-lg bg-white dark:bg-slate-800 overflow-hidden shrink-0 border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-center shadow-xs">
+                                        <% if (p.course?.thumbnail) { %>
+                                            <img src="<%= p.course.thumbnail %>" class="w-full h-full object-cover">
+                                        <% } else if (p.itemType === 'note' || p.note) { %>
+                                            <span class="material-symbols-rounded text-amber-500 text-xl flex items-center justify-center leading-none">description</span>
                                         <% } else { %>
-                                            <div class="w-full h-full flex items-center justify-center">
-                                                <span class="material-symbols-outlined text-slate-400">school</span>
+                                            <span class="material-symbols-rounded text-primary text-xl flex items-center justify-center leading-none">school</span>
+                                        <% } %>
+                                    </div>
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center gap-2 flex-wrap mb-0.5">
+                                            <h4 class="font-bold text-xs sm:text-sm text-slate-800 dark:text-white truncate">
+                                                <%= itemTitle %>
+                                            </h4>
+                                            
+                                            <!-- Payment Method Badge -->
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold border shrink-0 
+                                                <%= rawMethod === 'bkash' ? 'bg-pink-50 text-pink-600 border-pink-200 dark:bg-pink-500/10 dark:text-pink-400 dark:border-pink-500/20' : 
+                                                    rawMethod === 'nagad' ? 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20' : 
+                                                    rawMethod === 'rocket' ? 'bg-purple-50 text-purple-600 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/20' : 
+                                                    'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' %>">
+                                                <%= pMethodFormatted %>
+                                            </span>
+                                        </div>
+
+                                        <div class="flex items-center gap-2.5 flex-wrap text-[11px] font-medium text-slate-400">
+                                            <span>TrxID: <strong class="font-mono text-slate-700 dark:text-slate-300"><%= p.transactionId || 'N/A' %></strong></span>
+                                            <span>•</span>
+                                            <span>Sender: <%= p.phoneNumber || 'N/A' %></span>
+                                            <span>•</span>
+                                            <span><%= new Date(p.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Right: Amount, Pending Status & Download Receipt Button -->
+                                <div class="flex items-center justify-between md:justify-end gap-3.5 w-full md:w-auto pt-2.5 md:pt-0 border-t md:border-t-0 border-slate-200/60 dark:border-slate-700/60 shrink-0">
+                                    <div class="text-left md:text-right">
+                                        <div class="text-base font-bold text-slate-800 dark:text-white leading-tight">
+                                            ৳ <%= p.amount %>
+                                        </div>
+                                        <% if (isPending) { %>
+                                            <div>
+                                                <span class="px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-200/50 dark:border-amber-500/20 inline-block">
+                                                    Pending Approval
+                                                </span>
                                             </div>
-                                            <% } %>
-                                </div>
-
-                                <!-- Details -->
-                                <div class="flex-1 min-w-0">
-                                    <h3 class="font-black truncate">
-                                        <%= p.course?.title || 'কোর্স' %>
-                                    </h3>
-                                    <div class="flex items-center gap-3 mt-1 flex-wrap">
-                                        <span class="text-xs font-bold text-slate-400">
-                                            <%= new Date(p.createdAt).toLocaleDateString('bn-BD', {year: 'numeric' ,
-                                                month: 'long' , day: 'numeric' }) %>
-                                        </span>
-                                        <span class="text-xs font-black capitalize
-                            <%= p.paymentMethod === 'bkash' ? 'text-pink-600' : 'text-orange-600' %>">
-                                            <%= p.paymentMethod %>
-                                        </span>
-                                        <span class="text-xs font-mono text-slate-400">
-                                            <%= p.transactionId %>
-                                        </span>
+                                        <% } else if (!isApproved) { %>
+                                            <div>
+                                                <span class="px-2 py-0.5 rounded bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[10px] font-bold border border-rose-200/50 dark:border-rose-500/20 inline-block">
+                                                    Rejected
+                                                </span>
+                                            </div>
+                                        <% } %>
                                     </div>
-                                </div>
 
-                                <!-- Amount & Status -->
-                                <div class="text-right flex-shrink-0">
-                                    <div class="text-xl font-black text-primary mb-1">৳<%= p.amount %>
-                                    </div>
-                                    <% if (p.status==='pending' ) { %>
-                                        <span
-                                            class="text-xs font-black bg-amber-100 dark:bg-amber-500/20 text-amber-600 px-3 py-1 rounded-full">⏳
-                                            অপেক্ষমান</span>
-                                        <% } else if (p.status==='approved' ) { %>
-                                            <span
-                                                class="text-xs font-black bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 px-3 py-1 rounded-full">✅
-                                                অনুমোদিত</span>
-                                            <% } else { %>
-                                                <span
-                                                    class="text-xs font-black bg-red-100 dark:bg-red-500/20 text-red-600 px-3 py-1 rounded-full">❌
-                                                    বাতিল</span>
-                                                <% if (p.adminNote) { %>
-                                                    <p class="text-xs text-slate-400 mt-1 max-w-[150px]">
-                                                        <%= p.adminNote %>
-                                                    </p>
-                                                    <% } %>
-                                                        <% } %>
+                                    <!-- Download Receipt Button -->
+                                    <button onclick="openReceiptModal('<%= p._id %>', '<%= encodeURIComponent(itemTitle) %>', '<%= p.amount %>', '<%= pMethodFormatted %>', '<%= p.transactionId %>', '<%= p.phoneNumber %>', '<%= new Date(p.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) %>', '<%= p.status %>')" 
+                                        class="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs shrink-0 print-hide">
+                                        <span class="material-symbols-rounded text-base leading-none flex items-center justify-center">download</span>
+                                        <span>Receipt</span>
+                                    </button>
                                 </div>
                             </div>
-                            <% }); %>
+                        <% }); %>
                     </div>
-                    <% } %>
-        </div>
-</body>
+                <% } %>
+            </div>
 
+            <!-- Receipt Modal (Printable Official Invoice Popup) -->
+            <div id="receipt-modal" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-3 hidden print:p-0">
+                <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl max-w-lg w-full p-4 sm:p-6 shadow-2xl relative print:border-none print:shadow-none print:w-full print:max-w-none">
+                    
+                    <!-- Close Button (Hidden in Print) -->
+                    <button onclick="closeReceiptModal()" class="absolute top-3 right-3 size-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center justify-center transition-colors print:hidden">
+                        <span class="material-symbols-rounded text-lg flex items-center justify-center leading-none">close</span>
+                    </button>
+
+                    <!-- Invoice Header -->
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4 mb-4">
+                        <div class="flex items-center gap-2.5">
+                            <div class="size-10 rounded-lg bg-primary flex items-center justify-center text-white font-black text-xl shadow-xs">
+                                O
+                            </div>
+                            <div>
+                                <h2 class="font-black text-lg text-slate-800 dark:text-white leading-none">ODDHAY</h2>
+                                <p class="text-[10px] font-medium text-slate-400 mt-0.5">Digital Learning Platform</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="px-2.5 py-1 rounded bg-primary/10 text-primary border border-primary/20 text-xs font-mono font-bold block" id="modal-invoice-no">
+                                #INV-0000
+                            </span>
+                            <span class="text-[10px] font-medium text-slate-400 block mt-1" id="modal-date">01 Jan 2026</span>
+                        </div>
+                    </div>
+
+                    <!-- Billed To & Platform Info Grid -->
+                    <div class="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-lg border border-slate-200/60 dark:border-slate-700/60 text-xs mb-4">
+                        <div>
+                            <p class="text-[10px] font-bold text-slate-400 mb-1">Billed To</p>
+                            <p class="font-bold text-slate-800 dark:text-white"><%= u.name || 'Student' %></p>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400"><%= u.email || u.phone || 'Student Account' %></p>
+                            <p class="text-[10px] text-slate-400">Class <%= u.classLevel || '10' %></p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[10px] font-bold text-slate-400 mb-1">Payment Channel</p>
+                            <p class="font-bold text-slate-800 dark:text-white" id="modal-method">bKash</p>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">Sender: <span id="modal-phone">01700000000</span></p>
+                            <p class="text-[10px] font-mono text-slate-400">TrxID: <span id="modal-trx">TRX123456</span></p>
+                        </div>
+                    </div>
+
+                    <!-- Itemized Payment Table -->
+                    <div class="border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden mb-4">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-100 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                    <th class="p-2.5">Item Description</th>
+                                    <th class="p-2.5 text-right">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                <tr>
+                                    <td class="p-2.5 font-medium text-slate-800 dark:text-slate-200" id="modal-title">Course Subscription</td>
+                                    <td class="p-2.5 text-right font-bold text-slate-800 dark:text-white" id="modal-amount">৳ 0</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Total & Verification Seal -->
+                    <div class="flex items-center justify-between bg-slate-50 dark:bg-slate-800/40 p-3 rounded-lg border border-slate-200/60 dark:border-slate-700/60 mb-5">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-rounded text-emerald-500 text-xl flex items-center justify-center leading-none">verified</span>
+                            <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400" id="modal-status-badge">Payment Approved</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[10px] text-slate-400 font-medium block">Total Amount Paid</span>
+                            <span class="text-lg font-black text-slate-800 dark:text-white" id="modal-total-amount">৳ 0</span>
+                        </div>
+                    </div>
+
+                    <!-- Receipt Modal Action Buttons (Print / Download PDF) -->
+                    <div class="flex items-center justify-end gap-2.5 print:hidden">
+                        <button onclick="closeReceiptModal()" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                            Close
+                        </button>
+                        <button onclick="window.print()" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs">
+                            <span class="material-symbols-rounded text-base leading-none flex items-center justify-center">print</span> Print / Save Receipt
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- 3. FOOTER SUMMARY INFO (ATTACHED FLUSH) -->
+            <div class="p-3.5 text-center bg-white dark:bg-[#0f172a] border-b border-slate-200/80 dark:border-slate-800/80 print-hide">
+                <p class="text-[10px] font-medium text-slate-400">Payment Records & Invoices • ODDHAY Learning Platform</p>
+            </div>
+
+        </main>
+    </div>
+
+    <%- include('partials/student-bottom-nav', { activePage: 'payments' }) %>
+    <%- include('partials/app-scripts') %>
+
+    <script>
+        function openReceiptModal(id, title, amount, method, trx, phone, date, status) {
+            const decodedTitle = decodeURIComponent(title);
+            document.getElementById('modal-invoice-no').innerText = '#INV-' + (trx || id.slice(-6).toUpperCase());
+            document.getElementById('modal-title').innerText = decodedTitle;
+            document.getElementById('modal-amount').innerText = '৳ ' + amount;
+            document.getElementById('modal-total-amount').innerText = '৳ ' + amount;
+            document.getElementById('modal-method').innerText = method || 'Online Payment';
+            document.getElementById('modal-phone').innerText = phone || 'N/A';
+            document.getElementById('modal-trx').innerText = trx || 'N/A';
+            document.getElementById('modal-date').innerText = date || '';
+
+            const statusBadge = document.getElementById('modal-status-badge');
+            if (status === 'approved' || status === 'success') {
+                statusBadge.innerText = 'Payment Approved';
+                statusBadge.className = 'text-xs font-bold text-emerald-600 dark:text-emerald-400';
+            } else if (status === 'pending') {
+                statusBadge.innerText = 'Pending Approval';
+                statusBadge.className = 'text-xs font-bold text-amber-600 dark:text-amber-400';
+            } else {
+                statusBadge.innerText = 'Payment Rejected';
+                statusBadge.className = 'text-xs font-bold text-rose-600 dark:text-rose-400';
+            }
+
+            document.getElementById('receipt-modal').classList.remove('hidden');
+        }
+
+        function closeReceiptModal() {
+            document.getElementById('receipt-modal').classList.add('hidden');
+        }
+    </script>
+</body>
 </html>

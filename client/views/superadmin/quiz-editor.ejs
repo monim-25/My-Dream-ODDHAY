@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+<head>
+    <%- include('../partials/head') %>
+    <title><%= quiz.title %> | Superadmin Assessment Studio</title>
+    <style>
+        :root { --sidebar-width: 260px; }
+        .studio-main { margin-left: var(--sidebar-width); min-height: 100vh; }
+        .studio-container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
+        
+        .q-card { 
+            background: white; 
+            border: 1px solid #f1f5f9; 
+            border-radius: 2rem; 
+            padding: 32px;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .dark .q-card { background: #0f172a; border-color: #1e293b; }
+        .q-card:hover { transform: translateY(-4px); box-shadow: 0 30px 60px rgba(0,0,0,0.04); border-color: #e2e8f0; }
+        .dark .q-card:hover { box-shadow: 0 30px 60px rgba(0,0,0,0.2); border-color: #334155; }
+        
+        .option-dot {
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 900;
+            background: #f8fafc;
+            color: #64748b;
+            border: 1px solid #e2e8f0;
+            transition: all 0.2s;
+        }
+        .dark .option-dot { background: #1e293b; color: #94a3b8; border-color: #334155; }
+        .option-dot.correct { background: #10b981; color: white; border-color: #10b981; box-shadow: 0 6px 15px rgba(16, 185, 129, 0.25); }
+
+        .btn-action {
+            height: 38px;
+            padding: 0 18px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        
+        .stat-card {
+            background: white;
+            border: 1px solid #f1f5f9;
+            border-radius: 2rem;
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .dark .stat-card { background: #0f172a; border-color: #1e293b; }
+
+        .swal2-container { z-index: 9999 !important; }
+        .swal2-popup { border-radius: 2rem !important; padding: 2rem !important; }
+        .swal2-title { font-weight: 900 !important; tracking: -0.02em !important; }
+    </style>
+</head>
+
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans antialiased">
+    <div class="flex">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
+            <%- include('sidebar_content', { active: 'quizzes' }) %>
+        </aside>
+
+        <main class="studio-main flex-1 bg-[#F8FAFC] dark:bg-[#020617]">
+            <%- include('header_v2', { 
+                pageTitle: `
+                    <div class="flex flex-col">
+                        <span class="text-[9px] font-black text-primary uppercase tracking-[0.3em] mb-1">Superadmin Studio</span>
+                        <h1 class="text-xl font-black text-slate-900 dark:text-white tracking-tight leading-none">${quiz.title}</h1>
+                    </div>
+                `, 
+                user: user,
+                extraContent: `
+                    <div class="flex items-center gap-3">
+                        <button onclick="openBulkModal()" class="h-10 px-5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-black text-[10px] uppercase tracking-widest hover:bg-slate-200 transition-all">
+                            Matrix Import
+                        </button>
+                        <button onclick="openAddModal()" class="h-10 px-6 bg-black dark:bg-white text-white dark:text-black rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:opacity-90 transition-all shadow-xl shadow-black/10 active:scale-95">
+                            <span class="material-symbols-rounded text-[18px]">add_circle</span> New Vector
+                        </button>
+                    </div>
+                `
+            }) %>
+
+            <div class="studio-container space-y-10">
+                <!-- Metrics Bar -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div class="stat-card">
+                        <div class="size-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+                            <span class="material-symbols-rounded text-2xl">layers</span>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Total Questions</p>
+                            <h3 class="text-xl font-black leading-none" id="total-count"><%= quiz.questions.length %></h3>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="size-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                            <span class="material-symbols-rounded text-2xl">timer</span>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Time Limit</p>
+                            <h3 class="text-xl font-black leading-none"><%= quiz.duration %> Min</h3>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="size-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500">
+                            <span class="material-symbols-rounded text-2xl">verified_user</span>
+                        </div>
+                        <div>
+                            <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Access Logic</p>
+                            <h3 class="text-xl font-black leading-none"><%= quiz.accessType %></h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Feed -->
+                <div class="space-y-6" id="questions-feed">
+                    <% quiz.questions.forEach((q, index) => { %>
+                        <div class="q-card group animate-in fade-in slide-in-from-bottom-4 duration-500" id="q-<%= q._id %>" style="animation-delay: <%= index * 50 %>ms">
+                            <div class="flex items-start justify-between mb-8">
+                                <div class="flex items-center gap-3">
+                                    <div class="size-9 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 flex items-center justify-center text-[11px] font-black text-slate-400">
+                                        #<%= index + 1 %>
+                                    </div>
+                                    <div class="flex flex-col">
+                                        <span class="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Verified Entry</span>
+                                        <span class="text-[10px] font-bold text-slate-400">Deployed to Production</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all transform translate-x-2 group-hover:translate-x-0">
+                                    <button onclick="editQuestion('<%= q._id %>')" class="btn-action bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black">
+                                        <span class="material-symbols-rounded text-[18px]">edit_note</span> Edit
+                                    </button>
+                                    <button onclick="deleteQuestion('<%= q._id %>')" class="btn-action bg-rose-50 dark:bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-100 dark:border-rose-500/20">
+                                        <span class="material-symbols-rounded text-[18px]">delete_sweep</span> Delete
+                                    </button>
+                                </div>
+                            </div>
+
+                            <h2 class="text-2xl font-black text-slate-900 dark:text-white leading-[1.3] mb-8 max-w-3xl">
+                                <%= q.questionText %>
+                            </h2>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                                <% q.options.forEach((opt, optIdx) => { %>
+                                    <div class="flex items-center gap-4 p-5 rounded-2xl border transition-all <%= optIdx === q.correctAnswer ? 'bg-emerald-50/50 border-emerald-100 dark:bg-emerald-500/5 dark:border-emerald-500/20' : 'bg-slate-50/30 border-slate-100 dark:bg-slate-800/20 dark:border-slate-800' %>">
+                                        <div class="option-dot <%= optIdx === q.correctAnswer ? 'correct' : '' %>">
+                                            <%= String.fromCharCode(65 + optIdx) %>
+                                        </div>
+                                        <span class="text-sm font-bold <%= optIdx === q.correctAnswer ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400' %>"><%= opt %></span>
+                                    </div>
+                                <% }) %>
+                            </div>
+
+                            <% if(q.explanation) { %>
+                                <div class="p-6 rounded-[1.8rem] bg-blue-50/30 dark:bg-blue-500/5 border border-blue-100/50 dark:border-blue-500/10 flex items-start gap-5">
+                                    <div class="size-10 rounded-xl bg-white dark:bg-slate-800 flex items-center justify-center text-blue-500 shadow-sm">
+                                        <span class="material-symbols-rounded text-xl">psychology</span>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <span class="text-[9px] font-black text-blue-500 uppercase tracking-widest">Pedagogical Logic</span>
+                                        <p class="text-[13px] font-bold text-slate-600 dark:text-slate-400 leading-relaxed"><%= q.explanation %></p>
+                                    </div>
+                                </div>
+                            <% } %>
+                        </div>
+                    <% }) %>
+                </div>
+
+                <!-- Empty state handled by JS list or initial render -->
+                <% if (quiz.questions.length === 0) { %>
+                    <div class="py-32 flex flex-col items-center justify-center text-center">
+                        <div class="size-24 rounded-[2.5rem] bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-300 mb-8 border border-slate-200 dark:border-slate-700">
+                            <span class="material-symbols-rounded text-5xl">quiz</span>
+                        </div>
+                        <h2 class="text-3xl font-black text-slate-900 dark:text-white mb-3 tracking-tight">Studio Empty</h2>
+                        <p class="text-slate-500 dark:text-slate-400 font-bold mb-10 max-w-xs">Start building your assessment by adding the first evaluation vector.</p>
+                        <button onclick="openAddModal()" class="h-14 px-10 bg-primary text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-primary/30 hover:scale-105 transition-all active:scale-95">
+                            Initialize First Vector
+                        </button>
+                    </div>
+                <% } %>
+            </div>
+            
+            <!-- Safe Space -->
+            <div class="h-20"></div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        const questionsData = <%- JSON.stringify(quiz.questions) %>;
+        const quizId = '<%= quiz._id %>';
+
+        function openAddModal() {
+            Swal.fire({
+                title: 'New Evaluation Vector',
+                html: `
+                    <div class="space-y-4 text-left p-1">
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">The Proposition</label>
+                            <textarea id="swal-question" class="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all" rows="3" placeholder="Enter question text..."></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Option A</label>
+                                <input id="swal-opt-0" class="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Option B</label>
+                                <input id="swal-opt-1" class="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Option C</label>
+                                <input id="swal-opt-2" class="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Option D</label>
+                                <input id="swal-opt-3" class="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Correct Matrix</label>
+                            <select id="swal-correct" class="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all cursor-pointer">
+                                <option value="0">Option A (Alpha)</option>
+                                <option value="1">Option B (Beta)</option>
+                                <option value="2">Option C (Gamma)</option>
+                                <option value="3">Option D (Delta)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Solution Logic</label>
+                            <textarea id="swal-explanation" class="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all" rows="2" placeholder="Explain the correct answer..."></textarea>
+                        </div>
+                    </div>
+                `,
+                width: '560px',
+                showCancelButton: true,
+                confirmButtonText: 'Deploy Vector',
+                confirmButtonColor: '#000000',
+                cancelButtonColor: '#94a3b8',
+                preConfirm: () => {
+                    const data = {
+                        questionText: document.getElementById('swal-question').value,
+                        options: [
+                            document.getElementById('swal-opt-0').value,
+                            document.getElementById('swal-opt-1').value,
+                            document.getElementById('swal-opt-2').value,
+                            document.getElementById('swal-opt-3').value
+                        ],
+                        correctAnswer: parseInt(document.getElementById('swal-correct').value),
+                        explanation: document.getElementById('swal-explanation').value
+                    };
+                    if(!data.questionText || data.options.some(o => !o)) {
+                        Swal.showValidationMessage('Please fulfill all required fields');
+                    }
+                    return data;
+                }
+            }).then(result => {
+                if(result.isConfirmed) saveQuestion(result.value);
+            });
+        }
+
+        async function saveQuestion(data) {
+            try {
+                const response = await fetch(`/superadmin/quiz/${quizId}/add-question`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if((await response.json()).success) location.reload();
+                else Swal.fire('Error', 'Failed to deploy vector', 'error');
+            } catch (err) { Swal.fire('Error', 'Network error', 'error'); }
+        }
+
+        async function editQuestion(qid) {
+            const q = questionsData.find(x => x._id === qid);
+            if(!q) return;
+
+            Swal.fire({
+                title: 'Update Evaluation Vector',
+                html: `
+                    <div class="space-y-4 text-left p-1">
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">The Proposition</label>
+                            <textarea id="swal-question" class="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all" rows="3">${q.questionText}</textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div><label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Option A</label><input id="swal-opt-0" value="${q.options[0]}" class="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all"></div>
+                            <div><label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Option B</label><input id="swal-opt-1" value="${q.options[1]}" class="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all"></div>
+                            <div><label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Option C</label><input id="swal-opt-2" value="${q.options[2]}" class="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all"></div>
+                            <div><label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Option D</label><input id="swal-opt-3" value="${q.options[3]}" class="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all"></div>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Correct Matrix</label>
+                            <select id="swal-correct" class="w-full h-11 px-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all cursor-pointer">
+                                <option value="0" ${q.correctAnswer === 0 ? 'selected' : ''}>Option A (Alpha)</option>
+                                <option value="1" ${q.correctAnswer === 1 ? 'selected' : ''}>Option B (Beta)</option>
+                                <option value="2" ${q.correctAnswer === 2 ? 'selected' : ''}>Option C (Gamma)</option>
+                                <option value="3" ${q.correctAnswer === 3 ? 'selected' : ''}>Option D (Delta)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 ml-1">Solution Logic</label>
+                            <textarea id="swal-explanation" class="w-full p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[13px] font-bold outline-none focus:border-primary transition-all" rows="2">${q.explanation || ''}</textarea>
+                        </div>
+                    </div>
+                `,
+                width: '560px',
+                showCancelButton: true,
+                confirmButtonText: 'Update Vector',
+                confirmButtonColor: '#000000',
+                preConfirm: () => {
+                    return {
+                        questionText: document.getElementById('swal-question').value,
+                        options: [
+                            document.getElementById('swal-opt-0').value,
+                            document.getElementById('swal-opt-1').value,
+                            document.getElementById('swal-opt-2').value,
+                            document.getElementById('swal-opt-3').value
+                        ],
+                        correctAnswer: parseInt(document.getElementById('swal-correct').value),
+                        explanation: document.getElementById('swal-explanation').value
+                    }
+                }
+            }).then(result => {
+                if(result.isConfirmed) updateQuestion(qid, result.value);
+            });
+        }
+
+        async function updateQuestion(qid, data) {
+            try {
+                const response = await fetch(`/superadmin/quiz/${quizId}/question/${qid}/edit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if((await response.json()).success) location.reload();
+                else Swal.fire('Error', 'Update failed', 'error');
+            } catch (err) { Swal.fire('Error', 'Network error', 'error'); }
+        }
+
+        async function deleteQuestion(qid) {
+            const res = await Swal.fire({
+                title: 'Destroy Vector?',
+                text: 'This removal is permanent.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f43f5e',
+                confirmButtonText: 'Permanently Delete'
+            });
+            if (res.isConfirmed) {
+                try {
+                    const response = await fetch(`/superadmin/quiz/${quizId}/question/${qid}/delete`, { method: 'POST' });
+                    if ((await response.json()).success) {
+                        document.getElementById(`q-${qid}`).classList.add('fade-out', 'translate-x-4');
+                        setTimeout(() => location.reload(), 300);
+                    }
+                } catch (err) { Swal.fire('Error', 'Failed to delete', 'error'); }
+            }
+        }
+
+        function openBulkModal() {
+            Swal.fire({
+                title: 'Matrix Bulk Import',
+                html: `
+                    <div class="text-left">
+                        <p class="text-[10px] font-bold text-slate-400 mb-4 uppercase tracking-widest">Protocol: Question ### Opt1 ### Opt2 ### Opt3 ### Opt4 ### CorrectIndex (0-3) ### Explanation</p>
+                        <textarea id="swal-bulk" class="w-full p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-[11px] font-mono outline-none focus:border-primary" rows="10" placeholder="Question ### A ### B ### C ### D ### 0 ### Logic..."></textarea>
+                    </div>
+                `,
+                width: '800px',
+                showCancelButton: true,
+                confirmButtonText: 'Initialize Protocol',
+                confirmButtonColor: '#000000'
+            }).then(result => {
+                if(result.isConfirmed) {
+                    const raw = document.getElementById('swal-bulk').value;
+                    processBulk(raw);
+                }
+            });
+        }
+
+        async function processBulk(raw) {
+            const lines = raw.split('\n').filter(l => l.trim().includes('###'));
+            if(lines.length === 0) return;
+            
+            Swal.fire({ title: 'Processing Matrix...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            let count = 0;
+            for(const line of lines) {
+                const parts = line.split('###').map(p => p.trim());
+                if(parts.length < 6) continue;
+                const data = {
+                    questionText: parts[0],
+                    options: [parts[1], parts[2], parts[3], parts[4]],
+                    correctAnswer: parseInt(parts[5]),
+                    explanation: parts[6] || ''
+                };
+                await fetch(`/superadmin/quiz/${quizId}/add-question`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                count++;
+            }
+            Swal.fire('Success', `${count} Vectors Deployed`, 'success').then(() => location.reload());
+        }
+    </script>
+</body>
+</html>

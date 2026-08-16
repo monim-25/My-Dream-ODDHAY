@@ -1,215 +1,608 @@
 <!DOCTYPE html>
-<html class="light" lang="bn">
-
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
 <head>
-    <title>নোটস লাইব্রেরি | ODDHAY Admin</title>
     <%- include('../partials/head') %>
-        <style>
-            :root {
-                --admin-sidebar-width: 280px;
-            }
-
-            .admin-sidebar {
-                width: var(--admin-sidebar-width);
-                height: 100vh;
-                position: fixed;
-                left: 0;
-                top: 0;
-                z-index: 100;
-            }
-
-            .admin-main {
-                margin-left: var(--admin-sidebar-width);
-                min-height: 100vh;
-            }
-
-            @media (max-width: 1024px) {
-                .admin-sidebar {
-                    transform: translateX(-100%);
-                }
-
-                .admin-main {
-                    margin-left: 0;
-                }
-
-                .admin-sidebar.active {
-                    transform: translateX(0);
-                }
-            }
-        </style>
+    <title>Notes | ODDHAY Command Center</title>
+    <style>
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+        .content-scroll { flex: 1; overflow-y: auto; padding: 0; position: relative; }
+        @keyframes slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @media (max-width: 1024px) { .admin-sidebar { transform: translateX(-100%); } .admin-main { margin-left: 0; } }
+        .form-label { display: block; font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 5px; }
+        .dark .form-label { color: #94a3b8; }
+        .form-input { height: 42px; width: 100%; padding: 0 14px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #1e293b; outline: none; transition: border-color 0.2s; }
+        .dark .form-input { background: #0f172a; border-color: rgba(255,255,255,0.08); color: #e2e8f0; }
+        .form-input:focus { border-color: #137fec; }
+        .form-input::placeholder { font-size: 11px; font-weight: 500; color: #94a3b8; }
+    </style>
 </head>
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+    <div class="flex h-screen">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100]">
+            <%- include('sidebar_content', { active: 'notes' }) %>
+        </aside>
 
-<body class="bg-[#f8fafc] dark:bg-[#0b1120] text-slate-900 dark:text-slate-100 font-sans">
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617]">
+            <%- include('header_v2', { pageTitle: 'Notes' }) %>
 
-    <aside id="adminSidebar"
-        class="admin-sidebar bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 overflow-y-auto transition-transform duration-300">
-        <%- include('sidebar_content', { active: 'notes' }) %>
-    </aside>
-
-    <main class="admin-main">
-        <nav
-            class="h-20 bg-white/80 dark:bg-[#0f172a]/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800 flex items-center justify-between px-10 sticky top-0 z-50">
-            <div class="flex items-center gap-6 w-1/3">
-                <div class="relative w-full max-w-xs group">
-                    <span
-                        class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
-                    <input type="text" placeholder="নোটস খুঁজুন..."
-                        class="w-full bg-slate-50 dark:bg-slate-800/50 border-none rounded-2xl pl-11 pr-4 py-2.5 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all">
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5">
+                <!-- Archive Stats -->
+                <!-- Archive Stats -->
+                <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/50 p-2">
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-1">
+                        <div onclick="window.location.href='?subject=all'" class="bg-blue-50/40 dark:bg-blue-500/10 border border-blue-100/20 dark:border-blue-500/20 rounded-md p-3 flex flex-col group h-[85px] relative overflow-hidden transition-all hover:bg-blue-100/40 dark:hover:bg-blue-500/20 cursor-pointer">
+                            <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-blue-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">description</span>
+                            <p class="text-[11px] font-bold text-blue-600 dark:text-blue-400 tracking-wider relative z-10">Total Notes</p>
+                            <div class="flex-1 flex items-center"><h3 class="text-xl font-black text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.totalNotes %></h3></div>
+                            <p class="text-[10px] text-blue-500/70 font-medium relative z-10">Document Assets &rarr;</p>
+                        </div>
+                        <div onclick="window.location.href='?q=<%= filters.q %>&subject=<%= filters.subject %>&class=<%= filters.class %>&access=Paid'" class="bg-emerald-50/40 dark:bg-emerald-500/10 border border-emerald-100/20 dark:border-emerald-500/20 rounded-md p-3 flex flex-col group h-[85px] relative overflow-hidden transition-all hover:bg-emerald-100/40 dark:hover:bg-emerald-500/20 cursor-pointer">
+                            <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-emerald-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">workspace_premium</span>
+                            <p class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 tracking-wider relative z-10">Paid Notes</p>
+                            <div class="flex-1 flex items-center"><h3 class="text-xl font-black text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.paidNotesCount %></h3></div>
+                            <p class="text-[10px] text-emerald-500/70 font-medium relative z-10">Premium Content &rarr;</p>
+                        </div>
+                        <div onclick="window.location.href='?q=<%= filters.q %>&subject=<%= filters.subject %>&class=<%= filters.class %>&access=Free'" class="bg-amber-50/40 dark:bg-amber-500/10 border border-amber-100/20 dark:border-amber-500/20 rounded-md p-3 flex flex-col group h-[85px] relative overflow-hidden transition-all hover:bg-amber-100/40 dark:hover:bg-amber-500/20 cursor-pointer">
+                            <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-amber-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">money_off</span>
+                            <p class="text-[11px] font-bold text-amber-600 dark:text-amber-400 tracking-wider relative z-10">Free Notes</p>
+                            <div class="flex-1 flex items-center"><h3 class="text-xl font-black text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.freeNotesCount %></h3></div>
+                            <p class="text-[10px] text-amber-500/70 font-medium relative z-10">Open Access &rarr;</p>
+                        </div>
+                        <div class="bg-violet-50/40 dark:bg-violet-500/10 border border-violet-100/20 dark:border-violet-500/20 rounded-md p-3 flex flex-col group h-[85px] relative overflow-hidden transition-all hover:bg-violet-100/40 dark:hover:bg-violet-500/20">
+                            <span class="material-symbols-rounded absolute -right-2 -bottom-2 text-5xl text-purple-500 opacity-20 group-hover:scale-110 group-hover:rotate-12 transition-transform">groups</span>
+                            <p class="text-[11px] font-bold text-purple-600 dark:text-purple-400 tracking-wider relative z-10">Subscribers</p>
+                            <div class="flex-1 flex items-center"><h3 class="text-xl font-black text-slate-900 dark:text-white leading-none relative z-10 tracking-tight"><%= stats.totalPaidStudents %></h3></div>
+                            <p class="text-[10px] text-purple-500/70 font-medium relative z-10">Active Access &rarr;</p>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            <div class="flex items-center gap-6">
-                <button onclick="document.documentElement.classList.toggle('dark')"
-                    class="size-11 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center text-slate-500 shadow-sm transition-all"><span
-                        class="material-symbols-outlined dark:hidden">dark_mode</span><span
-                        class="material-symbols-outlined hidden dark:block text-amber-400">light_mode</span></button>
-            </div>
-        </nav>
 
-        <section class="p-10 max-w-[1600px] mx-auto">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
-                <div>
-                    <h1 class="text-4xl font-black tracking-tighter mb-2">নোটস <span
-                            class="text-primary">লাইব্রেরি</span></h1>
-                    <p class="text-slate-500 dark:text-slate-400 font-bold text-sm">সকল হ্যান্ড-নোটস এবং লেকচার শিট এখান
-                        থেকে ম্যানেজ করুন।</p>
+                <% if (typeof filterTeacher !== 'undefined' && filterTeacher) { %>
+                <!-- Teacher Filter Banner -->
+                <div class="px-4 py-2.5 bg-primary/5 border border-primary/20 rounded-md flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="size-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <span class="material-symbols-rounded text-primary text-base">person</span>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-bold text-slate-500">Filtering Notes by Teacher</p>
+                            <p class="text-xs font-black text-slate-900 dark:text-white"><%= filterTeacher.name %></p>
+                        </div>
+                        <% if (filterTeacher.teachingSubject) { %>
+                            <span class="px-2 py-0.5 rounded-md bg-fuchsia-50 dark:bg-fuchsia-500/10 border border-fuchsia-200 dark:border-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-300 text-[10px] font-semibold"><%= filterTeacher.teachingSubject %></span>
+                        <% } %>
+                    </div>
+                    <a href="/admin/notes" class="h-7 px-3 text-[10px] font-bold rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-primary hover:text-primary transition-all flex items-center gap-1">
+                        <span class="material-symbols-rounded text-[13px]">close</span> Clear Filter
+                    </a>
                 </div>
-                <% if (user.role==='admin' ) { %>
-                    <button onclick="document.getElementById('addNoteModal').classList.remove('hidden')"
-                        class="px-8 py-4 bg-primary text-white rounded-[2rem] font-black text-xs uppercase tracking-widest hover:bg-primary-dark transition-all shadow-xl shadow-primary/20 flex items-center gap-2">
-                        <span class="material-symbols-outlined text-[20px]">add</span> নতুন নোট যোগ করুন
-                    </button>
-                    <% } %>
-            </div>
+                <% } %>
 
-            <!-- Notes Table -->
-            <div
-                class="bg-white dark:bg-[#0f172a] rounded-[3rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 dark:bg-slate-800/50">
-                                <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">নোটস
-                                    শিরোনাম</th>
-                                <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">বিষয় ও
-                                    ক্লাস</th>
-                                <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">আপলোড
-                                    করেছেন</th>
-                                <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">
-                                    স্ট্যাটাস</th>
-                                <th class="p-8 text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">অ্যাকশন
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                            <% notes.forEach(note=> { %>
-                                <tr class="hover:bg-slate-50/30 dark:hover:bg-slate-800/10 transition-colors group">
-                                    <td class="p-8">
-                                        <div class="flex items-center gap-4">
-                                            <div
-                                                class="size-10 rounded-xl bg-orange-500/10 text-orange-500 flex items-center justify-center">
-                                                <span class="material-symbols-outlined">description</span></div>
-                                            <div>
-                                                <p class="font-black text-sm uppercase tracking-tighter mb-0.5">
-                                                    <%= note.title %>
-                                                </p>
-                                                <p class="text-[10px] font-bold text-slate-400">ID: <%=
-                                                        note._id.toString().slice(-6).toUpperCase() %>
-                                                </p>
+                <div class="p-1.5 bg-white dark:bg-[#0b1120] rounded-md border border-slate-200 dark:border-slate-700/50 flex flex-col relative mb-2 shadow-sm">
+                    <!-- Filters Bar -->
+                    <div class="sticky top-[-0.5rem] z-30 bg-white dark:bg-slate-800 px-3 py-2 border-b border-slate-50 dark:border-slate-700/50 flex flex-wrap items-center justify-between gap-3 shadow-sm rounded-t-md">
+                        <div class="flex items-center gap-2 flex-1 min-w-[300px]">
+                            <form action="" method="GET" class="relative flex-1 max-w-[400px] flex items-center">
+                                <input type="text" name="q" value="<%= filters.q %>" placeholder="Search archive..." class="w-full pl-3 pr-10 h-10 rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[12px] font-bold outline-none focus:border-blue-500 transition-all">
+                                <span class="material-symbols-rounded absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px] pointer-events-none">search</span>
+                                <input type="hidden" name="subject" value="<%= filters.subject %>">
+                                <input type="hidden" name="class" value="<%= filters.class %>">
+                                <input type="hidden" name="access" value="<%= filters.access %>">
+                                <% if (filters.author) { %><input type="hidden" name="author" value="<%= filters.author %>"><% } %>
+                            </form>
+                            
+                            <div class="relative w-[100px]">
+                                <select onchange="window.location.href='?q=<%= filters.q %>&class=<%= filters.class %>&access=<%= filters.access %>&subject=' + this.value" class="w-full h-10 pl-3 pr-7 rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
+                                    <option value="all">All Subject</option>
+                                    <% subjects.forEach(sub => { %>
+                                        <option value="<%= sub %>" <%= filters.subject === sub ? 'selected' : '' %>><%= sub %></option>
+                                    <% }) %>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                            </div>
+
+                            <div class="relative w-[100px]">
+                                <select onchange="window.location.href='?q=<%= filters.q %>&subject=<%= filters.subject %>&access=<%= filters.access %>&class=' + this.value" class="w-full h-10 pl-3 pr-7 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
+                                    <option value="all">All Class</option>
+                                    <% classes.forEach(cls => { %>
+                                        <option value="<%= cls %>" <%= filters.class === cls ? 'selected' : '' %>><%= cls %></option>
+                                    <% }) %>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                            </div>
+
+                            <div class="relative w-[100px]">
+                                <select onchange="window.location.href='?q=<%= filters.q %>&subject=<%= filters.subject %>&class=<%= filters.class %>&access=' + this.value" class="w-full h-10 pl-3 pr-7 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
+                                    <option value="all" <%= filters.access === 'all' ? 'selected' : '' %>>All Access</option>
+                                    <option value="Free" <%= filters.access === 'Free' ? 'selected' : '' %>>Free</option>
+                                    <option value="Paid" <%= filters.access === 'Paid' ? 'selected' : '' %>>Paid</option>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                            </div>
+
+
+                            <div class="h-10 px-4 bg-primary/10 border border-primary/20 rounded-lg flex items-center transition-all"><span class="text-[11px] font-bold text-primary">Found <span><%= filters.totalNotes %></span> Matches</span></div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="exportToCSV()" class="h-10 px-4 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-1.5"><span class="material-symbols-rounded text-sm">download</span> Export</button>
+                            <% if (user.role !== 'superadmin') { %>
+                                <a href="/admin/notes?author=<%= user._id %>" class="h-10 px-4 rounded-md <%= filters.author === user._id.toString() ? 'bg-primary/10 text-primary border-primary/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700' %> font-bold text-[10px] border transition-all flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-sm">person</span> My Notes
+                                </a>
+                                <button onclick="document.getElementById('addNoteModal').classList.remove('hidden')" class="h-10 px-4 rounded-md bg-primary text-white font-bold text-[10px] shadow-lg shadow-primary/20 hover:bg-blue-600 transition-all flex items-center gap-1.5"><span class="material-symbols-rounded text-sm">upload_file</span> New Note</button>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-slate-50/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                    <th class="pl-4 pr-1 text-center w-10">
+                                        <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" class="size-4 rounded border-slate-300 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                    </th>
+                                    <th class="pl-1 pr-3 py-2 text-[10px] font-bold text-slate-500 tracking-wider text-left">Notes Title</th>
+                                    <th class="px-6 py-2 text-[10px] font-bold text-slate-500 tracking-wider text-left">Subject</th>
+                                    <th class="px-6 py-2 text-[10px] font-bold text-slate-500 tracking-wider text-left">Class</th>
+                                    <th class="px-6 py-2 text-[10px] font-bold text-slate-500 tracking-wider text-left">Course</th>
+                                    <th class="px-6 py-2 text-[10px] font-bold text-slate-500 tracking-wider text-left">Access</th>
+                                    <th class="px-6 py-2 text-[10px] font-bold text-slate-500 tracking-wider text-left">Author</th>
+                                    <th class="pr-4 py-2 text-[10px] font-bold text-slate-500 tracking-wider text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-50 dark:divide-slate-800/50">
+                                <% notes.forEach(note => { %>
+                                    <tr class="note-row hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-all cursor-pointer group" ondblclick="toggleRowSelection('<%= note._id %>')">
+                                        <td class="pl-4 pr-1 py-3" onclick="event.stopPropagation()">
+                                            <input type="checkbox" name="itemSelect" value="<%= note._id %>" id="cb-<%= note._id %>" onchange="toggleSelection(this)" class="item-cb size-4 rounded border-slate-300 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity checked:opacity-100">
+                                        </td>
+                                        <td class="pl-1 pr-3 py-3">
+                                            <div class="flex items-center gap-3">
+                                                <div class="size-9 rounded-lg overflow-hidden bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-500 border border-orange-100 dark:border-orange-500/20 shadow-sm transition-transform hover:scale-105">
+                                                    <span class="material-symbols-rounded">picture_as_pdf</span>
+                                                </div>
+                                                <div class="flex flex-col">
+                                                    <p class="text-[11px] font-bold text-slate-900 dark:text-white leading-tight"><%= note.title %></p>
+                                                </div>
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td class="p-8">
-                                        <div class="flex flex-col gap-1">
-                                            <span
-                                                class="text-xs font-black text-slate-700 dark:text-slate-300 uppercase">
+                                        </td>
+                                        <td class="px-6 py-3">
+                                            <span class="px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-900 text-slate-500 text-[9px] font-bold border border-slate-100 dark:border-slate-800">
                                                 <%= note.subject %>
                                             </span>
-                                            <span
-                                                class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                                <%= note.classLevel %>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="p-8">
-                                        <div class="flex items-center gap-3">
-                                            <div
-                                                class="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-black text-[10px] text-slate-400">
-                                                <%= (note.addedBy ? note.addedBy.name : 'Unknown' )[0] %>
+                                        </td>
+                                        <td class="px-6 py-3">
+                                            <span class="text-[11px] font-bold text-slate-700 dark:text-slate-300"><%= note.classLevel %></span>
+                                        </td>
+                                        <td class="px-6 py-3">
+                                            <% if (note.course) { %>
+                                                <a href="/admin/course/<%= note.course._id %>" class="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[9px] font-bold border border-blue-100 dark:border-blue-500/20 hover:underline truncate max-w-[120px] block"><%= note.course.title %></a>
+                                            <% } else { %>
+                                                <span class="text-[9px] text-slate-400 font-bold">—</span>
+                                            <% } %>
+                                        </td>
+                                        <td class="px-6 py-3">
+                                            <% if (note.accessType === 'Paid') { %>
+                                                <span class="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-bold border border-amber-100 dark:border-amber-500/20">Paid</span>
+                                            <% } else { %>
+                                                <span class="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold border border-emerald-100 dark:border-emerald-500/20">Free</span>
+                                            <% } %>
+                                        </td>
+                                        <td class="px-6 py-3">
+                                            <div class="flex items-center gap-2">
+                                                <div class="size-7 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0">
+                                                    <% const avatar = note.addedBy && (note.addedBy.profilePicture || note.addedBy.profileImage); %>
+                                                    <% if (avatar) { %>
+                                                        <img src="<%= avatar %>" class="size-full object-cover" onerror="this.src='/images/default-avatar.png';">
+                                                    <% } else { %>
+                                                        <img src="/images/default-avatar.png" class="size-full object-cover">
+                                                    <% } %>
+                                                </div>
+                                                <span class="text-[10px] font-semibold text-slate-600 dark:text-slate-300 truncate max-w-[90px]"><%= note.addedBy ? note.addedBy.name : 'System' %></span>
                                             </div>
-                                            <span class="text-xs font-bold">
-                                                <%= note.addedBy ? note.addedBy.name : 'সিস্টেম' %>
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="p-8">
-                                        <span
-                                            class="px-3 py-1 rounded-lg bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase tracking-widest">লাইভ</span>
-                                    </td>
-                                    <td class="p-8">
-                                        <div class="flex items-center gap-2">
-                                            <a href="<%= note.fileUrl %>" target="_blank"
-                                                class="size-9 flex items-center justify-center bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-primary transition-all shadow-sm"><span
-                                                    class="material-symbols-outlined text-[20px]">visibility</span></a>
-                                            <% if (user.role==='admin' ) { %>
-                                                <button
-                                                    class="size-9 flex items-center justify-center bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-rose-500 transition-all shadow-sm"><span
-                                                        class="material-symbols-outlined text-[20px]">delete</span></button>
+                                        </td>
+                                        <td class="pr-4 py-3">
+                                            <div class="flex items-center justify-end gap-1.5">
+                                                <% if (note.fileUrl) { %>
+                                                    <a href="/admin/note-details/<%= note._id %>" class="size-7 rounded bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 text-blue-500 hover:bg-blue-500 hover:text-white transition-all flex items-center justify-center shadow-sm" title="View Material">
+                                                        <span class="material-symbols-rounded text-[18px]">visibility</span>
+                                                    </a>
                                                 <% } %>
-                                        </div>
-                                    </td>
-                                </tr>
+                                                <% if (user.role === 'superadmin' || (note.addedBy && note.addedBy._id.toString() === user._id.toString())) { %>
+                                                    <a href="/admin/note-details/<%= note._id %>?edit=true" class="size-7 rounded bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white transition-all flex items-center justify-center shadow-sm" title="Edit Note">
+                                                        <span class="material-symbols-rounded text-[18px]">edit</span>
+                                                    </a>
+                                                    <button onclick="deleteResource('<%= note._id %>')" class="size-7 rounded bg-rose-50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20 text-rose-500 hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center shadow-sm" title="Delete Entry">
+                                                        <span class="material-symbols-rounded text-[18px]">delete</span>
+                                                    </button>
+                                                <% } %>
+                                            </div>
+                                        </td>
+                                    </tr>
                                 <% }) %>
-                        </tbody>
-                    </table>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <div class="px-3 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <p class="text-[9px] font-bold text-slate-500">Page <%= filters.page %> of <%= filters.totalPages %></p>
+                        <div class="flex items-center gap-0.5">
+                            <% for(var i=1; i<=filters.totalPages; i++) { %>
+                                <a href="?page=<%= i %>&q=<%= filters.q %>&subject=<%= filters.subject %>&class=<%= filters.class %>&access=<%= filters.access %>" class="size-7 rounded-md flex items-center justify-center text-[9px] font-bold<% if(filters.page === i) { %> bg-primary text-white shadow-lg shadow-primary/20<% } else { %> bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700<% } %> transition-all">
+                                    <%= i %>
+                                </a>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Action Bar -->
+                    <div id="bulkActions" class="hidden sticky bottom-1 bg-white/90 dark:bg-slate-800/90 backdrop-blur-xl text-slate-800 dark:text-white px-6 py-3 flex items-center justify-between z-50 border border-slate-200 dark:border-slate-700 mx-0.5 rounded-md shadow-xl shadow-slate-200/50 dark:shadow-black/50">
+                        <div class="flex items-center gap-6">
+                            <div class="flex items-center gap-2">
+                                <div class="size-7 rounded-full bg-primary/10 flex items-center justify-center">
+                                    <span class="material-symbols-rounded text-primary text-base">check_circle</span>
+                                </div>
+                                <span class="text-[11px] font-bold tracking-tight">Selected <span id="selectedCount" class="text-primary">0</span></span>
+                            </div>
+                            <div class="h-4 w-[1px] bg-slate-200 dark:bg-slate-700"></div>
+                            <button onclick="selectAllRows(true)" id="selectAllBtn" class="text-[9px] font-bold tracking-widest text-slate-500 hover:text-primary transition-colors border border-slate-200 dark:border-slate-700 px-2 py-1 rounded-md">Select All</button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="handleBulkAction('delete')" class="h-8 px-4 bg-rose-500 text-white rounded-md text-[10px] font-bold hover:bg-rose-600 transition-all shadow-lg shadow-rose-500/20">Delete</button>
+                            <button onclick="clearSelection()" class="h-8 px-4 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-md text-[10px] font-bold hover:bg-slate-200 dark:hover:bg-slate-600 transition-all">Cancel</button>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </section>
-    </main>
+        </main>
+    </div>
 
-    <!-- Modal Placeholder -->
-    <div id="addNoteModal"
-        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[200] hidden flex items-center justify-center p-6">
-        <div class="bg-white dark:bg-[#0f172a] rounded-[3rem] w-full max-w-xl overflow-hidden shadow-2xl">
-            <div class="p-10">
-                <div class="flex justify-between items-center mb-8">
-                    <h3 class="text-2xl font-black">নতুন নোট <span class="text-primary">আপলোড</span></h3>
-                    <button onclick="document.getElementById('addNoteModal').classList.add('hidden')"
-                        class="size-10 rounded-xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400"><span
-                            class="material-symbols-outlined">close</span></button>
+    <!-- Add Note Modal -->
+    <div id="addNoteModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[250] hidden flex items-end sm:items-center justify-center p-4 transition-all">
+        <div class="bg-white dark:bg-[#0f172a] rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 relative flex flex-col max-h-[90vh]">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/5 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="size-9 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20">
+                        <span class="material-symbols-rounded text-primary text-[20px]">upload_file</span>
+                    </div>
+                    <div>
+                        <h3 class="text-[15px] font-bold text-slate-900 dark:text-white tracking-tight">Upload Material</h3>
+                        <p class="text-[10px] font-bold text-slate-400">Add a new lecture note or study document</p>
+                    </div>
                 </div>
-                <form action="/admin/add-note" method="POST" enctype="multipart/form-data" class="space-y-6">
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">নোট
-                            শিরোনাম</label>
-                        <input type="text" name="title" required
-                            class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-6 py-3.5 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all">
-                    </div>
-                    <div class="grid grid-cols-2 gap-6">
-                        <div class="space-y-2">
-                            <label
-                                class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">বিষয়</label>
-                            <input type="text" name="subject" required
-                                class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-6 py-3.5 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all">
+                <button onclick="document.getElementById('addNoteModal').classList.add('hidden')" class="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-all">
+                    <span class="material-symbols-rounded text-[18px]">close</span>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <div class="overflow-y-auto flex-1">
+                <form id="addNoteForm" action="/admin/add-note" method="POST" enctype="multipart/form-data" class="divide-y divide-slate-100 dark:divide-white/5">
+                    <!-- Section 1: Identity -->
+                    <div class="p-6">
+                        <p class="text-[11px] font-bold text-slate-400 mb-4 flex items-center gap-2"><span class="material-symbols-rounded text-[15px]">badge</span> Document Identity</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="md:col-span-2">
+                                <label class="form-label">Title <span class="text-rose-500">*</span></label>
+                                <input type="text" name="title" required placeholder="Physics Handnote — Chapter 01" class="form-input w-full">
+                            </div>
+                            <div>
+                                <label class="form-label">Subject <span class="text-rose-500">*</span></label>
+                                <select name="subject" id="noteSubject" required onchange="filterCourses()" class="form-input w-full cursor-pointer">
+                                    <option value="">Select Subject</option>
+                                    <% ([...new Set((typeof globalAcademicClasses !== 'undefined' ? globalAcademicClasses : []).flatMap(c => c.subjects || []))]).forEach(s => { %>
+                                        <option value="<%= s %>"><%= s %></option>
+                                    <% }) %>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Class Level <span class="text-rose-500">*</span></label>
+                                <select name="classLevel" id="noteClassLevel" required onchange="filterCourses()" class="form-input w-full cursor-pointer">
+                                    <option value="">Select Class</option>
+                                    <% ((typeof globalAcademicClasses !== 'undefined' ? globalAcademicClasses : []).map(c => c.name)).forEach(c => { %>
+                                        <option value="<%= c %>"><%= c %></option>
+                                    <% }) %>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label">Chapter</label>
+                                <input type="text" name="chapter" placeholder="Chapter 01" class="form-input w-full">
+                            </div>
+                            <div>
+                                <label class="form-label">Description</label>
+                                <input type="text" name="description" placeholder="Short overview of this material" class="form-input w-full">
+                            </div>
                         </div>
-                        <div class="space-y-2">
-                            <label
-                                class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">ক্লাস</label>
-                            <input type="text" name="classLevel" required
-                                class="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-6 py-3.5 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all">
+                    </div>
+                    <!-- Section 2: Access & Course -->
+                    <div class="p-6">
+                        <p class="text-[11px] font-bold text-slate-400 mb-4 flex items-center gap-2"><span class="material-symbols-rounded text-[15px]">lock</span> Access & Course Link</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label">Link to Course <span class="text-[10px] text-slate-400 font-normal">(optional)</span></label>
+                                <select id="noteCoursePicker" name="course" onchange="syncAccessFromCourse()" class="form-input w-full cursor-pointer">
+                                    <option value="" data-access="" data-subjects="" data-classes="">— Standalone Note —</option>
+                                    <% userCourses.forEach(c => { %>
+                                        <option value="<%= c._id %>" 
+                                                data-access="<%= c.accessType %>" 
+                                                data-subjects="<%= Array.isArray(c.subject) ? c.subject.join(',') : (c.subject || '') %>" 
+                                                data-classes="<%= Array.isArray(c.classLevel) ? c.classLevel.join(',') : (c.classLevel || '') %>">
+                                            <%= c.title %> <% if(c.accessType === 'paid') { %>(Paid)<% } else { %>(Free)<% } %>
+                                        </option>
+                                    <% }) %>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label" id="accessLabel">Access Type</label>
+                                <div id="accessAutoMsg" class="hidden mb-2 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 text-[10px] font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-[14px]">auto_fix_high</span>
+                                    Auto-set from selected course
+                                </div>
+                                <select id="noteAccessType" name="accessType" class="form-input w-full cursor-pointer">
+                                    <option value="Free">Free — Open Access</option>
+                                    <option value="Paid">Paid — Premium Only</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
-                    <div class="space-y-2">
-                        <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-2">পিডিএফ
-                            ফাইল</label>
-                        <input type="file" name="note" required class="w-full text-xs font-black">
+                    <!-- Section 3: File Upload -->
+                    <div class="p-6">
+                        <p class="text-[11px] font-bold text-slate-400 mb-4 flex items-center gap-2"><span class="material-symbols-rounded text-[15px]">picture_as_pdf</span> Attach PDF</p>
+                        <label class="relative flex flex-col items-center justify-center h-28 border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl cursor-pointer group hover:border-primary/60 hover:bg-primary/5 transition-all">
+                            <input type="file" name="note" accept="application/pdf" required onchange="updateFileName(this)" class="absolute inset-0 opacity-0 cursor-pointer">
+                            <span class="material-symbols-rounded text-3xl text-slate-300 group-hover:text-primary transition-colors mb-1">upload_file</span>
+                            <span id="fileLabel" class="text-[11px] font-semibold text-slate-400 group-hover:text-primary transition-colors">Click to select PDF</span>
+                            <span class="text-[10px] text-slate-300 mt-0.5">PDF only</span>
+                        </label>
                     </div>
-                    <button type="submit"
-                        class="w-full py-4 bg-primary text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-[1.02] transition-all mt-4">আপলোড
-                        শুরু করুন</button>
+                    <!-- Footer -->
+                    <div class="px-6 py-4 bg-slate-50 dark:bg-white/[0.02] flex items-center justify-end gap-3 flex-shrink-0">
+                        <button type="button" onclick="document.getElementById('addNoteModal').classList.add('hidden')" class="h-10 px-5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[12px] font-semibold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Cancel</button>
+                        <button type="submit" class="h-10 px-6 rounded-lg bg-primary text-white text-[12px] font-bold shadow-lg shadow-primary/20 hover:bg-blue-600 transition-all flex items-center gap-2"><span class="material-symbols-rounded text-sm">check</span> Submit</button>
+                    </div>
                 </form>
             </div>
         </div>
     </div>
-</body>
 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        const selectedItems = new Set();
+        function toggleSelectAll() { selectAllRows(document.getElementById('selectAll').checked); }
+        function selectAllRows(force) {
+            document.querySelectorAll('.item-cb').forEach(cb => { cb.checked = force; if(force) selectedItems.add(cb.value); else selectedItems.delete(cb.value); });
+            const selectAllCb = document.getElementById('selectAll');
+            if(selectAllCb) selectAllCb.checked = force;
+            updateBulkUI();
+        }
+        function toggleRowSelection(id) { const cb = document.getElementById(`cb-${id}`); if (cb) { cb.checked = !cb.checked; toggleSelection(cb); } }
+        function toggleSelection(el) {
+            if(el.checked) selectedItems.add(el.value); else selectedItems.delete(el.value);
+            const selectAllCb = document.getElementById('selectAll');
+            if(selectAllCb) selectAllCb.checked = document.querySelectorAll('.item-cb').length === selectedItems.size;
+            updateBulkUI();
+        }
+        function updateBulkUI() {
+            const bar = document.getElementById('bulkActions');
+            const countEl = document.getElementById('selectedCount');
+            if(selectedItems.size > 0) { bar.classList.remove('hidden'); countEl.innerText = selectedItems.size; } else { bar.classList.add('hidden'); }
+        }
+        function clearSelection() {
+            selectedItems.clear();
+            document.querySelectorAll('.item-cb').forEach(i => i.checked = false);
+            document.getElementById('selectAll').checked = false;
+            updateBulkUI();
+        }
+
+        async function handleBulkAction(action) {
+            const res = await Swal.fire({ title: 'Bulk Action', text: `Apply ${action} to ${selectedItems.size} items?`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#137fec' });
+            if (!res.isConfirmed) return;
+            try {
+                const response = await fetch('/admin/notes/bulk-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action, itemIds: Array.from(selectedItems) })
+                });
+                const data = await response.json();
+                if (data.success) location.reload();
+                else Swal.fire('Error', data.error || 'Failed', 'error');
+            } catch (err) { Swal.fire('Error', 'Network error', 'error'); }
+        }
+
+        async function deleteResource(id) {
+            const res = await Swal.fire({ title: 'Confirm Deletion', text: 'This action cannot be undone.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#f43f5e' });
+            if (res.isConfirmed) { window.location.href = `/admin/note/${id}/delete`; }
+        }
+
+        function updateFileName(input) {
+            const label = document.getElementById('fileLabel');
+            if (input.files[0]) {
+                label.textContent = input.files[0].name;
+                label.classList.add('text-primary');
+            }
+        }
+
+        function syncAccessFromCourse() {
+            const picker = document.getElementById('noteCoursePicker');
+            const accessSelect = document.getElementById('noteAccessType');
+            const autoMsg = document.getElementById('accessAutoMsg');
+            const selected = picker.options[picker.selectedIndex];
+            const courseAccess = selected ? selected.getAttribute('data-access') : '';
+            if (courseAccess) {
+                // Map course accessType: 'paid' -> 'Paid', 'free'/'Free' -> 'Free'
+                const val = courseAccess.charAt(0).toUpperCase() + courseAccess.slice(1).toLowerCase();
+                const match = val === 'Paid' ? 'Paid' : 'Free';
+                accessSelect.value = match;
+                accessSelect.disabled = true;
+                autoMsg.classList.remove('hidden');
+            } else {
+                accessSelect.disabled = false;
+                autoMsg.classList.add('hidden');
+            }
+        }
+
+        function filterCourses() {
+            const subject = document.getElementById('noteSubject').value;
+            const classLevel = document.getElementById('noteClassLevel').value;
+            const picker = document.getElementById('noteCoursePicker');
+            const options = picker.querySelectorAll('option');
+
+            let matchCount = 0;
+            options.forEach(opt => {
+                if (opt.value === "") {
+                    opt.style.display = "block";
+                    return;
+                }
+
+                const courseSubjects = opt.getAttribute('data-subjects').split(',');
+                const courseClasses = opt.getAttribute('data-classes').split(',');
+
+                const subjectMatch = !subject || courseSubjects.includes(subject);
+                const classMatch = !classLevel || courseClasses.includes(classLevel);
+
+                if (subjectMatch && classMatch) {
+                    opt.style.display = "block";
+                    matchCount++;
+                } else {
+                    opt.style.display = "none";
+                    if (picker.value === opt.value) {
+                        picker.value = "";
+                        syncAccessFromCourse();
+                    }
+                }
+            });
+        }
+
+        function exportToCSV() {
+            const rows = [['Title', 'Subject', 'Class', 'Date']];
+            // Extract from DOM to avoid large JSON injection
+            document.querySelectorAll('.note-row').forEach(tr => {
+                const title = tr.querySelector('p').innerText;
+                const subject = tr.querySelector('span').innerText;
+                const classLevel = tr.querySelectorAll('span')[1].innerText;
+                const date = tr.querySelectorAll('td')[4].innerText;
+                rows.push([title, subject, classLevel, date]);
+            });
+            const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+            const link = document.createElement("a");
+            link.setAttribute("href", encodeURI(csvContent));
+            link.setAttribute("download", "lecture_notes.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const globalAcademicClasses = <%- typeof globalAcademicClasses !== 'undefined' ? JSON.stringify(globalAcademicClasses) : '[]' %>;
+        if (!globalAcademicClasses || globalAcademicClasses.length === 0) return;
+
+        function updateDynamicSubjects() {
+            const classCheckboxes = document.querySelectorAll('input[name="classLevel[]"]:checked, input[name="classes"]:checked, input[name="classes[]"]:checked, input[name="targetClass"]:checked');
+            const classSelects = document.querySelectorAll('select[name="applicableClass"], select[name="classLevel"], select[name="class"], select[name="targetClass"]');
+            
+            let selectedClasses = [];
+            classCheckboxes.forEach(cb => selectedClasses.push(cb.value));
+            classSelects.forEach(sel => { if(sel.value) selectedClasses.push(sel.value); });
+
+            let allowedSubjects = new Set();
+            if (selectedClasses.length === 0) {
+                globalAcademicClasses.forEach(c => (c.subjects || []).forEach(s => allowedSubjects.add(s)));
+            } else {
+                globalAcademicClasses.forEach(c => {
+                    const normalizedClass = c.name.replace('Class ', '');
+                    if (selectedClasses.includes(c.name) || selectedClasses.includes(normalizedClass)) {
+                        (c.subjects || []).forEach(s => allowedSubjects.add(s));
+                    }
+                });
+            }
+
+            const subjectCheckboxes = document.querySelectorAll('input[name="subject[]"], input[name="subjects"], input[name="subjects[]"], input[name="targetSubject"]');
+            subjectCheckboxes.forEach(cb => {
+                const optDiv = cb.closest('.multi-select-option');
+                if (optDiv) {
+                    if (allowedSubjects.has(cb.value)) {
+                        optDiv.style.display = 'flex';
+                    } else {
+                        optDiv.style.display = 'none';
+                        if (cb.checked) {
+                            cb.checked = false;
+                            const checkIcon = optDiv.querySelector('.material-symbols-rounded');
+                            if (checkIcon) checkIcon.classList.add('hidden');
+                            optDiv.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+                            if(checkIcon && checkIcon.parentElement) checkIcon.parentElement.classList.remove('bg-blue-500', 'border-blue-500');
+                        }
+                    }
+                }
+            });
+
+            const subjectSelects = document.querySelectorAll('select[name="subject"], select[name="targetSubject"]');
+            subjectSelects.forEach(sel => {
+                const options = sel.querySelectorAll('option');
+                let hasValidSelected = false;
+                options.forEach(opt => {
+                    if (!opt.value) return; 
+                    if (allowedSubjects.has(opt.value)) {
+                        opt.style.display = '';
+                        if (sel.value === opt.value) hasValidSelected = true;
+                    } else {
+                        opt.style.display = 'none';
+                    }
+                });
+                if (!hasValidSelected && sel.value) sel.value = '';
+            });
+            
+            document.querySelectorAll('.multi-select-container').forEach(container => {
+                const classLevelNames = ['classLevel', 'classes', 'targetClass', 'applicableClass'];
+                const subjectNames = ['subject', 'subjects', 'targetSubject', 'applicableSubject'];
+                const dataName = container.getAttribute('data-name');
+                if (dataName && subjectNames.includes(dataName)) {
+                    const triggerSpan = container.querySelector('.multi-select-trigger span');
+                    const checkedBox = container.querySelectorAll('input[type="checkbox"]:checked');
+                    if (triggerSpan) {
+                        if (checkedBox.length === 0) {
+                            triggerSpan.textContent = 'Select Subjects';
+                            triggerSpan.classList.add('text-slate-400');
+                            triggerSpan.classList.remove('text-slate-700', 'dark:text-slate-200');
+                        } else {
+                            triggerSpan.textContent = Array.from(checkedBox).map(cb => cb.value).join(', ');
+                            triggerSpan.classList.remove('text-slate-400');
+                            triggerSpan.classList.add('text-slate-700', 'dark:text-slate-200');
+                        }
+                    }
+                }
+            });
+        }
+
+        document.querySelectorAll('select[name="applicableClass"], select[name="classLevel"], select[name="class"], select[name="targetClass"]').forEach(sel => {
+            sel.addEventListener('change', updateDynamicSubjects);
+        });
+
+        const observer = new MutationObserver(mutations => {
+            let shouldUpdate = false;
+            mutations.forEach(m => {
+                const container = m.target.closest('.multi-select-container');
+                if (container) {
+                    const dataName = container.getAttribute('data-name') || '';
+                    if (['classLevel', 'classes', 'targetClass', 'applicableClass'].includes(dataName) || container.querySelector('input[name="targetClass"]')) {
+                        shouldUpdate = true;
+                    }
+                }
+            });
+            if (shouldUpdate) updateDynamicSubjects();
+        });
+
+        document.querySelectorAll('.multi-select-dropdown').forEach(dropdown => {
+            observer.observe(dropdown, { attributes: true, subtree: true, attributeFilter: ['class'] });
+        });
+
+        setTimeout(updateDynamicSubjects, 100);
+    });
+</script>
+</body>
 </html>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="bn" class="<%= locals.user && user.theme === 'dark' ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title><%= notice.title %> | ODDHAY Notice</title>
+</head>
+
+<body class="bg-[#f8fafc] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300">
+    <%- include('partials/student-header') %>
+
+    <div class="flex-1 flex overflow-hidden">
+        <%- include('partials/student-sidebar', { activePage: 'dashboard' }) %>
+
+        <main class="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 no-scrollbar bg-[#f8fafc] dark:bg-[#0b1120]">
+
+            <!-- Navigation Back Bar -->
+            <div class="flex items-center justify-between">
+                <a href="/dashboard" class="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:text-rose-500 shadow-sm transition-all">
+                    <span class="material-symbols-rounded text-base shrink-0 flex items-center justify-center -mt-0.5">arrow_back</span>
+                    <span>Back to Dashboard</span>
+                </a>
+
+                <span class="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                    <span class="material-symbols-rounded text-sm shrink-0 flex items-center justify-center -mt-0.5">schedule</span>
+                    <span><%= notice.timeAgo %></span>
+                </span>
+            </div>
+
+            <!-- Notice Full Detail Card -->
+            <div class="bg-white dark:bg-[#0f172a] border <%= notice.isHighPriority ? 'border-rose-400 dark:border-rose-500/50 shadow-rose-500/5' : 'border-slate-200/80 dark:border-slate-800/80' %> rounded-2xl p-5 lg:p-8 shadow-sm space-y-5 relative overflow-hidden max-w-4xl mx-auto">
+                
+                <!-- Category & Priority Badges -->
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-4 flex-wrap gap-2">
+                    <div class="flex items-center gap-2">
+                        <span class="size-2.5 rounded-full shrink-0 <%= notice.isHighPriority ? 'bg-rose-500 animate-pulse' : 'bg-amber-500' %>"></span>
+                        <span class="text-xs font-extrabold <%= notice.isHighPriority ? 'text-rose-500' : 'text-slate-700 dark:text-slate-300' %>">
+                            <%= notice.isHighPriority ? 'Important Notice' : (notice.category || 'Notice & Updates') %>
+                        </span>
+                    </div>
+
+                    <% if (notice.courseTitle) { %>
+                        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-100 dark:border-rose-900/30">
+                            <span class="material-symbols-rounded text-sm shrink-0 flex items-center justify-center -mt-0.5">auto_stories</span>
+                            <span><%= notice.courseTitle %></span>
+                        </div>
+                    <% } %>
+                </div>
+
+                <!-- Notice Title -->
+                <h1 class="text-lg lg:text-2xl font-black text-slate-900 dark:text-white leading-tight">
+                    <%= notice.title %>
+                </h1>
+
+                <!-- Date & Time Bar (No Sender Info) -->
+                <div class="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                    <span class="material-symbols-rounded text-sm shrink-0 flex items-center justify-center -mt-0.5">schedule</span>
+                    <span><%= notice.formattedDate %></span>
+                    <span>•</span>
+                    <span><%= notice.timeAgo %></span>
+                </div>
+
+                <!-- Full Message Content with Inline Clickable Web Links -->
+                <%
+                    let formattedMessage = notice.message || '';
+                    const urlRegex = /(https?:\/\/[^\s]+)/g;
+                    const htmlMessage = formattedMessage.replace(urlRegex, function(url) {
+                        return '<a href="' + url + '" target="_blank" rel="noopener noreferrer" class="text-rose-500 underline font-bold hover:text-rose-600 break-all">' + url + '</a>';
+                    });
+                %>
+                <div class="text-sm lg:text-base text-slate-700 dark:text-slate-300 leading-relaxed font-medium whitespace-pre-wrap py-3 border-t border-slate-100 dark:border-slate-800">
+                    <%- htmlMessage %>
+                </div>
+
+                <!-- Clean Related Course / Resource Button -->
+                <% if (notice.link && notice.link !== '/dashboard' && notice.link !== '#') { %>
+                    <div class="pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-end flex-wrap gap-3">
+                        <a href="<%= notice.link %>" onclick="attendNotice('<%= notice.id %>')"
+                           class="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm group">
+                            <span><%= notice.link.includes('course-details') || notice.link.includes('/courses') ? 'Explore Course' : (notice.buttonText || 'Explore Link') %></span>
+                            <span class="material-symbols-rounded text-sm group-hover:translate-x-0.5 transition-transform shrink-0 flex items-center justify-center -mt-0.5">arrow_forward</span>
+                        </a>
+                    </div>
+                <% } %>
+            </div>
+
+        </main>
+    </div>
+
+    <%- include('partials/student-bottom-nav', { activePage: 'dashboard' }) %>
+    <%- include('partials/app-scripts') %>
+
+    <script>
+        function attendNotice(noticeId) {
+            if (!noticeId) return;
+            try {
+                fetch('/api/attend-notice', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ noticeId })
+                }).catch(err => {});
+            } catch (e) {}
+        }
+    </script>
+</body>
+</html>

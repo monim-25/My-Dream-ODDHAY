@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+<head>
+    <%- include('../partials/head') %>
+    <title>User Profile Insight | ODDHAY Command Center</title>
+    <% 
+        const maskText = (text, type = 'phone') => {
+            if (!text) return 'N/A';
+            // Superadmins see everything
+            if (user.role === 'superadmin' || user.email === 'admin@oddhay.com') return text;
+            
+            // Admins see student info, but not other staff info
+            if (user.role === 'admin' && targetUser.role === 'student') return text;
+
+            if (type === 'email') {
+                const parts = text.split('@');
+                if (parts.length < 2) return '********';
+                const name = parts[0];
+                const domain = parts[1];
+                return name.charAt(0) + '***' + name.charAt(name.length - 1) + '@' + domain;
+            }
+            if (type === 'phone') {
+                return text.substring(0, 4) + '****' + text.substring(text.length - 3);
+            }
+            return '********';
+        };
+    %>
+    <style>
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+        .content-scroll { flex: 1; overflow-y: auto; padding: 0; position: relative; }
+        @keyframes slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slide-up { animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @media (max-width: 1024px) { .admin-sidebar { transform: translateX(-100%); } .admin-main { margin-left: 0; } }
+        
+        /* Command Center Tabs */
+        .tab-btn { position: relative; transition: all 0.2s ease; }
+        .tab-btn.active { color: #137fec; }
+        .tab-btn.active::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: #137fec; border-radius: 2px 2px 0 0; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fade-in 0.3s ease; }
+        @keyframes fade-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+    <div class="flex h-screen">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100]">
+            <%- include('sidebar_content', { active: 'users' }) %>
+        </aside>
+
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617]">
+            <%- include('header_v2', { pageTitle: 'Intelligence Profile' }) %>
+
+            <% 
+              // Inject mock data if empty for UI testing
+              if (!targetUser.enrolledCourses || targetUser.enrolledCourses.length === 0) {
+                  targetUser.enrolledCourses = [
+                      { course: { _id: '123', title: 'Advanced Physics Masterclass', subject: 'Physics', classLevel: 'Class 11' }, progress: 45 },
+                      { course: { _id: '124', title: 'Organic Chemistry Basics', subject: 'Chemistry', classLevel: 'Class 11' }, progress: 12 },
+                      { course: { _id: '125', title: 'Higher Math Final Prep', subject: 'Mathematics', classLevel: 'Class 12' }, progress: 88 }
+                  ];
+              }
+              if (!targetUser.quizResults || targetUser.quizResults.length === 0) {
+                  targetUser.quizResults = [
+                      { quiz: { title: 'Newtonian Mechanics Quiz 1' }, score: 18, total: 20, date: new Date(Date.now() - 86400000) },
+                      { quiz: { title: 'Organic Chemistry Mock Test' }, score: 8, total: 30, date: new Date(Date.now() - 172800000) },
+                      { quiz: { title: 'Calculus Midterm' }, score: 45, total: 50, date: new Date(Date.now() - 259200000) }
+                  ];
+              }
+              if (!payments || payments.length === 0) {
+                  payments = [
+                      { transactionId: 'TRX-10293847', course: { title: 'Advanced Physics Masterclass' }, amount: 1500, discountAmount: 0, refundAmount: 0, status: 'success', createdAt: new Date(Date.now() - 86400000 * 5) },
+                      { transactionId: 'TRX-56473829', course: { title: 'Organic Chemistry Basics' }, amount: 1200, discountAmount: 300, couponCode: 'EARLYBIRD', refundAmount: 0, status: 'approved', createdAt: new Date(Date.now() - 86400000 * 12) },
+                      { transactionId: 'TRX-99887766', course: { title: 'Higher Math Final Prep' }, amount: 2000, discountAmount: 0, refundAmount: 2000, status: 'refunded', createdAt: new Date(Date.now() - 86400000 * 20) }
+                  ];
+              }
+              if (!targetUser.activeDevices || targetUser.activeDevices.length === 0) {
+                  targetUser.activeDevices = [
+                      { deviceId: 'sess_1', browser: 'Chrome', os: 'Windows 11', deviceType: 'Desktop', ip: '103.145.72.18', lastActive: new Date() },
+                      { deviceId: 'sess_2', browser: 'Safari', os: 'iOS 17', deviceType: 'Mobile', ip: '202.5.48.210', lastActive: new Date(Date.now() - 86400000) },
+                      { deviceId: 'sess_3', browser: 'Chrome Mobile', os: 'Android 14', deviceType: 'Mobile', ip: '103.145.72.18', lastActive: new Date(Date.now() - 172800000) }
+                  ];
+              }
+            %>
+
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5">
+                
+                <!-- Main Combined Container -->
+                <div class="bg-white dark:bg-[#0b1120] rounded-lg border border-slate-200 dark:border-slate-700/50 shadow-sm mb-3 flex flex-col flex-1">
+                    
+                    <!-- Profile Header Section -->
+                    <div class="p-6 border-b border-slate-900/5 dark:border-white/5 flex flex-col gap-6 relative shrink-0">
+                        <!-- Top Row: Avatar + Info -->
+                        <div class="flex flex-col md:flex-row items-center md:items-start gap-6 w-full">
+                            <!-- Avatar & Rating Badge -->
+                            <div class="relative shrink-0">
+                                <div class="size-32 lg:size-40 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-6xl font-black text-slate-300 dark:text-slate-600 border border-slate-200 dark:border-slate-700 overflow-hidden shadow-sm">
+                                    <% if (targetUser.profilePicture || targetUser.profileImage) { %>
+                                        <img src="<%= targetUser.profilePicture || targetUser.profileImage %>" class="w-full h-full object-cover" onerror="this.src='/images/default-avatar.png';">
+                                    <% } else { %>
+                                        <%= targetUser.name ? targetUser.name[0].toUpperCase() : '?' %>
+                                    <% } %>
+                                </div>
+                                <% if (targetUser.role === 'teacher' && targetUser.rating) { %>
+                                    <div class="absolute -bottom-2 -right-2 px-2.5 py-1 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 flex items-center gap-1 shadow-sm backdrop-blur-sm">
+                                        <span class="material-symbols-rounded text-[14px] text-amber-500 leading-none">star</span>
+                                        <span class="text-[11px] font-black text-amber-700 dark:text-amber-400 leading-none"><%= targetUser.rating %></span>
+                                    </div>
+                                <% } %>
+                            </div>
+
+                            <!-- Info -->
+                            <div class="flex-1 flex flex-col justify-center w-full">
+                                <!-- Line 1: Name and Actions -->
+                                <div class="flex flex-col xl:flex-row xl:items-center justify-between w-full gap-4 mb-3">
+                                    <div class="flex items-center justify-center md:justify-start gap-3">
+                                        <h1 class="text-3xl font-bold tracking-tight text-slate-900 dark:text-white"><%= targetUser.name %></h1>
+                                        <% if (targetUser.classLevel && targetUser.role !== 'teacher') { %>
+                                            <span class="px-3 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-300">Class: <%= targetUser.classLevel %></span>
+                                        <% } %>
+                                    </div>
+
+                                    <!-- Actions -->
+                                    <div class="flex items-center justify-center md:justify-start gap-2">
+                                        <button class="h-8 px-3 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-all shadow-sm flex items-center gap-1.5" onclick="resetPassword()">
+                                            <span class="material-symbols-rounded text-[14px]">key</span> Key
+                                        </button>
+                                        <% if(targetUser.status === 'suspended') { %>
+                                            <button class="h-8 px-3 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold text-xs border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all shadow-sm flex items-center gap-1.5" onclick="toggleStatus('active')">
+                                                <span class="material-symbols-rounded text-[14px]">check_circle</span> Activate
+                                            </button>
+                                        <% } else { %>
+                                            <button class="h-8 px-3 rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold text-xs border border-amber-200 dark:border-amber-500/20 hover:bg-amber-500 hover:text-white transition-all shadow-sm flex items-center gap-1.5" onclick="toggleStatus('suspended')">
+                                                <span class="material-symbols-rounded text-[14px]">block</span> Suspend
+                                            </button>
+                                        <% } %>
+                                        <button class="h-8 w-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold text-xs border border-rose-200 dark:border-rose-500/20 hover:bg-rose-500 hover:text-white transition-all shadow-sm flex items-center justify-center gap-1.5" onclick="deleteUser()">
+                                            <span class="material-symbols-rounded text-[14px]">delete</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Line 2: Other information -->
+                                <div class="flex flex-wrap items-center justify-center md:justify-start gap-1.5 mb-3">
+                                    <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 capitalize">
+                                        <span class="material-symbols-rounded text-[13px] text-slate-400">badge</span>
+                                        <%= targetUser.role %>
+                                    </div>
+                                    <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                                        <span class="material-symbols-rounded text-[13px] text-slate-400">mail</span>
+                                        <%= maskText(targetUser.email, 'email') %>
+                                    </div>
+                                    <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+                                        <span class="material-symbols-rounded text-[13px] text-slate-400">call</span>
+                                        <%= maskText(targetUser.phone, 'phone') %>
+                                    </div>
+
+
+                                    <% if (targetUser.teachingSubject) { %>
+                                    <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-fuchsia-200 dark:border-fuchsia-500/30 bg-fuchsia-50 dark:bg-fuchsia-500/10 text-[11px] font-semibold text-fuchsia-700 dark:text-fuchsia-300">
+                                        <span class="material-symbols-rounded text-[13px] text-fuchsia-500">menu_book</span>
+                                        Subject: <%= targetUser.teachingSubject %>
+                                    </div>
+                                    <% } %>
+                                </div>
+
+                                <!-- Line 3: Stats -->
+                                <div class="flex flex-wrap items-center justify-center md:justify-start gap-2">
+                                    <% if (targetUser.role !== 'teacher') { %>
+                                        <div class="p-2.5 rounded-xl bg-[#EFF3F8] dark:bg-white/5 border border-slate-900/5 dark:border-white/10">
+                                            <p class="text-[10px] font-semibold text-slate-500 mb-0.5">Achievement</p>
+                                            <p class="text-xs font-black text-slate-800 dark:text-white leading-tight"><%= targetUser.totalXP || 0 %> XP</p>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-[#EFF3F8] dark:bg-white/5 border border-slate-900/5 dark:border-white/10">
+                                            <p class="text-[10px] font-semibold text-slate-500 mb-0.5">Active streak</p>
+                                            <p class="text-xs font-black text-slate-800 dark:text-white leading-tight"><%= targetUser.streak || 0 %> Days</p>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-[#EFF3F8] dark:bg-white/5 border border-slate-900/5 dark:border-white/10">
+                                            <p class="text-[10px] font-semibold text-slate-500 mb-0.5">Avg exam score</p>
+                                            <p class="text-xs font-black text-slate-800 dark:text-white leading-tight"><%= stats.avgExamScore %>%</p>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-[#EFF3F8] dark:bg-white/5 border border-slate-900/5 dark:border-white/10">
+                                            <p class="text-[10px] font-semibold text-slate-500 mb-0.5"><%= ['admin', 'superadmin'].includes(targetUser.role) ? 'Total earned' : 'Total spent' %></p>
+                                            <p class="text-xs font-black text-slate-800 dark:text-white leading-tight">৳ <%= stats.totalSpend %></p>
+                                        </div>
+                                    <% } else { %>
+                                        <div class="p-2.5 rounded-xl bg-[#EFF3F8] dark:bg-white/5 border border-slate-900/5 dark:border-white/10">
+                                            <p class="text-[10px] font-semibold text-slate-500 mb-0.5">Experience</p>
+                                            <p class="text-xs font-black text-slate-800 dark:text-white leading-tight"><%= targetUser.totalXP || 0 %> XP</p>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-[#EFF3F8] dark:bg-white/5 border border-slate-900/5 dark:border-white/10">
+                                            <p class="text-[10px] font-semibold text-slate-500 mb-0.5">Questions added</p>
+                                            <p class="text-xs font-black text-slate-800 dark:text-white leading-tight"><%= teacherStats ? teacherStats.questionsAdded : 0 %></p>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-[#EFF3F8] dark:bg-white/5 border border-slate-900/5 dark:border-white/10">
+                                            <p class="text-[10px] font-semibold text-slate-500 mb-0.5">Questions answered</p>
+                                            <p class="text-xs font-black text-slate-800 dark:text-white leading-tight"><%= teacherStats ? teacherStats.questionsAnswered : 0 %></p>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-[#EFF3F8] dark:bg-white/5 border border-slate-900/5 dark:border-white/10">
+                                            <p class="text-[10px] font-semibold text-slate-500 mb-0.5">Notes added</p>
+                                            <p class="text-xs font-black text-slate-800 dark:text-white leading-tight"><%= teacherStats ? teacherStats.notesAdded : 0 %></p>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-[#EFF3F8] dark:bg-white/5 border border-slate-900/5 dark:border-white/10">
+                                            <p class="text-[10px] font-semibold text-slate-500 mb-0.5">Classes taken</p>
+                                            <p class="text-xs font-black text-slate-800 dark:text-white leading-tight"><%= teacherStats ? teacherStats.classesTaken : 0 %></p>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-[#EFF3F8] dark:bg-white/5 border border-slate-900/5 dark:border-white/10">
+                                            <p class="text-[10px] font-semibold text-slate-500 mb-0.5">Courses mentored</p>
+                                            <p class="text-xs font-black text-slate-800 dark:text-white leading-tight"><%= teacherStats ? teacherStats.coursesMentored : 0 %></p>
+                                        </div>
+                                    <% } %>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Detailed Info Module (Tabs) -->
+                    <div class="flex flex-col flex-1 min-h-[400px]">
+                        <!-- Tabs -->
+                        <div id="tabs-nav-bar" class="flex border-b border-slate-100 dark:border-slate-800/50 px-4 pt-2">
+                        <button class="tab-btn active px-4 py-3 text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200" onclick="switchTab('enrollments', this)">
+                            <%= targetUser.role === 'teacher' ? 'Teacher Info' : 'Academic' %>
+                        </button>
+                        <button class="tab-btn px-4 py-3 text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200" onclick="switchTab('assessments', this)">
+                            <%= targetUser.role === 'teacher' ? 'Performance' : 'Assessments' %>
+                        </button>
+                        <button class="tab-btn px-4 py-3 text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200" onclick="switchTab('finances', this)">
+                            <%= targetUser.role === 'teacher' ? 'Content Details' : 'Finances' %>
+                        </button>
+                        <% if (['superadmin', 'admin', 'teacher'].includes(user.role)) { %>
+                            <button class="tab-btn px-4 py-3 text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200" onclick="switchTab('activity', this)">System Activity</button>
+                        <% } %>
+                    </div>
+
+                    <div class="p-4 flex-1">
+                        <!-- Enrollments / Teacher Info Tab -->
+                        <div id="tab-enrollments" class="tab-content active">
+                            <% if (targetUser.role === 'teacher') { %>
+                                <!-- Teacher Info Content (Read-Only Presentation) -->
+                                <div class="max-w-3xl flex flex-col gap-3">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <!-- Designation -->
+                                        <div class="p-3 rounded-md bg-slate-50/80 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
+                                            <div class="size-8 rounded-md bg-blue-50 dark:bg-blue-500/10 text-blue-500 flex items-center justify-center shrink-0">
+                                                <span class="material-symbols-rounded text-[18px] leading-none block">work</span>
+                                            </div>
+                                            <div>
+                                                <p class="text-[10px] font-bold text-slate-400 mb-0.5">Designation</p>
+                                                <p class="text-[12px] font-bold text-slate-800 dark:text-slate-200"><%= targetUser.designation || 'Not specified' %></p>
+                                            </div>
+                                        </div>
+
+                                        <!-- Experience -->
+                                        <div class="p-3 rounded-md bg-slate-50/80 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
+                                            <div class="size-8 rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0">
+                                                <span class="material-symbols-rounded text-[18px] leading-none block">history</span>
+                                            </div>
+                                            <div>
+                                                <p class="text-[10px] font-bold text-slate-400 mb-0.5">Experience</p>
+                                                <p class="text-[12px] font-bold text-slate-800 dark:text-slate-200"><%= targetUser.experience || 'Not specified' %></p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Education (General) -->
+                                    <div class="p-3 rounded-md bg-slate-50/80 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60 flex items-center gap-3 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
+                                        <div class="size-8 rounded-md bg-purple-50 dark:bg-purple-500/10 text-purple-500 flex items-center justify-center shrink-0">
+                                            <span class="material-symbols-rounded text-[18px] leading-none block">school</span>
+                                        </div>
+                                        <div>
+                                            <p class="text-[10px] font-bold text-slate-400 mb-0.5">Highest Degree</p>
+                                            <p class="text-[12px] font-bold text-slate-800 dark:text-slate-200"><%= targetUser.education || 'Not specified' %></p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Contact Information -->
+                                    <div class="p-3 rounded-md bg-slate-50/80 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
+                                        <div class="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100 dark:border-slate-800/50">
+                                            <span class="material-symbols-rounded text-rose-500 text-[18px] leading-none block">contact_mail</span>
+                                            <p class="text-[11px] font-bold text-slate-500">Contact & Address</p>
+                                        </div>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div class="space-y-3">
+                                                <div>
+                                                    <p class="text-[10px] font-bold text-slate-400 mb-0.5">Email Address</p>
+                                                    <p class="text-[12px] font-medium text-slate-800 dark:text-slate-200"><%= maskText(targetUser.email, 'email') %></p>
+                                                </div>
+                                                <div>
+                                                    <p class="text-[10px] font-bold text-slate-400 mb-0.5">Mobile Number</p>
+                                                    <p class="text-[12px] font-medium text-slate-800 dark:text-slate-200"><%= maskText(targetUser.phone, 'phone') %></p>
+                                                </div>
+                                            </div>
+                                            <div class="space-y-3">
+                                                <div>
+                                                    <p class="text-[10px] font-bold text-slate-400 mb-0.5">Present Address</p>
+                                                    <p class="text-[12px] font-medium text-slate-800 dark:text-slate-200"><%= targetUser.presentAddress || 'Not specified' %></p>
+                                                </div>
+                                                <div>
+                                                    <p class="text-[10px] font-bold text-slate-400 mb-0.5">Permanent Address</p>
+                                                    <p class="text-[12px] font-medium text-slate-800 dark:text-slate-200"><%= targetUser.permanentAddress || 'Not specified' %></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Academic History Detailed -->
+                                    <div class="p-3 rounded-md bg-slate-50/80 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
+                                        <div class="flex items-center gap-2 mb-3 pb-2 border-b border-slate-100 dark:border-slate-800/50">
+                                            <span class="material-symbols-rounded text-indigo-500 text-[18px] leading-none block">menu_book</span>
+                                            <p class="text-[11px] font-bold text-slate-500">Academic History</p>
+                                        </div>
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <!-- School -->
+                                            <div class="bg-white dark:bg-slate-800/50 p-3 rounded border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
+                                                <div>
+                                                    <p class="text-[10px] font-bold text-slate-400 mb-1">School</p>
+                                                    <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200 mb-2 leading-snug"><%= targetUser.schoolName || 'Not specified' %></p>
+                                                </div>
+                                                <div class="flex items-center justify-between border-t border-slate-50 dark:border-slate-700/50 pt-2">
+                                                    <span class="text-[9px] text-slate-400 font-medium">SSC Result</span>
+                                                    <span class="text-[10px] font-black text-indigo-600 dark:text-indigo-400"><%= targetUser.sscGpa ? 'GPA ' + targetUser.sscGpa : 'N/A' %></span>
+                                                </div>
+                                            </div>
+                                            <!-- College -->
+                                            <div class="bg-white dark:bg-slate-800/50 p-3 rounded border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
+                                                <div>
+                                                    <p class="text-[10px] font-bold text-slate-400 mb-1">College</p>
+                                                    <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200 mb-2 leading-snug"><%= targetUser.collegeName || 'Not specified' %></p>
+                                                </div>
+                                                <div class="flex items-center justify-between border-t border-slate-50 dark:border-slate-700/50 pt-2">
+                                                    <span class="text-[9px] text-slate-400 font-medium">HSC Result</span>
+                                                    <span class="text-[10px] font-black text-indigo-600 dark:text-indigo-400"><%= targetUser.hscGpa ? 'GPA ' + targetUser.hscGpa : 'N/A' %></span>
+                                                </div>
+                                            </div>
+                                            <!-- University -->
+                                            <div class="bg-white dark:bg-slate-800/50 p-3 rounded border border-slate-100 dark:border-slate-800 flex flex-col justify-between">
+                                                <div>
+                                                    <p class="text-[10px] font-bold text-slate-400 mb-1">University</p>
+                                                    <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200 mb-2 leading-snug"><%= targetUser.universityName || 'Not specified' %></p>
+                                                </div>
+                                                <div class="flex items-center justify-between border-t border-slate-50 dark:border-slate-700/50 pt-2">
+                                                    <span class="text-[9px] text-slate-400 font-medium">Undergrad Result</span>
+                                                    <span class="text-[10px] font-black text-indigo-600 dark:text-indigo-400"><%= targetUser.cgpa ? 'CGPA ' + targetUser.cgpa : 'N/A' %></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Bio -->
+                                    <div class="p-3 rounded-md bg-slate-50/80 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
+                                        <div class="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100 dark:border-slate-800/50">
+                                            <span class="material-symbols-rounded text-slate-400 text-[18px] leading-none block">person_book</span>
+                                            <p class="text-[11px] font-bold text-slate-500">Professional Bio</p>
+                                        </div>
+                                        <p class="text-[12px] font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap"><%= targetUser.bio || 'No professional bio provided.' %></p>
+                                    </div>
+
+                                    <!-- Achievements -->
+                                    <div class="p-3 rounded-md bg-slate-50/80 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors">
+                                        <div class="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100 dark:border-slate-800/50">
+                                            <span class="material-symbols-rounded text-amber-500 text-[18px] leading-none block">emoji_events</span>
+                                            <p class="text-[11px] font-bold text-slate-500">Achievements</p>
+                                        </div>
+                                        <p class="text-[12px] font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap"><%= targetUser.achievements || 'No notable achievements listed.' %></p>
+                                    </div>
+                                </div>
+                            <% } else { %>
+                                <!-- Enrollments Tab Content (Students) -->
+                                <% if (targetUser.enrolledCourses && targetUser.enrolledCourses.length > 0) { %>
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                        <% targetUser.enrolledCourses.forEach(enr => { %>
+                                            <% if (enr.course) { %>
+                                            <a href="/admin/course/<%= enr.course._id %>" class="p-3 border border-slate-100 dark:border-slate-800 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 flex items-center gap-4 hover:border-slate-300 dark:hover:border-slate-600 transition-all group block w-full">
+                                                <div class="size-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shrink-0 group-hover:bg-primary group-hover:text-white transition-all">
+                                                    <span class="material-symbols-rounded">auto_stories</span>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <div class="flex items-center justify-between mb-1">
+                                                        <h4 class="text-xs font-bold text-slate-900 dark:text-white truncate pr-2 group-hover:text-primary transition-colors"><%= enr.course.title %></h4>
+                                                        <span class="text-[9px] font-black uppercase text-slate-400"><%= enr.progress || 0 %>%</span>
+                                                    </div>
+                                                    <p class="text-[10px] font-bold text-slate-500 mb-2 truncate"><%= enr.course.subject %> &bull; <%= enr.course.classLevel %></p>
+                                                    <div class="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                        <div class="h-full bg-primary rounded-full transition-all duration-500" style="width: <%= enr.progress || 0 %>%"></div>
+                                                    </div>
+                                                </div>
+                                            </a>
+                                            <% } %>
+                                        <% }) %>
+                                    </div>
+                                <% } else { %>
+                                    <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+                                        <span class="material-symbols-rounded text-4xl mb-2 opacity-50">inbox</span>
+                                        <p class="text-xs font-bold">No course enrollments found</p>
+                                    </div>
+                                <% } %>
+                            <% } %>
+                        </div>
+
+                        <!-- Assessments / Performance Tab -->
+                        <div id="tab-assessments" class="tab-content">
+                            <% if (targetUser.role === 'teacher') { %>
+                                <div class="flex flex-col gap-6">
+                                    <!-- Quality Control Metrics -->
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-3">
+                                            <span class="material-symbols-rounded text-indigo-500 text-[18px] leading-none block">analytics</span>
+                                            <p class="text-[12px] font-black text-slate-800 dark:text-slate-200">Quality Control</p>
+                                        </div>
+                                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                            <div class="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-lg p-3">
+                                                <p class="text-[10px] font-bold text-slate-500 mb-1">Accuracy Rate</p>
+                                                <p class="text-xl font-black text-emerald-600 dark:text-emerald-400"><%= targetUser.performance?.accuracyRate || 'N/A' %>%</p>
+                                            </div>
+                                            <div class="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-lg p-3">
+                                                <p class="text-[10px] font-bold text-slate-500 mb-1">Content Score</p>
+                                                <p class="text-xl font-black text-blue-600 dark:text-blue-400"><%= targetUser.performance?.contentScore || 'N/A' %></p>
+                                            </div>
+                                            <div class="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-lg p-3">
+                                                <p class="text-[10px] font-bold text-slate-500 mb-1">Reported Questions</p>
+                                                <p class="text-xl font-black text-rose-600 dark:text-rose-400"><%= targetUser.performance?.reportedQuestions || '0' %></p>
+                                            </div>
+                                            <div class="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 rounded-lg p-3">
+                                                <p class="text-[10px] font-bold text-slate-500 mb-1">Avg. Resolution</p>
+                                                <p class="text-xl font-black text-amber-600 dark:text-amber-400"><%= targetUser.performance?.avgResolutionTime || 'N/A' %></p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Student Reviews -->
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-3">
+                                            <span class="material-symbols-rounded text-amber-500 text-[18px] leading-none block">forum</span>
+                                            <p class="text-[12px] font-black text-slate-800 dark:text-slate-200">Recent Student Reviews</p>
+                                        </div>
+                                        
+                                        <% if (targetUser.reviews && targetUser.reviews.length > 0) { %>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                <% targetUser.reviews.forEach(review => { %>
+                                                    <div class="bg-white dark:bg-[#0b1120] border border-slate-200 dark:border-slate-700/50 rounded-lg p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow">
+                                                        <div class="flex items-center justify-between">
+                                                            <div class="flex items-center gap-2">
+                                                                <div class="size-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black shrink-0"><%= review.avatar %></div>
+                                                                <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200"><%= review.studentName %></p>
+                                                            </div>
+                                                            <div class="flex items-center gap-0.5">
+                                                                <% for(let i=1; i<=5; i++) { %>
+                                                                    <span class="material-symbols-rounded text-[12px] leading-none <%= i <= review.rating ? 'text-amber-500 fill-amber-500' : 'text-slate-200 dark:text-slate-700' %>" style="<%= i <= review.rating ? 'font-variation-settings: \'FILL\' 1;' : '' %>">star</span>
+                                                                <% } %>
+                                                            </div>
+                                                        </div>
+                                                        <p class="text-[11px] font-medium text-slate-600 dark:text-slate-400 leading-relaxed italic border-l-2 border-slate-100 dark:border-slate-800 pl-2">"<%= review.comment %>"</p>
+                                                        <p class="text-[9px] font-semibold text-slate-400 mt-auto"><%= new Date(review.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) %></p>
+                                                    </div>
+                                                <% }) %>
+                                            </div>
+                                        <% } else { %>
+                                            <div class="flex flex-col items-center justify-center py-8 text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg">
+                                                <span class="material-symbols-rounded text-3xl mb-2 opacity-50">rate_review</span>
+                                                <p class="text-[11px] font-bold">No reviews available yet</p>
+                                            </div>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            <% } else if (targetUser.quizResults && targetUser.quizResults.length > 0) { %>
+                                <table class="w-full text-left border-collapse">
+                                    <thead class="bg-slate-50 dark:bg-slate-800/50 border-y border-slate-100 dark:border-slate-800">
+                                        <tr>
+                                            <th class="px-4 py-3 text-xs font-semibold text-slate-500">Exam Title</th>
+                                            <th class="px-4 py-3 text-xs font-semibold text-slate-500 text-center">Score</th>
+                                            <th class="px-4 py-3 text-xs font-semibold text-slate-500 text-center">Result</th>
+                                            <th class="px-4 py-3 text-xs font-semibold text-slate-500 text-right">Date</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/50">
+                                        <% targetUser.quizResults.slice().reverse().forEach(q => { 
+                                            const perc = q.total > 0 ? ((q.score / q.total) * 100).toFixed(0) : 0;
+                                            const passed = perc >= 40;
+                                        %>
+                                            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                                                <td class="px-4 py-3">
+                                                    <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate max-w-[300px]">
+                                                        <%= q.quiz ? q.quiz.title : 'Deleted Exam' %>
+                                                    </p>
+                                                </td>
+                                                <td class="px-4 py-3 text-center">
+                                                    <span class="text-[11px] font-black <%= passed ? 'text-emerald-500' : 'text-rose-500' %>"><%= q.score %> / <%= q.total %></span>
+                                                    <span class="text-[9px] font-bold text-slate-400 ml-1">(<%= perc %>%)</span>
+                                                </td>
+                                                <td class="px-4 py-3 text-center">
+                                                    <% if (passed) { %>
+                                                        <span class="px-2 py-0.5 rounded border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 text-[10px] font-bold">Pass</span>
+                                                    <% } else { %>
+                                                        <span class="px-2 py-0.5 rounded border border-rose-500/20 bg-rose-500/10 text-rose-600 text-[10px] font-bold">Fail</span>
+                                                    <% } %>
+                                                </td>
+                                                <td class="px-4 py-3 text-right">
+                                                    <span class="text-[10px] font-bold text-slate-500"><%= new Date(q.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) %></span>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    </tbody>
+                                </table>
+                            <% } else { %>
+                                <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+                                    <span class="material-symbols-rounded text-4xl mb-2 opacity-50">quiz</span>
+                                    <p class="text-xs font-bold">No exam attempts found</p>
+                                </div>
+                            <% } %>
+                        </div>
+
+                        <!-- Finances Tab -->
+                        <div id="tab-finances" class="tab-content">
+                            <% if (targetUser.role === 'teacher') { %>
+                                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                                    <a href="/admin/question-details?author=<%= targetUser._id %>" class="p-3 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-slate-800 hover:border-primary/50 transition-all group">
+                                        <p class="text-[10px] font-bold text-slate-500 mb-0.5">Questions Added</p>
+                                        <p class="text-lg font-black text-slate-800 dark:text-white group-hover:text-primary transition-colors"><%= teacherStats ? teacherStats.questionsAdded : 0 %></p>
+                                        <p class="text-[9px] font-semibold text-slate-400 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-[10px]">open_in_new</span> View All</p>
+                                    </a>
+                                    <a href="/admin/qas?answeredBy=<%= targetUser._id %>" class="p-3 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-slate-800 hover:border-primary/50 transition-all group">
+                                        <p class="text-[10px] font-bold text-slate-500 mb-0.5">Ques. Answered</p>
+                                        <p class="text-lg font-black text-slate-800 dark:text-white group-hover:text-primary transition-colors"><%= teacherStats ? teacherStats.questionsAnswered : 0 %></p>
+                                        <p class="text-[9px] font-semibold text-slate-400 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-[10px]">open_in_new</span> View All</p>
+                                    </a>
+                                    <a href="/admin/notes?author=<%= targetUser._id %>" class="p-3 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-slate-800 hover:border-primary/50 transition-all group">
+                                        <p class="text-[10px] font-bold text-slate-500 mb-0.5">Notes Added</p>
+                                        <p class="text-lg font-black text-slate-800 dark:text-white group-hover:text-primary transition-colors"><%= teacherStats ? teacherStats.notesAdded : 0 %></p>
+                                        <p class="text-[9px] font-semibold text-slate-400 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-[10px]">open_in_new</span> View All</p>
+                                    </a>
+                                    <a href="/admin/video-classes?instructor=<%= targetUser._id %>" class="p-3 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-slate-800 hover:border-primary/50 transition-all group">
+                                        <p class="text-[10px] font-bold text-slate-500 mb-0.5">Classes Taken</p>
+                                        <p class="text-lg font-black text-slate-800 dark:text-white group-hover:text-primary transition-colors"><%= teacherStats ? teacherStats.classesTaken : 0 %></p>
+                                        <p class="text-[9px] font-semibold text-slate-400 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-[10px]">open_in_new</span> View All</p>
+                                    </a>
+                                    <a href="/admin/courses?instructor=<%= targetUser._id %>" class="p-3 rounded-lg bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-slate-800 hover:border-primary/50 transition-all group">
+                                        <p class="text-[10px] font-bold text-slate-500 mb-0.5">Courses Mentored</p>
+                                        <p class="text-lg font-black text-slate-800 dark:text-white group-hover:text-primary transition-colors"><%= teacherStats ? teacherStats.coursesMentored : 0 %></p>
+                                        <p class="text-[9px] font-semibold text-slate-400 mt-1 flex items-center gap-0.5"><span class="material-symbols-rounded text-[10px]">open_in_new</span> View All</p>
+                                    </a>
+                                </div>
+                            <% } else if (payments && payments.length > 0) { %>
+                                <table class="w-full text-left border-collapse">
+                                    <thead class="bg-slate-50 dark:bg-slate-800/50 border-y border-slate-100 dark:border-slate-800">
+                                        <tr>
+                                            <th class="px-4 py-3 text-xs font-semibold text-slate-500">Trx ID</th>
+                                            <th class="px-4 py-3 text-xs font-semibold text-slate-500">Course</th>
+                                            <th class="px-4 py-3 text-xs font-semibold text-slate-500 text-right">Amount</th>
+                                            <th class="px-4 py-3 text-xs font-semibold text-slate-500 text-center">Status</th>
+                                            <th class="px-4 py-3 text-xs font-semibold text-slate-500 text-right">Date</th>
+                                            <th class="px-4 py-3 text-xs font-semibold text-slate-500 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/50">
+                                        <% payments.forEach((p, index) => { %>
+                                            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                                                <td class="px-4 py-3"><span class="text-[10px] font-mono font-bold text-slate-500"><%= p.transactionId %></span></td>
+                                                <td class="px-4 py-3"><p class="text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate max-w-[200px]"><%= p.course ? p.course.title : 'Deleted Course' %></p></td>
+                                                <td class="px-4 py-3 text-right"><span class="text-[11px] font-black text-slate-700 dark:text-slate-300">৳ <%= p.amount %></span></td>
+                                                <td class="px-4 py-3 text-center">
+                                                    <% if(p.status === 'success' || p.status === 'approved') { %>
+                                                        <span class="px-2 py-0.5 rounded border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 text-[10px] font-bold capitalize"><%= p.status %></span>
+                                                    <% } else if(p.status === 'pending') { %>
+                                                        <span class="px-2 py-0.5 rounded border border-amber-500/20 bg-amber-500/10 text-amber-600 text-[10px] font-bold capitalize"><%= p.status %></span>
+                                                    <% } else if(p.status === 'refunded' || p.status === 'partial_refund') { %>
+                                                        <span class="px-2 py-0.5 rounded border border-rose-500/20 bg-rose-500/10 text-rose-600 text-[10px] font-bold capitalize"><%= p.status === 'partial_refund' ? 'Partial Refund' : 'Refunded' %></span>
+                                                    <% } else { %>
+                                                        <span class="px-2 py-0.5 rounded border border-rose-500/20 bg-rose-500/10 text-rose-600 text-[10px] font-bold capitalize"><%= p.status %></span>
+                                                    <% } %>
+                                                </td>
+                                                <td class="px-4 py-3 text-right">
+                                                    <span class="text-[10px] font-bold text-slate-500"><%= new Date(p.createdAt).toLocaleDateString('en-GB') %></span>
+                                                </td>
+                                                <td class="px-4 py-3 text-right">
+                                                    <button onclick="viewPayment(<%= index %>)" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-all">
+                                                        <span class="material-symbols-rounded text-[18px]">visibility</span>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    </tbody>
+                                </table>
+                                <script>
+                                    const paymentsData = <%- JSON.stringify(payments) %>;
+                                </script>
+                            <% } else { %>
+                                <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+                                    <span class="material-symbols-rounded text-4xl mb-2 opacity-50">receipt_long</span>
+                                    <p class="text-xs font-bold">No transaction history found</p>
+                                </div>
+                            <% } %>
+                        </div>
+
+                        <!-- System Activity Tab -->
+                        <% if (['superadmin', 'admin', 'teacher'].includes(user.role)) { %>
+                        <div id="tab-activity" class="tab-content space-y-4">
+                            <!-- Active Devices -->
+                            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
+                                <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="material-symbols-rounded text-lg text-blue-500">devices</span>
+                                        <h3 class="text-[11px] font-bold text-slate-800 dark:text-white">Active Devices & Sessions</h3>
+                                    </div>
+                                    <span class="px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-[9px] font-bold text-blue-600 dark:text-blue-400">Security Audit</span>
+                                </div>
+                                <div class="p-0">
+                                    <% if (targetUser.activeDevices && targetUser.activeDevices.length > 0) { %>
+                                        <div class="divide-y divide-slate-50 dark:divide-slate-800/50">
+                                            <% targetUser.activeDevices.reverse().forEach(device => { %>
+                                                <div class="px-4 py-2.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group/device">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 shrink-0 border border-slate-200/50 dark:border-slate-700/50">
+                                                            <span class="material-symbols-rounded text-[20px] leading-none block">
+                                                                <%= device.deviceType === 'Mobile' ? 'smartphone' : 'desktop_windows' %>
+                                                            </span>
+                                                        </div>
+                                                        <div class="flex flex-col">
+                                                            <p class="text-[11px] font-black text-slate-700 dark:text-slate-200 leading-tight mb-0.5"><%= device.browser %> on <%= device.os %></p>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <p class="text-[9px] font-semibold text-slate-400 leading-none">IP: <%= device.ip %></p>
+                                                                <span class="size-0.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                                                                <p class="text-[9px] font-semibold text-slate-400 leading-none"><%= new Date(device.lastActive).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) %></p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <button class="size-7 rounded-md border border-slate-200 dark:border-slate-700 flex items-center justify-center text-rose-500 hover:bg-rose-500 hover:text-white hover:border-rose-500 transition-all opacity-0 group-hover/device:opacity-100 shadow-sm" title="Revoke Session">
+                                                        <span class="material-symbols-rounded text-[16px] leading-none block">logout</span>
+                                                    </button>
+                                                </div>
+                                            <% }) %>
+                                        </div>
+                                    <% } else { %>
+                                        <div class="p-8 text-center">
+                                            <p class="text-[11px] text-slate-500">No active session data recorded yet.</p>
+                                        </div>
+                                    <% } %>
+                                </div>
+                            </div>
+                            <% if (logs && logs.length > 0) { %>
+                                <div class="space-y-3">
+                                    <% logs.forEach(log => { %>
+                                        <div class="flex items-start gap-4 p-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800 group/log">
+                                            <div class="size-8 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 flex items-center justify-center shrink-0 mt-0.5">
+                                                <% if(log.action === 'CREATE') { %>
+                                                    <span class="material-symbols-rounded text-emerald-500 text-[18px] leading-none block">add_circle</span>
+                                                <% } else if(log.action === 'UPDATE') { %>
+                                                    <span class="material-symbols-rounded text-blue-500 text-[18px] leading-none block">edit</span>
+                                                <% } else if(log.action === 'DELETE') { %>
+                                                    <span class="material-symbols-rounded text-rose-500 text-[18px] leading-none block">delete</span>
+                                                <% } else { %>
+                                                    <span class="material-symbols-rounded text-slate-400 text-[18px] leading-none block">info</span>
+                                                <% } %>
+                                            </div>
+                                            <div class="flex-1">
+                                                <p class="text-[11px] font-bold text-slate-800 dark:text-slate-200 leading-snug mb-0.5"><%= log.actionDetails %></p>
+                                                <p class="text-[10px] font-semibold text-slate-500"><span class="capitalize"><%= log.entityType %></span> • <%= new Date(log.createdAt).toLocaleString('en-GB') %></p>
+                                            </div>
+                                        </div>
+                                    <% }) %>
+                                </div>
+                            <% } else { %>
+                                <div class="flex flex-col items-center justify-center py-12 text-slate-400">
+                                    <span class="material-symbols-rounded text-4xl mb-2 opacity-50">history</span>
+                                    <p class="text-xs font-bold">No recent system activity</p>
+                                </div>
+                            <% } %>
+                        </div>
+                        <% } %>
+
+                    </div>
+                </div>
+            </div>
+            
+
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+            btn.classList.add('active');
+
+            // Auto-scroll to tabs
+            const tabsNavBar = document.getElementById('tabs-nav-bar');
+            if (tabsNavBar) {
+                document.querySelector('.content-scroll').scrollTo({
+                    top: tabsNavBar.offsetTop,
+                    behavior: 'smooth'
+                });
+            }
+        }
+
+        const userId = '<%= targetUser._id %>';
+
+        function editProfile() {
+            Swal.fire({
+                title: 'Edit Profile',
+                text: 'Profile editing will be available in the next update.',
+                icon: 'info',
+                confirmButtonColor: '#137fec'
+            });
+        }
+
+        function resetPassword() {
+            Swal.fire({
+                title: 'Reset Password',
+                text: 'Are you sure you want to trigger a password reset for this user?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#137fec',
+                confirmButtonText: 'Yes, Reset'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire('Success', 'Password reset email sent (simulation).', 'success');
+                }
+            });
+        }
+
+        function toggleStatus(newStatus) {
+            if (newStatus === 'suspended') {
+                Swal.fire({
+                    title: 'Suspend User',
+                    text: 'Choose suspension duration:',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    showDenyButton: true,
+                    confirmButtonColor: '#ef4444',
+                    denyButtonColor: '#f59e0b',
+                    confirmButtonText: 'Lifetime',
+                    denyButtonText: 'Manual (Days)',
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        updateUserStatus('suspended', null);
+                    } else if (result.isDenied) {
+                        Swal.fire({
+                            title: 'Enter suspension duration',
+                            input: 'number',
+                            inputLabel: 'Number of Days',
+                            inputAttributes: { min: 1 },
+                            showCancelButton: true,
+                            confirmButtonText: 'Suspend',
+                            confirmButtonColor: '#f59e0b',
+                        }).then((manualResult) => {
+                            if (manualResult.isConfirmed && manualResult.value) {
+                                updateUserStatus('suspended', manualResult.value);
+                            }
+                        });
+                    }
+                });
+            } else {
+                Swal.fire({
+                    title: 'Activate Account?',
+                    text: 'Are you sure you want to activate this user?',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#10b981',
+                    confirmButtonText: 'Yes, Activate'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        updateUserStatus('active', null);
+                    }
+                });
+            }
+        }
+
+        async function updateUserStatus(status, days) {
+            try {
+                const response = await fetch(`/admin/user/${userId}/status`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status, days })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    Swal.fire('Success', `User status has been updated to ${status}.`, 'success').then(() => {
+                        window.location.reload();
+                    });
+                } else {
+                    Swal.fire('Error', data.error || 'Failed to update status', 'error');
+                }
+            } catch (error) {
+                console.error(error);
+                Swal.fire('Error', 'A server error occurred.', 'error');
+            }
+        }
+
+        function deleteUser() {
+            Swal.fire({
+                title: 'Delete User?',
+                text: 'This action is irreversible. All data will be lost.',
+                icon: 'error',
+                showCancelButton: true,
+                confirmButtonColor: '#f43f5e',
+                confirmButtonText: 'Yes, Delete'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire('Deleted', 'User has been permanently deleted (simulation).', 'success').then(() => {
+                        window.location.href = '/admin/users';
+                    });
+                }
+            });
+        }
+
+        function viewPayment(index) {
+            const payment = paymentsData[index];
+            const date = new Date(payment.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            const courseTitle = payment.course ? payment.course.title : 'General Academic Fee';
+            
+            Swal.fire({
+                title: '<span class="text-lg font-black text-slate-800 dark:text-white">Transaction Receipt</span>',
+                html: `
+                    <div class="space-y-4">
+                        <div class="text-left p-5 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-100 dark:border-slate-800 font-sans">
+                            <div class="flex justify-between items-start border-b border-slate-200 dark:border-slate-700 pb-3 mb-4">
+                            <div>
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Receipt To</p>
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200"><%= targetUser.name %></p>
+                                <p class="text-[10px] text-slate-500"><%= targetUser.email %></p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Date</p>
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200">${date}</p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3">
+                            <div class="flex justify-between">
+                                <p class="text-xs text-slate-500 font-medium">Transaction ID</p>
+                                <p class="text-xs font-mono font-bold text-slate-800 dark:text-slate-200">${payment.transactionId}</p>
+                            </div>
+                            <div class="flex justify-between">
+                                    <p class="text-xs text-slate-500 font-medium">Payment Status</p>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase ${payment.status === 'success' || payment.status === 'approved' ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : payment.status === 'refunded' || payment.status === 'partial_refund' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'}">${payment.status}</span>
+                                </div>
+
+                                <!-- Financial Breakdown -->
+                                <div class="py-2 space-y-1.5 border-t border-b border-slate-100 dark:border-slate-800">
+                                    <div class="flex justify-between">
+                                        <p class="text-[10px] text-slate-500">Original Price</p>
+                                        <p class="text-[10px] font-bold text-slate-700 dark:text-slate-300">৳ ${payment.amount + (payment.discountAmount || 0)}</p>
+                                    </div>
+                                    ${payment.discountAmount > 0 ? `
+                                    <div class="flex justify-between">
+                                        <p class="text-[10px] text-emerald-600 font-medium">Discount ${payment.couponCode ? `(${payment.couponCode})` : ''}</p>
+                                        <p class="text-[10px] font-bold text-emerald-600">- ৳ ${payment.discountAmount}</p>
+                                    </div>
+                                    ` : ''}
+                                    ${(payment.refundAmount > 0 || payment.status === 'refunded') ? `
+                                    <div class="flex justify-between py-1.5 px-2 bg-rose-500/5 rounded border border-rose-500/10">
+                                        <p class="text-[10px] text-rose-600 font-bold">Refunded</p>
+                                        <p class="text-[10px] font-bold text-rose-600">- ৳ ${payment.refundAmount || payment.amount}</p>
+                                    </div>
+                                    ` : ''}
+                                </div>
+
+                                <div class="pt-1">
+                                    <p class="text-[10px] font-bold text-slate-400 tracking-widest mb-2">Item Details</p>
+                                    <div class="flex justify-between items-center bg-white dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
+                                        <p class="text-xs font-bold text-slate-700 dark:text-slate-300 truncate pr-4">${courseTitle}</p>
+                                        <p class="text-xs font-black text-slate-900 dark:text-white">৳ ${payment.amount}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-6 flex justify-between items-center pt-4 border-t-2 border-dashed border-slate-200 dark:border-slate-700">
+                                <p class="text-sm font-black text-slate-800 dark:text-white uppercase">${(payment.refundAmount > 0 || payment.status === 'refunded') ? 'Net Payment' : 'Total Paid'}</p>
+                                <p class="text-xl font-black ${(payment.refundAmount > 0 || payment.status === 'refunded') ? 'text-slate-400 line-through' : 'text-primary'}">৳ ${(payment.amount - (payment.refundAmount || 0)) < 0 ? 0 : (payment.amount - (payment.refundAmount || 0))}</p>
+                            </div>              </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<div class="flex items-center gap-2"><span class="material-symbols-rounded text-[18px]">download</span> Export Receipt</div>',
+                cancelButtonText: 'Close',
+                confirmButtonColor: '#137fec',
+                cancelButtonColor: '#64748b',
+                width: '500px',
+                customClass: {
+                    container: 'payment-receipt-modal',
+                    popup: 'rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl'
+                }
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    downloadReceipt(payment);
+                }
+            });
+        }
+
+        function downloadReceipt(payment) {
+            const content = `
+=========================================
+                 ODDHAY
+            Official Receipt
+=========================================
+Transaction ID : ${payment.transactionId}
+Date           : ${new Date(payment.createdAt).toLocaleString()}
+-----------------------------------------
+User Details
+Name           : <%= targetUser.name %>
+Email          : <%= targetUser.email %>
+-----------------------------------------
+Payment Details
+Course/Item    : ${payment.course ? payment.course.title : 'General Fee'}
+Amount Paid    : ৳ ${payment.amount}
+${payment.refundAmount > 0 ? `Refund Amount  : ৳ ${payment.refundAmount}
+Net Payment    : ৳ ${payment.amount - payment.refundAmount}` : ''}
+Method         : ${payment.paymentMethod || 'N/A'}
+Status         : ${payment.status.charAt(0).toUpperCase() + payment.status.slice(1)}
+-----------------------------------------
+Thank you for your payment!
+This is a computer-generated receipt.
+=========================================
+            `;
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `receipt_${payment.transactionId}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            Swal.fire({
+                title: 'Receipt Downloaded',
+                text: 'Your transaction receipt has been exported successfully.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+    </script>
+</body>
+</html>

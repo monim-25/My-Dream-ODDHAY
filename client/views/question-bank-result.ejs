@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Exam Result | <%= bank.title || bank.subject %></title>
+</head>
+
+<body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans min-h-screen flex flex-col transition-colors duration-300">
+    <%- include('partials/student-header') %>
+
+    <% 
+       const bSubject = (bank.subject || 'Subject').trim();
+       const bBoard = (bank.board || 'Board Exam').trim();
+       const bYear = (bank.year || '').trim();
+       const bTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${bBoard} ${bYear}`.trim();
+
+       const mcqScore = attempt.mcqScore || 0;
+       const maxMcqScore = attempt.maxMcqScore || 0;
+       const mcqCorrect = attempt.mcqCorrectCount || 0;
+       const mcqTotal = attempt.mcqTotalQuestions || 0;
+       const nonMcqTotal = attempt.nonMcqCount || 0;
+       const totalQ = attempt.totalBankQuestions || (mcqTotal + nonMcqTotal);
+
+       const accuracyPct = maxMcqScore > 0 ? Math.round((mcqScore / maxMcqScore) * 100) : 0;
+       const timeSecs = attempt.timeTakenSeconds || 0;
+       const timeMins = Math.floor(timeSecs / 60);
+       const remSecs = timeSecs % 60;
+       const formattedTime = `${timeMins}m ${remSecs}s`;
+
+       const answeredMcqCount = (attempt.userAnswers || []).filter(ua => ua.questionType === 'MCQ' && ua.selectedOptionIndex !== undefined && ua.selectedOptionIndex >= 0).length;
+       const answeredWrittenCount = (attempt.userAnswers || []).filter(ua => ua.questionType !== 'MCQ' && ua.writtenAnswer && ua.writtenAnswer.trim() !== '').length;
+       const totalAnsweredCount = answeredMcqCount + answeredWrittenCount;
+       const unansweredCount = Math.max(0, totalQ - totalAnsweredCount);
+
+       const maxBankScore = (attempt.userAnswers || []).reduce((acc, ua) => acc + (ua.maxMarks || 1), 0) || maxMcqScore;
+
+       const isMockTest = (bank.isMockTest || bTitle.toLowerCase().includes('mock test'));
+       const isModelTest = bTitle.toLowerCase().includes('model test');
+       const isCustomExam = bTitle.includes('Personalized Exam') || bTitle.includes('Custom Exam') || bTitle.includes('Self Test');
+
+       let returnUrl = '/question-bank';
+       let returnLabel = 'Go to Question Bank';
+
+       if (isMockTest) {
+           returnUrl = '/exams/mock-tests';
+           returnLabel = 'Back to Mock Tests';
+       } else if (isModelTest) {
+           returnUrl = '/exams/model-tests';
+           returnLabel = 'Back to Model Tests';
+       } else if (isCustomExam) {
+           returnUrl = '/exams';
+           returnLabel = 'Back to Exams & Quizzes';
+       }
+
+       const isExamTab = isMockTest || isModelTest || isCustomExam;
+       const activeNavPage = isExamTab ? 'exams' : 'questions';
+    %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: activeNavPage }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-4 sm:p-6 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120]">
+
+            <div class="max-w-3xl w-full mx-auto space-y-6 py-4">
+
+                <!-- HEADER & PERFORMANCE BADGE -->
+                <div class="flex items-start justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
+                    <div class="space-y-1 min-w-0">
+                        <h1 class="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100 truncate"><%= bTitle %></h1>
+                        <p class="text-xs font-semibold text-slate-400">
+                            Evaluated on <%= new Date(attempt.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
+                        </p>
+                    </div>
+                    <span class="px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-extrabold border border-emerald-200 dark:border-emerald-500/20 flex items-center gap-1.5 shrink-0">
+                        <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0">check_circle</span>
+                        <span>Performance Summary</span>
+                    </span>
+                </div>
+
+                <!-- 5 METRICS DISPLAY SECTION -->
+                <div class="space-y-3.5">
+                    
+                    <!-- 0. OBTAINED MARK (WITHOUT WRITTEN) & TIME TAKEN -->
+                    <div class="p-4 sm:p-5 rounded-2xl bg-slate-50/80 dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+                        <div class="space-y-1">
+                            <span class="text-xs font-bold text-slate-600 dark:text-slate-300">Obtained mark (without written)</span>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400"><%= mcqScore %></span>
+                                <span class="text-sm font-bold text-slate-400">/ <%= maxBankScore %> Marks</span>
+                            </div>
+                            <div class="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 pt-0.5">
+                                <%= accuracyPct %>% Accuracy
+                            </div>
+                        </div>
+                        <% if (formattedTime) { %>
+                            <div class="px-4 py-3 rounded-2xl bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200/90 dark:border-slate-800 shadow-sm flex items-center gap-3 self-start sm:self-auto shrink-0">
+                                <span class="material-symbols-rounded text-lg text-emerald-600 dark:text-emerald-400 leading-none flex items-center justify-center shrink-0">timer</span>
+                                <div>
+                                    <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 block leading-none">Time taken</span>
+                                    <span class="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight leading-tight mt-1 block"><%= formattedTime %></span>
+                                </div>
+                            </div>
+                        <% } %>
+                    </div>
+
+                    <!-- 5 METRICS GRID (Answered, Unanswered, Correct MCQ, Answered MCQs, Written Answers) -->
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+                        
+                        <!-- 1. Answered Questions -->
+                        <div class="p-3.5 rounded-xl bg-slate-50/70 dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 space-y-1 shadow-xs">
+                            <p class="text-[11px] font-bold text-slate-500 dark:text-slate-400 truncate">Answered</p>
+                            <p class="text-base font-black text-slate-900 dark:text-slate-100"><%= totalAnsweredCount %> <span class="text-xs font-bold text-slate-400">/ <%= totalQ %></span></p>
+                        </div>
+
+                        <!-- 2. Not Answered Questions -->
+                        <div class="p-3.5 rounded-xl bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/20 space-y-1 shadow-xs">
+                            <p class="text-[11px] font-bold text-rose-600 dark:text-rose-400 truncate">Not Answered</p>
+                            <p class="text-base font-black text-rose-600 dark:text-rose-400"><%= unansweredCount %> <span class="text-xs font-bold text-rose-400/70">/ <%= totalQ %></span></p>
+                        </div>
+
+                        <!-- 3. Correct MCQ -->
+                        <div class="p-3.5 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 space-y-1 shadow-xs">
+                            <p class="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 truncate">Correct MCQ</p>
+                            <p class="text-base font-black text-emerald-600 dark:text-emerald-400"><%= mcqCorrect %> <span class="text-xs font-bold text-emerald-600/70 dark:text-emerald-400/70">/ <%= mcqTotal %></span></p>
+                        </div>
+
+                        <!-- 4. Answered MCQs -->
+                        <div class="p-3.5 rounded-xl bg-teal-500/5 dark:bg-teal-500/10 border border-teal-500/20 space-y-1 shadow-xs">
+                            <p class="text-[11px] font-bold text-teal-700 dark:text-teal-400 truncate">Answered MCQs</p>
+                            <p class="text-base font-black text-teal-600 dark:text-teal-400"><%= answeredMcqCount %> <span class="text-xs font-bold text-teal-600/70 dark:text-teal-400/70">/ <%= mcqTotal %></span></p>
+                        </div>
+
+                        <!-- 5. Written Answers -->
+                        <div class="p-3.5 rounded-xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 space-y-1 shadow-xs">
+                            <p class="text-[11px] font-bold text-amber-700 dark:text-amber-400 truncate">Written Answers</p>
+                            <p class="text-base font-black text-amber-600 dark:text-amber-400"><%= answeredWrittenCount %> <span class="text-xs font-bold text-amber-600/70 dark:text-amber-400/70">/ <%= nonMcqTotal %></span></p>
+                        </div>
+
+                    </div>
+
+                    <% if (bank.negativeMarking || (attempt.negativeMarksDeducted && attempt.negativeMarksDeducted > 0)) { %>
+                        <div class="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-400 text-xs flex items-center justify-between gap-3 shadow-xs">
+                            <div>
+                                <span class="block font-semibold text-rose-800 dark:text-rose-300">Negative Marking Applied</span>
+                                <span class="text-[11px] font-normal text-rose-600 dark:text-rose-300/90 block">
+                                    Wrong MCQs: <%= attempt.wrongMcqCount || 0 %> • Penalty Rate: -<%= bank.negativeMarkValue || 0.25 %> per wrong MCQ
+                                </span>
+                            </div>
+                            <div class="text-right shrink-0">
+                                <span class="text-[10px] font-normal text-rose-500 block">Deducted</span>
+                                <span class="text-sm font-semibold text-rose-600 dark:text-rose-400">-<%= attempt.negativeMarksDeducted || 0 %> Marks</span>
+                            </div>
+                        </div>
+                    <% } %>
+                </div>
+
+                <!-- SHORTENED WRITTEN QUESTIONS NOTICE WITH SEE WRITTEN MARKS BUTTON -->
+                <% if (nonMcqTotal > 0) { %>
+                    <div class="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-2xl p-4 flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <span class="material-symbols-rounded text-amber-600 dark:text-amber-400 text-lg leading-none flex items-center justify-center shrink-0">lightbulb</span>
+                            <p class="text-xs font-semibold text-amber-800 dark:text-amber-300 truncate">Written questions (<%= nonMcqTotal %> Items) evaluated by instructor</p>
+                        </div>
+                        <a href="/question-bank/written-answers/<%= attempt._id %>" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0">
+                            <span>See Written Marks</span>
+                            <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0">arrow_forward</span>
+                        </a>
+                    </div>
+                <% } %>
+
+                <!-- ACTION BUTTONS SECTION -->
+                <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800 gap-3">
+                    <a href="/question-bank/review/<%= attempt._id %>" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all active:scale-95">
+                        <span class="material-symbols-rounded text-base leading-none flex items-center justify-center shrink-0">fact_check</span>
+                        <span>See Answers</span>
+                    </a>
+
+                    <a href="<%= returnUrl %>" class="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-2">
+                        <span><%= returnLabel %></span>
+                        <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0">arrow_forward</span>
+                    </a>
+                </div>
+
+            </div>
+        </main>
+    </div>
+</body>
+</html>

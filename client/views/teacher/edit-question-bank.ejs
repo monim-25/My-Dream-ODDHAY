@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+<head>
+    <%- include('../partials/head') %>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <title>Archive Studio | ODDHAY</title>
+    <style>
+        * { font-family: 'Inter', 'Hind Siliguri', sans-serif !important; }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(16px); border: 1px solid rgba(226, 232, 240, 0.8); }
+        .dark .glass-panel { background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(51, 65, 85, 0.8); }
+        .q-card { transition: all 0.2s ease; border-radius: 1rem; }
+        .edit-mode .static-content { display: none; }
+        .edit-mode .edit-content { display: block; }
+        .static-content { display: block; }
+        .edit-content { display: none; }
+        
+        /* Sticky Logic Refinement */
+        .sticky-column { position: sticky; top: 1rem; align-self: start; }
+        
+        /* Icon Perfection */
+        .icon-box { display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; line-height: 1; }
+        .material-symbols-rounded { display: block; line-height: 1; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    </style>
+</head>
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans min-h-screen overflow-hidden">
+    <div class="flex h-screen overflow-hidden">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
+            <%- include('sidebar', { active: 'questions' }) %>
+        </aside>
+
+        <main class="ml-[260px] flex-1 flex flex-col h-full overflow-hidden">
+            <%- include('../admin/header_v2', { pageTitle: 'Archive Intelligence Hub' }) %>
+
+            <!-- Main Scrollable Area -->
+            <div class="flex-1 overflow-y-auto px-3 sm:px-4 pt-0 pb-6 scroll-smooth relative">
+                <div class="max-w-6xl mx-auto pb-24">
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start relative pt-2">
+                        
+                        <!-- Left Column: Archive Info (Sticky) -->
+                        <div class="lg:col-span-4 sticky top-0 z-10">
+                            <div class="glass-panel rounded-2xl p-4 sm:p-5 shadow-sm border-slate-200/60">
+                                <div class="flex items-center gap-2 mb-4">
+                                    <div class="icon-box text-primary">
+                                        <span class="material-symbols-rounded text-[20px]">info</span>
+                                    </div>
+                                    <h2 class="text-[13px] font-extrabold text-slate-800 dark:text-white">Archive Information</h2>
+                                </div>
+
+                                <form action="/teacher/edit-question-bank/<%= bank._id %>" method="POST" enctype="multipart/form-data" class="space-y-3.5">
+                                    <div class="space-y-1">
+                                        <label class="text-[10px] font-bold text-slate-400 ml-0.5">Authority</label>
+                                        <input type="text" name="board" value="<%= bank.board %>" required class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <div class="space-y-1">
+                                            <label class="text-[10px] font-bold text-slate-400 ml-0.5">Year</label>
+                                            <input type="text" name="year" value="<%= bank.year %>" required class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                        </div>
+                                        <div class="space-y-1">
+                                             <label class="text-[10px] font-bold text-slate-400 ml-0.5">Level</label>
+                                             <select name="classLevel" class="w-full h-9 px-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                                 <% 
+                                                     const bankClasses = (Array.isArray(bank.classLevel) ? bank.classLevel : [bank.classLevel]).map(c => String(c).trim());
+                                                     const hasClsVal = (v) => bankClasses.includes(String(v)) || bankClasses.includes('Class ' + v) || bankClasses.includes(String(v).replace('Class', '').trim());
+                                                     
+                                                     // Combine assigned classes with any pre-existing bank classes to avoid empty selection
+                                                     const classChoices = [...new Set([...assignedClasses, ...bankClasses])].filter(Boolean).sort();
+                                                 %>
+                                                 <% classChoices.forEach(c => { %>
+                                                     <option value="<%= c %>" <%= hasClsVal(c) ? 'selected' : '' %>><%= c %></option>
+                                                 <% }) %>
+                                             </select>
+                                        </div>
+                                        <div class="space-y-1">
+                                            <label class="text-[10px] font-bold text-slate-400 ml-0.5">Time (Mins)</label>
+                                            <input type="number" name="duration" value="<%= bank.duration || 30 %>" min="1" max="600" class="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                        </div>
+                                    </div>
+                                    <div class="space-y-1">
+                                         <label class="text-[10px] font-bold text-slate-400 ml-0.5">Subject</label>
+                                         <select name="subject" required class="w-full h-9 px-2 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all">
+                                             <%
+                                                 // Combine assigned subjects with pre-existing bank subject
+                                                 const subjectChoices = [...new Set([...assignedSubjects, bank.subject])].filter(Boolean).sort();
+                                             %>
+                                             <% subjectChoices.forEach(s => { %>
+                                                 <option value="<%= s %>" <%= bank.subject === s ? 'selected' : '' %>><%= s %></option>
+                                             <% }) %>
+                                         </select>
+                                    </div>
+
+                                    <div class="pt-2">
+                                        <label class="text-[10px] font-bold text-slate-400 ml-0.5 mb-2 block">Material (PDF)</label>
+                                        <% if (bank.fileUrl) { %>
+                                            <div class="mb-2 p-2 rounded-lg bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/20 flex items-center justify-between gap-2">
+                                                <div class="flex items-center gap-2 overflow-hidden flex-1">
+                                                    <div class="icon-box text-emerald-500 shrink-0">
+                                                        <span class="material-symbols-rounded text-[18px]">check_circle</span>
+                                                    </div>
+                                                    <p class="text-[10px] font-bold truncate text-emerald-700 dark:text-emerald-400"><%= bank.fileUrl.split('/').pop() %></p>
+                                                </div>
+                                                <button type="button" onclick="deleteAttachment(event, '<%= bank._id %>')" class="p-1 rounded-lg bg-red-100 hover:bg-red-200 text-red-600 dark:bg-red-500/20 dark:hover:bg-red-500/30 dark:text-red-400 transition-colors flex items-center justify-center shrink-0" title="Delete Attachment">
+                                                    <span class="material-symbols-rounded text-[16px]">delete</span>
+                                                </button>
+                                            </div>
+                                        <% } %>
+                                        <div class="relative group">
+                                            <input type="file" name="file" class="absolute inset-0 size-full opacity-0 cursor-pointer z-10" onchange="updateFileName(this)">
+                                            <div class="w-full h-11 rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center gap-2 group-hover:border-primary/50 transition-all bg-slate-50/20">
+                                                <div class="icon-box text-slate-400 group-hover:text-primary">
+                                                    <span class="material-symbols-rounded text-[18px]">add_circle</span>
+                                                </div>
+                                                <p id="file-label" class="text-[10px] font-bold text-slate-400">PDF Asset</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button type="submit" class="w-full h-10 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-lg font-extrabold text-[11px] hover:opacity-90 transition-all shadow-sm">
+                                        Update Archive
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Right Column: Question Inventory -->
+                        <div class="lg:col-span-8 space-y-4">
+                            <div class="flex items-center justify-between px-1">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="size-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500 icon-box">
+                                        <span class="material-symbols-rounded text-[20px]">inventory_2</span>
+                                    </div>
+                                    <div class="flex items-baseline gap-2">
+                                        <h2 class="text-lg font-black text-slate-800 dark:text-white">Inventory</h2>
+                                        <p class="text-[11px] font-bold text-slate-400"><%= questions.length %> questions</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button id="toggleEditBtn" onclick="toggleEditMode()" class="h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-800 text-[11px] font-bold flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
+                                        <div class="icon-box text-slate-500">
+                                            <span class="material-symbols-rounded text-[18px]">edit</span>
+                                        </div>
+                                        Edit Mode
+                                    </button>
+                                    <button onclick="toggleAllAnswers()" class="h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-800 text-[11px] font-bold flex items-center gap-2 hover:bg-slate-50 transition-all shadow-sm">
+                                        <div class="icon-box text-slate-500">
+                                            <span class="material-symbols-rounded text-[18px]">visibility</span>
+                                        </div>
+                                        Answers
+                                    </button>
+                                </div>
+                            </div>
+
+                            <form id="bulkQuestionForm" action="/teacher/question-bank/<%= bank._id %>/bulk-update-questions" method="POST" class="space-y-3">
+                                <div class="space-y-3" id="questionList">
+                                    <% questions.forEach((q, i) => { %>
+                                        <div class="q-card glass-panel p-5 border border-slate-100 dark:border-slate-800 relative group/card" id="q-block-<%= i %>">
+                                            <input type="hidden" name="questionIds[]" value="<%= q._id %>">
+                                            <div class="flex justify-between items-start gap-4">
+                                                <div class="flex-1 space-y-3">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-[10px] font-extrabold text-slate-300">#<%= i + 1 %></span>
+                                                        <span class="px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-500/10 text-[8px] font-extrabold text-blue-500 border border-blue-100/50 uppercase"><%= q.questionType %></span>
+                                                    </div>
+
+                                                    <!-- Question Text -->
+                                                    <div class="static-content text-[14px] font-bold text-slate-700 dark:text-slate-200 leading-relaxed">
+                                                        <%- q.questionText %>
+                                                    </div>
+                                                    <div class="edit-content space-y-1">
+                                                        <label class="text-[9px] font-bold text-slate-400 ml-0.5">Edit Text</label>
+                                                        <textarea name="texts[]" rows="2" class="w-full p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold focus:border-primary outline-none transition-all"><%= q.questionText.replace(/<[^>]*>?/gm, '') %></textarea>
+                                                    </div>
+                                                    
+                                                    <!-- Solutions -->
+                                                    <div id="ans-<%= i %>" class="hidden static-content pt-3 border-t border-slate-50 dark:border-slate-800/20">
+                                                        <% if (q.questionType === 'MCQ') { %>
+                                                            <div class="grid grid-cols-2 gap-2 mb-3">
+                                                                <% (q.options || []).forEach((opt, idx) => { %>
+                                                                    <div class="p-2 rounded-lg border <%= q.correctAnswerIndex === idx ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-slate-50 dark:bg-slate-900 border-slate-100 text-slate-500' %> text-[11px] font-bold flex items-center gap-2">
+                                                                        <div class="size-4 rounded-full flex items-center justify-center text-[9px] <%= q.correctAnswerIndex === idx ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500' %> icon-box"><%= String.fromCharCode(65 + idx) %></div>
+                                                                        <%= opt %>
+                                                                    </div>
+                                                                <% }) %>
+                                                            </div>
+                                                        <% } else { %>
+                                                            <div class="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-100 text-emerald-700 dark:text-emerald-400">
+                                                                <p class="text-[9px] font-extrabold text-emerald-500 mb-1">Answer</p>
+                                                                <p class="text-[12px] font-bold"><%= q.correctAnswer || 'None' %></p>
+                                                            </div>
+                                                        <% } %>
+                                                        <% if (q.explanation && q.explanation.trim() !== '') { %>
+                                                            <div class="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 mt-2">
+                                                                <p class="text-[9px] font-extrabold text-amber-600 mb-0.5">Explanation</p>
+                                                                <p class="text-[11px] font-medium leading-relaxed"><%= q.explanation %></p>
+                                                            </div>
+                                                        <% } %>
+                                                    </div>
+
+                                                    <!-- Edit Form Fields -->
+                                                    <div class="edit-content space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                                        <% if (q.questionType === 'MCQ') { %>
+                                                            <div class="grid grid-cols-2 gap-2">
+                                                                <% for(let j=0; j<4; j++) { %>
+                                                                    <div class="space-y-1">
+                                                                        <label class="text-[9px] font-bold text-slate-400 ml-0.5">Option <%= String.fromCharCode(65+j) %></label>
+                                                                        <input type="text" name="options_<%= i %>[]" value="<%= q.options ? q.options[j] : '' %>" class="w-full h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold outline-none focus:border-primary">
+                                                                    </div>
+                                                                <% } %>
+                                                            </div>
+                                                            <div class="space-y-1">
+                                                                <label class="text-[9px] font-bold text-slate-400 ml-0.5">Correct Option Index (0=A, 1=B, 2=C, 3=D)</label>
+                                                                <input type="number" name="correctAnswers[]" value="<%= q.correctAnswerIndex %>" min="0" max="3" class="w-24 h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold outline-none focus:border-primary">
+                                                            </div>
+                                                        <% } else { %>
+                                                            <div class="space-y-1">
+                                                                <label class="text-[9px] font-bold text-slate-400 ml-0.5">Answer Content</label>
+                                                                <input type="text" name="answers[]" value="<%= q.correctAnswer %>" class="w-full h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold outline-none focus:border-primary">
+                                                            </div>
+                                                        <% } %>
+                                                        <div class="space-y-1">
+                                                            <label class="text-[9px] font-bold text-slate-400 ml-0.5">Explanation</label>
+                                                            <input type="text" name="explanations[]" value="<%= q.explanation %>" class="w-full h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold outline-none focus:border-primary">
+                                                        </div>
+                                                        <div class="space-y-1 w-24">
+                                                            <label class="text-[9px] font-bold text-slate-400 ml-0.5">Marks</label>
+                                                            <input type="number" name="marks[]" value="<%= q.marks || 1 %>" min="1" max="100" class="w-full h-8 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold outline-none focus:border-primary">
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
+                                                    <button type="button" onclick="toggleAnswer(<%= i %>)" class="size-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition-colors icon-box">
+                                                        <span class="material-symbols-rounded text-[18px]">visibility</span>
+                                                    </button>
+                                                    <button type="button" onclick="deleteQuestion('<%= q._id %>')" class="size-8 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition-colors icon-box">
+                                                        <span class="material-symbols-rounded text-[18px]">delete</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <% }) %>
+                                </div>
+
+                                <div id="saveAllBar" class="hidden fixed bottom-6 right-6 z-50 glass-panel p-3 rounded-2xl shadow-xl border border-primary/20 flex items-center gap-3">
+                                    <p class="text-xs font-bold text-slate-600 dark:text-slate-300 ml-2">Unsaved inventory changes</p>
+                                    <button type="submit" class="h-9 px-5 bg-primary text-white rounded-xl text-xs font-extrabold hover:bg-primary/90 transition-all shadow-md">
+                                        Save All Changes
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function updateFileName(input) {
+            const label = document.getElementById('file-label');
+            if (input.files && input.files[0]) {
+                label.textContent = input.files[0].name;
+                label.classList.add('text-primary');
+            }
+        }
+
+        function toggleEditMode() {
+            document.body.classList.toggle('edit-mode');
+            const btn = document.getElementById('toggleEditBtn');
+            const saveBar = document.getElementById('saveAllBar');
+            
+            if (document.body.classList.contains('edit-mode')) {
+                btn.classList.add('bg-primary', 'text-white', 'border-primary');
+                btn.classList.remove('hover:bg-slate-50');
+                saveBar.classList.remove('hidden');
+            } else {
+                btn.classList.remove('bg-primary', 'text-white', 'border-primary');
+                btn.classList.add('hover:bg-slate-50');
+                saveBar.classList.add('hidden');
+            }
+        }
+
+        function toggleAnswer(id) {
+            const ans = document.getElementById(`ans-${id}`);
+            ans.classList.toggle('hidden');
+        }
+
+        function toggleAllAnswers() {
+            document.querySelectorAll('[id^="ans-"]').forEach(a => a.classList.toggle('hidden'));
+        }
+
+        async function deleteQuestion(id) {
+            const res = await Swal.fire({
+                title: 'Delete Question?',
+                text: 'Are you sure you want to permanently remove this question from inventory?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Delete',
+                cancelButtonText: 'Cancel'
+            });
+            if (res.isConfirmed) {
+                window.location.href = `/teacher/question/${id}/delete?redirect=/teacher/edit-question-bank/<%= bank._id %>`;
+            }
+        }
+
+        async function deleteAttachment(e, bankId) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            const res = await Swal.fire({
+                title: 'Delete Attachment?',
+                text: 'Are you sure you want to remove this attached PDF file?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Delete File',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (res.isConfirmed) {
+                try {
+                    const resp = await fetch(`/teacher/question-bank/${bankId}/delete-file`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        }
+                    });
+                    const data = await resp.json();
+                    if (data.success) {
+                        await Swal.fire({
+                            title: 'Deleted!',
+                            text: 'The attachment has been removed successfully.',
+                            icon: 'success',
+                            confirmButtonColor: '#137fec',
+                            timer: 1500,
+                            timerProgressBar: true
+                        });
+                        window.location.href = `/teacher/edit-question-bank/${bankId}?success=Attachment deleted`;
+                    } else {
+                        Swal.fire({
+                            title: 'Error',
+                            text: data.error || 'Failed to delete attachment',
+                            icon: 'error',
+                            confirmButtonColor: '#ef4444'
+                        });
+                    }
+                } catch (err) {
+                    console.error('Delete attachment error:', err);
+                    window.location.href = `/teacher/question-bank/${bankId}/delete-file`;
+                }
+            }
+        }
+    </script>
+</body>
+</html>

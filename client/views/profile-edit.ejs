@@ -1,231 +1,273 @@
 <!DOCTYPE html>
-<html class="light" lang="bn">
-
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
 <head>
-    <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
-    <title>প্রোফাইল এডিট | ODDHAY</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Lexend:wght@300..900&family=Noto+Sans+Bengali:wght@300..900&display=swap"
-        rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
-        rel="stylesheet" />
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: { "primary": "#137fec" },
-                    fontFamily: { "display": ["Lexend", "Noto Sans Bengali", "sans-serif"] },
-                },
-            },
-        }
-    </script>
-    <style>
-        body {
-            font-family: 'Lexend', 'Noto Sans Bengali', sans-serif;
-        }
-
-        .pb-safe {
-            padding-bottom: env(safe-area-inset-bottom, 20px);
-        }
-    </style>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Edit Profile & Academic Information | ODDHAY</title>
 </head>
 
-<body class="bg-slate-50 dark:bg-[#0f172a] text-slate-900 dark:text-slate-100 min-h-screen pb-20">
-    <!-- Header -->
-    <header
-        class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-4 sticky top-0 z-50">
-        <div class="max-w-lg mx-auto flex items-center gap-3">
-            <a href="/profile" class="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl">
-                <span class="material-symbols-outlined">arrow_back</span>
-            </a>
-            <h1 class="text-lg font-black">প্রোফাইল এডিট</h1>
-        </div>
-    </header>
+<body class="bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <%- include('partials/student-header') %>
 
-    <main class="max-w-lg mx-auto p-4 py-6">
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'profile' }) %>
 
-        <% if(success) { %>
-            <div class="mb-4 p-4 bg-emerald-100 text-emerald-700 rounded-xl text-sm font-bold">
-                সফলভাবে আপডেট হয়েছে!
-            </div>
+        <main class="flex-1 w-full overflow-y-auto p-0 m-0 space-y-0 no-scrollbar bg-[#FFFFFF] dark:bg-[#0b1120] relative">
+            
+            <% const u = locals.user || {}; %>
+            <% const classOptions = locals.availableClasses || ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'HSC 1st Year', 'HSC 2nd Year']; %>
+
+            <!-- Alerts Section (Attached Flush) -->
+            <% if (locals.success || (locals.query && locals.query.success)) { %>
+                <div class="w-full p-3.5 bg-emerald-50 dark:bg-emerald-500/10 border-b border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2">
+                    <span class="material-symbols-rounded text-lg flex items-center justify-center leading-none">check_circle</span>
+                    <span>Profile details updated successfully!</span>
+                </div>
             <% } %>
 
-                <% if(error) { %>
-                    <div class="mb-4 p-4 bg-red-100 text-red-700 rounded-xl text-sm font-bold">
-                        <%= error %>
-                    </div>
-                    <% } %>
+            <% if (locals.error || (locals.query && locals.query.error)) { %>
+                <% const err = locals.error || locals.query.error; %>
+                <div class="w-full p-3.5 bg-rose-50 dark:bg-rose-500/10 border-b border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-2">
+                    <span class="material-symbols-rounded text-lg flex items-center justify-center leading-none">error</span>
+                    <span><%= err === 'wrong_old_password' ? 'The current password entered is incorrect.' : (err === 'old_password_required' ? 'Current password is required to set a new password.' : 'Failed to update profile. Please try again.') %></span>
+                </div>
+            <% } %>
 
-                        <!-- Profile Picture -->
-                        <div
-                            class="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 mb-6 text-center shadow-lg relative overflow-hidden">
-                            <div class="relative inline-block">
-                                <div
-                                    class="size-32 rounded-[2.5rem] bg-slate-100 dark:bg-slate-800 border-4 border-white dark:border-slate-800 shadow-xl overflow-hidden flex items-center justify-center mx-auto mb-4">
-                                    <% if(user.profilePicture) { %>
-                                        <img src="<%= user.profilePicture %>" class="w-full h-full object-cover"
-                                            id="profile-preview">
-                                        <% } else { %>
-                                            <span class="material-symbols-outlined text-slate-300 text-6xl"
-                                                id="profile-placeholder">person</span>
-                                            <% } %>
-                                </div>
-                                <label for="profile-upload"
-                                    class="absolute bottom-4 -right-2 size-10 bg-primary text-white rounded-2xl flex items-center justify-center border-4 border-white dark:border-slate-900 cursor-pointer hover:scale-110 transition-transform shadow-lg">
-                                    <span class="material-symbols-outlined text-xl">add_a_photo</span>
-                                </label>
-                                <input type="file" id="profile-upload" class="hidden" accept="image/*"
-                                    onchange="previewImage(this)">
-                            </div>
-                            <p class="text-xs font-black text-slate-400 uppercase tracking-widest mt-2">প্রোফাইল ছবি
-                                পরিবর্তন করুন</p>
+            <!-- Edit Profile Content Grid (Attached Flush to Sidebar, Navbar & Sections) -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 w-full border-b border-slate-200/80 dark:border-slate-800/80 divide-y lg:divide-y-0 lg:divide-x divide-slate-200/80 dark:divide-slate-800/80 bg-white dark:bg-[#0f172a]">
+                
+                <!-- Left Column: Avatar & Quick Info Card -->
+                <div class="lg:col-span-1 p-4 sm:p-5 flex flex-col items-center text-center bg-white dark:bg-[#0f172a]">
+                    
+                    <!-- Avatar Clickable Zone -->
+                    <div id="avatar-click-zone" class="relative group my-2 cursor-pointer select-none">
+                        <div class="size-28 lg:size-32 rounded-full border-2 border-primary/30 shadow-xs overflow-hidden flex items-center justify-center bg-slate-100 dark:bg-slate-800 relative z-10">
+                            <img src="<%= (u.profileImage || u.profilePicture) ? (u.profileImage || u.profilePicture) : (u.name ? `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=random&size=144` : '/default-avatar.png') %>" class="w-full h-full object-cover" id="profile-preview" alt="Profile Picture">
+                        </div>
+                        <div class="absolute -bottom-1 -right-1 size-8 bg-primary text-white rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-md z-20 group-hover:scale-110 transition-transform">
+                            <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none">photo_camera</span>
+                        </div>
+                        <input type="file" id="profile-upload" name="profilePicture" class="hidden" accept="image/*">
+                    </div>
+
+                    <h3 class="font-bold text-slate-800 dark:text-white mt-2 text-sm leading-tight"><%= u.name || 'Student' %></h3>
+                    <span class="text-[10px] font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-md border border-primary/20 mt-1 inline-block">
+                        <%= u.classLevel || 'Class 10' %>
+                    </span>
+
+                    <div id="uploading-indicator" class="hidden mt-3 px-3 py-1.5 bg-blue-50 dark:bg-blue-500/10 text-primary rounded-lg text-xs font-bold flex items-center gap-2 justify-center w-full">
+                        <span class="material-symbols-rounded animate-spin text-sm flex items-center justify-center leading-none">sync</span> Updating photo...
+                    </div>
+                </div>
+
+                <!-- Right Column: Personal & Academic Information Form -->
+                <div class="lg:col-span-2 p-4 sm:p-5 bg-white dark:bg-[#0f172a]">
+                    
+                    <!-- Personal & Academic Information Form Section -->
+                    <div class="w-full pb-4">
+                        <div class="flex items-center gap-2 mb-3.5 pb-2.5 border-b border-slate-100 dark:border-slate-800/80">
+                            <span class="material-symbols-rounded text-primary text-lg flex items-center justify-center leading-none">badge</span>
+                            <h3 class="text-xs font-bold text-slate-800 dark:text-white">Personal & Academic Information</h3>
                         </div>
 
-                        <script>
-                            function previewImage(input) {
-                                if (input.files && input.files[0]) {
-                                    const reader = new FileReader();
-                                    reader.onload = function (e) {
-                                        const preview = document.getElementById('profile-preview');
-                                        const placeholder = document.getElementById('profile-placeholder');
-                                        if (preview) {
-                                            preview.src = e.target.result;
-                                        } else if (placeholder) {
-                                            const img = document.createElement('img');
-                                            img.id = 'profile-preview';
-                                            img.src = e.target.result;
-                                            img.className = 'w-full h-full object-cover';
-                                            placeholder.parentNode.replaceChild(img, placeholder);
-                                        }
+                        <form action="/profile/update" method="POST" enctype="multipart/form-data" class="space-y-3">
+                            <!-- Name & Email -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-400 mb-1">Full Name</label>
+                                    <input type="text" name="name" value="<%= u.name || '' %>" required
+                                        class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-400 mb-1">
+                                        Email <span class="text-slate-400 font-normal">(Read-only)</span>
+                                    </label>
+                                    <input type="email" name="email" value="<%= u.email || '' %>" readonly
+                                        class="w-full px-3 py-2 bg-slate-100 dark:bg-slate-800/30 border border-slate-200/60 dark:border-slate-700/60 text-xs font-semibold text-slate-400 rounded-lg cursor-not-allowed outline-none">
+                                </div>
+                            </div>
 
-                                        // Auto-upload
-                                        const formData = new FormData();
-                                        formData.append('profilePicture', input.files[0]);
-                                        fetch('/profile/upload-picture', {
-                                            method: 'POST',
-                                            body: formData
-                                        })
-                                            .then(res => res.json())
-                                            .then(data => {
-                                                if (data.success) {
-                                                    console.log('Upload success');
-                                                }
-                                            })
-                                            .catch(err => console.error(err));
-                                    }
-                                    reader.readAsDataURL(input.files[0]);
+                            <!-- Phone & Class Level -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-400 mb-1">Phone Number</label>
+                                    <input type="text" name="phone" value="<%= u.phone || '' %>"
+                                        class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
+                                        placeholder="017XXXXXXXX">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-400 mb-1">Class</label>
+                                    <select name="classLevel" class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors cursor-pointer">
+                                        <% classOptions.forEach(lvl => { %>
+                                            <option value="<%= lvl %>" <%= (u.classLevel === lvl || (u.classLevel && u.classLevel.toString().trim() === lvl.toString().trim())) ? 'selected' : '' %>><%= lvl %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- School Name & College Name -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-400 mb-1">School Name</label>
+                                    <input type="text" name="schoolName" value="<%= u.schoolName || '' %>"
+                                        class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
+                                        placeholder="School name">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-400 mb-1">College Name</label>
+                                    <input type="text" name="collegeName" value="<%= u.collegeName || '' %>"
+                                        class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
+                                        placeholder="College / Institution name">
+                                </div>
+                            </div>
+
+                            <!-- Present Address & Permanent Address -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-400 mb-1">Present Address</label>
+                                    <input type="text" name="presentAddress" value="<%= u.presentAddress || '' %>"
+                                        class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
+                                        placeholder="Present address">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-400 mb-1">Permanent Address</label>
+                                    <input type="text" name="permanentAddress" value="<%= u.permanentAddress || '' %>"
+                                        class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
+                                        placeholder="Permanent address">
+                                </div>
+                            </div>
+
+                            <div class="pt-2 flex justify-end">
+                                <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary/90 text-white rounded-lg font-bold text-xs shadow-xs transition-all flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-base flex items-center justify-center leading-none">save</span> Save Changes
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Security Quick Redirect Card (Flush Attached Below Form) -->
+                    <div class="pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="size-9 rounded-lg flex items-center justify-center border shrink-0 text-amber-500 bg-amber-50 dark:bg-amber-500/10 border-amber-200/60 dark:border-amber-500/20">
+                                <span class="material-symbols-rounded text-lg flex items-center justify-center leading-none">security</span>
+                            </div>
+                            <div class="min-w-0">
+                                <h4 class="text-xs font-bold text-slate-800 dark:text-white leading-tight">Account Security & Logged-in Devices</h4>
+                                <p class="text-[11px] font-medium text-slate-400 truncate">Change password or manage active session devices</p>
+                            </div>
+                        </div>
+                        <a href="/profile/security" class="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg font-bold text-xs shadow-xs transition-all flex items-center gap-1 shrink-0">
+                            <span class="material-symbols-rounded text-base flex items-center justify-center leading-none">shield</span> Security
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <%- include('partials/student-bottom-nav', { activePage: 'profile' }) %>
+    <%- include('partials/app-scripts') %>
+
+    <script>
+        // Client-side canvas compression helper
+        function compressAndUploadAvatar(file) {
+            const indicator = document.getElementById('uploading-indicator');
+            if (indicator) {
+                indicator.classList.remove('hidden');
+                indicator.innerHTML = '<span class="material-symbols-rounded animate-spin text-sm flex items-center justify-center leading-none">sync</span> Processing photo...';
+            }
+
+            const img = new Image();
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                // Render preview immediately
+                const previewImg = document.getElementById('profile-preview');
+                if (previewImg) previewImg.src = e.target.result;
+
+                img.onload = function() {
+                    let width = img.width;
+                    let height = img.height;
+                    const maxDim = 800; // Optimal avatar resolution
+
+                    if (width > maxDim || height > maxDim) {
+                        if (width > height) {
+                            height = Math.round((height * maxDim) / width);
+                            width = maxDim;
+                        } else {
+                            width = Math.round((width * maxDim) / height);
+                            height = maxDim;
+                        }
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    canvas.toBlob(function(blob) {
+                        const uploadFile = blob ? new File([blob], file.name || 'avatar.jpg', { type: 'image/jpeg' }) : file;
+                        
+                        if (indicator) {
+                            indicator.innerHTML = '<span class="material-symbols-rounded animate-spin text-sm flex items-center justify-center leading-none">sync</span> Uploading photo...';
+                        }
+
+                        const formData = new FormData();
+                        formData.append('profilePicture', uploadFile);
+
+                        fetch('/profile/upload-picture', {
+                            method: 'POST',
+                            body: formData
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success && data.filePath) {
+                                const cacheBustedPath = data.filePath + '?t=' + Date.now();
+                                if (previewImg) previewImg.src = cacheBustedPath;
+
+                                const headerImgs = document.querySelectorAll('header img[alt="Profile"]');
+                                headerImgs.forEach(i => i.src = cacheBustedPath);
+
+                                if (indicator) {
+                                    indicator.innerHTML = '<span class="material-symbols-rounded text-sm flex items-center justify-center leading-none text-emerald-500">check_circle</span> Photo updated!';
+                                    setTimeout(() => indicator.classList.add('hidden'), 3000);
                                 }
+                            } else {
+                                alert(data.error || 'Failed to upload photo');
+                                if (indicator) indicator.classList.add('hidden');
                             }
-                        </script>
+                        })
+                        .catch(err => {
+                            console.error('Avatar upload failed:', err);
+                            if (indicator) indicator.classList.add('hidden');
+                        });
+                    }, 'image/jpeg', 0.85);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
 
-                        <!-- Edit Form -->
-                        <form action="/profile/update" method="POST"
-                            class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+        document.addEventListener('DOMContentLoaded', function() {
+            const avatarZone = document.getElementById('avatar-click-zone');
+            const fileInput = document.getElementById('profile-upload');
 
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 mb-1">নাম</label>
-                                <input type="text" name="name" value="<%= user.name %>"
-                                    class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold">
-                            </div>
+            if (avatarZone && fileInput) {
+                avatarZone.addEventListener('click', function(e) {
+                    if (e.target !== fileInput) {
+                        fileInput.click();
+                    }
+                });
 
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 mb-1">ইমেইল</label>
-                                <input type="email" name="email" value="<%= user.email %>"
-                                    class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold"
-                                    readonly>
-                            </div>
-
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 mb-1">ফোন</label>
-                                <input type="text" name="phone" value="<%= user.phone || '' %>"
-                                    class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold">
-                            </div>
-
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 mb-1">ক্লাস লেভেল</label>
-                                <select name="classLevel"
-                                    class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold">
-                                    <option value="Class 6" <%=user.classLevel==='Class 6' ? 'selected' : '' %>>Class 6
-                                    </option>
-                                    <option value="Class 7" <%=user.classLevel==='Class 7' ? 'selected' : '' %>>Class 7
-                                    </option>
-                                    <option value="Class 8" <%=user.classLevel==='Class 8' ? 'selected' : '' %>>Class 8
-                                    </option>
-                                    <option value="Class 9" <%=user.classLevel==='Class 9' ? 'selected' : '' %>>Class 9
-                                    </option>
-                                    <option value="Class 10" <%=user.classLevel==='Class 10' ? 'selected' : '' %>>Class
-                                        10</option>
-                                    <option value="HSC 1st Year" <%=user.classLevel==='HSC 1st Year' ? 'selected' : ''
-                                        %>>HSC 1st Year</option>
-                                    <option value="HSC 2nd Year" <%=user.classLevel==='HSC 2nd Year' ? 'selected' : ''
-                                        %>>HSC 2nd Year</option>
-                                </select>
-                            </div>
-
-                            <div class="pt-2">
-                                <button type="submit"
-                                    class="w-full py-3.5 bg-primary text-white rounded-xl font-black text-sm">সংরক্ষণ
-                                    করুন</button>
-                            </div>
-                        </form>
-
-                        <!-- Change Password -->
-                        <form action="/profile/change-password" method="POST"
-                            class="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4 mt-4">
-                            <h3 class="font-black text-sm mb-2">পাসওয়ার্ড পরিবর্তন</h3>
-
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 mb-1">বর্তমান পাসওয়ার্ড</label>
-                                <input type="password" name="currentPassword"
-                                    class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold">
-                            </div>
-
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 mb-1">নতুন পাসওয়ার্ড</label>
-                                <input type="password" name="newPassword"
-                                    class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold">
-                            </div>
-
-                            <div>
-                                <label class="block text-xs font-bold text-slate-500 mb-1">নতুন পাসওয়ার্ড নিশ্চিত
-                                    করুন</label>
-                                <input type="password" name="confirmPassword"
-                                    class="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800 border-none text-sm font-bold">
-                            </div>
-
-                            <div class="pt-2">
-                                <button type="submit"
-                                    class="w-full py-3.5 bg-slate-800 dark:bg-slate-700 text-white rounded-xl font-black text-sm">পাসওয়ার্ড
-                                    পরিবর্তন</button>
-                            </div>
-                        </form>
-    </main>
-
-    <!-- Mobile Bottom Nav -->
-    <nav
-        class="fixed bottom-0 left-0 right-0 z-[100] bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 lg:hidden pb-safe">
-        <div class="flex items-center justify-around h-16">
-            <a href="/dashboard" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">home</span>
-                <span class="text-[9px] font-black">হোম</span>
-            </a>
-            <a href="/messages" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">mail</span>
-                <span class="text-[9px] font-black">মেসেজ</span>
-            </a>
-            <a href="/downloads" class="flex flex-col items-center gap-0.5 text-slate-400">
-                <span class="material-symbols-outlined text-xl">download</span>
-                <span class="text-[9px] font-black">ডাউনলোড</span>
-            </a>
-            <a href="/profile" class="flex flex-col items-center gap-0.5 text-primary">
-                <span class="material-symbols-outlined text-xl">person</span>
-                <span class="text-[9px] font-black">প্রোফাইল</span>
-            </a>
-        </div>
-    </nav>
+                fileInput.addEventListener('change', function() {
+                    if (!this.files || !this.files[0]) return;
+                    compressAndUploadAvatar(this.files[0]);
+                });
+            }
+        });
+    </script>
 </body>
-
 </html>

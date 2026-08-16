@@ -6,25 +6,46 @@ const paymentSchema = new mongoose.Schema({
         ref: 'User',
         required: true
     },
+    itemType: {
+        type: String,
+        enum: ['course', 'note', 'question_bank'],
+        default: 'course'
+    },
     course: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Course',
-        required: true
+        required: false
+    },
+    note: {
+        type: mongoose.Schema.Types.Mixed,
+        required: false
+    },
+    questionBank: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'QuestionBank',
+        required: false
     },
     planIndex: { type: Number, default: 0 },
-    amount: { type: Number, required: true },
+    amount: { type: Number, required: true },         // final amount after discount
+    originalAmount: { type: Number, default: 0 },     // before discount
+    discountAmount: { type: Number, default: 0 },     // discount applied
+    couponCode: { type: String, default: null },       // coupon used
     paymentMethod: {
         type: String,
-        enum: ['bkash', 'nagad', 'rocket', 'bank'],
+        enum: ['bkash', 'nagad', 'rocket', 'card', 'bank_transfer'],
         required: true
     },
     phoneNumber: { type: String, required: true },
-    transactionId: { type: String, required: true, uppercase: true },
+    transactionId: { type: String, required: true, uppercase: true, trim: true },
     status: {
         type: String,
-        enum: ['pending', 'approved', 'rejected'],
-        default: 'pending'
+        enum: ['pending', 'success', 'approved', 'failed', 'rejected', 'refunded', 'partial_refund'],
+        default: 'success'
     },
+    refundAmount: { type: Number, default: 0 },
+    refundReason: { type: String, default: '' },
+    refundDate: { type: Date },
+    refundBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     adminNote: { type: String, default: '' },
     reviewedBy: {
         type: mongoose.Schema.Types.ObjectId,

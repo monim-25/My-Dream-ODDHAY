@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Account Security & Active Devices | ODDHAY</title>
+</head>
+
+<body class="bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <%- include('partials/student-header') %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'profile' }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-0 m-0 space-y-0 no-scrollbar bg-[#FFFFFF] dark:bg-[#0b1120] relative">
+            
+            <% const u = locals.user || {}; %>
+            <% const devices = locals.activeDevices || u.activeDevices || []; %>
+
+            <!-- Auto-dismissing Alerts Section (Attached Flush) -->
+            <% if (locals.success || (locals.query && locals.query.success)) { %>
+                <% const succ = locals.success || locals.query.success; %>
+                <div id="flash-alert" class="w-full p-3.5 bg-emerald-50 dark:bg-emerald-500/10 border-b border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2 transition-all duration-300">
+                    <span class="material-symbols-rounded text-lg flex items-center justify-center leading-none">check_circle</span>
+                    <span><%= succ === 'password_changed' ? 'Password updated successfully!' : (succ === 'device_logged_out' ? 'Device session logged out successfully!' : 'Security settings updated.') %></span>
+                </div>
+            <% } %>
+
+            <% if (locals.error || (locals.query && locals.query.error)) { %>
+                <% const err = locals.error || locals.query.error; %>
+                <div id="flash-alert" class="w-full p-3.5 bg-rose-50 dark:bg-rose-500/10 border-b border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-2 transition-all duration-300">
+                    <span class="material-symbols-rounded text-lg flex items-center justify-center leading-none">error</span>
+                    <span>
+                        <%= err === 'wrong_old_password' ? 'The current password entered is incorrect.' : 
+                           (err === 'password_mismatch' ? 'New passwords do not match.' : 
+                           (err === 'fields_required' ? 'All password fields are required.' : 'Failed to update security settings.')) %>
+                    </span>
+                </div>
+            <% } %>
+
+            <!-- Security Content Grid (Attached Flush to Sidebar, Navbar & Sections) -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 w-full border-b border-slate-200/80 dark:border-slate-800/80 divide-y lg:divide-y-0 lg:divide-x divide-slate-200/80 dark:divide-slate-800/80 bg-white dark:bg-[#0f172a]">
+                
+                <!-- Left Column: Change Password -->
+                <div class="w-full p-4 sm:p-5 bg-white dark:bg-[#0f172a]">
+                    <div class="flex items-center gap-2 mb-3.5 pb-2.5 border-b border-slate-100 dark:border-slate-800/80">
+                        <span class="material-symbols-rounded text-rose-500 text-lg flex items-center justify-center leading-none">lock</span>
+                        <h3 class="text-xs font-bold text-slate-800 dark:text-white">Change Password</h3>
+                    </div>
+
+                    <form action="/profile/change-password" method="POST" class="space-y-3">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Current Password</label>
+                            <input type="password" name="oldPassword" required
+                                class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
+                                placeholder="Enter current password">
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">New Password</label>
+                            <input type="password" name="password" required
+                                class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
+                                placeholder="Enter new password">
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Confirm New Password</label>
+                            <input type="password" name="confirmPassword" required
+                                class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
+                                placeholder="Re-enter new password">
+                        </div>
+
+                        <div class="pt-2 flex justify-end">
+                            <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-xs shadow-xs transition-all flex items-center gap-1.5">
+                                <span class="material-symbols-rounded text-base flex items-center justify-center leading-none">key</span> Update Password
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Right Column: Active Logged-in Devices -->
+                <div class="w-full p-4 sm:p-5 bg-white dark:bg-[#0f172a]">
+                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-2.5 mb-3.5">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-rounded text-indigo-500 text-lg flex items-center justify-center leading-none">devices</span>
+                            <h3 class="text-xs font-bold text-slate-800 dark:text-white">Logged-in Devices & Active Sessions</h3>
+                        </div>
+                        <span class="text-xs font-medium text-slate-400"><%= devices.length %> Active</span>
+                    </div>
+
+                    <% if (devices.length === 0) { %>
+                        <div class="py-8 text-center bg-slate-50 dark:bg-slate-800/30 rounded-lg border border-dashed border-slate-200 dark:border-slate-800">
+                            <span class="material-symbols-rounded text-3xl text-slate-300 mb-1 flex items-center justify-center leading-none">phonelink_off</span>
+                            <p class="text-xs font-bold text-slate-700 dark:text-slate-300">No active device sessions found</p>
+                        </div>
+                    <% } else { %>
+                        <div class="space-y-2">
+                            <% devices.forEach(function(dev, idx) { %>
+                                <% 
+                                   const isMobile = dev.deviceType === 'Mobile' || (dev.os && (dev.os.includes('Android') || dev.os.includes('iOS')));
+                                   const isTablet = dev.deviceType === 'Tablet' || (dev.os && dev.os.includes('iPad'));
+                                   const devIcon = isMobile ? 'smartphone' : (isTablet ? 'tablet_mac' : 'desktop_windows');
+                                   const currSessId = locals.currentSessionId || '';
+                                   const isCurrent = (dev.deviceId && currSessId && dev.deviceId === currSessId) || (idx === devices.length - 1);
+                                %>
+                                <div class="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between gap-3">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <div class="size-9 rounded-lg flex items-center justify-center border shrink-0 <%= isCurrent ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200/60 dark:border-emerald-500/20' : 'text-indigo-500 bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200/60 dark:border-indigo-500/20' %>">
+                                            <span class="material-symbols-rounded text-lg flex items-center justify-center leading-none"><%= devIcon %></span>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <h4 class="text-xs font-bold text-slate-800 dark:text-white leading-tight truncate">
+                                                    <%= dev.browser || 'Browser' %> on <%= dev.os || 'OS' %>
+                                                </h4>
+                                                <% if (isCurrent) { %>
+                                                    <span class="px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 rounded text-[9px] font-bold flex items-center gap-1">
+                                                        <span class="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Current Device
+                                                    </span>
+                                                <% } %>
+                                            </div>
+                                            <p class="text-[10px] font-medium text-slate-400 mt-0.5 truncate">
+                                                IP: <%= dev.ip || 'Unknown' %> • Last active: <%= dev.lastActive ? new Date(dev.lastActive).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recently' %>
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <% if (!isCurrent) { %>
+                                        <form action="/profile/logout-device" method="POST" class="shrink-0">
+                                            <input type="hidden" name="deviceId" value="<%= dev.deviceId %>">
+                                            <button type="submit" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 dark:bg-rose-500/10 dark:hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-md text-[11px] font-bold transition-colors flex items-center gap-1">
+                                                <span class="material-symbols-rounded text-xs flex items-center justify-center leading-none">logout</span> Revoke
+                                            </button>
+                                        </form>
+                                    <% } %>
+                                </div>
+                            <% }); %>
+                        </div>
+                    <% } %>
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+    <%- include('partials/student-bottom-nav', { activePage: 'profile' }) %>
+    <%- include('partials/app-scripts') %>
+</body>
+</html>

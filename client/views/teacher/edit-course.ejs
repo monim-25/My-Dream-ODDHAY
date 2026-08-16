@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <script> const hasEditAccess = <%= typeof hasEditAccess !== 'undefined' ? hasEditAccess : false %>; </script>
+    <title>Course Content | Teacher Hub</title>
+    <style>
+        :root {
+            --admin-sidebar-width: 260px;
+        }
+
+        .admin-main {
+            margin-left: var(--admin-sidebar-width);
+            min-height: 100vh;
+            transition: all 0.3s ease;
+        }
+
+        .form-label {
+            font-size: 12px;
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 0.5rem;
+            display: block;
+            letter-spacing: -0.01em;
+        }
+
+        .dark .form-label {
+            color: #94a3b8;
+        }
+
+        .form-input {
+            width: 100%;
+            height: 42px;
+            padding: 0 0.85rem;
+            font-size: 11.5px;
+            font-weight: 700;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 0;
+            outline: none;
+            transition: all 0.2s ease;
+            appearance: none;
+        }
+
+        .dark .form-input {
+            background: #020617;
+            border: 1px solid #334155;
+            color: #f1f5f9;
+        }
+
+        .form-input::placeholder {
+            color: #94a3b8;
+            font-weight: 500;
+            opacity: 0.8;
+            font-size: 12px;
+        }
+
+        .form-input:hover {
+            border-color: #94a3b8;
+        }
+
+        .dark .form-input:hover {
+            border-color: #475569;
+        }
+
+        .form-input:focus {
+            border-color: #1e293b;
+        }
+
+        .dark .form-input:focus {
+            border-color: #f1f5f9;
+        }
+
+        /* Multi-select Styles */
+        .multi-select-container {
+            position: relative;
+        }
+
+        .multi-select-trigger {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            padding: 4px 0.85rem;
+            min-height: 42px;
+            height: auto;
+            align-items: center;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 0.75rem center;
+            background-size: 0.9rem;
+            padding-right: 2.2rem;
+        }
+
+        .multi-select-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            background: #ffffff;
+            border: 1px solid #cbd5e1;
+            border-radius: 0;
+            margin-top: 4px;
+            max-height: 240px;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .dark .multi-select-dropdown {
+            background: #0f172a;
+            border-color: #334155;
+        }
+
+        .multi-select-option {
+            padding: 8px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            transition: background 0.15s ease;
+        }
+
+        .multi-select-option:hover {
+            background: #f8fafc;
+        }
+
+        .dark .multi-select-option:hover {
+            background: #1e293b;
+        }
+
+        .multi-select-pill {
+            background: #f1f5f9;
+            color: #475569;
+            padding: 2px 8px;
+            border-radius: 0;
+            font-size: 9.5px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .dark .multi-select-pill {
+            background: #1e293b;
+            color: #cbd5e1;
+            border-color: #334155;
+        }
+
+        .multi-select-pill span {
+            cursor: pointer;
+            opacity: 0.6;
+        }
+
+        .multi-select-pill span:hover {
+            opacity: 1;
+            color: #ef4444;
+        }
+
+        @media (max-width: 1024px) {
+            .admin-main { margin-left: 0; }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+</head>
+
+<body class="bg-[#F8F8FF] dark:bg-[#0b1120] text-slate-700 dark:text-slate-300 font-sans min-h-screen antialiased">
+    <div class="flex">
+        <!-- Sidebar -->
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100] lg:translate-x-0 -translate-x-full">
+            <%- include('sidebar', { active: 'courses' }) %>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main flex-1 flex flex-col w-full">
+            <%- include('../admin/header_v2', { pageTitle: 'Course Content' }) %>
+
+            <section class="flex-1 flex flex-col bg-[#F8F8FF] dark:bg-[#0b1120] border-l border-slate-900/10 dark:border-white/5 bg-white dark:bg-[#0f172a]">
+                
+                <!-- Tab Headers -->
+                <div class="border-b border-slate-200 dark:border-white/5 bg-white dark:bg-[#0f172a] px-6 pt-4 flex gap-6">
+                    <button id="tabBtn-curriculum" onclick="switchTab('curriculum')" class="pb-3 border-b-2 font-bold text-[13px] border-primary text-primary transition-colors">
+                        Curriculum
+                    </button>
+                    <button id="tabBtn-progress" onclick="switchTab('progress')" class="pb-3 border-b-2 font-bold text-[13px] border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
+                        Student Progress
+                    </button>
+                    <button id="tabBtn-announcements" onclick="switchTab('announcements')" class="pb-3 border-b-2 font-bold text-[13px] border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
+                        Announcements
+                    </button>
+                </div>
+
+                <!-- Tab: Curriculum -->
+                <div id="tab-curriculum" class="tab-pane">
+                    <div class="p-6">
+                        <%- include('curriculum-studio-partial') %>
+                    </div>
+                </div>
+
+                
+                <!-- Tab: Student Progress -->
+                <div id="tab-progress" class="tab-pane hidden p-6">
+                    <div class="mb-6 flex items-center justify-between">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800 dark:text-white">Student Progress Tracking</h2>
+                            <p class="text-sm text-slate-500">Monitor engagement and completion rates</p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white dark:bg-[#0b1120] border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden">
+                        <table class="w-full text-left text-sm">
+                            <thead class="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 font-bold">
+                                <tr>
+                                    <th class="px-4 py-3">Student</th>
+                                    <th class="px-4 py-3">Enrolled On</th>
+                                    <th class="px-4 py-3">Last Active</th>
+                                    <th class="px-4 py-3 text-center">Exam Attended</th>
+                                    <th class="px-4 py-3 w-[200px]">Overall Progress</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-white/5">
+                                <% if (students && students.length > 0) { %>
+                                    <% students.forEach(student => { %>
+                                        <tr class="hover:bg-slate-50 dark:hover:bg-white/5">
+                                            <td class="px-4 py-3">
+                                                <div class="flex items-center gap-3">
+                                                    <img src="<%= student.profileImage %>" alt="avatar" class="size-8 rounded-full object-cover">
+                                                    <div>
+                                                        <p class="font-bold text-slate-800 dark:text-white"><%= student.name %></p>
+                                                        <p class="text-[11px] text-slate-500"><%= student.email %></p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">
+                                                <%= new Date(student.enrolledAt).toLocaleDateString() %>
+                                            </td>
+                                            <td class="px-4 py-3 text-slate-600 dark:text-slate-400">
+                                                <%= student.lastAccessed ? new Date(student.lastAccessed).toLocaleDateString() : 'Never' %>
+                                            </td>
+                                            <td class="px-4 py-3 text-center font-bold text-slate-700 dark:text-slate-300">
+                                                <%= student.examAttended || 0 %>
+                                            </td>
+                                            <td class="px-4 py-3">
+                                                <% const progressPercent = student.progress || 0; %>
+                                                <div class="flex items-center gap-3">
+                                                    <div class="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                        <div class="h-full bg-emerald-500 rounded-full" style="width: <%= progressPercent %>%"></div>
+                                                    </div>
+                                                    <span class="text-xs font-bold text-slate-600 dark:text-slate-400"><%= Math.round(progressPercent) %>%</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <% }) %>
+                                <% } else { %>
+                                    <tr>
+                                        <td colspan="5" class="px-4 py-8 text-center text-slate-500">
+                                            No students enrolled yet.
+                                        </td>
+                                    </tr>
+                                <% } %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+
+                <!-- Tab: Announcements -->
+                <div id="tab-announcements" class="tab-pane hidden p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800 dark:text-white">Notice Board</h2>
+                            <p class="text-sm text-slate-500">Broadcast announcements to all enrolled students</p>
+                        </div>
+                        <button onclick="document.getElementById('announcementForm').classList.toggle('hidden')" class="px-4 py-2 bg-primary text-white rounded-md font-bold text-sm hover:bg-primary/90 transition-colors flex items-center gap-2">
+                            <span class="material-symbols-rounded text-lg">add</span> New Notice
+                        </button>
+                    </div>
+
+                    <div id="announcementForm" class="hidden bg-white dark:bg-[#0b1120] border border-slate-200 dark:border-white/10 rounded-lg p-5 mb-6">
+                        <input type="text" id="annTitle" placeholder="Announcement Title" class="w-full px-4 py-2 border border-slate-200 dark:border-white/10 bg-transparent rounded mb-4 focus:outline-none focus:border-primary dark:text-white">
+                        <textarea id="annContent" placeholder="Write your message here... You can use standard formatting." class="w-full px-4 py-3 border border-slate-200 dark:border-white/10 bg-transparent rounded mb-4 h-32 focus:outline-none focus:border-primary dark:text-white"></textarea>
+                        <div class="flex items-center justify-between">
+                            <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+                                <input type="checkbox" id="annPriority" class="accent-primary size-4 rounded cursor-pointer">
+                                Mark as High Priority (Red Alert)
+                            </label>
+                            <div class="flex gap-3">
+                                <button onclick="document.getElementById('announcementForm').classList.add('hidden')" class="px-4 py-2 text-slate-500 hover:text-slate-700 dark:hover:text-white font-bold text-sm transition-colors">Cancel</button>
+                                <button onclick="postAnnouncement()" class="px-5 py-2 bg-primary text-white rounded font-bold text-sm hover:bg-primary/90 transition-colors">Post Notice</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <% if (typeof announcements !== 'undefined' && announcements.length > 0) { %>
+                            <% announcements.forEach(ann => { %>
+                                <div class="bg-white dark:bg-[#0f172a] border <%= ann.priority === 'high' ? 'border-rose-500/50' : 'border-slate-200 dark:border-white/10' %> rounded-lg p-5 relative group">
+                                    <button onclick="deleteAnnouncement('<%= ann._id %>')" class="absolute top-4 right-4 text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <span class="material-symbols-rounded text-lg">delete</span>
+                                    </button>
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <% if (ann.priority === 'high') { %>
+                                            <span class="px-2 py-0.5 bg-rose-500/10 text-rose-500 text-[10px] font-bold rounded uppercase">Important</span>
+                                        <% } %>
+                                        <span class="text-xs text-slate-500"><%= new Date(ann.createdAt).toLocaleString() %></span>
+                                    </div>
+                                    <h3 class="font-bold text-slate-800 dark:text-white mb-2"><%= ann.title %></h3>
+                                    <p class="text-sm text-slate-600 dark:text-slate-300 whitespace-pre-wrap"><%= ann.content %></p>
+                                </div>
+                            <% }) %>
+                        <% } else { %>
+                            <div class="text-center py-10 border border-dashed border-slate-300 dark:border-white/10 rounded-lg text-slate-500">
+                                <span class="material-symbols-rounded text-4xl mb-3 opacity-50">campaign</span>
+                                <p>No announcements yet.</p>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+
+                <script>
+                    async function postAnnouncement() {
+                        const title = document.getElementById('annTitle').value.trim();
+                        const content = document.getElementById('annContent').value.trim();
+                        const priority = document.getElementById('annPriority').checked ? 'high' : 'normal';
+                        
+                        if (!title || !content) return alert('Please enter both title and content.');
+                        
+                        try {
+                            const res = await fetch(`/teacher/course/<%= course._id %>/announcement`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ title, content, priority })
+                            });
+                            if (res.ok) window.location.reload();
+                            else alert('Failed to post announcement');
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }
+
+                    async function deleteAnnouncement(id) {
+                        if (!confirm('Delete this announcement?')) return;
+                        try {
+                            const res = await fetch(`/teacher/course/<%= course._id %>/announcement/${id}`, { method: 'DELETE' });
+                            if (res.ok) window.location.reload();
+                            else alert('Failed to delete');
+                        } catch (e) {
+                            console.error(e);
+                        }
+                    }
+                </script>
+
+                <script>
+                    function switchTab(tabId) {
+                        ['curriculum', 'progress', 'announcements'].forEach(id => {
+                            document.getElementById(`tabBtn-${id}`).className = 'pb-3 border-b-2 font-bold text-[13px] border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors';
+                            document.getElementById(`tab-${id}`).classList.add('hidden');
+                        });
+                        document.getElementById(`tabBtn-${tabId}`).className = 'pb-3 border-b-2 font-bold text-[13px] border-primary text-primary transition-colors';
+                        document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+                        
+                        // Save to localStorage
+                        if (typeof(Storage) !== "undefined") {
+                            localStorage.setItem('editCourseTab_<%= typeof course !== "undefined" ? course._id : "default" %>', tabId);
+                        }
+                    }
+
+                    // Restore tab on load
+                    document.addEventListener('DOMContentLoaded', () => {
+                        if (typeof(Storage) !== "undefined") {
+                            const savedTab = localStorage.getItem('editCourseTab_<%= typeof course !== "undefined" ? course._id : "default" %>');
+                            if (savedTab && ['curriculum', 'progress', 'announcements'].includes(savedTab)) {
+                                switchTab(savedTab);
+                            }
+                        }
+                    });
+                </script>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

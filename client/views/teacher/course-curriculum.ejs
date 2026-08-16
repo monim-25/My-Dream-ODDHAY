@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+        <title>
+            <%= course.title %> | Teacher Hub
+        </title>
+        <style>
+            :root {
+                --admin-sidebar-width: 260px;
+            }
+
+            .admin-main {
+                margin-left: var(--admin-sidebar-width);
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                transition: all 0.3s ease;
+            }
+
+            .content-scroll {
+                flex: 1;
+                overflow-y: auto;
+                padding: 0;
+                position: relative;
+            }
+
+            @keyframes slide-up {
+                from {
+                    transform: translateY(20px);
+                    opacity: 0;
+                }
+
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+
+            .animate-slide-up {
+                animation: slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            }
+
+            .tab-btn.active {
+                color: #137fec;
+                border-bottom: 2px solid #137fec;
+            }
+
+            .custom-scrollbar::-webkit-scrollbar {
+                width: 4px;
+            }
+
+            .custom-scrollbar::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: #e2e8f0;
+                border-radius: 10px;
+            }
+
+            .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+                background: #1e293b;
+            }
+        </style>
+</head>
+
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <aside id="adminSidebar"
+            class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100]">
+            <%- include('sidebar', { active: 'courses' }) %>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617]">
+            <%- include('../admin/header_v2', { pageTitle: 'Course Curriculum' }) %>
+
+
+                <div id="content-scroll-area"
+                    class="content-scroll border-l border-slate-200 dark:border-white/5 custom-scrollbar">
+
+
+
+                    <!-- Tabs Navigation -->
+                    <div id="tabs-nav-bar"
+                        class="sticky top-0 z-50 bg-white dark:bg-[#0b1120] border-b border-slate-200 dark:border-white/5">
+                        <div class="flex items-center gap-10 px-6">
+                            <button onclick="switchTab('details')"
+                                class="tab-btn active py-3.5 text-sm font-bold text-slate-600 dark:text-slate-300 transition-all border-b-2 border-transparent hover:text-primary"
+                                id="tab-details">
+                                Details
+                            </button>
+                            <button onclick="switchTab('instructor')"
+                                class="tab-btn py-3.5 text-sm font-bold text-slate-600 dark:text-slate-300 transition-all border-b-2 border-transparent hover:text-primary"
+                                id="tab-instructor">
+                                Instructor
+                            </button>
+                            <button onclick="switchTab('content')"
+                                class="tab-btn py-3.5 text-sm font-bold text-slate-600 dark:text-slate-300 transition-all border-b-2 border-transparent hover:text-primary"
+                                id="tab-content">
+                                Course Content
+                            </button>
+                            <button onclick="switchTab('students')"
+                                class="tab-btn py-3.5 text-sm font-bold text-slate-600 dark:text-slate-300 transition-all border-b-2 border-transparent hover:text-primary"
+                                id="tab-students">
+                                Enrolled Students
+                            </button>
+                            <button onclick="switchTab('exams')"
+                                class="tab-btn py-3.5 text-sm font-bold text-slate-600 dark:text-slate-300 transition-all border-b-2 border-transparent hover:text-primary"
+                                id="tab-exams">
+                                Examination
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Tab Panes -->
+                    <div class="bg-white dark:bg-[#0b1120] px-4 py-2 pb-32">
+
+                                <!-- Details Tab - Active by default -->
+                                <div id="pane-details" class="tab-pane animate-slide-up">
+                                    <div class="p-6 rounded-none bg-[#F8FAFC] dark:bg-white/5 border border-slate-200 dark:border-slate-800 shadow-sm">
+                                        
+                                        <% if (course.thumbnail) { %>
+                                            <div class="mb-8 rounded-lg overflow-hidden border border-slate-200 dark:border-white/10 shadow-sm">
+                                                <img src="<%= course.thumbnail %>" alt="<%= course.title %>" class="w-full h-auto max-h-[400px] object-cover">
+                                            </div>
+                                        <% } %>
+
+                                        <h3 class="text-xl font-bold text-slate-800 dark:text-white mb-4">Course Description</h3>
+                                        <div class="prose prose-slate dark:prose-invert max-w-none text-slate-600 dark:text-slate-400">
+                                            <p>
+                                                <%= course.description || 'No detailed description available for this course.' %>
+                                            </p>
+                                        </div>
+
+                                        <div class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                            <div>
+                                                <h4 class="text-sm font-bold text-slate-800 dark:text-white mb-2">Subject</h4>
+                                                <p class="text-slate-600 dark:text-slate-400 capitalize">
+                                                    <% const subjectList = Array.isArray(course.subject) ? course.subject : (course.subject ? [course.subject] : []); %>
+                                                    <%= subjectList.length > 0 ? subjectList.join(', ') : 'N/A' %>
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-bold text-slate-800 dark:text-white mb-2">Class Level</h4>
+                                                <p class="text-slate-600 dark:text-slate-400">
+                                                    <% const classList = Array.isArray(course.classLevel) ? course.classLevel : (course.classLevel ? [course.classLevel] : []); %>
+                                                    <%= classList.length > 0 ? classList.join(', ') : 'N/A' %>
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-bold text-slate-800 dark:text-white mb-2">Access Plan</h4>
+                                                <p class="text-slate-600 dark:text-slate-400 capitalize">
+                                                    <%= course.accessType %>
+                                                    <% if (course.accessType !== 'free' && (course.discountPrice || course.price)) { %>
+                                                        &nbsp;(৳<%= course.discountPrice || course.price %>)
+                                                    <% } %>
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-sm font-bold text-slate-800 dark:text-white mb-2">Total Enrollment</h4>
+                                                <p class="text-slate-600 dark:text-slate-400">
+                                                    <%= stats.studentCount || 0 %> Students
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div class="mt-8 pt-8 border-t border-slate-900/5 dark:border-white/5">
+                                            <form action="/teacher/course/<%= course._id %>/course-routine" method="POST" enctype="multipart/form-data" class="w-full">
+                                                <div class="flex items-center justify-between mb-4">
+                                                    <h3 class="text-xl font-bold text-slate-800 dark:text-white">Class Routine</h3>
+                                                </div>
+                                                
+                                                <div class="grid grid-cols-1 md:grid-cols-12 gap-6 bg-slate-50 dark:bg-slate-900/30 p-6 border border-slate-100 dark:border-white/5">
+                                                    <!-- Routine Slots Builder -->
+                                                    <div class="md:col-span-8">
+                                                        <label class="text-xs font-bold text-slate-500 mb-3 block">Weekly Class Schedule</label>
+                                                        <div id="routineSlotsContainer" class="space-y-3">
+                                                            <% if (course.routine && course.routine.length > 0) { %>
+                                                                <% course.routine.forEach((slot, index) => { %>
+                                                                    <div class="routine-slot group bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 p-4 rounded-none flex flex-wrap items-end gap-3 relative shadow-sm">
+                                                                        <div class="flex-1 min-w-[120px]">
+                                                                            <label class="text-[10px] font-bold text-slate-400 mb-1 block">Day</label>
+                                                                            <select name="routine[<%= index %>][day]" class="form-input text-xs h-9">
+                                                                                <% ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].forEach(day => { %>
+                                                                                    <option value="<%= day %>" <%= slot.day === day ? 'selected' : '' %>><%= day %></option>
+                                                                                <% }) %>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div class="flex-1 min-w-[100px]">
+                                                                            <label class="text-[10px] font-bold text-slate-400 mb-1 block">Start</label>
+                                                                            <input type="time" name="routine[<%= index %>][startTime]" value="<%= slot.startTime %>" class="form-input text-xs h-9">
+                                                                        </div>
+                                                                        <div class="flex-1 min-w-[100px]">
+                                                                            <label class="text-[10px] font-bold text-slate-400 mb-1 block">End</label>
+                                                                            <input type="time" name="routine[<%= index %>][endTime]" value="<%= slot.endTime %>" class="form-input text-xs h-9">
+                                                                        </div>
+                                                                        <div class="flex-[1.5] min-w-[150px]">
+                                                                            <label class="text-[10px] font-bold text-slate-400 mb-1 block">Topic / Note</label>
+                                                                            <input type="text" name="routine[<%= index %>][note]" value="<%= slot.note %>" placeholder="e.g., Live Class" class="form-input text-xs h-9">
+                                                                        </div>
+                                                                        <button type="button" onclick="removeRoutineSlot(this)" class="size-9 rounded-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-all flex items-center justify-center">
+                                                                            <span class="material-symbols-rounded text-[18px]">delete</span>
+                                                                        </button>
+                                                                    </div>
+                                                                <% }) %>
+                                                            <% } else { %>
+                                                                <div class="routine-slot group bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 p-4 rounded-none flex flex-wrap items-end gap-3 relative shadow-sm">
+                                                                    <div class="flex-1 min-w-[120px]">
+                                                                        <label class="text-[10px] font-bold text-slate-400 mb-1 block">Day</label>
+                                                                        <select name="routine[0][day]" class="form-input text-xs h-9">
+                                                                            <option value="Saturday">Saturday</option>
+                                                                            <option value="Sunday">Sunday</option>
+                                                                            <option value="Monday">Monday</option>
+                                                                            <option value="Tuesday">Tuesday</option>
+                                                                            <option value="Wednesday">Wednesday</option>
+                                                                            <option value="Thursday">Thursday</option>
+                                                                            <option value="Friday">Friday</option>
+                                                                        </select>
+                                                                    </div>
+                                                                    <div class="flex-1 min-w-[100px]">
+                                                                        <label class="text-[10px] font-bold text-slate-400 mb-1 block">Start</label>
+                                                                        <input type="time" name="routine[0][startTime]" class="form-input text-xs h-9">
+                                                                    </div>
+                                                                    <div class="flex-1 min-w-[100px]">
+                                                                        <label class="text-[10px] font-bold text-slate-400 mb-1 block">End</label>
+                                                                        <input type="time" name="routine[0][endTime]" class="form-input text-xs h-9">
+                                                                    </div>
+                                                                    <div class="flex-[1.5] min-w-[150px]">
+                                                                        <label class="text-[10px] font-bold text-slate-400 mb-1 block">Topic / Note</label>
+                                                                        <input type="text" name="routine[0][note]" placeholder="e.g., Live Class" class="form-input text-xs h-9">
+                                                                    </div>
+                                                                    <button type="button" onclick="removeRoutineSlot(this)" class="size-9 rounded-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-all flex items-center justify-center">
+                                                                        <span class="material-symbols-rounded text-[18px]">delete</span>
+                                                                    </button>
+                                                                </div>
+                                                            <% } %>
+                                                        </div>
+                                                        <div class="flex items-center gap-3 mt-4">
+                                                            <button type="button" onclick="addRoutineSlot()" class="px-5 h-9 rounded-none bg-white dark:bg-[#0f172a] hover:bg-indigo-500 hover:text-white text-slate-600 dark:text-slate-300 font-bold text-[11px] transition-all flex items-center gap-2 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                                                <span class="material-symbols-rounded text-[16px]">add_circle</span>
+                                                                Add Schedule Slot
+                                                            </button>
+                                                            <button type="submit" class="h-9 px-6 bg-indigo-600 text-white rounded-none font-bold text-xs transition-all shadow-md shadow-indigo-600/20 hover:opacity-90 active:scale-[0.98]">
+                                                                Update Routine
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="md:col-span-4">
+                                                        <label class="text-xs font-bold text-slate-500 mb-3 block">Routine Image (Optional)</label>
+                                                        <div class="relative aspect-[4/5] bg-white dark:bg-[#0f172a] border border-dashed border-slate-300 dark:border-slate-700 rounded-none flex flex-col items-center justify-center overflow-hidden group shadow-sm">
+                                                            <input type="file" name="routineImage" accept="image/*" class="absolute inset-0 opacity-0 cursor-pointer z-20" id="routineImageInput">
+                                                            
+                                                            <!-- Image Preview Overlay -->
+                                                            <div id="routinePreviewContainer" class="absolute inset-0 z-10 bg-white dark:bg-[#0f172a] <%= course.routineImage ? '' : 'hidden' %>">
+                                                                <img src="<%= course.routineImage %>" class="w-full h-full object-cover" id="routinePreviewImg">
+                                                                <!-- Overlay always visible if image exists -->
+                                                                <div class="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white transition-opacity group-hover:bg-black/60">
+                                                                    <span class="material-symbols-rounded text-3xl mb-2">edit</span>
+                                                                    <p class="text-[10px] font-bold uppercase tracking-widest">Change Routine</p>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Empty State -->
+                                                            <div class="text-center p-4" id="routineEmptyState">
+                                                                <span class="material-symbols-rounded text-slate-300 group-hover:text-indigo-500 transition-colors text-4xl">calendar_view_day</span>
+                                                                <p class="text-[11px] font-bold text-slate-400 mt-2">Upload Routine Image</p>
+                                                                <p class="text-[9px] text-slate-400/60 mt-1">Students can download this</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Course Content Tab - Hidden by default -->
+                                <div id="pane-content" class="tab-pane hidden animate-slide-up">
+                                    <div class="max-w-4xl mx-auto py-12 px-6">
+                                        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-white/5 rounded-2xl p-10 text-center shadow-sm flex flex-col items-center">
+                                            <div class="size-20 bg-primary/10 rounded-full flex items-center justify-center mb-6">
+                                                <span class="material-symbols-rounded text-primary text-4xl">inventory_2</span>
+                                            </div>
+                                            
+                                            <h3 class="text-2xl font-bold text-slate-800 dark:text-white mb-3">Course Materials</h3>
+                                            
+                                            <% 
+                                                let videoCount = 0;
+                                                let noteCount = 0;
+                                                let liveCount = 0;
+                                                let quizCount = 0;
+                                                
+                                                if (course.curriculumNodes && course.curriculumNodes.length > 0) {
+                                                    course.curriculumNodes.forEach(node => {
+                                                        if (node.type === 'video') videoCount++;
+                                                        else if (node.type === 'note') noteCount++;
+                                                        else if (node.type === 'liveClass') liveCount++;
+                                                        else if (node.type === 'quiz') quizCount++;
+                                                    });
+                                                }
+                                                const totalCount = videoCount + noteCount + liveCount + quizCount;
+                                            %>
+                                            
+                                            <p class="text-slate-500 dark:text-slate-400 max-w-lg mx-auto mb-8 leading-relaxed text-base">
+                                                <strong class="text-slate-800 dark:text-slate-200 text-lg font-black"><%= totalCount %></strong> Learning Materials Available
+                                            </p>
+
+                                            <% 
+                                                let isAssignedTeacher = false;
+                                                if (user && course.instructor && String(course.instructor._id || course.instructor) === String(user._id)) {
+                                                    isAssignedTeacher = true;
+                                                }
+                                                if (!isAssignedTeacher && user && course.permittedTeachers) {
+                                                    isAssignedTeacher = course.permittedTeachers.some(function(t) { 
+                                                        return String(t._id || t) === String(user._id) && t.role === 'teacher';
+                                                    });
+                                                }
+                                            %>
+                                            
+                                            <a href="/teacher/course/<%= course._id %>/edit" class="h-11 px-8 bg-primary hover:bg-primary/95 text-white rounded-full font-bold text-sm transition-all shadow-md shadow-primary/20 flex items-center gap-2">
+                                                <span class="material-symbols-rounded text-[20px]"><%= isAssignedTeacher ? 'edit' : 'visibility' %></span>
+                                                <%= isAssignedTeacher ? 'Manage Content' : 'View Content' %>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Instructor Tab -->
+                                <div id="pane-instructor" class="tab-pane hidden animate-slide-up">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                                        <% 
+                                            const actualTeachers = course.permittedTeachers ? course.permittedTeachers.filter(t => t.role === 'teacher') : [];
+                                            if (actualTeachers.length > 0) { 
+                                        %>
+                                            <% actualTeachers.forEach(teacher => { %>
+                                                <div class="p-8 rounded-2xl bg-[#F8FAFC] dark:bg-[#111827] border border-slate-200 dark:border-white/5 shadow-sm flex flex-col items-center text-center gap-3 transition-all hover:shadow-md hover:border-slate-300 dark:hover:border-white/10 group aspect-[1/1.2] justify-center">
+                                                    <!-- Profile Image -->
+                                                    <div class="size-28 rounded-full overflow-hidden border-4 border-white dark:border-slate-800 shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300 mb-1">
+                                                        <img src="<%= teacher.profileImage || teacher.profilePicture || '/images/default-avatar.png' %>" class="size-full object-cover">
+                                                    </div>
+                                                    
+                                                    <!-- Details -->
+                                                    <div class="flex flex-col items-center w-full space-y-1">
+                                                        <span class="px-4 py-1.5 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[11px] font-bold border border-blue-100 dark:border-blue-500/20 w-max mb-0.5">Course Mentor</span>
+                                                        <h3 class="text-xl font-bold text-slate-800 dark:text-white leading-tight line-clamp-1 w-full" title="<%= teacher.name %>">
+                                                            <%= teacher.name || 'Unknown' %>
+                                                        </h3>
+                                                        
+                                                        <p class="text-sm font-medium text-slate-500 dark:text-slate-400 truncate w-full" title="<%= teacher.email %>">
+                                                            <%= teacher.email || 'N/A' %>
+                                                        </p>
+
+                                                        <!-- Rating -->
+                                                        <div class="flex items-center justify-center gap-1 pt-1.5 text-amber-400">
+                                                            <span class="material-symbols-rounded text-[18px]">star</span>
+                                                            <span class="material-symbols-rounded text-[18px]">star</span>
+                                                            <span class="material-symbols-rounded text-[18px]">star</span>
+                                                            <span class="material-symbols-rounded text-[18px]">star</span>
+                                                            <span class="material-symbols-rounded text-[18px]">star_half</span>
+                                                            <span class="text-sm font-bold text-slate-600 dark:text-slate-400 ml-1.5">4.8</span>
+                                                        </div>
+
+                                                        <!-- Bio -->
+                                                        <% if (teacher.bio) { %>
+                                                            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed pt-2 line-clamp-2 w-full"><%= teacher.bio %></p>
+                                                        <% } %>
+                                                    </div>
+                                                </div>
+                                            <% }) %>
+                                        <% } else { %>
+                                            <div class="col-span-full py-16 text-center border-2 border-dashed border-slate-200 dark:border-white/5 rounded-2xl">
+                                                <div class="size-16 rounded-full bg-slate-50 dark:bg-white/5 flex items-center justify-center mx-auto mb-4">
+                                                    <span class="material-symbols-rounded text-slate-400 text-3xl">person_off</span>
+                                                </div>
+                                                <h3 class="text-lg font-bold text-slate-800 dark:text-white">No Teachers Assigned</h3>
+                                                <p class="text-sm text-slate-500 mt-1">There are no instructors explicitly assigned to this course yet.</p>
+                                            </div>
+                                        <% } %>
+                                    </div>
+                                </div>
+
+
+
+                                <!-- Students Tab -->
+                                <div id="pane-students" class="tab-pane hidden animate-slide-up">
+                                    <% if (course.accessType==='free' ) { %>
+                                        <div
+                                            class="p-12 rounded-none bg-white dark:bg-[#0b1120] border border-slate-200 dark:border-white/10 shadow-md text-center space-y-4 max-w-2xl mx-auto">
+                                            <div
+                                                class="size-16 rounded-full bg-emerald-50 flex items-center justify-center mx-auto">
+                                                <span
+                                                    class="material-symbols-rounded text-emerald-500 text-3xl">verified_user</span>
+                                            </div>
+                                            <div>
+                                                <h3 class="text-2xl font-bold text-slate-800 dark:text-white">Free
+                                                    Access Course</h3>
+                                                <p class="text-slate-500 mt-2 text-sm leading-relaxed">This course is
+                                                     automatically available to all students in <span
+                                                         class="font-bold text-primary">
+                                                         <%= course.classLevel %>
+                                                     </span> within the ODDHAY Network. No individual enrollment
+                                                     required.</p>
+                                            </div>
+                                        </div>
+                                        <% } else { %>
+                                            <div
+                                                class="bg-white dark:bg-[#0b1120] rounded-none border border-slate-200 dark:border-white/10 shadow-md overflow-hidden">
+                                                <table class="w-full text-left">
+                                                    <thead
+                                                        class="bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/10">
+                                                        <tr>
+                                                            <th class="px-6 py-4 text-xs font-bold text-slate-500">
+                                                                Student Name</th>
+                                                            <th class="px-6 py-4 text-xs font-bold text-slate-500">
+                                                                Enrolled At</th>
+                                                            <th class="px-6 py-4 text-xs font-bold text-slate-500">
+                                                                Progress</th>
+                                                            <th
+                                                                class="px-6 py-4 text-xs font-bold text-slate-500 text-right">
+                                                                Status</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody class="divide-y divide-slate-100 dark:divide-white/5">
+                                                        <% students.forEach(student=> { %>
+                                                            <tr
+                                                                class="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                                                                <td class="px-6 py-4">
+                                                                    <div class="flex items-center gap-3">
+                                                                        <div
+                                                                            class="size-10 rounded-none overflow-hidden border border-slate-200 dark:border-slate-700">
+                                                                            <img src="<%= student.profileImage || student.profilePicture || '/images/default-avatar.png' %>"
+                                                                                class="size-full object-cover">
+                                                                        </div>
+                                                                        <div>
+                                                                            <p
+                                                                                class="text-sm font-bold text-slate-800 dark:text-white">
+                                                                                <%= student.name %>
+                                                                            </p>
+                                                                            <p class="text-xs text-slate-500">
+                                                                                <%= student.email %>
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                                <td
+                                                                    class="px-6 py-4 text-sm font-bold text-slate-600 dark:text-slate-400">
+                                                                    <%= new
+                                                                        Date(student.enrolledAt).toLocaleDateString() %>
+                                                                </td>
+                                                                <td class="px-6 py-4">
+                                                                    <div class="w-full max-w-[120px] space-y-1.5">
+                                                                        <div
+                                                                            class="flex items-center justify-between text-xs">
+                                                                            <span class="font-bold text-primary">
+                                                                                <%= student.progress %>%
+                                                                            </span>
+                                                                        </div>
+                                                                        <div
+                                                                            class="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                                                                            <div class="h-full bg-primary"
+                                                                                style="width: <%= student.progress %>%">
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                                <td class="px-6 py-4 text-right">
+                                                                    <span
+                                                                        class="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-100 dark:border-emerald-500/20">Active</span>
+                                                                </td>
+                                                            </tr>
+                                                            <% }) %>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <% } %>
+                                </div>
+
+                                <!-- Exams Tab -->
+                                <div id="pane-exams" class="tab-pane hidden animate-slide-up">
+                                    <% 
+                                       let courseQuizzes = [];
+                                       (course.curriculumNodes || []).forEach(n => {
+                                           if (n.type === 'quiz' && n.quizId) {
+                                               courseQuizzes.push(n.quizId);
+                                           }
+                                       });
+                                       if (courseQuizzes.length === 0 && course.chapters) {
+                                           course.chapters.forEach(ch => {
+                                               (ch.quizzes || []).forEach(q => {
+                                                   if (q) courseQuizzes.push(q);
+                                               });
+                                           });
+                                       }
+                                    %>
+                                    <% if (courseQuizzes.length === 0) { %>
+                                        <div
+                                            class="p-8 rounded-none bg-white dark:bg-[#0b1120] border border-slate-200 dark:border-white/10 shadow-sm text-center space-y-3 max-w-2xl mx-auto">
+                                            <div
+                                                class="size-16 rounded-full bg-slate-50 dark:bg-white/5 flex items-center justify-center mx-auto">
+                                                <span
+                                                    class="material-symbols-rounded text-slate-400 text-3xl">history_edu</span>
+                                            </div>
+                                            <div>
+                                                <h3 class="text-xl font-bold text-slate-800 dark:text-white">No Exams
+                                                    Found</h3>
+                                                <p class="text-slate-500 mt-2 text-sm">No exams or quizzes have been
+                                                    assigned to this course yet.</p>
+                                            </div>
+                                        </div>
+                                        <% } else { %>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                <% courseQuizzes.forEach(quiz=> { %>
+                                                    <div
+                                                        class="p-4 rounded-none bg-[#F8FAFC] dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm group hover:shadow-md transition-all duration-300">
+                                                        <div class="flex items-center gap-4">
+                                                            <div
+                                                                class="size-12 rounded-none bg-amber-50 dark:bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
+                                                                <span
+                                                                    class="material-symbols-rounded text-xl">psychology</span>
+                                                            </div>
+                                                            <div class="flex-1 min-w-0">
+                                                                <p
+                                                                    class="text-xs font-bold text-amber-600 dark:text-amber-400 mb-1">
+                                                                    Assessment</p>
+                                                                <h3
+                                                                    class="text-lg font-bold text-slate-800 dark:text-white truncate">
+                                                                    <%= quiz.title %>
+                                                                </h3>
+                                                                <div class="flex items-center gap-4 pt-1">
+                                                                    <div
+                                                                        class="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                                                                        <span
+                                                                            class="material-symbols-rounded text-[14px]">timer</span>
+                                                                        <%= quiz.duration || 10 %> Min
+                                                                    </div>
+                                                                    <div
+                                                                        class="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                                                                        <span
+                                                                            class="material-symbols-rounded text-[14px]">quiz</span>
+                                                                        <%= quiz.questions?.length || 0 %> Qs
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <a href="/admin/quiz-details/<%= quiz._id %>"
+                                                                class="size-10 rounded-full bg-slate-50 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:bg-primary hover:text-white transition-all shrink-0">
+                                                                <span
+                                                                    class="material-symbols-rounded">arrow_forward</span>
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                <% }) %>
+                                            </div>
+                                        <% } %>
+                                </div>
+                            </div>
+                </div>
+        </main>
+    </div>
+
+    <script>
+        // Inject data for dynamic filtering
+        const chaptersData = <%- JSON.stringify(course.chapters) %>;
+
+        function switchTab(tabId, skipHash = false, noScroll = false) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            const btn = document.getElementById(`tab-${tabId}`);
+            if (btn) btn.classList.add('active');
+            
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.add('hidden'));
+            const pane = document.getElementById(`pane-${tabId}`);
+            if (pane) pane.classList.remove('hidden');
+            
+            if (!skipHash) {
+                window.location.hash = tabId;
+            }
+
+            // Reset content view if switching to content tab
+            if (tabId === 'content' && !window.location.hash.includes(':chapter-')) {
+                closeFileDetails(true);
+            }
+
+            // Scroll the content area so the tab nav bar is at the top
+            if (!noScroll) {
+                const scrollArea = document.getElementById('content-scroll-area');
+                const navBar = document.getElementById('tabs-nav-bar');
+                if (scrollArea && navBar) {
+                    const navTop = navBar.offsetTop;
+                    scrollArea.scrollTo({ top: navTop, behavior: 'smooth' });
+                }
+            }
+        }
+
+        function openFileDetails(idx, skipHash = false) {
+            const chapter = chaptersData[idx];
+            document.getElementById('files-list-view').classList.add('hidden');
+            document.getElementById('file-detail-view').classList.remove('hidden');
+            
+            const title = chapter.title.toLowerCase().includes('chapter') ? chapter.title : `Chapter ${idx + 1}: ${chapter.title}`;
+            document.getElementById('breadcrumb-chapter-title').innerText = title;
+            
+            if (!skipHash) {
+                window.location.hash = `content:chapter-${idx}`;
+            }
+
+            const container = document.getElementById('file-assets-container');
+            container.innerHTML = '';
+            
+            const assets = [];
+            (chapter.recordedClasses || []).forEach(v => assets.push({...v, type: 'video'}));
+            (chapter.notes || []).forEach(n => assets.push({...n, type: 'note'}));
+            (chapter.liveClasses || []).forEach(l => assets.push({...l, type: 'live'}));
+            (chapter.quizzes || []).forEach(q => {
+                if (q) assets.push({...q, type: 'quiz'});
+            });
+            
+            if(assets.length === 0) {
+                container.innerHTML = '<div class="col-span-full py-20 text-center text-slate-400 font-bold text-xs">No assets available in this chapter.</div>';
+                return;
+            }
+            
+            assets.forEach(asset => {
+                let icon = 'description';
+                let colorClass = 'bg-slate-50 dark:bg-white/5 text-slate-500';
+                let typeName = 'Asset';
+                let clickAction = '';
+
+                if (asset.type === 'video') {
+                    icon = 'play_circle';
+                    colorClass = 'bg-blue-50 dark:bg-blue-500/10 text-blue-500';
+                    typeName = 'Video Lesson';
+                    if (asset.videoPath) {
+                        const safeTitle = (asset.title || '').replace(/'/g, "\\'").replace(/\n/g, " ").replace(/\r/g, "");
+                        const safeDesc = (asset.description || '').replace(/'/g, "\\'").replace(/\n/g, " ").replace(/\r/g, "");
+                        clickAction = `playVideoNode('${asset.videoPath}', '${safeTitle}', '${asset.duration || '00:00'}', '${safeDesc}')`;
+                    }
+                } else if (asset.type === 'note') {
+                    icon = 'description';
+                    colorClass = 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-500';
+                    typeName = 'Resource Note';
+                    if (asset.filePath) {
+                        clickAction = `window.open('${asset.filePath}', '_blank')`;
+                    }
+                } else if (asset.type === 'live') {
+                    icon = 'live_tv';
+                    colorClass = 'bg-rose-50 dark:bg-rose-500/10 text-rose-500';
+                    typeName = 'Live Class';
+                    const roomId = asset.meetingUrl || asset._id;
+                    clickAction = `window.open('/live/${roomId}', '_blank')`;
+                } else if (asset.type === 'quiz') {
+                    icon = 'psychology';
+                    colorClass = 'bg-amber-50 dark:bg-amber-500/10 text-amber-500';
+                    typeName = 'Assessment';
+                    clickAction = `window.open('/admin/quiz-details/${asset._id}', '_blank')`;
+                }
+
+                const html = `
+                    <div onclick="${clickAction}" class="flex items-center gap-4 p-4 bg-white dark:bg-[#0b1120] border border-slate-200 dark:border-white/10 rounded-none hover:shadow-md transition-all group cursor-pointer">
+                        <div class="size-12 rounded-none ${colorClass} flex items-center justify-center group-hover:scale-110 transition-transform">
+                            <span class="material-symbols-rounded">${icon}</span>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-bold text-slate-800 dark:text-white truncate">${asset.title}</p>
+                            <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">${typeName}</p>
+                        </div>
+                        <span class="material-symbols-rounded text-slate-200 group-hover:text-primary transition-colors">open_in_new</span>
+                    </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            });
+        }
+
+        function closeFileDetails(skipHash = false) {
+            document.getElementById('files-list-view').classList.remove('hidden');
+            document.getElementById('file-detail-view').classList.add('hidden');
+            if (!skipHash) {
+                window.location.hash = 'content';
+            }
+        }
+
+        // Initialize state from hash
+        window.addEventListener('DOMContentLoaded', () => {
+            const hash = window.location.hash.replace('#', '');
+            if (hash) {
+                if (hash.includes(':chapter-')) {
+                    const [tab, chapterPart] = hash.split(':');
+                    const chapterIdx = parseInt(chapterPart.replace('chapter-', ''));
+                    switchTab(tab, true, true);
+                    openFileDetails(chapterIdx, true);
+                } else {
+                    switchTab(hash, true, true);
+                }
+            } else {
+                switchTab('details', true, true);
+            }
+        });
+
+        // Routine Management
+        let routineSlotCount = <%= Math.max(1, (course.routine || []).length) %>;
+        function addRoutineSlot() {
+            const container = document.getElementById('routineSlotsContainer');
+            const slot = document.createElement('div');
+            slot.className = 'routine-slot group bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 p-4 rounded-none flex flex-wrap items-end gap-3 relative shadow-sm animate-in fade-in slide-in-from-top-2 duration-200';
+            slot.innerHTML = `
+                <div class="flex-1 min-w-[120px]">
+                    <label class="text-[10px] font-bold text-slate-400 mb-1 block">Day</label>
+                    <select name="routine[${routineSlotCount}][day]" class="form-input text-xs h-9">
+                        <option value="Saturday">Saturday</option>
+                        <option value="Sunday">Sunday</option>
+                        <option value="Monday">Monday</option>
+                        <option value="Tuesday">Tuesday</option>
+                        <option value="Wednesday">Wednesday</option>
+                        <option value="Thursday">Thursday</option>
+                        <option value="Friday">Friday</option>
+                    </select>
+                </div>
+                <div class="flex-1 min-w-[100px]">
+                    <label class="text-[10px] font-bold text-slate-400 mb-1 block">Start</label>
+                    <input type="time" name="routine[${routineSlotCount}][startTime]" class="form-input text-xs h-9">
+                </div>
+                <div class="flex-1 min-w-[100px]">
+                    <label class="text-[10px] font-bold text-slate-400 mb-1 block">End</label>
+                    <input type="time" name="routine[${routineSlotCount}][endTime]" class="form-input text-xs h-9">
+                </div>
+                <div class="flex-[1.5] min-w-[150px]">
+                    <label class="text-[10px] font-bold text-slate-400 mb-1 block">Topic / Note</label>
+                    <input type="text" name="routine[${routineSlotCount}][note]" placeholder="e.g., Live Class" class="form-input text-xs h-9">
+                </div>
+                <button type="button" onclick="removeRoutineSlot(this)" class="size-9 rounded-none bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-rose-500 hover:bg-rose-50 hover:border-rose-200 transition-all flex items-center justify-center">
+                    <span class="material-symbols-rounded text-[18px]">delete</span>
+                </button>
+            `;
+            container.appendChild(slot);
+            routineSlotCount++;
+        }
+
+        function removeRoutineSlot(btn) {
+            const container = document.getElementById('routineSlotsContainer');
+            if (container.children.length > 1) {
+                btn.closest('.routine-slot').remove();
+            } else {
+                alert("At least one schedule slot is required.");
+            }
+        }
+
+        // Routine Image Preview
+        document.getElementById('routineImageInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const previewContainer = document.getElementById('routinePreviewContainer');
+                    previewContainer.innerHTML = `
+                        <img src="${e.target.result}" class="w-full h-full object-cover" id="routinePreviewImg">
+                        <div class="absolute inset-0 bg-black/40 flex flex-col items-center justify-center text-white transition-opacity group-hover:bg-black/60">
+                            <span class="material-symbols-rounded text-3xl mb-2">edit</span>
+                            <p class="text-[10px] font-bold uppercase tracking-widest">Change Routine</p>
+                        </div>
+                    `;
+                    previewContainer.classList.remove('hidden');
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+    </script>
+
+
+
+    <script>
+
+    const currentUserId = '<%= user._id %>';
+    const currentCourseId = '<%= course._id %>';
+    const currentCourseSubject = '<%= course.subject %>';
+    const currentCourseClass = '<%= course.classLevel %>';
+    let curriculumNodes = <%- JSON.stringify(course.curriculumNodes || []) %>;
+    let openCommentReplies = new Set();
+    let activePlayingNodeId = null;
+    let pendingVideoNodeId = null;
+
+// Video Player (in-page panel, same sidebar/navbar chrome)
+    const courseInstructorName = `<%= course.instructor ? course.instructor.name.replace(/'/g, "\\'") : (course.permittedTeachers && course.permittedTeachers.length > 0 ? course.permittedTeachers[0].name.replace(/'/g, "\\'") : 'Course Mentor') %>`;
+    const courseInstructorAvatar = `<%= course.instructor ? (course.instructor.profileImage || course.instructor.profilePicture || '/images/default-avatar.png') : ((course.permittedTeachers && course.permittedTeachers.length > 0) ? (course.permittedTeachers[0].profileImage || course.permittedTeachers[0].profilePicture || '/images/default-avatar.png') : '/images/default-avatar.png') %>`;
+
+    function playVideoNode(node, skipHash = false, incrementView = false) {
+        try {
+            if (typeof node === 'string') {
+                node = curriculumNodes.find(n => String(n._id) === String(node));
+                if (!node) return;
+            }
+
+            const panel = document.getElementById('videoPlayerPanel');
+            const videoEl = document.getElementById('playerVideoEl');
+            const iframeEl = document.getElementById('playerIframeEl');
+            const emptyState = document.getElementById('playerEmptyState');
+            const listView = document.getElementById('files-list-view');
+            const tabsNav = document.getElementById('tabs-nav-bar');
+            if (listView) listView.classList.add('hidden');
+            if (tabsNav) tabsNav.classList.add('hidden');
+
+            const url = node.videoPath;
+            const title = node.name;
+            const description = node.description || '';
+            const nodeId = node._id;
+            
+            console.log("Playing node:", node.name, "Type:", node.type, "URL:", url);
+
+            if (!url) {
+                console.error("No video path found for this node");
+                // If it's a note or quiz, maybe we shouldn't even call playVideoNode!
+                if (node.type === 'note' && node.filePath) {
+                    window.open(node.filePath, '_blank');
+                    return;
+                } else if (node.type === 'quiz') {
+                    const qId = (node.quizId && node.quizId._id) ? node.quizId._id : (node.quizId || node._id);
+                    window.open(`/teacher/quiz-details/${qId}`, '_blank');
+                    return;
+                } else if (node.type === 'liveClass') {
+                    window.open(`/live/${node.meetingUrl || node._id}`, '_blank');
+                    return;
+                }
+                alert('This item does not have a valid video attached.');
+                return;
+            }
+
+            // Extract Author Info
+            let authorName = courseInstructorName;
+            let authorAvatar = courseInstructorAvatar;
+            
+            if (node.addedBy) {
+                authorName = node.addedBy.name || authorName;
+                authorAvatar = node.addedBy.profileImage || node.addedBy.profilePicture || authorAvatar;
+            }
+
+            // Reset elements
+            videoEl.onerror = null; // Clean up error handler before resetting src to prevent stray alerts
+            videoEl.classList.add('hidden');
+            videoEl.src = '';
+            iframeEl.classList.add('hidden');
+            iframeEl.src = '';
+            emptyState.classList.add('hidden');
+
+            // Detect URL type and load
+            if (url.includes('youtube.com') || url.includes('youtu.be')) {
+                let embedUrl = url;
+                if (url.includes('watch?v=')) {
+                    embedUrl = 'https://www.youtube.com/embed/' + url.split('v=')[1].split('&')[0] + '?autoplay=1';
+                } else if (url.includes('youtu.be/')) {
+                    embedUrl = 'https://www.youtube.com/embed/' + url.split('youtu.be/')[1].split('?')[0] + '?autoplay=1';
+                }
+                iframeEl.src = embedUrl;
+                iframeEl.classList.remove('hidden');
+            } else if (url.includes('vimeo.com')) {
+                const videoId = url.split('vimeo.com/')[1].split('?')[0];
+                iframeEl.src = 'https://player.vimeo.com/video/' + videoId + '?autoplay=1';
+                iframeEl.classList.remove('hidden');
+            } else {
+                videoEl.src = url;
+                videoEl.classList.remove('hidden');
+                
+                // Restore playback speed state
+                const currentSpeed = parseFloat(localStorage.getItem('video-speed') || '1.0');
+                videoEl.playbackRate = currentSpeed;
+                
+                // Add error handling to notify if the browser can't decode the video format
+                videoEl.onerror = function() {
+                    // Only show alert if src is actually valid and not empty or during a deliberate state reset
+                    if (videoEl.src && videoEl.src !== window.location.href) {
+                        alert('Error: The browser cannot play this video format. Make sure it is a standard MP4 (H.264 codec).');
+                    }
+                };
+                
+                videoEl.load();
+                
+                // Resume watch progress from localStorage
+                const savedProgress = localStorage.getItem(`video-progress-${currentUserId}-${nodeId}`);
+                if (savedProgress) {
+                    const resumeTime = parseFloat(savedProgress);
+                    videoEl.addEventListener('loadedmetadata', function onLoaded() {
+                        // Only resume if user had progress left and wasn't at the very end of the video
+                        if (resumeTime < videoEl.duration - 5) {
+                            videoEl.currentTime = resumeTime;
+                        }
+                        videoEl.removeEventListener('loadedmetadata', onLoaded);
+                    });
+                }
+                
+                videoEl.play().catch((e) => { 
+                    console.error("Video playback error:", e);
+                    if(e.name !== 'NotAllowedError') {
+                        alert('Video playback error: ' + e.message);
+                    }
+                });
+            }
+
+            // Populate metadata
+            document.getElementById('playerVideoTitle').innerText = title || 'Untitled Lesson';
+            
+            const descEl = document.getElementById('playerVideoDesc');
+            const descToggleBtn = document.getElementById('descToggleBtn');
+            descEl.innerText = description || 'No detailed description is available for this video lesson.';
+            
+            // Reset description state
+            descEl.classList.add('line-clamp-2');
+            descToggleBtn.innerText = 'Details';
+            
+            // Use a short timeout to let the browser render the text so we can check its height
+            setTimeout(() => {
+                if (descEl.scrollHeight > descEl.clientHeight || description.length > 150) {
+                    descToggleBtn.classList.remove('hidden');
+                } else {
+                    descToggleBtn.classList.add('hidden');
+                }
+            }, 50);
+            // Set active playing node
+            activePlayingNodeId = nodeId;
+
+            document.getElementById('playerVideoViews').innerText = formatCount(node.views || 0);
+            document.getElementById('playerVideoComments').innerText = '0';
+            document.getElementById('playerAuthorName').innerText = authorName;
+            document.getElementById('playerAuthorAvatar').src = authorAvatar;
+
+            // Async views tracking and comments fetch
+            if (incrementView) {
+                incrementNodeView(nodeId);
+            }
+            loadNodeComments(nodeId);
+            renderCoursePlaylist();
+
+            // Write hash so refresh restores this video
+            if (!skipHash && nodeId) {
+                window.location.hash = 'video-' + nodeId;
+            }
+
+            // Switch views
+            const tree = document.getElementById('curriculum-tree-container');
+            if (tree) tree.classList.add('hidden');
+            panel.classList.remove('hidden');
+            
+            // Scroll to top of content
+            const scrollArea = document.getElementById('content-scroll-area') || document.querySelector('.content-scroll');
+            if (scrollArea) scrollArea.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (e) {
+            alert('Error playing video: ' + e.message + '\n' + e.stack);
+            console.error(e);
+        }
+    }
+
+    function closeVideoPlayer() {
+        const listView = document.getElementById('files-list-view');
+        const tabsNav = document.getElementById('tabs-nav-bar');
+        if (listView) listView.classList.remove('hidden');
+        if (tabsNav) tabsNav.classList.remove('hidden');
+        const panel = document.getElementById('videoPlayerPanel');
+        const tree = document.getElementById('curriculum-tree-container');
+        
+        stopVideoPlayback();
+        
+        panel.classList.add('hidden');
+        if (tree) tree.classList.remove('hidden');
+
+        // Clear video hash from URL cleanly (no page jump)
+        history.replaceState('', document.title, window.location.pathname + window.location.search);
+    }
+
+    function toggleDescription() {
+        const descEl = document.getElementById('playerVideoDesc');
+        const btn = document.getElementById('descToggleBtn');
+        
+        if (descEl.classList.contains('line-clamp-2')) {
+            descEl.classList.remove('line-clamp-2');
+            btn.innerText = 'Show less';
+        } else {
+            descEl.classList.add('line-clamp-2');
+            btn.innerText = 'Details';
+        }
+    }
+
+    // Format views and comments counts dynamically (e.g. 1.2k)
+    function formatCount(num) {
+        if (!num) return '0';
+        num = parseInt(num, 10);
+        if (isNaN(num)) return '0';
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'm';
+        }
+        if (num >= 1000) {
+            return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+        }
+        return num.toString();
+    }
+
+    async function incrementNodeView(nodeId) {
+        try {
+            const res = await fetch(`/api/curriculum/node/${nodeId}/view`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('playerVideoViews').innerText = formatCount(data.views);
+                const cachedNode = curriculumNodes.find(n => n._id === nodeId);
+                if (cachedNode) cachedNode.views = data.views;
+            }
+        } catch (err) {
+            console.error('Error incrementing views:', err);
+        }
+    }
+
+    let commentsSkip = 0;
+    const commentsLimit = 10;
+    let commentsHasMore = false;
+    let loadedCommentsArray = [];
+
+    async function loadNodeComments(nodeId, append = false, isSilent = false) {
+        const list = document.getElementById('commentsList');
+        const badge = document.getElementById('commentsCountBadge');
+        const playerBadge = document.getElementById('playerVideoComments');
+        const loadMoreContainer = document.getElementById('loadMoreCommentsContainer');
+        
+        if (!append && !isSilent) {
+            commentsSkip = 0;
+            loadedCommentsArray = [];
+            list.innerHTML = `
+                <div class="flex items-center justify-center py-10">
+                    <div class="animate-spin rounded-full h-5 w-5 border-2 border-primary border-t-transparent"></div>
+                </div>
+            `;
+        }
+
+        try {
+            const res = await fetch(`/api/curriculum/node/${nodeId}/comments?limit=${commentsLimit}&skip=${commentsSkip}`);
+            const data = await res.json();
+            if (data.success && data.comments) {
+                commentsHasMore = data.hasMore;
+                
+                if (append) {
+                    loadedCommentsArray = loadedCommentsArray.concat(data.comments);
+                } else {
+                    loadedCommentsArray = data.comments;
+                }
+
+                // Update counts with premium compact formatting
+                badge.innerText = formatCount(loadedCommentsArray.length);
+                playerBadge.innerText = formatCount(loadedCommentsArray.length);
+
+                // Update Comments Settings Toggle UI & disabled state banner
+                updateCommentsSettingUI(data.commentsDisabled);
+
+                if (loadedCommentsArray.length === 0) {
+                    list.innerHTML = `
+                        <div class="flex flex-col items-center justify-center text-center pt-10 pb-6 opacity-60">
+                            <span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600 mb-3">chat_bubble_outline</span>
+                            <p class="text-xs font-medium text-slate-500">No comments yet</p>
+                            <p class="text-[10px] text-slate-400 mt-1">Be the first to share your thoughts!</p>
+                        </div>
+                    `;
+                    if (loadMoreContainer) loadMoreContainer.classList.add('hidden');
+                    return;
+                }
+
+                renderCommentsList(loadedCommentsArray);
+
+                if (loadMoreContainer) {
+                    if (commentsHasMore) {
+                        loadMoreContainer.classList.remove('hidden');
+                    } else {
+                        loadMoreContainer.classList.add('hidden');
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error loading comments:', err);
+            if (!isSilent) {
+                list.innerHTML = `<p class="text-xs text-rose-500 text-center py-4">Failed to load comments</p>`;
+            }
+        }
+    }
+
+    function updateCommentsSettingUI(disabled) {
+        const btn = document.getElementById('toggleCommentsBtn');
+        const icon = document.getElementById('toggleCommentsIcon');
+        const text = document.getElementById('toggleCommentsText');
+        const banner = document.getElementById('commentsDisabledBanner');
+
+        // Always keep the same class/color as requested
+        if (btn) {
+            btn.className = "text-xs font-bold px-3 py-1 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-white/10 transition-all rounded-none flex items-center gap-1.5 shrink-0";
+        }
+        if (text) {
+            text.innerText = disabled ? "Turn on" : "Turn off";
+        }
+
+        if (disabled) {
+            if (icon) icon.innerText = "comments_disabled";
+            if (banner) banner.classList.remove('hidden');
+        } else {
+            if (icon) icon.innerText = "chat";
+            if (banner) banner.classList.add('hidden');
+        }
+    }
+
+    async function toggleNodeCommentsSetting() {
+        if (!activePlayingNodeId) return;
+        const btn = document.getElementById('toggleCommentsBtn');
+        if (btn) btn.disabled = true;
+
+        try {
+            const res = await fetch(`/api/curriculum/node/${activePlayingNodeId}/toggle-comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                updateCommentsSettingUI(data.commentsDisabled);
+            } else {
+                alert(data.error || 'Failed to toggle comments setting');
+            }
+        } catch (err) {
+            console.error('Error toggling comments setting:', err);
+            alert('Failed to toggle comments setting');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    async function toggleCommentHighlight(commentId) {
+        try {
+            const res = await fetch(`/api/curriculum/comment/${commentId}/toggle-highlight`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                // Refresh active node comments to see highlighted floating at top
+                if (activePlayingNodeId) {
+                    loadNodeComments(activePlayingNodeId, false, true);
+                }
+            } else {
+                alert(data.error || 'Failed to update highlight status');
+            }
+        } catch (err) {
+            console.error('Error toggling highlight status:', err);
+            alert('Failed to update highlight status');
+        }
+    }
+
+    // switchSidebarTab — toggles between Comments and Playlist tabs in the right sidebar
+    function switchSidebarTab(tabName) {
+        const commentsTab = document.getElementById('commentsTabContent');
+        const playlistTab = document.getElementById('playlistTabContent');
+        const btnComments = document.getElementById('tabBtnComments');
+        const btnPlaylist = document.getElementById('tabBtnPlaylist');
+
+        if (tabName === 'comments') {
+            if (commentsTab) commentsTab.classList.remove('hidden');
+            if (playlistTab) playlistTab.classList.add('hidden');
+            if (btnComments) btnComments.className = "flex-1 py-3 text-xs font-bold text-center border-r border-slate-100 dark:border-white/5 transition-all text-slate-800 dark:text-white bg-white dark:bg-[#0b1120] flex items-center justify-center gap-1.5 rounded-none";
+            if (btnPlaylist) btnPlaylist.className = "flex-1 py-3 text-xs font-bold text-center transition-all text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center gap-1.5 rounded-none";
+        } else {
+            if (commentsTab) commentsTab.classList.add('hidden');
+            if (playlistTab) playlistTab.classList.remove('hidden');
+            if (btnComments) btnComments.className = "flex-1 py-3 text-xs font-bold text-center border-r border-slate-100 dark:border-white/5 transition-all text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center gap-1.5 rounded-none";
+            if (btnPlaylist) btnPlaylist.className = "flex-1 py-3 text-xs font-bold text-center transition-all text-slate-800 dark:text-white bg-white dark:bg-[#0b1120] flex items-center justify-center gap-1.5 rounded-none";
+            // Render playlist when switching to it
+            renderCoursePlaylist();
+        }
+    }
+
+    function renderCoursePlaylist() {
+        const playlistContainer = document.getElementById('playlistContainer');
+        if (!playlistContainer) return;
+
+        if (!curriculumNodes || curriculumNodes.length === 0) {
+            playlistContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center py-10 opacity-60">
+                    <span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600 mb-3">video_library</span>
+                    <p class="text-xs font-medium text-slate-500">No lessons available</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Get all videos (both standalone and those inside folders)
+        const allVideos = curriculumNodes.filter(n => 
+            n.type === 'video' || (n.type === 'liveClass' && n.videoPath)
+        ).sort((a, b) => {
+            const timeA = parseInt(a._id.toString().substring(0, 8), 16);
+            const timeB = parseInt(b._id.toString().substring(0, 8), 16);
+            return timeA - timeB;
+        });
+
+        let html = '';
+
+        // Render all videos in a flat, continuous list
+        allVideos.forEach(node => {
+            const isActive = node._id === activePlayingNodeId;
+            const activeClass = isActive ? 'bg-[#EAE9ED] dark:bg-white/10 rounded-md' : 'hover:bg-[#EAE9ED]/60 dark:hover:bg-white/5 rounded-md';
+            const iconColor = isActive ? 'text-black dark:text-white' : 'text-slate-400';
+            const activeTextClass = isActive ? 'text-black dark:text-white font-medium' : 'text-black dark:text-slate-300 font-medium';
+            
+            html += `
+                <div onclick="playVideoNode('${node._id}', false, true)" class="group flex items-center gap-3 p-2.5 cursor-pointer transition-all ${activeClass}">
+                    <span class="material-symbols-rounded shrink-0 text-[22px] flex items-center justify-center ${iconColor}">play_circle</span>
+                    <div class="min-w-0 flex-1 flex flex-col justify-center">
+                        <p class="text-[13px] ${activeTextClass} truncate leading-tight">${node.name}</p>
+                        <span class="text-[10px] text-slate-500 font-medium mt-0.5">${node.duration || 'Video'}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        if (html === '') {
+            playlistContainer.innerHTML = `
+                <div class="flex flex-col items-center justify-center text-center py-10 opacity-60">
+                    <span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600 mb-3">video_library</span>
+                    <p class="text-xs font-medium text-slate-500">No video lessons in this course</p>
+                </div>
+            `;
+        } else {
+            playlistContainer.innerHTML = html;
+        }
+
+        // Update playlist lesson count badge
+        const totalVideos = allVideos.length;
+        const badgeEl = document.getElementById('playlistCountBadge');
+        if (badgeEl) badgeEl.textContent = totalVideos > 0 ? `${totalVideos} lessons` : '';
+    }
+
+    function renderCommentsList(comments) {
+        const list = document.getElementById('commentsList');
+        
+        list.innerHTML = comments.map(c => {
+            const dateStr = new Date(c.createdAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+            const avatar = c.userAvatar || '/images/default-avatar.png';
+            const badgeClass = c.user && c.user.role === 'teacher' ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 dark:bg-white/5 text-slate-500';
+            const badgeText = c.user && c.user.role === 'teacher' ? 'Mentor' : '';
+
+            const timeAgo = (date) => {
+                const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+                let interval = Math.floor(seconds / 31536000);
+                if (interval >= 1) return interval === 1 ? '1 year ago' : interval + ' years ago';
+                interval = Math.floor(seconds / 2592000);
+                if (interval >= 1) return interval === 1 ? '1 month ago' : interval + ' months ago';
+                interval = Math.floor(seconds / 86400);
+                if (interval >= 1) return interval === 1 ? '1 day ago' : interval + ' days ago';
+                interval = Math.floor(seconds / 3600);
+                if (interval >= 1) return interval === 1 ? '1 hour ago' : interval + ' hours ago';
+                interval = Math.floor(seconds / 60);
+                if (interval >= 1) return interval === 1 ? '1 minute ago' : interval + ' minutes ago';
+                return seconds < 10 ? 'just now' : seconds + ' seconds ago';
+            };
+            const dateDisplay = `${dateStr} <span class="text-slate-300 dark:text-white/10 mx-1">&bull;</span> ${timeAgo(c.createdAt)}`;
+
+            const repliesHTML = (c.replies || []).map(r => {
+                const rDateStr = new Date(r.createdAt).toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                });
+                const rRelativeTime = timeAgo(r.createdAt);
+                const rAvatar = r.userAvatar || '/images/default-avatar.png';
+                const isRMentor = r.user && r.user.role === 'teacher';
+                const rBadgeClass = isRMentor ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 dark:bg-white/5 text-slate-500';
+                const rBadgeText = isRMentor ? 'Mentor' : '';
+                const isReplyAuthor = r.user && (r.user._id === currentUserId || r.user === currentUserId);                 return `
+                    <div class="flex gap-3">
+                        <div class="size-8 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-white/10 bg-slate-50">
+                            <img src="${rAvatar}" class="size-full object-cover" alt="${r.userName}">
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-1.5 flex-wrap relative">
+                                <span class="text-sm font-bold text-slate-800 dark:text-slate-200">${r.userName}</span>
+                                ${rBadgeText ? `<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-none shrink-0 ${rBadgeClass}">${rBadgeText}</span>` : ''}
+                                <span class="text-[11px] text-slate-400 shrink-0">${rDateStr} <span class="text-slate-300 dark:text-white/10 mx-1">&bull;</span> ${rRelativeTime}</span>
+                                
+                                <!-- Perfectly placed inline three-dot trigger outside text inherited shrink rules -->
+                                <div class="relative shrink-0 inline-block align-middle ml-0.5">
+                                    <button type="button" onclick="toggleCommentDropdown(event, '${r._id}')" class="p-0.5 hover:bg-slate-100 dark:hover:bg-white/5 text-black dark:text-white rounded-none transition-all flex items-center justify-center font-extrabold" title="Options">
+                                        <span class="material-symbols-rounded text-sm font-bold leading-none" style="font-weight: 800; color: #000000;">more_vert</span>
+                                    </button>
+                                    <div id="dropdown-${r._id}" class="hidden absolute left-0 mt-1 w-28 bg-[#FFFFFF] dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-lg rounded-none py-0.5 z-30">
+                                        ${isReplyAuthor ? `
+                                            <button type="button" onclick="triggerEditReply('${c._id}', '${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5">
+                                                <span class="material-symbols-rounded text-[14px]">edit</span> Edit
+                                            </button>
+                                            <button type="button" onclick="triggerDeleteReply('${c._id}', '${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5">
+                                                <span class="material-symbols-rounded text-[14px]">delete</span> Delete
+                                            </button>
+                                        ` : `
+                                            <button type="button" onclick="triggerReportComment('${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5">
+                                                <span class="material-symbols-rounded text-[14px]">flag</span> Report
+                                            </button>
+                                        `}
+                                    </div>
+                                </div>
+                            </div>
+                            ${renderExpandableText(r.text, r._id)}
+                            
+                            <div class="flex items-center gap-3 mt-1">
+                                <button type="button" onclick="toggleReplyForm('${r._id}', '${r.userName}')" class="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-[13px]">reply</span> Reply
+                                </button>
+                            </div>
+
+                            <div id="reply-form-${r._id}" class="hidden mt-2 w-full max-w-[350px]">
+                                <form onsubmit="submitReply(event, '${c._id}', '${r._id}')" class="flex gap-2 items-start w-full">
+                                    <textarea required rows="1" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px';" placeholder="Write a reply..." class="flex-1 text-xs p-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 focus:outline-none focus:border-primary rounded-none resize-y text-slate-800 dark:text-white leading-relaxed w-full min-h-[36px]"></textarea>
+                                    <div class="flex gap-1 shrink-0">
+                                        <button type="button" onclick="toggleReplyForm('${r._id}', '', true)" class="px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 rounded-none">Cancel</button>
+                                        <button type="submit" class="px-2.5 py-1 bg-primary hover:bg-primary/95 text-white text-[9px] font-bold uppercase tracking-wider rounded-none">Reply</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div id="edit-reply-form-${r._id}" class="hidden mt-2 w-full max-w-[350px]">
+                                <form onsubmit="submitEditReply(event, '${c._id}', '${r._id}')" class="flex gap-2 items-start w-full">
+                                    <textarea required rows="1" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px';" class="flex-1 text-xs p-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 focus:outline-none focus:border-primary rounded-none resize-y text-slate-800 dark:text-white leading-relaxed w-full min-h-[36px]">${escapeHTML(r.text)}</textarea>
+                                    <div class="flex gap-1 shrink-0">
+                                        <button type="button" onclick="toggleEditReplyForm('${c._id}', '${r._id}', true)" class="px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 rounded-none">Cancel</button>
+                                        <button type="submit" class="px-2.5 py-1 bg-primary hover:bg-primary/95 text-white text-[9px] font-bold uppercase tracking-wider rounded-none">Save</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            const isRepliesOpen = openCommentReplies.has(c._id);
+            const repliesBlock = (c.replies || []).length > 0 
+                ? `
+                    <button type="button" onclick="toggleRepliesList('${c._id}')" id="toggle-replies-btn-${c._id}" class="text-[11px] font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white flex items-center gap-1 mt-2">
+                        <span class="material-symbols-rounded text-sm">${isRepliesOpen ? 'unfold_less' : 'unfold_more'}</span> ${isRepliesOpen ? 'Hide replies' : `View ${c.replies.length} ${c.replies.length === 1 ? 'reply' : 'replies'}`}
+                    </button>
+                    <div id="replies-block-${c._id}" class="${isRepliesOpen ? '' : 'hidden'} pl-6 border-l border-slate-100 dark:border-white/5 mt-2.5 space-y-2.5">
+                        ${repliesHTML}
+                    </div>
+                  ` 
+                : '';
+
+            const isCommentAuthor = c.user && (c.user._id === currentUserId || c.user === currentUserId);
+
+            const highlightClass = "";
+
+            return `
+                <div class="flex gap-3 group border-b border-slate-100 dark:border-white/5 pb-3">
+                    <div class="size-8 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-white/10 bg-slate-50">
+                        <img src="${avatar}" class="size-full object-cover" alt="${c.userName}">
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center justify-between gap-2 w-full relative">
+                            <div class="flex items-center gap-1.5 flex-wrap min-w-0">
+                                <span class="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">${c.userName}</span>
+                                ${badgeText ? `<span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-none shrink-0 ${badgeClass}">${badgeText}</span>` : ''}
+                                ${c.highlighted ? `<span class="text-[9px] font-bold bg-yellow-400 dark:bg-yellow-500 text-slate-900 dark:text-slate-950 px-1.5 py-0.5 rounded-none shrink-0 flex items-center gap-0.5"><span class="material-symbols-rounded text-[11px] font-bold">push_pin</span>Highlighted</span>` : ''}
+                                <span class="text-[11px] text-slate-400 shrink-0">${dateDisplay}</span>
+                            </div>
+                            
+                            <!-- Three Dot Dropdown Menu (on the far right, bold & black-colored) -->
+                            <div class="relative shrink-0">
+                                <button type="button" onclick="toggleCommentDropdown(event, '${c._id}')" class="p-1 hover:bg-slate-100 dark:hover:bg-white/5 text-black dark:text-white rounded-none transition-all flex items-center justify-center font-extrabold" title="Options">
+                                    <span class="material-symbols-rounded text-sm font-bold leading-none" style="font-weight: 800; color: #000000;">more_vert</span>
+                                </button>
+                                <div id="dropdown-${c._id}" class="hidden absolute right-0 mt-1 w-32 bg-[#FFFFFF] dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-lg rounded-none py-0.5 z-30">
+                                    <button type="button" onclick="toggleCommentHighlight('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5">
+                                        <span class="material-symbols-rounded text-[14px]">${c.highlighted ? 'explore_off' : 'push_pin'}</span> ${c.highlighted ? 'Unhighlight' : 'Highlight'}
+                                    </button>
+                                    ${isCommentAuthor ? `
+                                        <button type="button" onclick="triggerEditComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5">
+                                            <span class="material-symbols-rounded text-[14px]">edit</span> Edit
+                                        </button>
+                                        <button type="button" onclick="triggerDeleteComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5">
+                                            <span class="material-symbols-rounded text-[14px]">delete</span> Delete
+                                        </button>
+                                    ` : `
+                                        <button type="button" onclick="triggerReportComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5">
+                                            <span class="material-symbols-rounded text-[14px]">flag</span> Report
+                                        </button>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+                        ${renderExpandableText(c.text, c._id)}
+                        
+                        <div class="flex items-center gap-3 mt-1">
+                            <button type="button" onclick="toggleReplyForm('${c._id}', '${c.userName}')" class="text-[11px] font-bold text-primary hover:underline flex items-center gap-1">
+                                <span class="material-symbols-rounded text-[13px]">reply</span> Reply
+                            </button>
+                        </div>
+                        
+                        <div id="reply-form-${c._id}" class="hidden mt-2 pl-4 w-full max-w-[350px]">
+                            <form onsubmit="submitReply(event, '${c._id}', '${c._id}')" class="flex gap-2 items-start w-full">
+                                <textarea required rows="1" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px';" placeholder="Write a reply..." class="flex-1 text-xs p-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 focus:outline-none focus:border-primary rounded-none resize-y text-slate-800 dark:text-white leading-relaxed w-full min-h-[36px]"></textarea>
+                                <div class="flex gap-1 shrink-0">
+                                    <button type="button" onclick="toggleReplyForm('${c._id}', '', true)" class="px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 rounded-none">Cancel</button>
+                                    <button type="submit" class="px-2.5 py-1 bg-primary hover:bg-primary/95 text-white text-[9px] font-bold uppercase tracking-wider rounded-none">Reply</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div id="edit-comment-form-${c._id}" class="hidden mt-2 w-full max-w-[350px]">
+                            <form onsubmit="submitEditComment(event, '${c._id}')" class="flex gap-2 items-start w-full">
+                                <textarea required rows="1" oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px';" class="flex-1 text-xs p-2 bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-white/10 focus:outline-none focus:border-primary rounded-none resize-y text-slate-800 dark:text-white leading-relaxed w-full min-h-[36px]">${escapeHTML(c.text)}</textarea>
+                                <div class="flex gap-1 shrink-0">
+                                    <button type="button" onclick="toggleEditCommentForm('${c._id}', true)" class="px-2 py-1 text-[9px] font-bold uppercase tracking-wider bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 text-slate-500 rounded-none">Cancel</button>
+                                    <button type="submit" class="px-2.5 py-1 bg-primary hover:bg-primary/95 text-white text-[9px] font-bold uppercase tracking-wider rounded-none">Save</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        ${repliesBlock}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function toggleRepliesList(commentId) {
+        const block = document.getElementById(`replies-block-${commentId}`);
+        const btn = document.getElementById(`toggle-replies-btn-${commentId}`);
+        if (block && btn) {
+            const isHidden = block.classList.contains('hidden');
+            if (isHidden) {
+                block.classList.remove('hidden');
+                openCommentReplies.add(commentId);
+                btn.innerHTML = `<span class="material-symbols-rounded text-sm">unfold_less</span> Hide replies`;
+            } else {
+                block.classList.add('hidden');
+                openCommentReplies.delete(commentId);
+                const count = block.querySelectorAll('.pl-6 > div, div.flex.gap-3').length || block.children.length;
+                btn.innerHTML = `<span class="material-symbols-rounded text-sm">unfold_more</span> View ${count} ${count === 1 ? 'reply' : 'replies'}`;
+            }
+        }
+    }
+
+    async function loadNextCommentsPage() {
+        if (!activePlayingNodeId || !commentsHasMore) return;
+        commentsSkip += commentsLimit;
+        await loadNodeComments(activePlayingNodeId, true);
+    }
+
+    async function submitComment(e) {
+        e.preventDefault();
+        if (!activePlayingNodeId) return;
+
+        const input = document.getElementById('commentInput');
+        const text = input.value.trim();
+        if (!text) return;
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = 'Posting...';
+
+        try {
+            const res = await fetch(`/api/curriculum/node/${activePlayingNodeId}/comments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, courseId: currentCourseId })
+            });
+            const data = await res.json();
+            if (data.success) {
+                input.value = '';
+                await loadNodeComments(activePlayingNodeId);
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            console.error('Error posting comment:', err);
+            alert('Failed to post comment');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
+
+    function toggleReplyForm(formId, replyToUser = '', forceHide = false) {
+        const formDiv = document.getElementById(`reply-form-${formId}`);
+        if (formDiv) {
+            if (forceHide) {
+                formDiv.classList.add('hidden');
+                const textarea = formDiv.querySelector('textarea');
+                if (textarea) textarea.value = '';
+            } else {
+                const isHidden = formDiv.classList.contains('hidden');
+                if (isHidden) {
+                    // Close all other reply forms first to prevent UI clutter
+                    document.querySelectorAll('[id^="reply-form-"]').forEach(el => {
+                        if (el.id !== `reply-form-${formId}`) {
+                            el.classList.add('hidden');
+                            const ta = el.querySelector('textarea');
+                            if (ta) ta.value = '';
+                        }
+                    });
+
+                    formDiv.classList.remove('hidden');
+                    const textarea = formDiv.querySelector('textarea');
+                    if (textarea) {
+                        if (replyToUser) {
+                            textarea.value = `@${replyToUser} `;
+                        } else {
+                            textarea.value = '';
+                        }
+                        textarea.focus();
+                    }
+                } else {
+                    formDiv.classList.add('hidden');
+                    const textarea = formDiv.querySelector('textarea');
+                    if (textarea) textarea.value = '';
+                }
+            }
+        }
+    }
+
+    async function submitReply(e, commentId, formId) {
+        e.preventDefault();
+        const formDiv = document.getElementById(`reply-form-${formId}`);
+        const textarea = formDiv ? formDiv.querySelector('textarea') : null;
+        if (!textarea) return;
+        const text = textarea.value.trim();
+        if (!text) return;
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = '...';
+
+        try {
+            const res = await fetch(`/api/curriculum/comment/${commentId}/reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            if (data.success) {
+                textarea.value = '';
+                openCommentReplies.add(commentId);
+                toggleReplyForm(formId, '', true);
+                if (activePlayingNodeId) {
+                    await loadNodeComments(activePlayingNodeId);
+                }
+            } else {
+                alert('Error posting reply: ' + (data.error || 'Server error'));
+            }
+        } catch (err) {
+            console.error('Error posting reply:', err);
+            alert('Failed to post reply');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
+
+    function toggleEditCommentForm(commentId, forceHide = false) {
+        const formDiv = document.getElementById(`edit-comment-form-${commentId}`);
+        if (formDiv) {
+            if (forceHide) {
+                formDiv.classList.add('hidden');
+            } else {
+                const isHidden = formDiv.classList.contains('hidden');
+                if (isHidden) {
+                    formDiv.classList.remove('hidden');
+                    const textarea = formDiv.querySelector('textarea');
+                    if (textarea) textarea.focus();
+                } else {
+                    formDiv.classList.add('hidden');
+                }
+            }
+        }
+    }
+
+    function toggleEditReplyForm(commentId, replyId, forceHide = false) {
+        const formDiv = document.getElementById(`edit-reply-form-${replyId}`);
+        if (formDiv) {
+            if (forceHide) {
+                formDiv.classList.add('hidden');
+            } else {
+                const isHidden = formDiv.classList.contains('hidden');
+                if (isHidden) {
+                    formDiv.classList.remove('hidden');
+                    const textarea = formDiv.querySelector('textarea');
+                    if (textarea) textarea.focus();
+                } else {
+                    formDiv.classList.add('hidden');
+                }
+            }
+        }
+    }
+
+    async function submitEditComment(e, commentId) {
+        e.preventDefault();
+        const textarea = e.target.querySelector('textarea');
+        const text = textarea.value.trim();
+        if (!text) return;
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = '...';
+
+        try {
+            const res = await fetch(`/api/curriculum/comment/${commentId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            if (data.success) {
+                toggleEditCommentForm(commentId, true);
+                if (activePlayingNodeId) {
+                    await loadNodeComments(activePlayingNodeId);
+                }
+            } else {
+                alert('Error editing comment: ' + (data.error || 'Server error'));
+            }
+        } catch (err) {
+            console.error('Error editing comment:', err);
+            alert('Failed to edit comment');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
+
+    async function submitEditReply(e, commentId, replyId) {
+        e.preventDefault();
+        const textarea = e.target.querySelector('textarea');
+        const text = textarea.value.trim();
+        if (!text) return;
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        const originalText = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = '...';
+
+        try {
+            const res = await fetch(`/api/curriculum/comment/${commentId}/reply/${replyId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text })
+            });
+            const data = await res.json();
+            if (data.success) {
+                toggleEditReplyForm(commentId, replyId, true);
+                if (activePlayingNodeId) {
+                    await loadNodeComments(activePlayingNodeId);
+                }
+            } else {
+                alert('Error editing reply: ' + (data.error || 'Server error'));
+            }
+        } catch (err) {
+            console.error('Error editing reply:', err);
+            alert('Failed to edit reply');
+        } finally {
+            btn.disabled = false;
+            btn.innerText = originalText;
+        }
+    }
+
+    // Global outside click listener to auto-close all dropdowns
+    document.addEventListener('click', () => {
+        document.querySelectorAll('[id^="dropdown-"]').forEach(el => el.classList.add('hidden'));
+        const playerSettings = document.getElementById('playerSettingsDropdown');
+        if (playerSettings) playerSettings.classList.add('hidden');
+    });
+
+    function toggleCommentDropdown(e, id) {
+        e.stopPropagation();
+        const dropdown = document.getElementById(`dropdown-${id}`);
+        if (dropdown) {
+            const isHidden = dropdown.classList.contains('hidden');
+            // Hide all others
+            document.querySelectorAll('[id^="dropdown-"]').forEach(el => el.classList.add('hidden'));
+            if (isHidden) {
+                dropdown.classList.remove('hidden');
+            }
+        }
+    }
+
+    function renderExpandableText(text, id) {
+        const escaped = escapeHTML(text);
+        if (text.length <= 220) {
+            return `<p class="text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed whitespace-pre-wrap">${escaped}</p>`;
+        }
+        const shortText = escapeHTML(text.substring(0, 220));
+        return `
+            <div id="text-container-${id}" class="mt-1">
+                <p id="text-short-${id}" class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap">${shortText}... <button type="button" onclick="toggleCommentTextExpand('${id}')" class="text-xs text-primary font-bold hover:underline inline ml-1">Read more</button></p>
+                <p id="text-full-${id}" class="hidden text-sm text-slate-600 dark:text-slate-400 leading-relaxed whitespace-pre-wrap">${escaped} <button type="button" onclick="toggleCommentTextExpand('${id}')" class="text-xs text-primary font-bold hover:underline inline ml-1">Read less</button></p>
+            </div>
+        `;
+    }
+
+    function toggleCommentTextExpand(id) {
+        const shortEl = document.getElementById(`text-short-${id}`);
+        const fullEl = document.getElementById(`text-full-${id}`);
+        if (shortEl && fullEl) {
+            if (shortEl.classList.contains('hidden')) {
+                shortEl.classList.remove('hidden');
+                fullEl.classList.add('hidden');
+            } else {
+                shortEl.classList.add('hidden');
+                fullEl.classList.remove('hidden');
+            }
+        }
+    }
+
+    function triggerEditComment(id) {
+        toggleEditCommentForm(id);
+    }
+
+    function triggerEditReply(commentId, replyId) {
+        toggleEditReplyForm(commentId, replyId);
+    }
+
+    function triggerDeleteComment(commentId) {
+        const modalText = document.getElementById('deleteModalText');
+        if (modalText) {
+            modalText.innerText = `Are you sure you want to delete this comment? This action is permanent and cannot be undone.`;
+        }
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        if (confirmBtn) {
+            confirmBtn.onclick = async () => {
+                const originalText = confirmBtn.innerText;
+                confirmBtn.disabled = true;
+                confirmBtn.innerText = 'Deleting...';
+                try {
+                    const res = await fetch(`/api/curriculum/comment/${commentId}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        closeDeleteModal();
+                        if (activePlayingNodeId) {
+                            await loadNodeComments(activePlayingNodeId);
+                        }
+                    } else {
+                        alert('Error deleting comment: ' + (data.error || 'Server error'));
+                    }
+                } catch (err) {
+                    console.error('Error deleting comment:', err);
+                    alert('Failed to delete comment');
+                } finally {
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerText = originalText;
+                }
+            };
+        }
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    function triggerDeleteReply(commentId, replyId) {
+        const modalText = document.getElementById('deleteModalText');
+        if (modalText) {
+            modalText.innerText = `Are you sure you want to delete this reply? This action is permanent and cannot be undone.`;
+        }
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        if (confirmBtn) {
+            confirmBtn.onclick = async () => {
+                const originalText = confirmBtn.innerText;
+                confirmBtn.disabled = true;
+                confirmBtn.innerText = 'Deleting...';
+                try {
+                    const res = await fetch(`/api/curriculum/comment/${commentId}/reply/${replyId}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        closeDeleteModal();
+                        if (activePlayingNodeId) {
+                            await loadNodeComments(activePlayingNodeId);
+                        }
+                    } else {
+                        alert('Error deleting reply: ' + (data.error || 'Server error'));
+                    }
+                } catch (err) {
+                    console.error('Error deleting reply:', err);
+                    alert('Failed to delete reply');
+                } finally {
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerText = originalText;
+                }
+            };
+        }
+        document.getElementById('deleteModal').classList.remove('hidden');
+    }
+
+    function triggerReportComment(id) {
+        alert('Comment has been reported to the site administrator. Thank you.');
+    }
+
+    function escapeHTML(str) {
+        return str.replace(/[&<>'"]/g, 
+            tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+        );
+    }
+
+</script>
+</body>
+</html>

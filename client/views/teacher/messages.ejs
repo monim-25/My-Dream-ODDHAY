@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+<head>
+    <%- include('../partials/head') %>
+    <%- include('../partials/app-styles') %>
+    <title>Student Messages | Instructor Portal</title>
+</head>
+<body class="bg-[#f8fafc] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    
+    <!-- Top Header -->
+    <header class="h-14 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md flex items-center justify-between px-4 z-30 shrink-0">
+        <div class="flex items-center gap-3">
+            <a href="/teacher" class="flex items-center gap-2">
+                <span class="font-black text-slate-900 dark:text-white text-base tracking-tight">Oddhay</span>
+                <span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-wider">Instructor</span>
+            </a>
+            <span class="text-slate-300 dark:text-slate-700">/</span>
+            <h1 class="text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                <span class="material-symbols-rounded text-primary text-base leading-none flex items-center justify-center shrink-0 select-none">chat</span>
+                Student Messages
+            </h1>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <a href="/teacher" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all flex items-center gap-1">
+                <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0 select-none">arrow_back</span>
+                Dashboard
+            </a>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 border-r border-slate-200/80 dark:border-slate-800/80 hidden lg:block shrink-0 bg-white dark:bg-[#0f172a]">
+            <%- include('sidebar', { active: 'messages' }) %>
+        </aside>
+
+        <!-- Main Messaging Studio -->
+        <main class="flex-1 overflow-hidden p-2 sm:p-3 bg-[#f8fafc] dark:bg-[#0b1120] flex">
+            <div class="flex-1 bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl overflow-hidden shadow-sm flex flex-col md:flex-row">
+                
+                <!-- Left Sidebar: Students List -->
+                <div class="w-full md:w-80 border-r border-slate-200/80 dark:border-slate-800/80 flex flex-col shrink-0 bg-slate-50/50 dark:bg-slate-900/40">
+                    
+                    <!-- Search & Title -->
+                    <div class="p-3 border-b border-slate-200/80 dark:border-slate-800/80 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                                <span class="material-symbols-rounded text-primary text-base leading-none flex items-center justify-center shrink-0 select-none">forum</span>
+                                Student Threads
+                            </h2>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                                <%= (locals.conversations || []).length %> Enrolled
+                            </span>
+                        </div>
+                        <div class="relative flex items-center">
+                            <input type="text" id="student-search-input" oninput="filterStudentList(this.value)" placeholder="Search student by name or class..."
+                                class="w-full pl-7 pr-3 py-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-primary text-slate-800 dark:text-slate-100 placeholder:text-slate-400 font-medium">
+                            <span class="material-symbols-rounded absolute left-2 text-slate-400 text-xs leading-none flex items-center justify-center pointer-events-none select-none">search</span>
+                        </div>
+                    </div>
+
+                    <!-- Student Conversations Scroll List -->
+                    <div class="flex-1 overflow-y-auto p-2 space-y-1 no-scrollbar" id="student-conversations-list">
+                        <% if (locals.conversations && conversations.length > 0) { %>
+                            <% conversations.forEach(item => { %>
+                                <% const stu = item.student; %>
+                                <% const isActive = locals.activeStudent && activeStudent._id.toString() === stu._id.toString(); %>
+                                <div onclick="selectStudentThread('<%= stu._id %>')"
+                                    data-student-name="<%= stu.name.toLowerCase() %>"
+                                    data-student-class="<%= (stu.classLevel || '').toLowerCase() %>"
+                                    class="student-thread-item p-2.5 rounded-xl cursor-pointer transition-all flex items-center gap-2.5 relative <%= isActive ? 'bg-primary/10 border border-primary/30 shadow-2xs' : 'hover:bg-slate-100/80 dark:hover:bg-slate-800/60 border border-transparent' %>">
+                                    
+                                    <!-- Avatar -->
+                                    <div class="size-9 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                                        <% if (stu.profilePicture || stu.profileImage) { %>
+                                            <img src="<%= stu.profilePicture || stu.profileImage %>" alt="<%= stu.name %>" class="w-full h-full object-cover">
+                                        <% } else { %>
+                                            <span><%= stu.name ? stu.name[0].toUpperCase() : 'S' %></span>
+                                        <% } %>
+                                    </div>
+
+                                    <!-- Student Info & Latest Msg -->
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center justify-between gap-1 mb-0.5">
+                                            <h4 class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate <%= isActive ? 'text-primary dark:text-primary' : '' %>"><%= stu.name %></h4>
+                                            <% if (item.latestMessage) { %>
+                                                <span class="text-[9px] font-semibold text-slate-400 shrink-0">
+                                                    <%= new Date(item.latestMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) %>
+                                                </span>
+                                            <% } %>
+                                        </div>
+                                        <div class="flex items-center justify-between gap-1">
+                                            <p class="text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate flex-1">
+                                                <%= item.latestMessage ? item.latestMessage.text : 'Student enrolled in your curriculum' %>
+                                            </p>
+                                            <% if (item.unreadCount > 0) { %>
+                                                <span class="size-4 rounded-full bg-rose-500 text-white text-[9px] font-black flex items-center justify-center shrink-0">
+                                                    <%= item.unreadCount %>
+                                                </span>
+                                            <% } %>
+                                        </div>
+                                        <div class="flex items-center gap-1 mt-1">
+                                            <span class="px-1.5 py-0.2 bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[8px] font-bold rounded">
+                                                <%= stu.classLevel || 'Student' %>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }); %>
+                        <% } else { %>
+                            <div class="py-12 px-4 text-center">
+                                <span class="material-symbols-rounded text-3xl text-slate-300 dark:text-slate-600 mb-1 leading-none flex items-center justify-center select-none">person_search</span>
+                                <p class="text-xs font-bold text-slate-500 dark:text-slate-400">No student conversations yet</p>
+                                <p class="text-[10px] text-slate-400 mt-0.5">When enrolled students send questions, they will appear here.</p>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+
+                <!-- Right: Active Chat Area -->
+                <div class="flex-1 flex flex-col bg-white dark:bg-[#0f172a] relative">
+                    <% if (locals.activeStudent) { %>
+                        
+                        <!-- Chat Header Bar -->
+                        <div class="px-4 py-2.5 border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-50/30 dark:bg-slate-900/20">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="size-9 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                                    <% if (activeStudent.profilePicture || activeStudent.profileImage) { %>
+                                        <img src="<%= activeStudent.profilePicture || activeStudent.profileImage %>" alt="<%= activeStudent.name %>" class="w-full h-full object-cover">
+                                    <% } else { %>
+                                        <span><%= activeStudent.name[0].toUpperCase() %></span>
+                                    <% } %>
+                                </div>
+                                <div class="min-w-0">
+                                    <h3 class="text-xs font-bold text-slate-800 dark:text-slate-100 truncate"><%= activeStudent.name %></h3>
+                                    <div class="flex items-center gap-1.5 text-[10px] font-semibold text-slate-400">
+                                        <span><%= activeStudent.classLevel || 'Student' %></span>
+                                        <span>•</span>
+                                        <span class="text-emerald-500 font-bold">Enrolled Student</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-1.5">
+                                <span class="px-2 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold flex items-center gap-1">
+                                    <span class="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Direct Thread
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Messages Stream Container -->
+                        <div id="teacher-messages-stream" class="flex-1 overflow-y-auto p-4 space-y-3 no-scrollbar bg-[#fafafa] dark:bg-[#070d18]">
+                            <!-- Loaded via Javascript -->
+                            <div id="messages-loading" class="py-10 text-center text-xs font-semibold text-slate-400">
+                                Loading conversation...
+                            </div>
+                        </div>
+
+                        <!-- Chat Input Box -->
+                        <div class="p-3 border-t border-slate-200/80 dark:border-slate-800/80 bg-white dark:bg-[#0f172a] shrink-0">
+                            <form id="teacher-send-form" onsubmit="sendTeacherMessage(event)" class="flex items-center gap-2">
+                                <input type="text" id="teacher-msg-input" 
+                                    placeholder="Type your response to <%= activeStudent.name %>... (Press Enter to send)"
+                                    autocomplete="off"
+                                    class="flex-1 px-3.5 py-2 bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-100 rounded-xl outline-none focus:border-primary transition-all placeholder:text-slate-400">
+                                <button type="submit" id="teacher-send-btn"
+                                    class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 shrink-0 cursor-pointer active:scale-95">
+                                    <span>Send</span>
+                                    <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0 select-none">send</span>
+                                </button>
+                            </form>
+                        </div>
+
+                    <% } else { %>
+                        <div class="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#fafafa] dark:bg-[#070d18]">
+                            <div class="size-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-3">
+                                <span class="material-symbols-rounded text-3xl leading-none flex items-center justify-center select-none">chat_bubble</span>
+                            </div>
+                            <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-1">Select a Student Conversation</h3>
+                            <p class="text-xs text-slate-400 max-w-sm">Choose an enrolled student from the left list to view their questions and provide instant guidance.</p>
+                        </div>
+                    <% } %>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const activeStudentId = '<%= locals.activeStudent ? activeStudent._id : "" %>';
+        const currentTeacherId = '<%= user._id %>';
+        let pollTimer = null;
+
+        function selectStudentThread(stuId) {
+            window.location.href = '/teacher/messages?studentId=' + stuId;
+        }
+
+        function filterStudentList(query) {
+            const q = (query || '').toLowerCase().trim();
+            const items = document.querySelectorAll('.student-thread-item');
+            items.forEach(item => {
+                const name = item.getAttribute('data-student-name') || '';
+                const cls = item.getAttribute('data-student-class') || '';
+                if (!q || name.includes(q) || cls.includes(q)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        async function loadThreadMessages() {
+            if (!activeStudentId) return;
+            const container = document.getElementById('teacher-messages-stream');
+            if (!container) return;
+
+            try {
+                const res = await fetch('/api/messages/thread/' + activeStudentId);
+                const data = await res.json();
+
+                if (data.success && Array.isArray(data.messages)) {
+                    if (data.messages.length === 0) {
+                        container.innerHTML = `
+                            <div class="py-14 text-center">
+                                <span class="material-symbols-rounded text-4xl text-slate-300 dark:text-slate-600 mb-1.5 leading-none flex items-center justify-center select-none">waving_hand</span>
+                                <h4 class="text-xs font-bold text-slate-700 dark:text-slate-200">Start the conversation</h4>
+                                <p class="text-[10px] text-slate-400 mt-0.5">Send a message to guide and encourage this student.</p>
+                            </div>
+                        `;
+                    } else {
+                        let html = '';
+                        data.messages.forEach(msg => {
+                            const isMe = msg.sender.toString() === currentTeacherId;
+                            const timeStr = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                            if (isMe) {
+                                html += `
+                                    <div class="flex justify-end items-end gap-2 group">
+                                        <div class="max-w-[78%] sm:max-w-[70%]">
+                                            <div class="px-3.5 py-2.5 rounded-2xl rounded-br-none bg-primary text-white text-xs font-medium leading-relaxed shadow-sm">
+                                                ${escapeHtml(msg.text)}
+                                            </div>
+                                            <span class="text-[9px] font-semibold text-slate-400 text-right block mt-0.5 mr-1">${timeStr}</span>
+                                        </div>
+                                    </div>
+                                `;
+                            } else {
+                                html += `
+                                    <div class="flex justify-start items-end gap-2 group">
+                                        <div class="size-6 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[10px] flex items-center justify-center shrink-0 shadow-2xs">
+                                            ${(msg.senderName || 'S')[0].toUpperCase()}
+                                        </div>
+                                        <div class="max-w-[78%] sm:max-w-[70%]">
+                                            <div class="px-3.5 py-2.5 rounded-2xl rounded-bl-none bg-white dark:bg-[#182234] border border-slate-200/80 dark:border-slate-700/80 text-slate-800 dark:text-slate-100 text-xs font-medium leading-relaxed shadow-2xs">
+                                                ${escapeHtml(msg.text)}
+                                            </div>
+                                            <span class="text-[9px] font-semibold text-slate-400 block mt-0.5 ml-1">${timeStr}</span>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        });
+                        container.innerHTML = html;
+                        container.scrollTop = container.scrollHeight;
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load thread messages:', err);
+            }
+        }
+
+        async function sendTeacherMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('teacher-msg-input');
+            const btn = document.getElementById('teacher-send-btn');
+            const text = input ? input.value.trim() : '';
+
+            if (!text || !activeStudentId) return;
+
+            input.value = '';
+            if (btn) btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/messages/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targetUserId: activeStudentId, text })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    await loadThreadMessages();
+                } else {
+                    alert(data.error || 'Failed to send message.');
+                }
+            } catch (err) {
+                console.error('Failed to send teacher message:', err);
+            } finally {
+                if (btn) btn.disabled = false;
+                if (input) input.focus();
+            }
+        }
+
+        function escapeHtml(unsafe) {
+            return (unsafe || '')
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        if (activeStudentId) {
+            loadThreadMessages();
+            // Poll for new messages every 3 seconds
+            pollTimer = setInterval(loadThreadMessages, 3000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title><%= quiz.title %> | ODDHAY Command Center</title>
+    <style>
+        * { font-family: 'Inter', 'Hind Siliguri', sans-serif !important; }
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); min-height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+        .content-scroll { flex: 1; padding: 0; }
+        
+        .cockpit-unit { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 0.375rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .dark .cockpit-unit { background: #1e293b; border-color: #334155; }
+        
+        .q-table th { background: #f8fafc; color: #64748b; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; text-align: left; }
+        .dark .q-table th { background: #0f172a; color: #94a3b8; border-bottom-color: #1e293b; }
+        .q-table td { padding: 0.75rem 1rem; font-size: 12px; font-weight: 600; color: #1e293b; border-bottom: 1px solid #f8fafc; }
+        .dark .q-table td { color: #f1f5f9; border-bottom-color: #0f172a; }
+        
+        @media (max-width: 1024px) { .admin-main { margin-left: 0; } }
+    </style>
+</head>
+
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans min-h-screen">
+    <div class="flex">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
+            <%- include('sidebar', { active: 'quizzes' }) %>
+        </aside>
+
+        <main class="admin-main flex-1">
+            <%- include('../admin/header_v2', { pageTitle: 'Quiz Intelligence' }) %>
+
+            <div class="content-scroll flex flex-col gap-0 border-l border-slate-200 dark:border-white/5">
+                <!-- Top Summary Container -->
+                <div class="bg-white rounded-md p-4 border border-slate-200 shadow-sm flex flex-col gap-4">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h1 class="text-2xl font-black text-slate-800 dark:text-white tracking-tight"><%= quiz.title %></h1>
+                            <div class="flex items-center gap-5 mt-3">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-slate-400 text-[18px]">book</span>
+                                    <p class="text-[13px] font-bold text-slate-700 dark:text-slate-300"><%= quiz.course ? quiz.course.subject : (quiz.subject || '---') %></p>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-slate-400 text-[18px]">school</span>
+                                    <p class="text-[13px] font-bold text-slate-600 dark:text-slate-400">
+                                        Class <%= quiz.course ? quiz.course.classLevel : (quiz.classLevel || '---') %>
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-slate-400 text-[18px]">timer</span>
+                                    <p class="text-[13px] font-bold text-slate-600 dark:text-slate-400"><%= quiz.duration %> min</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <div class="text-right mr-2">
+                                <h2 class="text-[11px] font-black text-slate-700 dark:text-slate-200 leading-tight"><%= quiz.addedBy ? quiz.addedBy.name : 'System' %></h2>
+                                <p class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Creator</p>
+                            </div>
+                            <div class="size-9 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-white dark:border-slate-700 shadow-sm overflow-hidden">
+                                <img src="<%= quiz.addedBy && quiz.addedBy.profileImage ? quiz.addedBy.profileImage : '/images/default-avatar.png' %>" class="size-full object-cover">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Intelligence Ring Hub -->
+                    <div class="border-t border-slate-50 dark:border-slate-800 mt-4 pt-6 pb-2">
+                        <div class="flex items-center gap-6 px-2">
+                            <!-- Donut Chart (Left) -->
+                            <div class="relative size-32 flex-shrink-0">
+                                <% 
+                                    const t = stats.total || 1;
+                                    const pM = (stats.MCQ / t) * 100;
+                                    const pS = (stats.Short / t) * 100;
+                                    const pMed = (stats.Medium / t) * 100;
+                                    const pC = (stats.Comprehension / t) * 100;
+                                %>
+                                <svg viewBox="0 0 42 42" class="size-full -rotate-90">
+                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#f1f5f9" stroke-width="4.5" class="dark:stroke-slate-800"></circle>
+                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#3b82f6" stroke-width="4.5" stroke-dasharray="<%= pM %> <%= 100 - pM %>" stroke-dashoffset="0" class="transition-all duration-1000"></circle>
+                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#10b981" stroke-width="4.5" stroke-dasharray="<%= pS %> <%= 100 - pS %>" stroke-dashoffset="<%= -pM %>" class="transition-all duration-1000"></circle>
+                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#f59e0b" stroke-width="4.5" stroke-dasharray="<%= pMed %> <%= 100 - pMed %>" stroke-dashoffset="<%= -(pM + pS) %>" class="transition-all duration-1000"></circle>
+                                    <circle cx="21" cy="21" r="15.91549430918954" fill="transparent" stroke="#f43f5e" stroke-width="4.5" stroke-dasharray="<%= pC %> <%= 100 - pC %>" stroke-dashoffset="<%= -(pM + pS + pMed) %>" class="transition-all duration-1000"></circle>
+                                </svg>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                    <span class="text-2xl font-black text-slate-700 dark:text-slate-200 leading-none"><%= stats.total %></span>
+                                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tighter mt-0.5">Total</span>
+                                </div>
+                            </div>
+ 
+                            <!-- Legend (Middle) -->
+                            <div class="flex-1 grid grid-cols-1 gap-y-2 ml-2">
+                                <div class="flex items-center gap-3">
+                                    <div class="size-1.5 rounded-full bg-blue-500"></div>
+                                    <div class="flex items-baseline gap-1.5">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide">MCQ:</p>
+                                        <h3 class="text-base font-black text-slate-700 dark:text-slate-200 leading-none"><%= stats.MCQ %></h3>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div class="size-1.5 rounded-full bg-emerald-500"></div>
+                                    <div class="flex items-baseline gap-1.5">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide">Short:</p>
+                                        <h3 class="text-base font-black text-slate-700 dark:text-slate-200 leading-none"><%= stats.Short %></h3>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div class="size-1.5 rounded-full bg-amber-500"></div>
+                                    <div class="flex items-baseline gap-1.5">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide">Medium:</p>
+                                        <h3 class="text-base font-black text-slate-700 dark:text-slate-200 leading-none"><%= stats.Medium %></h3>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div class="size-1.5 rounded-full bg-rose-500"></div>
+                                    <div class="flex items-baseline gap-1.5">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide">Comprehension:</p>
+                                        <h3 class="text-base font-black text-slate-700 dark:text-slate-200 leading-none"><%= stats.Comprehension %></h3>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Live Engagement (Right) -->
+                            <div class="w-96 border-l border-slate-50 dark:border-slate-800 pl-6 flex flex-col gap-4">
+                                <div class="flex flex-col gap-2">
+                                    <div class="flex justify-between items-end">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide leading-none">Active Exam Takers</p>
+                                        <p class="text-[11px] font-black text-indigo-500 leading-none"><%= engagement.activeTakers %></p>
+                                    </div>
+                                    <div class="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-sm overflow-hidden shadow-inner">
+                                        <div class="h-full bg-indigo-500 transition-all duration-1000" style="width: <%= (engagement.activeTakers / engagement.maxTakers) * 100 %>%"></div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    <div class="flex justify-between items-end">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide leading-none">Avg. Study Duration</p>
+                                        <p class="text-[11px] font-black text-cyan-500 leading-none"><%= engagement.studyDuration %>m</p>
+                                    </div>
+                                    <div class="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-sm overflow-hidden shadow-inner">
+                                        <div class="h-full bg-cyan-500 transition-all duration-1000" style="width: <%= (engagement.studyDuration / engagement.maxDuration) * 100 %>%"></div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    <div class="flex justify-between items-end">
+                                        <p class="text-[10px] font-bold text-slate-400 tracking-wide leading-none">Popularity Score</p>
+                                        <p class="text-[11px] font-black text-rose-500 leading-none"><%= engagement.popularityScore %>%</p>
+                                    </div>
+                                    <div class="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-sm overflow-hidden shadow-inner">
+                                        <div class="h-full bg-rose-500 transition-all duration-1000" style="width: <%= engagement.popularityScore %>%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Questions List -->
+                <div class="bg-white dark:bg-[#0b1120] rounded-md border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden mb-10 mt-4">
+                    <div class="px-6 py-5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-[#0b1120] flex items-center justify-between">
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight">Quiz Questions</h3>
+                        <button onclick="toggleAllAnswers()" id="btn-toggle-all" class="h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0f172a] text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-black dark:hover:text-white transition-all shadow-sm flex items-center gap-2">
+                            <span class="material-symbols-rounded text-sm">visibility</span>
+                            <span class="text-[10px] font-bold">Show All Answers</span>
+                        </button>
+                    </div>
+
+                    <div class="p-6 space-y-6">
+                        <% questions.forEach((q, i) => { 
+                            let correctIndex = -1;
+                            if (q.questionType === 'MCQ') {
+                                if (q.correctAnswerIndex !== undefined && q.correctAnswerIndex !== null) {
+                                    correctIndex = parseInt(q.correctAnswerIndex);
+                                } else if (q.correctAnswer !== undefined && q.correctAnswer !== null) {
+                                    correctIndex = parseInt(q.correctAnswer);
+                                }
+                            }
+                        %>
+                            <div class="q-item p-6 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-sm hover:shadow-md transition-all duration-300" data-type="<%= q.questionType %>">
+                                <div class="flex items-center justify-between mb-6">
+                                    <div class="flex items-center gap-4">
+                                        <div class="size-8 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center font-bold text-xs shadow-md">
+                                            <%= (i + 1).toString().padStart(2, '0') %>
+                                        </div>
+                                        <div class="flex items-center gap-2.5">
+                                            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold border 
+                                                <%= q.questionType === 'MCQ' ? 'bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/20 text-blue-600 dark:text-blue-400' : '' %>
+                                                <%= q.questionType === 'Short' ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400' : '' %>
+                                                <%= q.questionType === 'Medium' ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-400' : '' %>
+                                                <%= q.questionType === 'Comprehension' ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/20 text-rose-600 dark:text-rose-400' : '' %>
+                                            "><%= q.questionType %></span>
+                                            <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">Marks: <%= q.marks || 1 %></span>
+                                        </div>
+                                    </div>
+                                    <button onclick="toggleAnswer('<%= i %>', this)" class="btn-toggle-answer h-9 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0f172a] text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-black dark:hover:text-white transition-all shadow-sm flex items-center gap-2">
+                                        <span class="material-symbols-rounded text-sm">visibility</span>
+                                        <span class="text-[10px] font-bold">Show Answer</span>
+                                    </button>
+                                </div>
+
+                                 <div class="pl-1">
+                                    <% if (q.questionType === 'Comprehension') { %>
+                                        <!-- Comprehension Header & Context -->
+                                        <div class="p-5 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800 mb-4 text-left">
+                                            <p class="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Context:</p>
+                                            <div class="text-[15px] font-bold text-slate-800 dark:text-slate-200 leading-relaxed"><%- q.context || 'Context not provided.' %></div>
+                                        </div>
+                                        <!-- Comprehension Questions (Visible immediately) -->
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-left">
+                                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/20 border border-slate-200 dark:border-slate-800">
+                                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Q1:</p>
+                                                <p class="text-[14px] font-bold text-slate-800 dark:text-slate-200"><%- q.q1 || 'Question 1 not provided.' %></p>
+                                            </div>
+                                            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/20 border border-slate-200 dark:border-slate-800">
+                                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Q2:</p>
+                                                <p class="text-[14px] font-bold text-slate-800 dark:text-slate-200"><%- q.q2 || 'Question 2 not provided.' %></p>
+                                            </div>
+                                        </div>
+                                    <% } else { %>
+                                        <div class="text-[15px] font-bold text-slate-800 dark:text-slate-200 leading-relaxed mb-0">
+                                            <%- q.questionText || 'Untitled Question' %>
+                                        </div>
+                                    <% } %>
+
+                                    <div id="ans-<%= i %>" class="hidden mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/80 animate-slide-up">
+                                        <% if (q.questionType === 'MCQ') { %>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                                                <% (q.options || []).forEach((opt, idx) => { %>
+                                                    <div class="p-4 rounded-xl border <%= correctIndex === idx ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-300 dark:border-emerald-500/30 text-emerald-750 dark:text-emerald-400' : 'bg-slate-50 dark:bg-slate-800/20 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400' %> text-[13px] font-bold flex gap-4 items-center">
+                                                        <div class="size-7 rounded-lg <%= correctIndex === idx ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400' %> flex items-center justify-center text-[11px] font-black shrink-0">
+                                                            <%= String.fromCharCode(65 + idx) %>
+                                                        </div>
+                                                        <span class="flex-1"><%- opt %></span>
+                                                    </div>
+                                                <% }) %>
+                                            </div>
+                                        <% } else if (q.questionType === 'Short' || q.questionType === 'Medium') { %>
+                                            <div class="p-5 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 mb-4">
+                                                <p class="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">Answer:</p>
+                                                <div class="text-[14px] font-bold text-slate-800 dark:text-slate-200 leading-relaxed">
+                                                    <% 
+                                                        let ansText = (q.answer || q.correctAnswer || '').toString().trim();
+                                                        if (!ansText || ansText === '0' || ansText === 'undefined' || ansText === 'null') {
+                                                            ansText = 'Answer not provided.';
+                                                        }
+                                                    %>
+                                                    <%- ansText %>
+                                                </div>
+                                            </div>
+                                        <% } else if (q.questionType === 'Comprehension') { %>
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-left">
+                                                <div class="p-4 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-200/40 dark:border-emerald-500/20">
+                                                    <p class="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1.5">Answer 1:</p>
+                                                    <p class="text-[14px] font-bold text-slate-800 dark:text-slate-200"><%- q.a1 || 'Answer 1 not provided.' %></p>
+                                                </div>
+                                                <div class="p-4 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-200/40 dark:border-emerald-500/20">
+                                                    <p class="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1.5">Answer 2:</p>
+                                                    <p class="text-[14px] font-bold text-slate-800 dark:text-slate-200"><%- q.a2 || 'Answer 2 not provided.' %></p>
+                                                </div>
+                                            </div>
+                                        <% } %>
+                                        
+                                        <% if (q.explanation) { %>
+                                            <div class="flex items-start gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/50">
+                                                <div class="size-9 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shrink-0">
+                                                    <span class="material-symbols-rounded text-slate-500 dark:text-slate-400 text-lg">psychology</span>
+                                                </div>
+                                                <div>
+                                                    <p class="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-0.5">Explanation</p>
+                                                    <p class="text-[13px] font-medium text-slate-600 dark:text-slate-400 leading-relaxed italic"><%- q.explanation %></p>
+                                                </div>
+                                            </div>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }) %>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        function toggleAnswer(id, btn) {
+            const ans = document.getElementById(`ans-${id}`);
+            if (ans.classList.contains('hidden')) {
+                ans.classList.remove('hidden');
+                btn.innerHTML = '<span class="material-symbols-rounded text-sm">visibility_off</span><span class="text-[10px] font-bold">Hide Answer</span>';
+                btn.classList.add('border-blue-500', 'text-blue-600');
+            } else {
+                ans.classList.add('hidden');
+                btn.innerHTML = '<span class="material-symbols-rounded text-sm">visibility</span><span class="text-[10px] font-bold">Show Answer</span>';
+                btn.classList.remove('border-blue-500', 'text-blue-600');
+            }
+        }
+
+        let allShown = false;
+        function toggleAllAnswers() {
+            allShown = !allShown;
+            const btnAll = document.getElementById('btn-toggle-all');
+            
+            if (allShown) {
+                btnAll.innerHTML = '<span class="material-symbols-rounded text-sm">visibility_off</span><span class="text-[10px] font-bold">Hide All Answers</span>';
+                btnAll.classList.add('border-blue-500', 'text-blue-600');
+            } else {
+                btnAll.innerHTML = '<span class="material-symbols-rounded text-sm">visibility</span><span class="text-[10px] font-bold">Show All Answers</span>';
+                btnAll.classList.remove('border-blue-500', 'text-blue-600');
+            }
+
+            const total = <%= questions.length %>;
+            for (let i = 0; i < total; i++) {
+                const ans = document.getElementById(`ans-${i}`);
+                if (!ans) continue;
+                const qItem = ans.closest('.q-item');
+                if (!qItem) continue;
+                const btn = qItem.querySelector('.btn-toggle-answer');
+                
+                if (allShown) {
+                    ans.classList.remove('hidden');
+                    if (btn) {
+                        btn.innerHTML = '<span class="material-symbols-rounded text-sm">visibility_off</span><span class="text-[10px] font-bold">Hide Answer</span>';
+                        btn.classList.add('border-blue-500', 'text-blue-600');
+                    }
+                } else {
+                    ans.classList.add('hidden');
+                    if (btn) {
+                        btn.innerHTML = '<span class="material-symbols-rounded text-sm">visibility</span><span class="text-[10px] font-bold">Show Answer</span>';
+                        btn.classList.remove('border-blue-500', 'text-blue-600');
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

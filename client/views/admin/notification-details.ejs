@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+        <title>Notification Details | ODDHAY Command Center</title>
+        <style>
+            :root {
+                --admin-sidebar-width: 260px;
+            }
+
+            .admin-sidebar {
+                width: var(--admin-sidebar-width);
+                height: 100vh;
+                position: fixed;
+                left: 0;
+                top: 0;
+                z-index: 100;
+            }
+
+            .admin-main {
+                margin-left: var(--admin-sidebar-width);
+                min-height: 100vh;
+            }
+
+            .detail-card {
+                background: #fff;
+                border: 1px solid #e2e8f0;
+                border-radius: 0.5rem;
+                padding: 1.5rem;
+            }
+
+            .dark .detail-card {
+                background: #1e293b;
+                border: 1px solid #334155;
+            }
+
+            @media (max-width: 1024px) {
+                .admin-sidebar {
+                    transform: translateX(-100%);
+                }
+
+                .admin-main {
+                    margin-left: 0;
+                }
+            }
+        </style>
+</head>
+
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans min-h-screen">
+    <div class="flex">
+        <aside id="adminSidebar"
+            class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
+            <%- include('sidebar_content', { active: 'notifications' }) %>
+        </aside>
+
+        <main class="admin-main flex-1 ml-[260px] bg-[#F8FAFC] dark:bg-[#020617]">
+            <%- include('header_v2', { pageTitle: 'Notification Details' }) %>
+
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5">
+                <section class="bg-white dark:bg-[#0b1120] rounded-lg border border-slate-200/50 dark:border-slate-700/50 flex flex-col shadow-sm relative">
+                    <div class="p-3 border-b border-slate-50 dark:border-slate-800/50 flex items-center justify-start gap-2 bg-slate-50/30 dark:bg-slate-800/10">
+                        <button onclick="toggleEditMode()" id="editBtn"
+                            class="h-7 px-3 bg-blue-50 text-blue-600 rounded-md font-bold text-[10px] tracking-tight hover:bg-blue-100 transition-all flex items-center gap-1.5 border border-blue-100 dark:border-blue-500/20">
+                            <span class="material-symbols-rounded text-sm">edit</span> <span>Edit</span>
+                        </button>
+
+                        <button onclick="deleteNotification()" id="deleteBtn"
+                            class="h-7 px-3 bg-rose-50 text-rose-600 rounded-md font-bold text-[10px] tracking-tight hover:bg-rose-100 transition-all flex items-center gap-1.5 border border-rose-100 dark:border-rose-500/20">
+                            <span class="material-symbols-rounded text-sm">delete</span> Delete Log
+                        </button>
+                        
+                        <% if (log.status === 'failed') { %>
+                            <button onclick="retryNotification('<%= log._id %>')"
+                                class="h-7 px-3 bg-blue-50 text-blue-600 rounded-md font-bold text-[10px] tracking-tight hover:bg-blue-100 transition-all flex items-center gap-1.5 border border-blue-100 dark:border-blue-500/20">
+                                <span class="material-symbols-rounded text-sm">refresh</span> Retry Delivery
+                            </button>
+                        <% } %>
+                    </div>
+
+                    <div class="p-4 space-y-6">
+                        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                            <!-- Main Content Column -->
+                            <div class="lg:col-span-7 space-y-6">
+                                <div class="space-y-5">
+                                    <div>
+                                        <p class="text-[9px] font-bold text-slate-400 tracking-tight mb-1.5">Notification Title</p>
+                                        <h2 id="viewTitle" class="text-lg font-black tracking-tight text-slate-900 dark:text-white leading-tight">
+                                            <%= log.title %>
+                                        </h2>
+                                        <input type="text" id="editTitle" class="hidden w-full h-10 px-3 rounded-lg border border-blue-200 dark:border-blue-500/30 bg-white dark:bg-slate-800 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="<%= log.title %>">
+                                    </div>
+        
+                                    <div>
+                                        <p class="text-[9px] font-bold text-slate-400 tracking-tight mb-1.5">Message Body</p>
+                                        <div id="viewBodyContainer" class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-700/50">
+                                            <p id="viewBody" class="text-[13px] text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                                                <%= log.body %>
+                                            </p>
+                                        </div>
+                                        <textarea id="editBody" rows="4" class="hidden w-full p-4 rounded-xl border border-blue-200 dark:border-blue-500/30 bg-white dark:bg-slate-800 text-[13px] text-slate-700 dark:text-slate-300 leading-relaxed font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20"><%= log.body %></textarea>
+                                    </div>
+        
+                                    <div>
+                                        <p class="text-[9px] font-bold text-slate-400 tracking-tight mb-1.5">Action URL</p>
+                                        <div id="viewUrlContainer">
+                                            <a href="<%= log.url || '#' %>" target="_blank" id="viewUrl"
+                                                class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-50 dark:bg-blue-500/5 text-blue-600 dark:text-blue-400 text-xs font-bold border border-blue-100 dark:border-blue-500/20 hover:bg-blue-100 transition-all break-all">
+                                                <span class="material-symbols-rounded text-[18px]">link</span>
+                                                <%= log.url || 'No URL attached' %>
+                                            </a>
+                                        </div>
+                                        <input type="text" id="editUrl" class="hidden w-full h-10 px-3 rounded-lg border border-blue-200 dark:border-blue-500/30 bg-white dark:bg-slate-800 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20" value="<%= log.url || '' %>" placeholder="https://...">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Sidebar Metadata Column -->
+                            <div class="lg:col-span-5 space-y-4">
+                                <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-700/50 space-y-4">
+                                    <div class="grid grid-cols-2 gap-y-5 gap-x-4">
+                                        <div>
+                                            <p class="text-[8px] font-bold text-slate-400 tracking-tight mb-1">Status</p>
+                                            <div class="flex items-center gap-1.5">
+                                                <div class="size-2 rounded-sm <%= log.status==='sent'?'bg-emerald-500':log.status==='failed'?'bg-rose-500':log.status==='scheduled'?'bg-violet-500':'bg-slate-400' %> shadow-sm"></div>
+                                                <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200 capitalize"><%= log.status %></span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p class="text-[8px] font-bold text-slate-400 tracking-tight mb-1">Priority</p>
+                                            <div class="flex items-center gap-1.5">
+                                                <div class="size-2 rounded-sm <%= log.priority==='urgent'?'bg-rose-500':log.priority==='high'?'bg-amber-500':log.priority==='low'?'bg-slate-400':'bg-emerald-500' %> shadow-sm"></div>
+                                                <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200 capitalize"><%= log.priority %></span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p class="text-[8px] font-bold text-slate-400 tracking-tight mb-1">Target Audience</p>
+                                            <span class="text-[11px] font-bold text-blue-600 dark:text-blue-400 capitalize"><%= log.target %></span>
+                                        </div>
+                                        <div>
+                                            <p class="text-[8px] font-bold text-slate-400 tracking-tight mb-1">Language</p>
+                                            <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200"><%= log.language==='bn' ? 'Bengali' : 'English' %></span>
+                                        </div>
+                                        <div>
+                                            <p class="text-[8px] font-bold text-slate-400 tracking-tight mb-1">System Type</p>
+                                            <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200 capitalize"><%= log.type %></span>
+                                        </div>
+                                        <div>
+                                            <p class="text-[8px] font-bold text-slate-400 tracking-tight mb-1">Timestamp</p>
+                                            <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200"><%= new Date(log.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) %></span>
+                                        </div>
+                                    </div>
+
+                                    <div class="pt-4 border-t border-slate-200 dark:border-slate-700/50">
+                                        <p class="text-[8px] font-bold text-slate-400 tracking-tight mb-1">Target Class</p>
+                                        <span id="viewClass" class="text-[11px] font-black text-slate-900 dark:text-white"><%= log.classLevel || 'N/A' %></span>
+                                        <select id="editClass" class="hidden w-full h-8 px-2 rounded-lg border border-blue-200 dark:border-blue-500/30 bg-white dark:bg-slate-800 text-[11px] font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/20">
+                                            <option value="">N/A</option>
+                                            <% [6,7,8,9,10,11,12].forEach(c => { %>
+                                                <option value="Class <%= c %>" <%= log.classLevel === `Class ${c}` ? 'selected' : '' %>>Class <%= c %></option>
+                                            <% }) %>
+                                        </select>
+                                    </div>
+
+                                    <% if (log.scheduledAt) { %>
+                                        <div class="pt-4 border-t border-slate-200 dark:border-slate-700/50">
+                                            <p class="text-[8px] font-bold text-slate-400 tracking-tight mb-1">Scheduled Delivery</p>
+                                            <div class="flex items-center gap-2 text-violet-600 dark:text-violet-400">
+                                                <span class="material-symbols-rounded text-[16px]">schedule</span>
+                                                <span class="text-[11px] font-black"><%= new Date(log.scheduledAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) %></span>
+                                            </div>
+                                        </div>
+                                    <% } %>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Statistics Section -->
+                        <div class="pt-6 border-t border-slate-100 dark:border-slate-800/50">
+                            <h3 class="text-xs font-black text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[18px] text-blue-500">analytics</span>
+                                Engagement Metrics
+                            </h3>
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                <div class="p-3 bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/10 rounded-xl text-center">
+                                    <p class="text-[8px] font-bold text-emerald-600/60 tracking-tight mb-1">Sent</p>
+                                    <p class="text-xl font-black text-emerald-600 dark:text-emerald-400 leading-none"><%= log.sent || 0 %></p>
+                                </div>
+                                <div class="p-3 bg-rose-50 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-500/10 rounded-xl text-center">
+                                    <p class="text-[8px] font-bold text-rose-600/60 tracking-tight mb-1">Failed</p>
+                                    <p class="text-xl font-black text-rose-600 dark:text-rose-400 leading-none"><%= log.failed || 0 %></p>
+                                </div>
+                                <div class="p-3 bg-blue-50 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/10 rounded-xl text-center">
+                                    <p class="text-[8px] font-bold text-blue-600/60 tracking-tight mb-1">Reads</p>
+                                    <p class="text-xl font-black text-blue-600 dark:text-blue-400 leading-none"><%= log.readCount || 0 %></p>
+                                </div>
+                                <div class="p-3 bg-violet-50 dark:bg-violet-500/5 border border-violet-100 dark:border-violet-500/10 rounded-xl text-center">
+                                    <p class="text-[8px] font-bold text-violet-600/60 tracking-tight mb-1">Clicks</p>
+                                    <p class="text-xl font-black text-violet-600 dark:text-violet-400 leading-none"><%= log.clickCount || 0 %></p>
+                                </div>
+                                <div class="p-3 bg-amber-50 dark:bg-amber-500/5 border border-amber-100 dark:border-amber-500/10 rounded-xl text-center">
+                                    <p class="text-[8px] font-bold text-amber-600/60 tracking-tight mb-1">Read Rate</p>
+                                    <p class="text-xl font-black text-amber-600 dark:text-amber-400 leading-none"><%= log.sent > 0 ? Math.round(((log.readCount || 0) / log.sent) * 100) : 0 %>%</p>
+                                </div>
+                            </div>
+    
+                            <% if (log.error) { %>
+                                <div class="mt-4 p-4 bg-rose-50 dark:bg-rose-500/5 border border-rose-100 dark:border-rose-500/20 rounded-xl">
+                                    <p class="text-[9px] font-bold text-rose-500 tracking-tight mb-1">Technical Error Log</p>
+                                    <p class="text-xs font-medium text-rose-700 dark:text-rose-300 leading-relaxed"><%= log.error %></p>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        let editMode = false;
+
+        function toggleEditMode() {
+            editMode = !editMode;
+            const editBtn = document.getElementById('editBtn');
+            const viewTitle = document.getElementById('viewTitle');
+            const editTitle = document.getElementById('editTitle');
+            const viewBodyContainer = document.getElementById('viewBodyContainer');
+            const editBody = document.getElementById('editBody');
+            const viewUrlContainer = document.getElementById('viewUrlContainer');
+            const editUrl = document.getElementById('editUrl');
+            const viewClass = document.getElementById('viewClass');
+            const editClass = document.getElementById('editClass');
+
+            if (editMode) {
+                editBtn.innerHTML = '<span class="material-symbols-rounded text-sm">save</span> <span>Save Changes</span>';
+                editBtn.classList.replace('bg-blue-50', 'bg-emerald-50');
+                editBtn.classList.replace('text-blue-600', 'text-emerald-600');
+                editBtn.classList.replace('border-blue-100', 'border-emerald-100');
+                
+                viewTitle.classList.add('hidden');
+                editTitle.classList.remove('hidden');
+                viewBodyContainer.classList.add('hidden');
+                editBody.classList.remove('hidden');
+                viewUrlContainer.classList.add('hidden');
+                editUrl.classList.remove('hidden');
+                viewClass.classList.add('hidden');
+                editClass.classList.remove('hidden');
+            } else {
+                saveChanges();
+            }
+        }
+
+        async function saveChanges() {
+            const editTitle = document.getElementById('editTitle').value;
+            const editBody = document.getElementById('editBody').value;
+            const editUrl = document.getElementById('editUrl').value;
+            const editClass = document.getElementById('editClass').value;
+
+            try {
+                const res = await fetch('/admin/notifications/<%= log._id %>', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        title: editTitle, 
+                        body: editBody, 
+                        url: editUrl, 
+                        classLevel: editClass 
+                    })
+                });
+                const data = await res.json();
+                
+                if (data.success) {
+                    location.reload();
+                } else {
+                    Swal.fire('Error!', data.error || 'Failed to save.', 'error');
+                    // Revert UI if failed
+                    editMode = true; 
+                    toggleEditMode();
+                }
+            } catch (err) {
+                Swal.fire('Error!', 'Server error.', 'error');
+                editMode = true;
+                toggleEditMode();
+            }
+        }
+
+        function toggleAdminSidebar() { document.getElementById('adminSidebar').classList.toggle('active'); }
+
+        async function deleteNotification() {
+            const result = await Swal.fire({
+                title: 'Delete Notification Log?',
+                text: 'This action cannot be undone.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, delete it!',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch('/admin/notifications/<%= log._id %>', {
+                        method: 'DELETE'
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire({
+                            title: 'Deleted!',
+                            text: 'Notification log has been deleted.',
+                            icon: 'success'
+                        }).then(() => window.location.href = '/admin/notifications/history');
+                    } else {
+                        Swal.fire('Error!', data.error || 'Failed to delete.', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error!', 'Server error.', 'error');
+                }
+            }
+        }
+
+        async function retryNotification(id) {
+            const result = await Swal.fire({
+                title: 'Retry Failed Notification?',
+                text: 'This will attempt to resend the notification to all targeted users.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#3b82f6',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Retry!',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`/admin/notifications/${id}/retry`, {
+                        method: 'POST'
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        Swal.fire({
+                            title: 'Retry Successful!',
+                            text: `Sent to ${data.sent} users.`,
+                            icon: 'success'
+                        }).then(() => location.reload());
+                    } else {
+                        Swal.fire('Error!', data.error || 'Failed to retry.', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error!', 'Server error.', 'error');
+                }
+            }
+        }
+    </script>
+</body>
+
+</html>

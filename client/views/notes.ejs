@@ -1,95 +1,1034 @@
 <!DOCTYPE html>
-<html class="light" lang="bn">
-
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
 <head>
-    <title>বিশেষ নোটস | অধ্যায়</title>
     <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Notes Explorer | ODDHAY</title>
+    <style>
+        /* Notes Compact List Mode Overrides */
+        body.notes-list-mode .notes-grid-container:not(.hidden),
+        body.notes-list-mode #explorer-folders-grid:not(.hidden),
+        body.notes-list-mode #subjects-workspace-grid:not(.hidden),
+        body.notes-list-mode #courses-workspace-grid:not(.hidden) {
+            display: flex !important;
+            flex-direction: column !important;
+            gap: 0.375rem !important;
+        }
+
+        body.notes-list-mode .note-card:not(.hidden),
+        body.notes-list-mode .explorer-folder-card:not(.hidden),
+        body.notes-list-mode .subject-folder-card:not(.hidden),
+        body.notes-list-mode .course-folder-card:not(.hidden) {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            padding: 0.5rem 0.75rem !important;
+            gap: 0.75rem !important;
+            border-radius: 0.75rem !important;
+        }
+
+        body.notes-list-mode .subject-folder-card,
+        body.notes-list-mode .course-folder-card {
+            text-align: left !important;
+        }
+
+        body.notes-list-mode .subject-folder-card > div:first-child {
+            width: 2.25rem !important;
+            height: 2.25rem !important;
+            border-radius: 0.5rem !important;
+        }
+
+        body.notes-list-mode .subject-folder-card .material-symbols-rounded {
+            font-size: 1.25rem !important;
+        }
+
+        body.notes-list-mode .subject-folder-card > * + * {
+            margin-top: 0 !important;
+        }
+
+        body.notes-list-mode .note-card > div:first-child {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            gap: 0.75rem !important;
+            min-width: 0 !important;
+            flex: 1 !important;
+            margin-bottom: 0 !important;
+        }
+
+        body.notes-list-mode .note-card > div:first-child > div:first-child {
+            margin-bottom: 0 !important;
+        }
+
+        body.notes-list-mode .note-card h3 {
+            margin-bottom: 0 !important;
+            font-size: 0.8125rem !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            max-width: 340px !important;
+        }
+
+        body.notes-list-mode .note-card p {
+            display: none !important;
+        }
+
+        body.notes-list-mode .note-card .mb-3,
+        body.notes-list-mode .note-card .mb-1\.5,
+        body.notes-list-mode .note-card .mb-2 {
+            margin-bottom: 0 !important;
+        }
+
+        body.notes-list-mode .note-card > div:last-child {
+            padding-top: 0 !important;
+            border-top: none !important;
+            flex-shrink: 0 !important;
+            margin-top: 0 !important;
+        }
+
+        /* Active Tab Styling */
+        .workspace-tab.active {
+            background-color: #3b82f6 !important;
+            color: #ffffff !important;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+        }
+        .dark .workspace-tab.active {
+            background-color: #3b82f6 !important;
+            color: #ffffff !important;
+        }
+    </style>
 </head>
 
-<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen">
-    <%- include('partials/nav') %>
+<body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300">
+    <%- include('partials/student-header') %>
 
-        <main class="relative overflow-hidden pt-40 pb-20 px-6 max-w-7xl mx-auto">
-            <!-- Background Blobs -->
-            <div class="bg-blob -top-20 -left-20 opacity-30"></div>
-            <div class="bg-blob top-1/2 -right-20 opacity-20" style="animation-delay: -5s;"></div>
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'notes' }) %>
 
-            <div class="mb-16 flex flex-col md:flex-row justify-between items-end gap-12 reveal">
-                <div class="max-w-2xl">
-                    <h1 class="h1-hero">নোটস</h1>
+        <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative">
+            
+            <% 
+                const u = locals.user || {}; 
+                const noteList = locals.notes || []; 
+                const cFolders = locals.courseFolders || []; 
+                const subList = locals.subjects || []; 
+                const activeSubject = locals.activeSubject || 'all'; 
+                const activeCourseId = locals.activeCourseId || null; 
+                const searchVal = locals.search || ''; 
+                const userClassLabel = locals.userClass || u.classLevel || 'Class 10'; 
+            %>
+
+            <!-- Header Toolbar Attached to Sidebar and Navbar Borders -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 rounded-none p-2 sm:p-2.5 shrink-0 space-y-2">
+                
+                <!-- Workspace Selector Tabs -->
+                <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-2.5 overflow-x-auto no-scrollbar">
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button type="button" onclick="explorer.setTab('subjects')" id="tab-subjects" class="workspace-tab px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">
+                            <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none">library_books</span>
+                            <span>Subjects</span>
+                        </button>
+                        <button type="button" onclick="explorer.setTab('courses')" id="tab-courses" class="workspace-tab px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">
+                            <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none text-indigo-500">school</span>
+                            <span>Courses</span>
+                            <span class="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-indigo-500/20 text-indigo-600 dark:text-indigo-400"><%= cFolders.length %></span>
+                        </button>
+                        <button type="button" onclick="explorer.setTab('free')" id="tab-free" class="workspace-tab px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">
+                            <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none text-emerald-500">lock_open</span>
+                            <span>Free & Unlocked</span>
+                        </button>
+                        <button type="button" onclick="explorer.setTab('saved')" id="tab-saved" class="workspace-tab px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700">
+                            <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none text-amber-500">star</span>
+                            <span>Saved</span>
+                            <span id="saved-count-badge" class="px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400">0</span>
+                        </button>
+                    </div>
+
+                    <!-- View Mode Toggle (Search Bar Moved to Top Navbar Header) -->
+                    <div class="flex items-center gap-2 shrink-0 ml-auto">
+                        <input type="hidden" id="explorer-search-input" value="<%= searchVal %>">
+                        <div class="flex items-center bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200/60 dark:border-slate-700/60">
+                            <button type="button" id="view-mode-grid-btn" onclick="explorer.setViewMode('grid')" class="px-2 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 bg-white dark:bg-slate-700 text-slate-800 dark:text-white shadow-xs" title="Grid View">
+                                <span class="material-symbols-rounded text-sm leading-none">grid_view</span>
+                            </button>
+                            <button type="button" id="view-mode-list-btn" onclick="explorer.setViewMode('list')" class="px-2 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white" title="List View">
+                                <span class="material-symbols-rounded text-sm leading-none">view_list</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                <div
-                    class="w-full md:w-auto card-smart !p-2 !rounded-2xl flex items-center gap-2 group hover:border-primary transition-all">
-                    <input type="text" placeholder="নোট খুঁজুন..."
-                        class="bg-transparent border-none focus:ring-0 px-4 py-2 w-full md:w-72 font-black text-sm">
-                    <button
-                        class="bg-primary text-white size-12 rounded-xl flex items-center justify-center shadow-lg shadow-primary/30 group-hover:scale-105 transition-all">
-                        <span class="material-symbols-outlined">search</span>
+                <!-- Real-time Interactive Path Breadcrumb Bar -->
+                <div id="explorer-breadcrumb-bar" class="flex items-center justify-between gap-2 text-xs font-bold text-slate-700 dark:text-slate-200 overflow-x-auto no-scrollbar">
+                    <div id="breadcrumb-links-container" class="flex items-center gap-1.5 min-w-0">
+                        <!-- Dynamic Breadcrumbs injected via JS -->
+                    </div>
+                    <span id="explorer-items-counter" class="text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-200/60 dark:border-slate-700/60 shrink-0">0 Items</span>
+                </div>
+
+            </div>
+
+            <!-- MAIN EXPLORER WORKSPACE CONTAINER -->
+            <div id="explorer-workspace" class="p-1.5 sm:p-3 flex-1 flex flex-col space-y-4">
+                
+                <!-- 1. SUBJECT CARDS GRID (Level 0 Subject Workspace) -->
+                <div id="subjects-workspace-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                    <% subList.forEach(function(sub) { %>
+                        <% const count = noteList.filter(n => {
+                            const nSub = (n.subject || '').trim().toLowerCase();
+                            const targetSub = sub.trim().toLowerCase();
+                            return nSub === targetSub || (targetSub === 'math' && nSub.includes('math')) || (targetSub === 'mathematics' && nSub.includes('math'));
+                        }).length; %>
+                        <div onclick="explorer.openSubject('<%= sub %>')"
+                             class="subject-folder-card bg-slate-50 dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 hover:border-primary/50 dark:hover:border-primary/50 rounded-2xl p-3.5 sm:p-4 flex flex-col items-center justify-center text-center transition-all duration-200 group shadow-xs cursor-pointer space-y-2.5 hover:shadow-md hover:-translate-y-0.5"
+                             data-search="<%= sub.toLowerCase() %>">
+                            <span class="material-symbols-rounded text-4xl sm:text-5xl text-amber-500 leading-none select-none group-hover:scale-110 transition-transform" style="font-variation-settings: 'FILL' 1;">folder</span>
+                            <div class="w-full min-w-0">
+                                <h4 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white truncate group-hover:text-primary transition-colors">
+                                    <%= sub %>
+                                </h4>
+                                <p class="text-[10px] font-semibold text-slate-400 mt-0.5">
+                                    <%= count %> <%= count === 1 ? 'File' : 'Files' %>
+                                </p>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+
+                <!-- 2. COURSE CARDS GRID (Level 0 Course Workspace) -->
+                <div id="courses-workspace-grid" class="hidden grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                    <% cFolders.forEach(function(cf) { %>
+                        <div onclick="explorer.openCourse('<%= cf._id %>', '<%= cf.title.replace(/'/g, "\\'") %>')"
+                             class="course-folder-card relative overflow-hidden bg-slate-50 dark:bg-[#0f172a] border border-indigo-200/90 dark:border-indigo-900/60 hover:border-indigo-500/80 dark:hover:border-indigo-500/80 rounded-2xl p-3.5 flex items-center gap-3.5 transition-all duration-200 group shadow-xs cursor-pointer hover:shadow-md hover:-translate-y-0.5"
+                             data-search="<%= [cf.title, cf.subject, cf.author || ''].join(' ').toLowerCase() %>"
+                             data-unlocked="<%= (cf.isFreeCourse || cf.isEnrolled) ? 'true' : 'false' %>">
+                            
+                            <span class="material-symbols-rounded text-3xl sm:text-4xl text-indigo-500 leading-none select-none group-hover:scale-110 transition-transform shrink-0" style="font-variation-settings: 'FILL' 1;">folder</span>
+
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+                                    <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 flex items-center gap-1">
+                                        <span class="material-symbols-rounded text-[11px] leading-none">school</span>
+                                        <span>Course</span>
+                                    </span>
+                                    <span class="px-1.5 py-0.2 rounded text-[9px] font-bold <%= cf.isFreeCourse ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 border border-emerald-200 dark:border-emerald-500/20' : (cf.isEnrolled ? 'bg-indigo-50 text-indigo-600 border border-indigo-200' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700') %>">
+                                        <%= cf.isFreeCourse ? 'Free Course' : (cf.isEnrolled ? 'Unlocked' : 'Premium') %>
+                                    </span>
+                                </div>
+                                <h4 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                    <%= cf.title %>
+                                </h4>
+                                <div class="flex items-center justify-between text-[10px] font-medium text-slate-400 mt-1">
+                                    <span class="truncate max-w-[110px]"><%= cf.author || 'Teacher' %></span>
+                                    <span class="font-bold text-indigo-600 dark:text-indigo-400 shrink-0"><%= cf.noteCount %> <%= cf.noteCount === 1 ? 'File' : 'Files' %></span>
+                                </div>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+
+                <!-- 3. NESTED SUBFOLDERS GRID -->
+                <div id="explorer-folders-container" class="hidden space-y-2">
+                    <div id="explorer-folders-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                        <!-- Dynamic Folder Cards injected via JS -->
+                    </div>
+                </div>
+
+                <!-- 4. DIRECT & NESTED FILES FEED -->
+                <div id="explorer-files-container" class="hidden space-y-2 pt-1">
+                    <div class="notes-grid-container grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                        <% noteList.forEach(function(note) { %>
+                            <% 
+                               const title = note.title || 'Untitled Note';
+                               const subject = note.subject || 'General Academic';
+                               const classLvl = note.classLevel || userClassLabel;
+                               const fileUrl = note.filePath || note.fileUrl || note.url || '#';
+                               const isPdf = fileUrl.toLowerCase().endsWith('.pdf');
+                               const isUnlocked = note.isFree || note.isPurchased || note.isFreeCourse || note.isEnrolled || (note.accessType && String(note.accessType).toLowerCase() === 'free');
+                               const authorName = note.author || note.uploadedByName || note.teacherName || 'Academic Instructor';
+                               const searchableText = [title, subject, classLvl, authorName, note.courseTitle || '', note.chapterTitle || '', isUnlocked ? 'free unlocked' : 'premium paid'].join(' ').toLowerCase();
+                               const safeTitle = title.replace(/'/g, "\\'");
+                               const safeFileUrl = fileUrl.replace(/'/g, "\\'");
+                            %>
+                            <div class="note-card bg-slate-50 dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between hover:border-primary/50 dark:hover:border-primary/50 transition-all duration-200 group shadow-xs hover:shadow-md hover:-translate-y-0.5"
+                                 data-id="<%= note._id %>"
+                                 data-search="<%= searchableText %>"
+                                 data-unlocked="<%= isUnlocked ? 'true' : 'false' %>"
+                                 data-iscourse="<%= note.isCourseNote ? 'true' : 'false' %>"
+                                 data-subject="<%= (note.subject || '').toLowerCase() %>"
+                                 data-class-level="<%= (note.classLevel || userClassLabel).toLowerCase() %>"
+                                 data-chapter="<%= (note.chapterTitle || 'General Notes').toLowerCase() %>"
+                                 data-chapter-name="<%= note.chapterTitle || 'General Notes' %>"
+                                 data-parent-folder-id="<%= note.parentFolderId || '' %>"
+                                 data-courseid="<%= (note.courseId || '').toString() %>">
+                                
+                                <div>
+                                    <div class="flex items-center justify-between gap-2 mb-3">
+                                        <div class="flex items-center gap-1.5 shrink-0">
+                                            <div class="size-9 rounded-lg bg-primary/10 border border-primary/20 text-primary flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                                                <span class="material-symbols-rounded text-xl leading-none select-none"><%= isPdf ? 'picture_as_pdf' : 'description' %></span>
+                                            </div>
+                                            <button type="button" onclick="explorer.toggleSave('<%= note._id %>', event)" class="save-note-btn size-7 rounded-lg text-slate-300 hover:text-amber-500 dark:text-slate-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 flex items-center justify-center transition-colors shrink-0" data-id="<%= note._id %>" title="Save Note">
+                                                <span class="material-symbols-rounded text-lg leading-none">star</span>
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="flex items-center gap-1.5 shrink-0">
+                                            <span class="px-2 py-0.5 rounded text-[9px] font-bold border <%= isUnlocked ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-500/20' : 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-500/20' %>">
+                                                <%= note.isPurchased ? 'PURCHASED' : (isUnlocked ? 'FREE' : ('PREMIUM • ৳' + (note.price || 50))) %>
+                                            </span>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 truncate max-w-[100px]">
+                                                <%= subject %>
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <h3 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white leading-snug line-clamp-2 mb-1.5 group-hover:text-primary transition-colors">
+                                        <%= title %>
+                                    </h3>
+
+                                    <% if (note.courseTitle && !activeCourseId) { %>
+                                        <p class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 mb-2 truncate flex items-center gap-1">
+                                            <span class="material-symbols-rounded text-xs leading-none">auto_stories</span>
+                                            <span><%= note.courseTitle %></span>
+                                        </p>
+                                    <% } %>
+
+                                    <div class="flex items-center gap-1.5 text-[10px] font-medium text-slate-400 mb-3">
+                                        <span class="material-symbols-rounded text-xs leading-none">person</span>
+                                        <span class="truncate"><%= authorName %></span>
+                                    </div>
+                                </div>
+
+                                <div class="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                                    <span class="px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-[9px] font-bold text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60">
+                                        <%= classLvl %>
+                                    </span>
+
+                                    <div class="flex items-center gap-1">
+                                        <% if (isUnlocked) { %>
+                                            <% const hasValidFile = fileUrl && fileUrl !== '#' && fileUrl !== 'undefined'; %>
+                                            <button onclick="explorer.openModal('<%= hasValidFile ? safeFileUrl : '#' %>', '<%= safeTitle %>')" class="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold transition-colors flex items-center gap-1 border border-emerald-500/20">
+                                                <span class="material-symbols-rounded text-xs leading-none">visibility</span>
+                                                <span>View</span>
+                                            </button>
+                                            <% if (hasValidFile) { %>
+                                                <a href="<%= fileUrl %>" download class="p-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 transition-colors" title="Download Note">
+                                                    <span class="material-symbols-rounded text-xs leading-none">download</span>
+                                                </a>
+                                            <% } %>
+                                        <% } else { %>
+                                            <a href="/notes/checkout/<%= note._id %>" class="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-colors flex items-center gap-1 shadow-xs">
+                                                <span class="material-symbols-rounded text-xs leading-none">lock</span>
+                                                <span>Unlock ৳<%= note.price || 50 %></span>
+                                            </a>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            </div>
+                        <% }); %>
+                    </div>
+                </div>
+
+                <!-- 5. NO MATCHES FALLBACK STATE -->
+                <div id="explorer-empty-state" class="hidden bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl p-10 text-center shadow-none my-2">
+                    <span class="material-symbols-rounded text-5xl text-slate-300 mb-3 flex items-center justify-center leading-none select-none">folder_off</span>
+                    <h3 id="empty-state-title" class="text-base font-bold text-slate-800 dark:text-white">No Files or Folders Found</h3>
+                    <p id="empty-state-desc" class="text-xs font-medium text-slate-400 mt-1 max-w-sm mx-auto">
+                        No matching folders or documents available for this search.
+                    </p>
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Note View Modal (PDF Viewer) -->
+    <div id="note-modal" class="fixed inset-0 z-[300] hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+            <div class="p-3 sm:p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-white dark:bg-[#0f172a] shrink-0">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="material-symbols-rounded text-primary text-xl flex items-center justify-center leading-none select-none">description</span>
+                    <h3 id="note-modal-title" class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white truncate">Note Document</h3>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                    <a id="note-modal-download" href="#" download class="px-3 py-1 bg-primary text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm">
+                        <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none select-none">download</span>
+                        <span class="hidden sm:inline">Download</span>
+                    </a>
+                    <button type="button" onclick="explorer.closeModal()" class="size-7 rounded-full bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center justify-center transition-colors">
+                        <span class="material-symbols-rounded text-base flex items-center justify-center leading-none select-none">close</span>
                     </button>
                 </div>
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 reveal delay-200">
-                <% notes.forEach(note=> { %>
-                    <div
-                        class="card-smart group hover:translate-y-[-10px] !p-0 overflow-hidden border-2 border-primary/5">
-                        <div class="aspect-[4/3] bg-slate-100 dark:bg-slate-800 relative overflow-hidden">
-                            <% if(note.thumbnail) { %>
-                                <img src="<%= note.thumbnail %>"
-                                    class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000">
-                                <% } else { %>
-                                    <div
-                                        class="w-full h-full flex items-center justify-center text-primary/20 scale-100 group-hover:scale-125 transition-transform duration-700">
-                                        <span class="material-symbols-outlined text-8xl">description</span>
-                                    </div>
-                                    <% } %>
-                                        <div class="absolute top-4 left-4">
-                                            <span
-                                                class="px-3 py-1 rounded-lg bg-primary text-white text-[10px] font-black uppercase tracking-widest shadow-xl shadow-primary/20">
-                                                <%= note.subject %>
-                                            </span>
-                                        </div>
-                        </div>
-                        <div class="p-8">
-                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                                <%= note.classLevel %>
-                            </p>
-                            <h3
-                                class="text-lg font-black mb-10 leading-snug group-hover:text-primary transition-colors line-clamp-2 min-h-[3rem]">
-                                <%= note.title %>
-                            </h3>
-                            <a href="/note/<%= note._id %>"
-                                class="w-full h-14 bg-slate-50 dark:bg-slate-800 shadow-inner rounded-2xl font-black text-xs flex items-center justify-center gap-3 group-hover:bg-primary group-hover:text-white transition-all duration-500 uppercase tracking-[0.1em]">
-                                পিডিএফ দেখুন <span class="material-symbols-outlined text-lg">visibility</span>
-                            </a>
-                        </div>
-                    </div>
-                    <% }) %>
-
-                        <% if(notes.length===0) { %>
-                            <div class="col-span-full py-32 text-center card-smart border-dashed border-2">
-                                <div
-                                    class="size-24 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-8 text-slate-300">
-                                    <span class="material-symbols-outlined text-6xl">notes</span>
-                                </div>
-                                <h2 class="text-3xl font-black mb-4 tracking-tight">আপাতত কোনো নোটস নেই</h2>
-                                <p class="text-slate-500 font-bold italic">শীঘ্রই নতুন চ্যাপ্টারের নোটস যোগ করা হবে।</p>
-                            </div>
-                            <% } %>
+            <div class="flex-1 w-full bg-slate-100 dark:bg-slate-950 relative overflow-hidden">
+                <iframe id="note-modal-frame" src="" class="w-full h-full border-none"></iframe>
             </div>
-        </main>
+        </div>
+    </div>
 
-        <%- include('partials/footer') %>
+    <%- include('partials/student-bottom-nav', { activePage: 'notes' }) %>
+    <%- include('partials/app-scripts') %>
 
-            <script>
-                document.addEventListener('DOMContentLoaded', () => {
-                    const observer = new IntersectionObserver((entries) => {
-                        entries.forEach(entry => entry.isIntersecting && entry.target.classList.add('active'));
-                    }, { threshold: 0.1 });
-                    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+    <!-- UNIFIED LIVE SEARCH & EXPLORER ENGINE -->
+    <script>
+        class OddhayFolderExplorer {
+            constructor() {
+                this.customFolders = <%- JSON.stringify(locals.customFolders || []) %>;
+                this.courseCurriculums = <%- JSON.stringify(locals.courseCurriculums || {}) %>;
+                this.userClassLabel = <%- JSON.stringify(userClassLabel) %>;
+                this.initialSubject = <%- JSON.stringify(activeSubject || 'all') %>;
+                this.initialCourseId = <%- JSON.stringify(activeCourseId || null) %>;
+
+                this.activeTab = 'subjects'; // 'subjects' | 'courses' | 'free' | 'saved'
+                this.selectedSubject = this.initialSubject !== 'all' ? this.initialSubject : null;
+                this.selectedCourseId = this.initialCourseId || null;
+                this.selectedCourseTitle = null;
+                
+                this.navStack = []; // [{ name: 'Chapter 1', folderId: 'f123' }]
+                const headerSearchInput = document.getElementById('notes-search-input-header');
+                const initialSearch = (headerSearchInput && headerSearchInput.value) || <%- JSON.stringify(searchVal || '') %>;
+                this.searchQuery = (initialSearch || '').trim().toLowerCase();
+                
+                this.init();
+            }
+
+            init() {
+                try {
+                    const savedMode = localStorage.getItem('oddhay_notes_view_mode') || 'grid';
+                    this.setViewMode(savedMode);
+                } catch(e) {}
+
+                if (this.selectedCourseId) {
+                    this.activeTab = 'courses';
+                } else if (this.selectedSubject) {
+                    this.activeTab = 'subjects';
+                }
+
+                if (this.searchQuery) {
+                    const headerInput = document.getElementById('notes-search-input-header');
+                    if (headerInput && !headerInput.value) headerInput.value = this.searchQuery;
+                    const clearBtn = document.getElementById('notes-clear-search-btn');
+                    if (clearBtn) clearBtn.classList.remove('hidden');
+                }
+
+                this.updateSavedUI();
+                this.render();
+            }
+
+            getSavedNotes() {
+                try {
+                    return JSON.parse(localStorage.getItem('oddhay_saved_notes') || '[]');
+                } catch (e) {
+                    return [];
+                }
+            }
+
+            setSavedNotes(list) {
+                try {
+                    localStorage.setItem('oddhay_saved_notes', JSON.stringify(list));
+                } catch (e) {}
+            }
+
+            toggleSave(id, event) {
+                if (event) event.stopPropagation();
+                let saved = this.getSavedNotes();
+                const index = saved.indexOf(id);
+                const isAdding = (index === -1);
+
+                if (index > -1) {
+                    saved.splice(index, 1);
+                } else {
+                    saved.push(id);
+                }
+                this.setSavedNotes(saved);
+                this.updateSavedUI();
+
+                // Find note card details to sync with database
+                const card = document.querySelector(`.note-card[data-id="${id}"]`);
+                const title = card ? (card.getAttribute('data-title') || card.querySelector('h3')?.textContent?.trim()) : 'Study Note';
+                const link = `/note-viewer/${id}`;
+
+                if (isAdding) {
+                    fetch('/api/save-bookmark', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title, link, itemType: 'note' })
+                    }).catch(e => {});
+                } else {
+                    fetch('/api/remove-bookmark', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ link })
+                    }).catch(e => {});
+                }
+
+                if (this.activeTab === 'saved') {
+                    this.render();
+                }
+            }
+
+            updateSavedUI() {
+                const saved = this.getSavedNotes();
+                const badge = document.getElementById('saved-count-badge');
+                if (badge) badge.textContent = saved.length;
+
+                document.querySelectorAll('.save-note-btn').forEach(btn => {
+                    const id = btn.getAttribute('data-id');
+                    const icon = btn.querySelector('.material-symbols-rounded');
+                    if (saved.includes(id)) {
+                        btn.classList.add('text-amber-500', 'dark:text-amber-400', 'bg-amber-50', 'dark:bg-amber-500/10');
+                        btn.classList.remove('text-slate-300', 'dark:text-slate-600');
+                        if (icon) icon.style.fontVariationSettings = "'FILL' 1, 'wght' 600";
+                    } else {
+                        btn.classList.remove('text-amber-500', 'dark:text-amber-400', 'bg-amber-50', 'dark:bg-amber-500/10');
+                        btn.classList.add('text-slate-300', 'dark:text-slate-600');
+                        if (icon) icon.style.fontVariationSettings = "'FILL' 0, 'wght' 400";
+                    }
                 });
-            </script>
-</body>
+            }
 
+            setViewMode(mode) {
+                try {
+                    localStorage.setItem('oddhay_notes_view_mode', mode);
+                } catch(e) {}
+
+                const gridBtn = document.getElementById('view-mode-grid-btn');
+                const listBtn = document.getElementById('view-mode-list-btn');
+
+                if (mode === 'list') {
+                    if (gridBtn) {
+                        gridBtn.classList.remove('bg-white', 'dark:bg-slate-700', 'text-slate-800', 'dark:text-white', 'shadow-xs');
+                        gridBtn.classList.add('text-slate-500', 'dark:text-slate-400');
+                    }
+                    if (listBtn) {
+                        listBtn.classList.add('bg-white', 'dark:bg-slate-700', 'text-slate-800', 'dark:text-white', 'shadow-xs');
+                        listBtn.classList.remove('text-slate-500', 'dark:text-slate-400');
+                    }
+                    document.body.classList.add('notes-list-mode');
+                } else {
+                    if (listBtn) {
+                        listBtn.classList.remove('bg-white', 'dark:bg-slate-700', 'text-slate-800', 'dark:text-white', 'shadow-xs');
+                        listBtn.classList.add('text-slate-500', 'dark:text-slate-400');
+                    }
+                    if (gridBtn) {
+                        gridBtn.classList.add('bg-white', 'dark:bg-slate-700', 'text-slate-800', 'dark:text-white', 'shadow-xs');
+                        gridBtn.classList.remove('text-slate-500', 'dark:text-slate-400');
+                    }
+                    document.body.classList.remove('notes-list-mode');
+                }
+            }
+
+            setTab(tabName) {
+                this.activeTab = tabName;
+                this.selectedSubject = null;
+                this.selectedCourseId = null;
+                this.selectedCourseTitle = null;
+                this.navStack = [];
+                this.render();
+            }
+
+            openSubject(subjName) {
+                this.selectedSubject = subjName;
+                this.selectedCourseId = null;
+                this.navStack = [];
+                this.render();
+            }
+
+            openCourse(courseId, courseTitle) {
+                this.selectedCourseId = courseId;
+                this.selectedCourseTitle = courseTitle;
+                this.selectedSubject = null;
+                this.navStack = [];
+                this.render();
+            }
+
+            openFolderCard(folderName, folderId) {
+                this.navStack.push({ name: folderName, folderId: folderId || null });
+                this.render();
+            }
+
+            navigateBreadcrumb(index) {
+                if (index === -1) {
+                    if (this.navStack.length > 0) {
+                        this.navStack.pop();
+                    } else if (this.selectedSubject || this.selectedCourseId) {
+                        this.selectedSubject = null;
+                        this.selectedCourseId = null;
+                    }
+                } else if (index === 0) {
+                    this.navStack = [];
+                } else {
+                    this.navStack = this.navStack.slice(0, index);
+                }
+                this.render();
+            }
+
+            onSearch(val) {
+                this.searchQuery = (val || '').trim().toLowerCase();
+                const clearBtn = document.getElementById('notes-clear-search-btn');
+                if (clearBtn) {
+                    if (this.searchQuery.length > 0) clearBtn.classList.remove('hidden');
+                    else clearBtn.classList.add('hidden');
+                }
+                this.render();
+            }
+
+            clearSearch() {
+                const input = document.getElementById('explorer-search-input');
+                if (input) input.value = '';
+                const headerInput = document.getElementById('notes-search-input-header');
+                if (headerInput) headerInput.value = '';
+                const clearBtn = document.getElementById('notes-clear-search-btn');
+                if (clearBtn) clearBtn.classList.add('hidden');
+                this.onSearch('');
+            }
+
+            openModal(url, title) {
+                const modal = document.getElementById('note-modal');
+                const frame = document.getElementById('note-modal-frame');
+                const titleEl = document.getElementById('note-modal-title');
+                const downloadBtn = document.getElementById('note-modal-download');
+                
+                if (modal && frame) {
+                    titleEl.textContent = title || 'Note Document';
+                    downloadBtn.href = url;
+                    frame.src = url;
+                    modal.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+
+            closeModal() {
+                const modal = document.getElementById('note-modal');
+                const frame = document.getElementById('note-modal-frame');
+                if (modal) {
+                    modal.classList.add('hidden');
+                    if (frame) frame.src = '';
+                    document.body.style.overflow = '';
+                }
+            }
+
+            render() {
+                // Update Workspace Tabs styling
+                document.querySelectorAll('.workspace-tab').forEach(t => t.classList.remove('active'));
+                const activeTabEl = document.getElementById('tab-' + this.activeTab);
+                if (activeTabEl) activeTabEl.classList.add('active');
+
+                const subjectsGrid = document.getElementById('subjects-workspace-grid');
+                const coursesGrid = document.getElementById('courses-workspace-grid');
+                const foldersContainer = document.getElementById('explorer-folders-container');
+                const foldersGrid = document.getElementById('explorer-folders-grid');
+                const filesContainer = document.getElementById('explorer-files-container');
+                const emptyState = document.getElementById('explorer-empty-state');
+                const subjectCards = document.querySelectorAll('.subject-folder-card');
+                const courseCards = document.querySelectorAll('.course-folder-card');
+                const noteCards = document.querySelectorAll('.note-card');
+                const savedNotes = this.getSavedNotes();
+
+                const isSearching = this.searchQuery.length > 0;
+                const isInsideSubfolder = this.navStack.length > 0;
+                const currentParentFolder = isInsideSubfolder ? this.navStack[this.navStack.length - 1] : null;
+                const isSubjectOrCourseActive = Boolean(this.selectedSubject || this.selectedCourseId);
+
+                // --- 1. SEARCH OVERRIDE MODE ---
+                if (isSearching) {
+                    const q = this.searchQuery;
+                    const terms = q.split(/\s+/).filter(Boolean);
+                    let matchingSubjectsCount = 0;
+                    let matchingCoursesCount = 0;
+                    let matchingNotesCount = 0;
+
+                    // Search Subjects
+                    subjectCards.forEach(card => {
+                        const searchStr = (card.getAttribute('data-search') || '').toLowerCase();
+                        if (terms.every(t => searchStr.includes(t))) {
+                            card.classList.remove('hidden');
+                            matchingSubjectsCount++;
+                        } else {
+                            card.classList.add('hidden');
+                        }
+                    });
+
+                    // Search Courses
+                    courseCards.forEach(card => {
+                        const searchStr = (card.getAttribute('data-search') || '').toLowerCase();
+                        if (terms.every(t => searchStr.includes(t))) {
+                            card.classList.remove('hidden');
+                            matchingCoursesCount++;
+                        } else {
+                            card.classList.add('hidden');
+                        }
+                    });
+
+                    // Search Notes (Free, Premium, Standalone, Course notes)
+                    noteCards.forEach(card => {
+                        const searchable = (card.getAttribute('data-search') || '').toLowerCase();
+                        if (terms.every(t => searchable.includes(t))) {
+                            card.classList.remove('hidden');
+                            matchingNotesCount++;
+                        } else {
+                            card.classList.add('hidden');
+                        }
+                    });
+
+                    // Update Search Breadcrumb
+                    const breadcrumbContainer = document.getElementById('breadcrumb-links-container');
+                    if (breadcrumbContainer) {
+                        breadcrumbContainer.innerHTML = `<a href="#" onclick="event.preventDefault(); explorer.clearSearch()" class="text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Home</a><span class="text-slate-300 dark:text-slate-700">/</span><span class="text-slate-800 dark:text-white font-bold">Search: "${this.searchQuery}"</span>`;
+                    }
+
+                    // Visibility toggles for Search Results
+                    if (matchingSubjectsCount > 0) {
+                        if (subjectsGrid) subjectsGrid.classList.remove('hidden');
+                    } else {
+                        if (subjectsGrid) subjectsGrid.classList.add('hidden');
+                    }
+
+                    if (matchingCoursesCount > 0) {
+                        if (coursesGrid) coursesGrid.classList.remove('hidden');
+                    } else {
+                        if (coursesGrid) coursesGrid.classList.add('hidden');
+                    }
+
+                    if (foldersContainer) foldersContainer.classList.add('hidden');
+
+                    if (matchingNotesCount > 0) {
+                        if (filesContainer) filesContainer.classList.remove('hidden');
+                    } else {
+                        if (filesContainer) filesContainer.classList.add('hidden');
+                    }
+
+                    const totalSearchItems = matchingSubjectsCount + matchingCoursesCount + matchingNotesCount;
+                    const counterEl = document.getElementById('explorer-items-counter');
+                    if (counterEl) counterEl.textContent = totalSearchItems + (totalSearchItems === 1 ? ' Item' : ' Items');
+
+                    if (totalSearchItems === 0) {
+                        if (emptyState) emptyState.classList.remove('hidden');
+                    } else {
+                        if (emptyState) emptyState.classList.add('hidden');
+                    }
+                    return;
+                }
+
+                // --- 2. NORMAL EXPLORER NAVIGATION MODE ---
+                // Reset hidden status on subject & course cards when search is inactive
+                subjectCards.forEach(card => card.classList.remove('hidden'));
+                courseCards.forEach(card => card.classList.remove('hidden'));
+
+                // Pre-calculate File Counts matching current tab & class
+                const chapterCountMap = new Map();
+                const folderIdCountMap = new Map();
+
+                noteCards.forEach(card => {
+                    const id = card.getAttribute('data-id');
+                    const isUnlocked = card.getAttribute('data-unlocked') === 'true';
+                    const cardSubj = (card.getAttribute('data-subject') || '').trim().toLowerCase();
+                    const cardCourseId = (card.getAttribute('data-courseid') || '').trim();
+
+                    let matchesTab = true;
+                    if (this.activeTab === 'free') matchesTab = isUnlocked;
+                    else if (this.activeTab === 'saved') matchesTab = savedNotes.includes(id);
+
+                    let matchesSubj = true;
+                    if (this.selectedSubject) {
+                        const selClean = this.selectedSubject.trim().toLowerCase();
+                        matchesSubj = cardSubj === selClean || cardSubj === 'general' || cardSubj === 'general academic';
+                    }
+
+                    let matchesCourse = true;
+                    if (this.selectedCourseId) {
+                        matchesCourse = cardCourseId === String(this.selectedCourseId);
+                    }
+
+                    if (matchesTab && matchesSubj && matchesCourse) {
+                        const parentFId = (card.getAttribute('data-parent-folder-id') || '').trim();
+                        const chapName = (card.getAttribute('data-chapter-name') || '').trim();
+
+                        if (parentFId && parentFId !== 'null' && parentFId !== 'undefined') {
+                            folderIdCountMap.set(parentFId, (folderIdCountMap.get(parentFId) || 0) + 1);
+                        }
+                        if (chapName && chapName !== 'General Notes' && chapName !== 'Academic Files' && chapName !== 'General Course Notes') {
+                            const cleanChapKey = chapName.toLowerCase();
+                            chapterCountMap.set(cleanChapKey, (chapterCountMap.get(cleanChapKey) || 0) + 1);
+                        }
+                    }
+                });
+
+                // Collect Folders for current level
+                const foldersMap = new Map();
+
+                if (this.selectedCourseId && this.courseCurriculums[this.selectedCourseId]) {
+                    const cFolders = this.courseCurriculums[this.selectedCourseId];
+                    cFolders.forEach(f => {
+                        if (!f || !f.name || !f.name.trim()) return;
+                        if (!isInsideSubfolder) {
+                            if (!f.parentId || f.parentId === 'null' || f.parentId === '' || f.parentId === 'undefined') {
+                                foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: null });
+                            }
+                        } else {
+                            if (currentParentFolder && String(f.parentId) === String(currentParentFolder.folderId)) {
+                                foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: f.parentId });
+                            }
+                        }
+                    });
+                } else if (!this.selectedCourseId && this.customFolders && this.customFolders.length > 0) {
+                    this.customFolders.forEach(f => {
+                        if (!f || !f.name || !f.name.trim()) return;
+                        const fSubjClean = (f.subject || '').trim().toLowerCase();
+                        let matchesSubj = true;
+                        if (this.selectedSubject) {
+                            const selClean = this.selectedSubject.trim().toLowerCase();
+                            matchesSubj = fSubjClean === selClean || fSubjClean.includes(selClean) || fSubjClean === 'general' || fSubjClean === 'general academic';
+                        }
+
+                        if (matchesSubj) {
+                            if (!isInsideSubfolder) {
+                                if (!f.parentId || f.parentId === 'null' || f.parentId === '' || f.parentId === 'undefined') {
+                                    foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: null });
+                                }
+                            } else {
+                                if (currentParentFolder && String(f.parentId) === String(currentParentFolder.folderId)) {
+                                    foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: f.parentId });
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Extract implicit chapter folders from noteCards if inside subject/course or free/saved
+                if (!isInsideSubfolder && (isSubjectOrCourseActive || this.activeTab === 'free' || this.activeTab === 'saved')) {
+                    noteCards.forEach(card => {
+                        const id = card.getAttribute('data-id');
+                        const isUnlocked = card.getAttribute('data-unlocked') === 'true';
+                        let matchesTab = true;
+                        if (this.activeTab === 'free') matchesTab = isUnlocked;
+                        else if (this.activeTab === 'saved') matchesTab = savedNotes.includes(id);
+
+                        if (!matchesTab) return;
+
+                        const cardSubj = (card.getAttribute('data-subject') || '').trim().toLowerCase();
+                        let matchesSubj = true;
+                        if (this.selectedSubject) {
+                            const selClean = this.selectedSubject.trim().toLowerCase();
+                            matchesSubj = cardSubj === selClean || cardSubj === 'general' || cardSubj === 'general academic';
+                        }
+
+                        const cardCourseId = (card.getAttribute('data-courseid') || '').trim();
+                        let matchesCourse = true;
+                        if (this.selectedCourseId) {
+                            matchesCourse = cardCourseId === String(this.selectedCourseId);
+                        }
+
+                        if (!matchesSubj || !matchesCourse) return;
+
+                        const chap = card.getAttribute('data-chapter-name');
+                        if (chap && chap !== 'General Notes' && chap !== 'Academic Files' && chap !== 'General Course Notes' && chap !== 'undefined' && chap !== 'null' && chap.trim() !== '') {
+                            const key = chap.trim().toLowerCase();
+                            if (!foldersMap.has(key)) {
+                                foldersMap.set(key, { _id: null, name: chap.trim(), parentId: null });
+                            }
+                        }
+                    });
+                }
+
+                let currentFolders = Array.from(foldersMap.values());
+
+                if (this.activeTab !== 'subjects' && this.activeTab !== 'courses') {
+                    currentFolders = currentFolders.filter(f => {
+                        const fNameKey = f.name.trim().toLowerCase();
+                        const directFiles = Math.max(f._id ? (folderIdCountMap.get(String(f._id)) || 0) : 0, chapterCountMap.get(fNameKey) || 0);
+                        let subfoldersCount = 0;
+                        if (f._id && this.customFolders && this.customFolders.length > 0) {
+                            subfoldersCount = this.customFolders.filter(cf => cf.parentId && String(cf.parentId) === String(f._id)).length;
+                        } else if (f._id && this.selectedCourseId && this.courseCurriculums[this.selectedCourseId]) {
+                            subfoldersCount = this.courseCurriculums[this.selectedCourseId].filter(cf => cf.parentId && String(cf.parentId) === String(f._id)).length;
+                        }
+                        return (directFiles + subfoldersCount) > 0;
+                    });
+                }
+
+                // Evaluate Note Cards Visibility
+                let visibleNotesCount = 0;
+
+                noteCards.forEach(card => {
+                    const id = card.getAttribute('data-id');
+                    const isUnlocked = card.getAttribute('data-unlocked') === 'true';
+                    const chapName = card.getAttribute('data-chapter-name') || 'General Notes';
+                    const parentFId = card.getAttribute('data-parent-folder-id') || '';
+
+                    let matchesTab = true;
+                    if (this.activeTab === 'free') matchesTab = isUnlocked;
+                    else if (this.activeTab === 'saved') matchesTab = savedNotes.includes(id);
+
+                    let matchesSubj = true;
+                    if (this.selectedSubject) {
+                        const selClean = this.selectedSubject.trim().toLowerCase();
+                        const cardSubj = (card.getAttribute('data-subject') || '').trim().toLowerCase();
+                        matchesSubj = cardSubj === selClean || cardSubj === 'general' || cardSubj === 'general academic';
+                    }
+
+                    let matchesCourse = true;
+                    if (this.selectedCourseId) {
+                        const cardCourseId = (card.getAttribute('data-courseid') || '').trim();
+                        matchesCourse = cardCourseId === String(this.selectedCourseId);
+                    }
+
+                    let matchesChapter = false;
+                    if (isInsideSubfolder && currentParentFolder) {
+                        const cardChapClean = (chapName || '').trim().toLowerCase();
+                        const activeChapClean = (currentParentFolder.name || '').trim().toLowerCase();
+                        const noteParentIdStr = parentFId ? String(parentFId).trim() : '';
+                        const currentParentIdStr = currentParentFolder.folderId ? String(currentParentFolder.folderId).trim() : '';
+
+                        if (currentParentIdStr && currentParentIdStr !== 'null' && currentParentIdStr !== 'undefined') {
+                            matchesChapter = Boolean(noteParentIdStr && noteParentIdStr === currentParentIdStr);
+                        } else if (activeChapClean) {
+                            const hasExplicitOtherParentFolder = Boolean(noteParentIdStr && noteParentIdStr !== 'null' && noteParentIdStr !== 'undefined');
+                            matchesChapter = !hasExplicitOtherParentFolder && Boolean(cardChapClean && cardChapClean === activeChapClean);
+                        }
+                    } else if (isSubjectOrCourseActive) {
+                        const noteParentIdStr = parentFId ? String(parentFId).trim() : '';
+                        const hasExplicitParentFolder = Boolean(noteParentIdStr && noteParentIdStr !== 'null' && noteParentIdStr !== 'undefined');
+                        
+                        const matchesAnyChildFolderById = currentFolders.some(f => f._id && noteParentIdStr && String(f._id) === noteParentIdStr);
+                        const matchesAnyChildFolderByName = currentFolders.some(f => f.name && chapName && f.name.trim().toLowerCase() === chapName.trim().toLowerCase());
+
+                        const belongsToASubfolder = hasExplicitParentFolder || matchesAnyChildFolderById || matchesAnyChildFolderByName;
+
+                        matchesChapter = !belongsToASubfolder;
+                    } else {
+                        // AT ROOT LEVEL OF ALL TABS: HIDE ALL NOTES! ONLY FOLDERS SHOW FIRST!
+                        matchesChapter = false;
+                    }
+
+                    const isViewActive = isInsideSubfolder || isSubjectOrCourseActive || this.activeTab === 'free' || this.activeTab === 'saved';
+
+                    if (matchesTab && matchesSubj && matchesCourse && matchesChapter && isViewActive) {
+                        card.classList.remove('hidden');
+                        visibleNotesCount++;
+                    } else {
+                        card.classList.add('hidden');
+                    }
+                });
+
+                // Update Breadcrumb Bar
+                const breadcrumbContainer = document.getElementById('breadcrumb-links-container');
+                if (breadcrumbContainer) {
+                    let breadcrumbHtml = `<a href="#" onclick="event.preventDefault(); explorer.setTab('${this.activeTab}')" class="text-slate-500 dark:text-slate-400 hover:text-primary transition-colors">Home</a>`;
+                    
+                    if (this.selectedSubject) {
+                        breadcrumbHtml += `<span class="text-slate-300 dark:text-slate-700">/</span><a href="#" onclick="event.preventDefault(); explorer.navigateBreadcrumb(0)" class="text-slate-700 dark:text-slate-200 hover:text-primary transition-colors">${this.selectedSubject}</a>`;
+                    } else if (this.selectedCourseId) {
+                        breadcrumbHtml += `<span class="text-slate-300 dark:text-slate-700">/</span><a href="#" onclick="event.preventDefault(); explorer.navigateBreadcrumb(0)" class="text-slate-700 dark:text-slate-200 hover:text-primary transition-colors">${this.selectedCourseTitle || 'Course'}</a>`;
+                    }
+
+                    this.navStack.forEach((f, idx) => {
+                        breadcrumbHtml += `<span class="text-slate-300 dark:text-slate-700">/</span><a href="#" onclick="event.preventDefault(); explorer.navigateBreadcrumb(${idx + 1})" class="text-slate-800 dark:text-white font-bold hover:text-primary transition-colors">${f.name}</a>`;
+                    });
+
+                    breadcrumbContainer.innerHTML = breadcrumbHtml;
+                }
+
+                // Render Subfolder Cards Grid
+                if (currentFolders.length > 0 && (isSubjectOrCourseActive || isInsideSubfolder || this.activeTab === 'free' || this.activeTab === 'saved')) {
+                    if (foldersContainer) foldersContainer.classList.remove('hidden');
+                    if (foldersGrid) {
+                        foldersGrid.innerHTML = '';
+                        currentFolders.forEach(f => {
+                            const fNameKey = f.name.trim().toLowerCase();
+                            const directFiles = Math.max(f._id ? (folderIdCountMap.get(String(f._id)) || 0) : 0, chapterCountMap.get(fNameKey) || 0);
+                            let subfoldersCount = 0;
+
+                            if (f._id && this.customFolders && this.customFolders.length > 0) {
+                                subfoldersCount = this.customFolders.filter(cf => cf.parentId && String(cf.parentId) === String(f._id)).length;
+                            } else if (f._id && this.selectedCourseId && this.courseCurriculums[this.selectedCourseId]) {
+                                subfoldersCount = this.courseCurriculums[this.selectedCourseId].filter(cf => cf.parentId && String(cf.parentId) === String(f._id)).length;
+                            }
+
+                            let countLabel = '';
+                            if (directFiles > 0 && subfoldersCount > 0) {
+                                countLabel = `${directFiles} ${directFiles === 1 ? 'File' : 'Files'}, ${subfoldersCount} ${subfoldersCount === 1 ? 'Folder' : 'Folders'}`;
+                            } else if (directFiles > 0) {
+                                countLabel = `${directFiles} ${directFiles === 1 ? 'File' : 'Files'}`;
+                            } else if (subfoldersCount > 0) {
+                                countLabel = `${subfoldersCount} ${subfoldersCount === 1 ? 'Folder' : 'Folders'}`;
+                            } else {
+                                countLabel = '0 Files';
+                            }
+
+                            const cardEl = document.createElement('div');
+                            cardEl.className = 'explorer-folder-card bg-slate-50 dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 hover:border-amber-500/50 rounded-2xl p-3.5 flex items-center justify-between transition-all duration-200 group shadow-xs cursor-pointer hover:shadow-md hover:-translate-y-0.5';
+                            cardEl.onclick = () => this.openFolderCard(f.name.trim(), f._id);
+                            cardEl.innerHTML = `
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <span class="material-symbols-rounded text-3xl sm:text-4xl text-amber-500 leading-none select-none group-hover:scale-110 transition-transform shrink-0" style="font-variation-settings: 'FILL' 1;">folder</span>
+                                    <div class="min-w-0">
+                                        <h4 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white truncate group-hover:text-amber-500 transition-colors">
+                                            ${f.name.trim()}
+                                        </h4>
+                                        <p class="text-[10px] font-semibold text-slate-400 mt-0.5">
+                                            ${countLabel}
+                                        </p>
+                                    </div>
+                                </div>
+                                <span class="material-symbols-rounded text-slate-300 dark:text-slate-600 group-hover:text-amber-500 group-hover:translate-x-0.5 transition-all text-xl leading-none select-none">chevron_right</span>
+                            `;
+                            foldersGrid.appendChild(cardEl);
+                        });
+                    }
+                } else {
+                    if (foldersContainer) foldersContainer.classList.add('hidden');
+                }
+
+                // Render Level 0 Workspace Grids
+                if (!isInsideSubfolder && !isSubjectOrCourseActive) {
+                    if (this.activeTab === 'courses') {
+                        if (subjectsGrid) subjectsGrid.classList.add('hidden');
+                        if (coursesGrid) coursesGrid.classList.remove('hidden');
+                    } else if (this.activeTab === 'subjects') {
+                        if (subjectsGrid) subjectsGrid.classList.remove('hidden');
+                        if (coursesGrid) coursesGrid.classList.add('hidden');
+                    } else {
+                        if (subjectsGrid) subjectsGrid.classList.add('hidden');
+                        if (coursesGrid) coursesGrid.classList.add('hidden');
+                    }
+                } else {
+                    if (subjectsGrid) subjectsGrid.classList.add('hidden');
+                    if (coursesGrid) coursesGrid.classList.add('hidden');
+                }
+
+                // Render Files Feed
+                if (visibleNotesCount > 0) {
+                    if (filesContainer) filesContainer.classList.remove('hidden');
+                } else {
+                    if (filesContainer) filesContainer.classList.add('hidden');
+                }
+
+                // Update Item Counters & Empty State
+                const totalItems = currentFolders.length + visibleNotesCount;
+                const counterEl = document.getElementById('explorer-items-counter');
+                if (counterEl) counterEl.textContent = totalItems + (totalItems === 1 ? ' Item' : ' Items');
+
+                const isViewActive = isInsideSubfolder || isSubjectOrCourseActive || this.activeTab === 'free' || this.activeTab === 'saved';
+
+                if (isViewActive && totalItems === 0) {
+                    if (emptyState) emptyState.classList.remove('hidden');
+                } else {
+                    if (emptyState) emptyState.classList.add('hidden');
+                }
+            }
+        }
+
+        // Initialize Global Explorer Instance
+        window.explorer = new OddhayFolderExplorer();
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!window.explorer) {
+                window.explorer = new OddhayFolderExplorer();
+            }
+        });
+    </script>
+</body>
 </html>

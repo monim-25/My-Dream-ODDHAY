@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title>Deploy Video Asset | ODDHAY Command Center</title>
+    <style>
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); min-height: 100vh; transition: all 0.3s ease; }
+        .form-label { font-size: 11px; font-weight: 800; color: #64748b; margin-bottom: 0.4rem; display: block; }
+        .dark .form-label { color: #94a3b8; }
+        .form-input { width: 100%; height: 38px; padding: 0 0.75rem; font-size: 11px; font-weight: 700; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 0.4rem; outline: none; transition: all 0.2s ease; appearance: none; }
+        .dark .form-input { background: #020617; border: 1px solid #334155; color: #f1f5f9; }
+        .form-select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.6rem center; background-size: 0.8rem; padding-right: 2rem; }
+        .form-input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .dark .form-input:focus { border-color: #f1f5f9; }
+
+        /* Multi-select Styles */
+        .multi-select-container { position: relative; }
+        .multi-select-trigger { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px 0.85rem; min-height: 38px; height: auto; align-items: center; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%2364748b'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.75rem center; background-size: 0.9rem; padding-right: 2.2rem; }
+        .multi-select-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 50; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 0.5rem; margin-top: 4px; max-height: 240px; overflow-y: auto; display: none; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        .dark .multi-select-dropdown { background: #0f172a; border-color: #334155; }
+        .multi-select-option { padding: 8px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 11px; font-weight: 600; transition: background 0.15s ease; }
+        .multi-select-option:hover { background: #f8fafc; }
+        .dark .multi-select-option:hover { background: #1e293b; }
+        .multi-select-pill { background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 4px; font-size: 9.5px; font-weight: 700; display: flex; items-center gap: 4px; border: 1px solid #e2e8f0; }
+        .dark .multi-select-pill { background: #1e293b; color: #cbd5e1; border-color: #334155; }
+        .multi-select-pill span { cursor: pointer; opacity: 0.6; }
+        .multi-select-pill span:hover { opacity: 1; color: #ef4444; }
+
+        @media (max-width: 1024px) { .admin-main { margin-left: 0; } }
+    </style>
+</head>
+
+<body class="bg-[#F8F8FF] dark:bg-[#0b1120] text-slate-700 dark:text-slate-300 font-sans min-h-screen antialiased">
+    <div class="flex">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100] lg:translate-x-0 -translate-x-full">
+            <%- include('sidebar_content', { active: 'classes' }) %>
+        </aside>
+
+        <main class="admin-main flex-1 flex flex-col w-full">
+            <%- include('header_v2', { pageTitle: 'Deploy Video Asset' }) %>
+
+            <section class="flex-1 flex flex-col bg-[#F8F8FF] dark:bg-[#0b1120] border-l border-slate-900/10 dark:border-white/5">
+                <form action="/admin/add-class" method="POST" enctype="multipart/form-data" class="w-full">
+                    <div class="divide-y divide-slate-100 dark:divide-white/5 bg-white dark:bg-[#0f172a]">
+                        
+                        <!-- Deployment Configuration -->
+                        <div class="p-6">
+                            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-6 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[20px] text-blue-500">settings_suggest</span> Deployment Configuration
+                            </h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+                                <div class="md:col-span-4">
+                                    <label class="form-label">Deployment Mode</label>
+                                    <div class="flex p-0.5 bg-slate-200 dark:bg-slate-800 rounded-md border border-slate-300 dark:border-slate-700 h-[38px] w-full md:w-[320px]">
+                                        <label class="flex-1">
+                                            <input type="radio" name="deploymentType" value="curriculum" checked class="hidden peer" onchange="toggleDeploymentUI('curriculum')">
+                                            <div class="h-full flex items-center justify-center rounded-[4px] cursor-pointer transition-all peer-checked:bg-white dark:peer-checked:bg-slate-700 peer-checked:text-blue-600 peer-checked:shadow-sm text-[10px] font-extrabold text-slate-500">Curriculum</div>
+                                        </label>
+                                        <label class="flex-1">
+                                            <input type="radio" name="deploymentType" value="asset" class="hidden peer" onchange="toggleDeploymentUI('asset')">
+                                            <div class="h-full flex items-center justify-center rounded-[4px] cursor-pointer transition-all peer-checked:bg-white dark:peer-checked:bg-slate-700 peer-checked:text-blue-600 peer-checked:shadow-sm text-[10px] font-extrabold text-slate-500">Promotional</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="form-label">Video Title</label>
+                                    <input type="text" name="title" required placeholder="Enter asset title..." class="form-input">
+                                </div>
+                                <div class="md:col-span-1">
+                                    <label class="form-label">Source Type</label>
+                                    <div class="flex p-0.5 bg-slate-200 dark:bg-slate-800 rounded-md border border-slate-300 dark:border-slate-700 h-[38px]">
+                                        <label class="flex-1">
+                                            <input type="radio" name="sourceType" value="link" checked class="hidden peer" onchange="toggleSourceUI('link')">
+                                            <div class="h-full flex items-center justify-center rounded-[4px] cursor-pointer transition-all peer-checked:bg-white dark:peer-checked:bg-slate-700 peer-checked:text-blue-600 peer-checked:shadow-sm text-[10px] font-extrabold text-slate-500">URL Link</div>
+                                        </label>
+                                        <label class="flex-1">
+                                            <input type="radio" name="sourceType" value="upload" class="hidden peer" onchange="toggleSourceUI('upload')">
+                                            <div class="h-full flex items-center justify-center rounded-[4px] cursor-pointer transition-all peer-checked:bg-white dark:peer-checked:bg-slate-700 peer-checked:text-blue-600 peer-checked:shadow-sm text-[10px] font-extrabold text-slate-500">File Upload</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="md:col-span-2" id="urlSource">
+                                    <label class="form-label">Video Source (URL)</label>
+                                    <input type="text" name="videoPath" placeholder="https://..." class="form-input">
+                                </div>
+                                <div class="md:col-span-2 hidden" id="fileSource">
+                                    <label class="form-label">Upload Video File</label>
+                                    <input type="file" name="video" accept="video/*" class="form-input pt-1.5">
+                                </div>
+                                <div class="md:col-span-4">
+                                    <label class="form-label">Video Description</label>
+                                    <textarea name="description" placeholder="Write a brief summary of the video content..." class="form-input h-auto min-h-[80px] py-2 resize-none"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Curriculum Context (Dynamic Cascading Selectors) -->
+                        <div id="curriculumFields" class="p-6">
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div>
+                                    <label class="form-label">Target Class</label>
+                                    <select id="classSelector" class="form-input form-select cursor-pointer" onchange="updateCourseList()">
+                                        <option value="">Select Class</option>
+                                        <% ((typeof globalAcademicClasses !== 'undefined' ? globalAcademicClasses : []).map(c => c.name)).forEach(cls => { %>
+                                            <option value="<%= cls %>"><%= cls %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-1">
+                                    <label class="form-label">Target Course</label>
+                                    <select id="courseSelector" class="form-input form-select cursor-pointer" disabled onchange="updateChapterList()">
+                                        <option value="">Select Course</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="form-label">Target Chapter / Topic</label>
+                                    <select id="chapterSelector" name="chapterId" class="form-input form-select cursor-pointer" disabled required>
+                                        <option value="">Select Chapter</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Promotional Strategy -->
+                        <div id="assetFields" class="p-6 hidden">
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div>
+                                    <label class="form-label">Promotion Type</label>
+                                    <select name="assetType" class="form-input form-select cursor-pointer">
+                                        <option value="Trailer">Course Trailer</option>
+                                        <option value="Promotion">Promotional Ad</option>
+                                        <option value="Announcement">Announcement</option>
+                                        <option value="Tutorial">Platform Tutorial</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label">Placement</label>
+                                    <select name="displayContext" class="form-input form-select cursor-pointer">
+                                        <option value="Landing Page">Landing Page</option>
+                                        <option value="User Profile">User Profile</option>
+                                        <option value="Course Context">Course Context</option>
+                                        <option value="Subject Hub">Subject Hub</option>
+                                        <option value="Global">Global / Anywhere</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="form-label">Target Subject (Optional)</label>
+                                    <select name="targetSubject" class="form-input form-select cursor-pointer">
+                                        <option value="">Global / All Subjects</option>
+                                        <% ([...new Set((typeof globalAcademicClasses !== 'undefined' ? globalAcademicClasses : []).flatMap(c => c.subjects || []))]).forEach(opt => { %>
+                                            <option value="<%= opt %>"><%= opt %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-4">
+                                    <label class="form-label">Target Classes (Select one or more)</label>
+                                    <div class="multi-select-container">
+                                        <div class="form-input multi-select-trigger" onclick="toggleDropdown(this)">
+                                            <span class="placeholder text-slate-400 font-medium">Select target classes...</span>
+                                        </div>
+                                        <div class="multi-select-dropdown">
+                                            <% ((typeof globalAcademicClasses !== 'undefined' ? globalAcademicClasses : []).map(c => c.name)).forEach(cls => { %>
+                                                <div class="multi-select-option" onclick="toggleOption(this, '<%= cls %>')">
+                                                    <div class="size-4 rounded border border-slate-300 flex items-center justify-center transition-all">
+                                                        <span class="material-symbols-rounded text-[12px] text-white hidden">check</span>
+                                                    </div>
+                                                    <input type="checkbox" name="targetClass" value="<%= cls %>" class="hidden" onchange="updateAssetCourseList()">
+                                                    <span><%= cls %></span>
+                                                </div>
+                                            <% }) %>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="form-label">Target Course (Optional)</label>
+                                    <select id="assetCourseSelector" name="targetCourse" class="form-input form-select cursor-pointer" disabled>
+                                        <option value="">N/A - General Promotion</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Hidden metadata will be handled by backend session -->
+                    </div>
+
+                    </div>
+
+                    <!-- Action Bar -->
+                    <div class="p-4 border-t border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-slate-900/30">
+                        <div class="flex items-center justify-end gap-3">
+                            <a href="/admin/video-classes" class="text-[11px] font-bold text-slate-400 hover:text-slate-600 transition-all px-4">Cancel</a>
+                            <button type="submit" class="h-9 px-10 bg-black text-white rounded-md font-bold text-[11px] transition-all shadow-md hover:bg-slate-900 active:scale-[0.98]">
+                                Publish
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        // Store courses data for dynamic filtering
+        const allCourses = <%- JSON.stringify(courses || []) %>;
+
+        function toggleDeploymentUI(type) {
+            const curriculum = document.getElementById('curriculumFields');
+            const asset = document.getElementById('assetFields');
+            const chapterSelector = document.getElementById('chapterSelector');
+
+            if (type === 'curriculum') {
+                curriculum.classList.remove('hidden');
+                asset.classList.add('hidden');
+                chapterSelector.required = true;
+            } else {
+                curriculum.classList.add('hidden');
+                asset.classList.remove('hidden');
+                chapterSelector.required = false;
+            }
+        }
+
+        function toggleSourceUI(type) {
+            const urlSource = document.getElementById('urlSource');
+            const fileSource = document.getElementById('fileSource');
+            const urlInput = urlSource.querySelector('input');
+            const fileInput = fileSource.querySelector('input');
+
+            if (type === 'link') {
+                urlSource.classList.remove('hidden');
+                fileSource.classList.add('hidden');
+                urlInput.required = true;
+                fileInput.required = false;
+            } else {
+                urlSource.classList.add('hidden');
+                fileSource.classList.remove('hidden');
+                urlInput.required = false;
+                fileInput.required = true;
+            }
+        }
+
+        // Multi-select Logic
+        function toggleDropdown(trigger) {
+            const dropdown = trigger.nextElementSibling;
+            const isOpen = dropdown.style.display === 'block';
+            document.querySelectorAll('.multi-select-dropdown').forEach(d => d.style.display = 'none');
+            dropdown.style.display = isOpen ? 'none' : 'block';
+            event.stopPropagation();
+        }
+
+        function toggleOption(option, value) {
+            const checkbox = option.querySelector('input');
+            const checkIcon = option.querySelector('.material-symbols-rounded');
+            const container = option.closest('.multi-select-container');
+            
+            checkbox.checked = !checkbox.checked;
+            
+            if (checkbox.checked) {
+                option.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
+                checkIcon.classList.remove('hidden');
+                checkIcon.parentElement.classList.add('bg-blue-500', 'border-blue-500');
+            } else {
+                option.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+                checkIcon.classList.add('hidden');
+                checkIcon.parentElement.classList.remove('bg-blue-500', 'border-blue-500');
+            }
+            
+            updatePills(container);
+            updateAssetCourseList();
+            event.stopPropagation();
+        }
+
+        function updatePills(container) {
+            const trigger = container.querySelector('.multi-select-trigger');
+            const checkboxes = container.querySelectorAll('input:checked');
+            const placeholder = trigger.querySelector('.placeholder');
+            
+            trigger.querySelectorAll('.multi-select-pill').forEach(p => p.remove());
+            
+            if (checkboxes.length > 0) {
+                placeholder.style.display = 'none';
+                checkboxes.forEach(cb => {
+                    const pill = document.createElement('div');
+                    pill.className = 'multi-select-pill';
+                    pill.innerHTML = `${cb.value} <span class="material-symbols-rounded text-[10px]" onclick="removePill(event, this, '${cb.value}')">close</span>`;
+                    trigger.appendChild(pill);
+                });
+            } else {
+                placeholder.style.display = 'block';
+            }
+        }
+
+        function removePill(event, span, value) {
+            event.stopPropagation();
+            const container = span.closest('.multi-select-container');
+            const checkbox = container.querySelector(`input[value="${value}"]`);
+            const option = checkbox.closest('.multi-select-option');
+            
+            checkbox.checked = false;
+            option.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+            const checkIcon = option.querySelector('.material-symbols-rounded');
+            checkIcon.classList.add('hidden');
+            checkIcon.parentElement.classList.remove('bg-blue-500', 'border-blue-500');
+            
+            updatePills(container);
+            updateAssetCourseList();
+        }
+
+        window.onclick = function(event) {
+            if (!event.target.closest('.multi-select-container')) {
+                document.querySelectorAll('.multi-select-dropdown').forEach(d => d.style.display = 'none');
+            }
+        }
+
+        function updateCourseList() {
+            const selectedClass = document.getElementById('classSelector').value;
+            const courseSelector = document.getElementById('courseSelector');
+            const chapterSelector = document.getElementById('chapterSelector');
+
+            // Reset
+            courseSelector.innerHTML = '<option value="">Select Course</option>';
+            chapterSelector.innerHTML = '<option value="">Select Chapter</option>';
+            chapterSelector.disabled = true;
+
+            if (!selectedClass) {
+                courseSelector.disabled = true;
+                return;
+            }
+
+            const filteredCourses = allCourses.filter(c => {
+                // Ensure classLevel is treated as an array even if stored as a string
+                const levels = Array.isArray(c.classLevel) ? c.classLevel : (c.classLevel ? [c.classLevel] : []);
+                const normalizedLevels = levels.map(l => l.toString().toLowerCase().trim());
+                const target = selectedClass.toString().toLowerCase().trim();
+                
+                // Flexible matching: "Class 9" matches "9", "Class 10" matches "10"
+                return normalizedLevels.some(l => {
+                    const lNum = l.replace(/\D/g, ''); // Extract digits only
+                    const tNum = target.replace(/\D/g, '');
+                    return l.includes(target) || target.includes(l) || (lNum && tNum && lNum === tNum);
+                });
+            });
+            
+            filteredCourses.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c._id;
+                opt.textContent = c.title;
+                courseSelector.appendChild(opt);
+            });
+
+            courseSelector.disabled = false;
+        }
+
+        function updateChapterList() {
+            const selectedCourseId = document.getElementById('courseSelector').value;
+            const chapterSelector = document.getElementById('chapterSelector');
+
+            // Reset
+            chapterSelector.innerHTML = '<option value="">Select Chapter</option>';
+
+            if (!selectedCourseId) {
+                chapterSelector.disabled = true;
+                return;
+            }
+
+            const course = allCourses.find(c => c._id === selectedCourseId);
+            if (course && course.chapters) {
+                course.chapters.forEach(chap => {
+                    const opt = document.createElement('option');
+                    opt.value = chap._id;
+                    opt.textContent = chap.title;
+                    chapterSelector.appendChild(opt);
+                });
+                chapterSelector.disabled = false;
+            } else {
+                chapterSelector.disabled = true;
+            }
+        }
+
+        function updateAssetCourseList() {
+            const checkboxes = document.querySelectorAll('input[name="targetClass"]:checked');
+            const selectedClasses = Array.from(checkboxes).map(cb => cb.value);
+            const courseSelector = document.getElementById('assetCourseSelector');
+
+            // Reset
+            courseSelector.innerHTML = '<option value="">N/A - General Promotion</option>';
+
+            if (selectedClasses.length === 0) {
+                courseSelector.disabled = true;
+                return;
+            }
+
+            // Filter courses that match ANY of the selected classes (flexible matching)
+            const filteredCourses = allCourses.filter(c => {
+                const levels = Array.isArray(c.classLevel) ? c.classLevel : (c.classLevel ? [c.classLevel] : []);
+                const normalizedLevels = levels.map(l => l.toString().toLowerCase().trim());
+                
+                return selectedClasses.some(target => {
+                    const t = target.toLowerCase().trim();
+                    const tNum = t.replace(/\D/g, '');
+                    
+                    return normalizedLevels.some(l => {
+                        const lNum = l.replace(/\D/g, '');
+                        return l.includes(t) || t.includes(l) || (lNum && tNum && lNum === tNum);
+                    });
+                });
+            });
+            
+            filteredCourses.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c._id;
+                opt.textContent = c.title;
+                courseSelector.appendChild(opt);
+            });
+
+            courseSelector.disabled = false;
+        }
+
+        // Initialize state
+        window.onload = () => {
+            toggleSourceUI('link');
+        };
+    </script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const globalAcademicClasses = <%- typeof globalAcademicClasses !== 'undefined' ? JSON.stringify(globalAcademicClasses) : '[]' %>;
+        if (!globalAcademicClasses || globalAcademicClasses.length === 0) return;
+
+        function updateDynamicSubjects() {
+            const classCheckboxes = document.querySelectorAll('input[name="classLevel[]"]:checked, input[name="classes"]:checked, input[name="classes[]"]:checked, input[name="targetClass"]:checked');
+            const classSelects = document.querySelectorAll('select[name="applicableClass"], select[name="classLevel"], select[name="class"], select[name="targetClass"]');
+            
+            let selectedClasses = [];
+            classCheckboxes.forEach(cb => selectedClasses.push(cb.value));
+            classSelects.forEach(sel => { if(sel.value) selectedClasses.push(sel.value); });
+
+            let allowedSubjects = new Set();
+            if (selectedClasses.length === 0) {
+                globalAcademicClasses.forEach(c => (c.subjects || []).forEach(s => allowedSubjects.add(s)));
+            } else {
+                globalAcademicClasses.forEach(c => {
+                    const normalizedClass = c.name.replace('Class ', '');
+                    if (selectedClasses.includes(c.name) || selectedClasses.includes(normalizedClass)) {
+                        (c.subjects || []).forEach(s => allowedSubjects.add(s));
+                    }
+                });
+            }
+
+            const subjectCheckboxes = document.querySelectorAll('input[name="subject[]"], input[name="subjects"], input[name="subjects[]"], input[name="targetSubject"]');
+            subjectCheckboxes.forEach(cb => {
+                const optDiv = cb.closest('.multi-select-option');
+                if (optDiv) {
+                    if (allowedSubjects.has(cb.value)) {
+                        optDiv.style.display = 'flex';
+                    } else {
+                        optDiv.style.display = 'none';
+                        if (cb.checked) {
+                            cb.checked = false;
+                            const checkIcon = optDiv.querySelector('.material-symbols-rounded');
+                            if (checkIcon) checkIcon.classList.add('hidden');
+                            optDiv.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
+                            if(checkIcon && checkIcon.parentElement) checkIcon.parentElement.classList.remove('bg-blue-500', 'border-blue-500');
+                        }
+                    }
+                }
+            });
+
+            const subjectSelects = document.querySelectorAll('select[name="subject"], select[name="targetSubject"]');
+            subjectSelects.forEach(sel => {
+                const options = sel.querySelectorAll('option');
+                let hasValidSelected = false;
+                options.forEach(opt => {
+                    if (!opt.value) return; 
+                    if (allowedSubjects.has(opt.value)) {
+                        opt.style.display = '';
+                        if (sel.value === opt.value) hasValidSelected = true;
+                    } else {
+                        opt.style.display = 'none';
+                    }
+                });
+                if (!hasValidSelected && sel.value) sel.value = '';
+            });
+            
+            document.querySelectorAll('.multi-select-container').forEach(container => {
+                const classLevelNames = ['classLevel', 'classes', 'targetClass', 'applicableClass'];
+                const subjectNames = ['subject', 'subjects', 'targetSubject', 'applicableSubject'];
+                const dataName = container.getAttribute('data-name');
+                if (dataName && subjectNames.includes(dataName)) {
+                    const triggerSpan = container.querySelector('.multi-select-trigger span');
+                    const checkedBox = container.querySelectorAll('input[type="checkbox"]:checked');
+                    if (triggerSpan) {
+                        if (checkedBox.length === 0) {
+                            triggerSpan.textContent = 'Select Subjects';
+                            triggerSpan.classList.add('text-slate-400');
+                            triggerSpan.classList.remove('text-slate-700', 'dark:text-slate-200');
+                        } else {
+                            triggerSpan.textContent = Array.from(checkedBox).map(cb => cb.value).join(', ');
+                            triggerSpan.classList.remove('text-slate-400');
+                            triggerSpan.classList.add('text-slate-700', 'dark:text-slate-200');
+                        }
+                    }
+                }
+            });
+        }
+
+        document.querySelectorAll('select[name="applicableClass"], select[name="classLevel"], select[name="class"], select[name="targetClass"]').forEach(sel => {
+            sel.addEventListener('change', updateDynamicSubjects);
+        });
+
+        const observer = new MutationObserver(mutations => {
+            let shouldUpdate = false;
+            mutations.forEach(m => {
+                const container = m.target.closest('.multi-select-container');
+                if (container) {
+                    const dataName = container.getAttribute('data-name') || '';
+                    if (['classLevel', 'classes', 'targetClass', 'applicableClass'].includes(dataName) || container.querySelector('input[name="targetClass"]')) {
+                        shouldUpdate = true;
+                    }
+                }
+            });
+            if (shouldUpdate) updateDynamicSubjects();
+        });
+
+        document.querySelectorAll('.multi-select-dropdown').forEach(dropdown => {
+            observer.observe(dropdown, { attributes: true, subtree: true, attributeFilter: ['class'] });
+        });
+
+        setTimeout(updateDynamicSubjects, 100);
+    });
+</script>
+</body>
+</html>

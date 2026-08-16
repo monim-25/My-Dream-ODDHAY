@@ -1,0 +1,118 @@
+<div id="global-toast-container" class="fixed top-20 right-4 z-[9999] flex flex-col gap-3 pointer-events-none"></div>
+
+<style>
+    @keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideOutRight {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+
+    .toast-anim-enter {
+        animation: slideInRight 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    .toast-anim-exit {
+        animation: slideOutRight 0.3s ease-in forwards;
+    }
+</style>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // Only connect if user exists in the context
+        <% if (locals.user) { %>
+            const currentUser = {
+                id: "<%= user._id %>",
+                role: "<%= user.role %>",
+                classLevel: "<%= user.classLevel || 'none' %>"
+            };
+
+            window.socket = io();
+            const socket = window.socket;
+
+            // Optional: User join
+            socket.emit('user:join', { userId: currentUser.id, name: "<%= user.name %>", role: currentUser.role });
+
+            // Listen for Global/Targeted Notices
+            socket.on('new_notice', (data) => {
+                let shouldShow = false;
+
+                if (data.target === 'all') {
+                    shouldShow = true;
+                } else if (data.target === 'role' && data.role === currentUser.role) {
+                    shouldShow = true;
+                } else if (data.target === 'class' && data.classLevel === currentUser.classLevel && currentUser.role === 'student') {
+                    shouldShow = true;
+                } else if (data.target === 'user' && data.userId === currentUser.id) {
+                    shouldShow = true;
+                }
+
+                if (shouldShow) {
+                    showRealtimeToast(data.title, data.body, data.url, data.type);
+                }
+            });
+
+            window.showRealtimeToast = showRealtimeToast;
+            function showRealtimeToast(title, body, url, type) {
+                const container = document.getElementById('global-toast-container');
+                if (!container) return;
+
+                const toast = document.createElement('div');
+                toast.className = 'w-80 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md shadow-2xl shadow-primary/20 dark:shadow-black/40 rounded-2xl p-4 border border-slate-100 dark:border-slate-800 pointer-events-auto toast-anim-enter flex flex-col gap-2 relative overflow-hidden';
+
+                // Audio cue
+                try {
+                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                    audio.volume = 0.5;
+                    audio.play().catch(e => { });
+                } catch (e) { }
+
+                // Color based on type
+                const color = type === 'system' ? 'text-blue-500' : 'text-emerald-500';
+
+                toast.innerHTML = `
+                    <div class="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-rounded ${color} text-xl">${type === 'system' ? 'notifications_active' : 'campaign'}</span>
+                            <h4 class="text-sm font-black text-slate-800 dark:text-white leading-tight">${title}</h4>
+                        </div>
+                        <button class="text-slate-400 hover:text-slate-600 transition-colors" onclick="this.parentElement.parentElement.classList.add('toast-anim-exit'); setTimeout(() => this.parentElement.parentElement.remove(), 300)">
+                            <span class="material-symbols-rounded text-sm">close</span>
+                        </button>
+                    </div>
+                    <p class="text-[12px] font-semibold text-slate-500 dark:text-slate-400 mt-1">${body}</p>
+                    ${url ? `<a href="${url}" class="mt-2 text-[10px] uppercase tracking-widest font-black text-primary hover:text-blue-600 transition-colors self-start">View Details →</a>` : ''}
+                `;
+
+                container.appendChild(toast);
+
+                // Auto remove after 5 seconds
+                setTimeout(() => {
+                    if (document.body.contains(toast)) {
+                        toast.classList.replace('toast-anim-enter', 'toast-anim-exit');
+                        setTimeout(() => toast.remove(), 300);
+                    }
+                }, 5000);
+            }
+        <% } %>
+    });
+</script>

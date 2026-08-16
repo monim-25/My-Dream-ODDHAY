@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+<head>
+    <%- include('../partials/head') %>
+    <title>My Courses | Teacher Hub</title>
+    <% 
+        // Title Case Helper
+        function toTitleCase(str) {
+            if (!str) return '';
+            const s = String(str);
+            return s.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+        }
+
+        // Number Formatter
+        function formatNumber(num) {
+            if (!num) return 0;
+            if (num >= 1000) {
+                return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+            }
+            return num;
+        }
+    %>
+    <style>
+        :root {
+            --admin-sidebar-width: 260px;
+        }
+
+        .admin-main {
+            margin-left: var(--admin-sidebar-width);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            transition: all 0.3s ease;
+        }
+
+        .content-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .course-card-studio {
+            background: #ffffff;
+            border-radius: 0;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 10px 25px -5px rgba(148, 163, 184, 0.15), 0 8px 10px -6px rgba(148, 163, 184, 0.1);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .course-card-studio:hover {
+            box-shadow: 0 20px 25px -5px rgba(148, 163, 184, 0.2), 0 10px 10px -5px rgba(148, 163, 184, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .dark .course-card-studio {
+            background: #0f172a;
+            border-color: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+        }
+
+        .dark .course-card-studio:hover {
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+        }
+
+        .course-card-inner {
+            border: none;
+            background: #ffffff;
+            border-radius: 0;
+        }
+
+        .dark .course-card-inner {
+            background: transparent;
+        }
+
+        .btn-studio {
+            background: #B5E29B;
+            color: #000000;
+            border-radius: 0;
+            font-weight: 700;
+            text-transform: capitalize;
+            transition: all 0.2s ease;
+        }
+
+        .btn-studio:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .meta-badge {
+            background: #F8FAFC;
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #000000;
+            border: 1px solid #f1f5f9;
+        }
+
+        .dark .meta-badge {
+            background: rgba(255, 255, 255, 0.03);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.05);
+        }
+
+        @media (max-width: 1024px) {
+            .admin-sidebar {
+                transform: translateX(-100%);
+            }
+
+            .admin-main {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body class="bg-[#F8F8FF] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden antialiased">
+
+    <div class="flex h-screen">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100] border-r border-slate-100 dark:border-white/5">
+            <%- include('sidebar', { active: 'courses' }) %>
+        </aside>
+
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617]">
+            <%- include('../admin/header_v2', { pageTitle: 'Assigned Courses' }) %>
+
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5">
+                <div class="bg-white dark:bg-[#0b1120] border-0 flex flex-col relative rounded-none shadow-none min-h-screen">
+                    
+                    <!-- Filters Bar -->
+                    <div class="sticky top-0 z-30 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md px-4 py-3 border-b border-slate-200 dark:border-slate-800/50 flex flex-wrap items-center justify-between gap-3 rounded-none">
+                        <div class="flex items-center gap-2 flex-1 min-w-[300px]">
+                            <div class="flex items-center mr-2">
+                                <span class="px-2 py-1 bg-[#E3E2E6] text-[10px] font-black text-slate-900 uppercase tracking-widest leading-none rounded-none"><%= courses.length %> Courses</span>
+                            </div>
+                            
+                            <!-- Class Filter -->
+                            <div class="relative w-36">
+                                <select onchange="updateCourseFilter('class', this.value)" class="w-full h-10 pl-3 pr-8 rounded-none bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
+                                    <option value="all" <%= filters.class === 'all' ? 'selected' : '' %>>All Classes</option>
+                                    <% assignedClasses.forEach(c => { %>
+                                        <option value="<%= c %>" <%= filters.class === c ? 'selected' : '' %>><%= c %></option>
+                                    <% }) %>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                            </div>
+
+                            <div class="relative w-72">
+                                <input type="text" id="courseSearch" placeholder="Search courses..." class="w-full h-10 px-4 pr-10 rounded-none bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none focus:border-blue-500 transition-all">
+                                <span class="material-symbols-rounded absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Courses Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 p-5 mt-2" id="coursesGrid">
+                        <% if (courses.length > 0) { %>
+                            <% courses.forEach(course => { %>
+                                <div class="p-1 course-card-studio course-item group cursor-pointer" data-title="<%= course.title ? course.title.toLowerCase() : '' %>" onclick="window.location.href='/teacher/course/<%= course._id %>'">
+                                    <div class="course-card-inner h-full flex flex-col relative overflow-hidden">
+                                        
+                                        <!-- Thumbnail -->
+                                        <div class="w-full h-40 bg-slate-50 dark:bg-slate-800/30 relative overflow-hidden border-b border-slate-100 dark:border-slate-800/50 shrink-0">
+                                            <% if (course.thumbnail) { %>
+                                                <img src="<%= course.thumbnail %>" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                                <div class="hidden w-full h-full items-center justify-center text-slate-300 dark:text-slate-700">
+                                                    <span class="material-symbols-rounded text-6xl">auto_stories</span>
+                                                </div>
+                                            <% } else { %>
+                                                <div class="w-full h-full flex items-center justify-center text-slate-300 dark:text-slate-700">
+                                                    <span class="material-symbols-rounded text-6xl opacity-50">auto_stories</span>
+                                                </div>
+                                            <% } %>
+                                        </div>
+
+                                        <!-- Content Wrapper -->
+                                        <div class="p-5 flex flex-col flex-1">
+                                            
+                                            <!-- Core Info -->
+                                            <div class="flex-1">
+                                                <div class="flex items-start justify-between gap-4 mb-2.5">
+                                                    <h4 class="text-base font-black text-slate-900 dark:text-white line-clamp-2 leading-tight flex-1"><%= course.title || 'Untitled Course' %></h4>
+                                                    
+                                                    <!-- Student Count -->
+                                                    <div class="flex flex-col items-center shrink-0 mt-0.5" title="Total Enrollment">
+                                                        <span class="material-symbols-rounded text-[22px] text-slate-400 dark:text-slate-500 leading-none mb-1">group</span>
+                                                        <span class="text-[12px] font-black text-slate-700 dark:text-slate-300 leading-none"><%= formatNumber(course.studentCount) %></span>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="flex flex-wrap gap-1.5 mb-3">
+                                                    <% const classes = Array.isArray(course.classLevel) && course.classLevel.length ? course.classLevel : (course.classLevel ? [course.classLevel] : ['N/A']); %>
+                                                    <% classes.forEach(c => { %>
+                                                        <span class="meta-badge"><%= c %></span>
+                                                    <% }) %>
+                                                    <% const subjects = Array.isArray(course.subject) && course.subject.length ? course.subject : (course.subject ? [course.subject] : ['General']); %>
+                                                    <% subjects.forEach(s => { %>
+                                                        <span class="meta-badge"><%= toTitleCase(s) %></span>
+                                                    <% }) %>
+                                                </div>
+
+                                                <!-- Short Details -->
+                                                <p class="text-[11px] font-medium text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">
+                                                    <%= course.description ? course.description.replace(/(<([^>]+)>)/gi, "") : 'Monitor updates in real time and stay informed throughout every step of the process.' %>
+                                                </p>
+                                            </div>
+
+                                            <!-- Action Footer -->
+                                            <div class="pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/50 flex items-center justify-between">
+                                                <div class="flex items-center gap-2">
+                                                    <% if (course.accessType === 'paid' || course.accessType === 'Paid') { %>
+                                                        <div class="size-6 rounded-none bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/20 text-amber-500 flex items-center justify-center shadow-sm">
+                                                            <span class="material-symbols-rounded text-[14px]">workspace_premium</span>
+                                                        </div>
+                                                        <span class="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Premium</span>
+                                                    <% } else { %>
+                                                        <div class="size-6 rounded-none bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 text-emerald-500 flex items-center justify-center shadow-sm">
+                                                            <span class="material-symbols-rounded text-[14px]">money_off</span>
+                                                        </div>
+                                                        <span class="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Free Access</span>
+                                                    <% } %>
+                                                </div>
+                                                
+                                                <a href="/teacher/course/<%= course._id %>" class="h-8 px-5 btn-studio flex items-center justify-center text-[11px]">
+                                                    Manage
+                                                </a>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                            <% }) %>
+                        <% } else { %>
+                            <!-- Empty State -->
+                            <div class="col-span-full py-48 text-center bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/50 rounded-none shadow-md">
+                                <div class="size-20 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-center text-slate-400 dark:text-slate-500 mx-auto mb-8 border border-slate-100 dark:border-slate-800 shadow-inner">
+                                    <span class="material-symbols-rounded text-4xl leading-none">inventory_2</span>
+                                </div>
+                                <h3 class="text-xl font-black text-slate-900 dark:text-white tracking-tight">No courses assigned</h3>
+                                <p class="text-sm font-medium text-slate-500 mt-2">Connect with administration to assign your first course.</p>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <script>
+        function toggleAdminSidebar() {
+            const sidebar = document.getElementById('adminSidebar');
+            sidebar.classList.toggle('active');
+        }
+
+        function updateCourseFilter(key, value) {
+            const params = new URLSearchParams(window.location.search);
+            if (value === 'all') {
+                params.delete(key);
+            } else {
+                params.set(key, value);
+            }
+            window.location.href = '?' + params.toString();
+        }
+
+        // Simple frontend search for courses
+        document.getElementById('courseSearch')?.addEventListener('input', function(e) {
+            const term = e.target.value.toLowerCase();
+            const items = document.querySelectorAll('.course-item');
+            items.forEach(item => {
+                const title = item.getAttribute('data-title');
+                if (title.includes(term)) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
