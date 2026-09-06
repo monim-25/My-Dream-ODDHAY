@@ -375,8 +375,8 @@ router.get('/course/:id', teacherProtect, async (req, res) => {
         })
             .populate('instructor', 'name email profileImage profilePicture bio role')
             .populate('permittedTeachers', 'name email profileImage profilePicture bio role')
-            .populate('curriculumNodes.quizId')
-            .populate('chapters.quizzes');
+            .populate('curriculumNodes.quizId', 'title duration totalMarks')
+            .populate('chapters.quizzes', 'title duration totalMarks');
 
         if (!course) return res.status(403).send('এই কোর্সে আপনার অ্যাক্সেস নেই।');
 
@@ -384,10 +384,12 @@ router.get('/course/:id', teacherProtect, async (req, res) => {
         await migrateCourseCurriculumIfRequired(course);
 
         // Fetch students and progress
-        const enrolledStudents = await User.find({ 'enrolledCourses.course': course._id }).select('name email profileImage profilePicture enrolledCourses quizResults').lean();
-        const courseQuizIds = (course.curriculumNodes || []).filter(n => n.type === 'quiz' && n.quizId).map(n => String(n.quizId));
+        const enrolledStudents = await User.find({ 'enrolledCourses.course': course._id })
+            .select('name email profileImage profilePicture enrolledCourses.course enrolledCourses.enrolledAt enrolledCourses.progress quizResults.quiz')
+            .lean();
+        const courseQuizIds = (course.curriculumNodes || []).filter(n => n.type === 'quiz' && n.quizId).map(n => String(n.quizId._id || n.quizId));
         const students = enrolledStudents.map(s => {
-            const enrollment = s.enrolledCourses.find(ec => String(ec.course) === String(course._id));
+            const enrollment = (s.enrolledCourses || []).find(ec => String(ec.course) === String(course._id));
             const examAttended = s.quizResults ? s.quizResults.filter(qr => courseQuizIds.includes(String(qr.quiz))).length : 0;
             return {
                 name: s.name,
@@ -471,8 +473,9 @@ router.get('/course/:id/curriculum', teacherProtect, async (req, res) => {
             _id: req.params.id,
             $or: [{ instructor: req.session.user._id }, { permittedTeachers: req.session.user._id }]
         })
-        .populate('curriculumNodes.quizId')
-        .populate('curriculumNodes.addedBy', 'name profilePicture profileImage role');
+        .populate('curriculumNodes.quizId', 'title duration totalMarks')
+        .populate('curriculumNodes.addedBy', 'name profilePicture profileImage role')
+        .lean();
         if (!course) return res.status(403).json({ error: 'Access denied' });
         
         await migrateCourseCurriculumIfRequired(course);
@@ -585,6 +588,11 @@ router.post('/course/:id/curriculum/node', teacherProtect, lazyUploadMiddleware,
             newNode.meetingUrl = autoUrl;
             newNode.date = date ? new Date(date) : new Date();
             newNode.description = description || '';
+            const liveMode = req.body.liveMode || 'instant';
+            if (liveMode === 'instant' || !date) {
+                newNode.isLive = true;
+                newNode.liveStartedAt = new Date();
+            }
         } else if (type === 'quiz') {
             const { quizId, bankId, quizName, quizDate, quizMode } = req.body;
             
@@ -688,6 +696,32 @@ router.post('/course/:id/announcement', teacherProtect, async (req, res) => {
             priority
         });
         await ann.save();
+        await ann.populate('authorId', 'name profileImage profilePicture role');
+
+        const io = req.app.get('io');
+        if (io) {
+            const author = ann.authorId || {};
+            const payload = {
+                _id: String(ann._id),
+                courseId: String(course._id),
+                title: ann.title,
+                content: ann.content,
+                priority: ann.priority || 'normal',
+                isHighPriority: ann.priority === 'high',
+                author: {
+                    name: author.name || req.session.user.name || 'Course Instructor',
+                    profileImage: author.profileImage || author.profilePicture || '',
+                    role: author.role || req.session.user.role || 'teacher'
+                },
+                createdAt: ann.createdAt,
+                timeAgo: 'Just now',
+                formattedDate: new Date(ann.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
+                type: 'announcement'
+            };
+            io.to(`course_${course._id}`).emit('course:announcement_new', payload);
+            io.emit('course:announcement_new', payload);
+        }
+
         res.json({ success: true, announcement: ann });
     } catch (err) {
         console.error(err);
@@ -709,6 +743,17 @@ router.delete('/course/:id/announcement/:annId', teacherProtect, async (req, res
         if (!isOwner && !isPermitted && req.session.user.role !== 'admin') return res.status(403).json({ success: false });
 
         await Announcement.findByIdAndDelete(req.params.annId);
+
+        const io = req.app.get('io');
+        if (io) {
+            const payload = {
+                courseId: String(course._id),
+                announcementId: String(req.params.annId)
+            };
+            io.to(`course_${course._id}`).emit('course:announcement_deleted', payload);
+            io.emit('course:announcement_deleted', payload);
+        }
+
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ success: false });
@@ -3335,4 +3380,823 @@ router.post('/question/bulk-action', teacherProtect, async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
+// ==========================================
+// AI KNOWLEDGE HUB - TEACHER ROUTES (RESTRICTED TO ASSIGNED SUBJECTS)
+// ==========================================
+
+// Helper to get strictly assigned subjects & classes for a teacher
+async function getTeacherAssignedContext(teacherId) {
+    const User = require('../models/User');
+    const Course = require('../models/Course');
+
+    const teacherProfile = await User.findById(teacherId).select('teachingSubject teachingSubjects classLevel assignedClasses role').lean();
+    
+    const splitTokens = (val) => {
+        if (!val) return [];
+        if (Array.isArray(val)) return val.flatMap(v => splitTokens(v));
+        return String(val).split(',').map(s => s.trim()).filter(Boolean);
+    };
+
+    const rawUserSubjects = [
+        ...splitTokens(teacherProfile?.teachingSubject),
+        ...splitTokens(teacherProfile?.teachingSubjects)
+    ];
+    const rawUserClasses = [
+        ...splitTokens(teacherProfile?.classLevel),
+        ...splitTokens(teacherProfile?.assignedClasses)
+    ];
+
+    const teacherAssignedCourses = await Course.find({
+        $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }]
+    }).select('subject classLevel').lean();
+
+    const teacherAssignedCourseSubjects = teacherAssignedCourses.flatMap(c => splitTokens(c.subject));
+    const teacherAssignedCourseClasses = teacherAssignedCourses.flatMap(c => splitTokens(c.classLevel));
+
+    const assignedSubjects = [...new Set([...rawUserSubjects, ...teacherAssignedCourseSubjects])].filter(Boolean).sort();
+    const assignedClasses = [...new Set([...rawUserClasses, ...teacherAssignedCourseClasses])].filter(Boolean).sort();
+
+    const isSuperOrAdmin = ['admin', 'superadmin'].includes(teacherProfile?.role);
+    const hasStrictSubject = assignedSubjects.length > 0;
+    const hasStrictClass = assignedClasses.length > 0;
+
+    return {
+        assignedSubjects: hasStrictSubject ? assignedSubjects : ['General Academic'],
+        assignedClasses: hasStrictClass ? assignedClasses : ['All Classes'],
+        rawAssignedSubjects: assignedSubjects,
+        rawAssignedClasses: assignedClasses,
+        hasStrictSubject,
+        hasStrictClass,
+        isSuperOrAdmin
+    };
+}
+
+// Helper to get question bank filter strictly scoped to teacher's assigned subjects and classes
+async function getTeacherAccessibleBankQuery(teacherId, userDoc) {
+    const context = await getTeacherAssignedContext(teacherId);
+    const { rawAssignedSubjects, rawAssignedClasses, hasStrictSubject, hasStrictClass, isSuperOrAdmin } = context;
+
+    // Unrestricted if admin/superadmin or if neither specific subject nor specific class is configured
+    if (isSuperOrAdmin || (!hasStrictSubject && !hasStrictClass)) {
+        return {
+            bankFilter: {},
+            context,
+            isUnrestricted: true
+        };
+    }
+
+    const Course = require('../models/Course');
+    const teacherCourses = await Course.find({
+        $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }]
+    }).select('_id').lean();
+    const teacherCourseIds = teacherCourses.map(c => c._id);
+
+    // Build criteria strictly enforcing assigned subject and class
+    const criteria = {};
+    const getSubjectRegex = (subj) => {
+        const s = (subj || '').trim();
+        if (/^math(ematics)?$/i.test(s)) {
+            return /.*(math|mathematics).*/i;
+        }
+        if (/^(bangla|bengali)$/i.test(s)) {
+            return /.*(bangla|bengali).*/i;
+        }
+        if (/^english$/i.test(s)) {
+            return /.*english.*/i;
+        }
+        return new RegExp(`.*${s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*`, 'i');
+    };
+
+    if (hasStrictSubject) {
+        criteria.subject = {
+            $in: rawAssignedSubjects.map(getSubjectRegex)
+        };
+    }
+    if (hasStrictClass) {
+        const classRegexes = rawAssignedClasses.flatMap(c => {
+            const str = String(c).trim();
+            const res = [new RegExp(`^${str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')];
+            if (/^(class\s*)?9$/i.test(str) || /^(class\s*)?10$/i.test(str)) {
+                res.push(/^SSC$/i, /^9$/i, /^10$/i, /^Class\s*9$/i, /^Class\s*10$/i);
+            }
+            if (/^(class\s*)?11$/i.test(str) || /^(class\s*)?12$/i.test(str)) {
+                res.push(/^HSC$/i, /^11$/i, /^12$/i, /^Class\s*11$/i, /^Class\s*12$/i);
+            }
+            return res;
+        });
+        criteria.classLevel = {
+            $in: classRegexes
+        };
+    }
+
+    let bankFilter = criteria;
+    if (teacherCourseIds.length > 0 || teacherId) {
+        bankFilter = {
+            $and: [
+                hasStrictSubject ? { subject: { $in: rawAssignedSubjects.map(getSubjectRegex) } } : {},
+                {
+                    $or: [
+                        criteria.classLevel ? { classLevel: criteria.classLevel } : {},
+                        ...(teacherCourseIds.length > 0 ? [{ course: { $in: teacherCourseIds } }] : []),
+                        { addedBy: teacherId }
+                    ]
+                }
+            ]
+        };
+    }
+
+    return {
+        bankFilter,
+        context,
+        isUnrestricted: false
+    };
+}
+
+// GET /teacher/ai-knowledge - List knowledge rules strictly for teacher's assigned subjects
+router.get('/ai-knowledge', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AIKnowledge = require('../models/AIKnowledge');
+        const user = req.session.user;
+
+        const { assignedSubjects, assignedClasses } = await getTeacherAssignedContext(user._id);
+
+        const { subject, classLevel, search } = req.query;
+        
+        // Scope filter to ONLY teacher's assigned subjects (or created by them)
+        const filter = {
+            $or: [
+                { subject: { $in: assignedSubjects.map(s => new RegExp(`^${s.trim()}$`, 'i')) } },
+                { createdBy: user._id }
+            ]
+        };
+
+        if (subject && subject !== 'all') {
+            filter.subject = new RegExp(`^${subject.trim()}$`, 'i');
+        }
+        if (classLevel && classLevel !== 'all') {
+            filter.classLevel = new RegExp(`^${classLevel.trim()}$`, 'i');
+        }
+        if (search && search.trim() !== '') {
+            const sRegex = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            filter.$and = [
+                {
+                    $or: [
+                        { title: sRegex },
+                        { topic: sRegex },
+                        { content: sRegex },
+                        { keywords: sRegex }
+                    ]
+                }
+            ];
+        }
+
+        const knowledgeList = await AIKnowledge.find(filter)
+            .populate('createdBy', 'name email')
+            .sort({ priority: -1, createdAt: -1 })
+            .lean();
+
+        // Calculate statistics for this teacher's subject scope
+        const totalItems = knowledgeList.length;
+        const activeItems = knowledgeList.filter(k => k.isActive).length;
+        const myCreatedCount = knowledgeList.filter(k => k.createdBy && k.createdBy._id && k.createdBy._id.toString() === user._id.toString()).length;
+
+        res.render('teacher/ai-knowledge', {
+            user,
+            active: 'ai-knowledge',
+            knowledgeList: knowledgeList || [],
+            classList: assignedClasses,
+            subjectList: assignedSubjects,
+            selectedSubject: subject || 'all',
+            selectedClass: classLevel || 'all',
+            searchQuery: search || '',
+            stats: {
+                total: totalItems,
+                active: activeItems,
+                myCreated: myCreatedCount
+            }
+        });
+    } catch (err) {
+        console.error('Error loading Teacher AI Knowledge Hub:', err);
+        res.status(500).send('Error loading AI Knowledge Hub');
+    }
+});
+
+// POST /teacher/ai-knowledge/create - Teacher creates rule strictly for their assigned subjects
+router.post('/ai-knowledge/create', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AIKnowledge = require('../models/AIKnowledge');
+        const user = req.session.user;
+        const { title, classLevel, subject, topic, keywords, content, priority, isActive } = req.body;
+
+        if (!title || !subject || !content) {
+            return res.status(400).json({ success: false, error: 'Title, Subject and Content are required.' });
+        }
+
+        const { assignedSubjects } = await getTeacherAssignedContext(user._id);
+
+        // Security check: teacher can only add knowledge for assigned subjects
+        const isSubjectPermitted = assignedSubjects.some(s => s.toLowerCase() === subject.trim().toLowerCase());
+        if (!isSubjectPermitted) {
+            return res.status(403).send('Unauthorized: You are only allowed to manage AI knowledge for your assigned subjects: ' + assignedSubjects.join(', '));
+        }
+
+        const parsedKeywords = (keywords || '')
+            .split(/[,;\n]+/)
+            .map(k => k.trim())
+            .filter(Boolean);
+
+        const newEntry = new AIKnowledge({
+            title: title.trim(),
+            classLevel: (classLevel || 'All Classes').trim(),
+            subject: subject.trim(),
+            topic: (topic || '').trim(),
+            keywords: parsedKeywords,
+            content: content.trim(),
+            priority: parseInt(priority, 10) || 100,
+            isActive: isActive === 'true' || isActive === true || isActive === 'on',
+            createdBy: user._id
+        });
+
+        await newEntry.save();
+        await logActivity(req, 'TEACHER_CREATE_AI_KNOWLEDGE', `Teacher created AI Knowledge rule: ${newEntry.title} for ${newEntry.subject}`, 'AIKnowledge');
+
+        res.redirect('/teacher/ai-knowledge?success=created');
+    } catch (err) {
+        console.error('Error creating Teacher AI Knowledge:', err);
+        res.redirect('/teacher/ai-knowledge?error=create_failed');
+    }
+});
+
+// POST /teacher/ai-knowledge/:id/edit - Edit rule if within assigned subjects or created by teacher
+router.post('/ai-knowledge/:id/edit', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AIKnowledge = require('../models/AIKnowledge');
+        const user = req.session.user;
+        const { title, classLevel, subject, topic, keywords, content, priority, isActive } = req.body;
+
+        const entry = await AIKnowledge.findById(req.params.id);
+        if (!entry) return res.redirect('/teacher/ai-knowledge?error=not_found');
+
+        const { assignedSubjects } = await getTeacherAssignedContext(user._id);
+
+        // Verify permission
+        const isOriginalSubjectPermitted = assignedSubjects.some(s => s.toLowerCase() === entry.subject.toLowerCase());
+        const isTargetSubjectPermitted = assignedSubjects.some(s => s.toLowerCase() === (subject || entry.subject).trim().toLowerCase());
+        const isOwner = entry.createdBy && entry.createdBy.toString() === user._id.toString();
+
+        if (!isOwner && (!isOriginalSubjectPermitted || !isTargetSubjectPermitted)) {
+            return res.status(403).send('Unauthorized: You can only edit knowledge for your assigned subjects.');
+        }
+
+        const parsedKeywords = (keywords || '')
+            .split(/[,;\n]+/)
+            .map(k => k.trim())
+            .filter(Boolean);
+
+        entry.title = title ? title.trim() : entry.title;
+        entry.classLevel = classLevel ? classLevel.trim() : entry.classLevel;
+        entry.subject = subject ? subject.trim() : entry.subject;
+        entry.topic = topic !== undefined ? topic.trim() : entry.topic;
+        entry.keywords = parsedKeywords;
+        entry.content = content ? content.trim() : entry.content;
+        entry.priority = priority !== undefined ? parseInt(priority, 10) : entry.priority;
+        entry.isActive = isActive === 'true' || isActive === true || isActive === 'on';
+
+        await entry.save();
+        await logActivity(req, 'TEACHER_UPDATE_AI_KNOWLEDGE', `Teacher updated AI Knowledge rule: ${entry.title}`, 'AIKnowledge');
+
+        res.redirect('/teacher/ai-knowledge?success=updated');
+    } catch (err) {
+        console.error('Error updating Teacher AI Knowledge:', err);
+        res.redirect('/teacher/ai-knowledge?error=update_failed');
+    }
+});
+
+// POST /teacher/ai-knowledge/:id/delete - Delete rule
+router.post('/ai-knowledge/:id/delete', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AIKnowledge = require('../models/AIKnowledge');
+        const user = req.session.user;
+
+        const entry = await AIKnowledge.findById(req.params.id);
+        if (!entry) return res.redirect('/teacher/ai-knowledge?error=not_found');
+
+        const { assignedSubjects } = await getTeacherAssignedContext(user._id);
+        const isSubjectPermitted = assignedSubjects.some(s => s.toLowerCase() === entry.subject.toLowerCase());
+        const isOwner = entry.createdBy && entry.createdBy.toString() === user._id.toString();
+
+        if (!isOwner && !isSubjectPermitted) {
+            return res.status(403).send('Unauthorized to delete this rule.');
+        }
+
+        await AIKnowledge.findByIdAndDelete(req.params.id);
+        await logActivity(req, 'TEACHER_DELETE_AI_KNOWLEDGE', `Teacher deleted AI Knowledge rule: ${entry.title}`, 'AIKnowledge');
+
+        res.redirect('/teacher/ai-knowledge?success=deleted');
+    } catch (err) {
+        console.error('Error deleting Teacher AI Knowledge:', err);
+        res.redirect('/teacher/ai-knowledge?error=delete_failed');
+    }
+});
+
+// POST /teacher/ai-knowledge/:id/toggle - Toggle active status
+router.post('/ai-knowledge/:id/toggle', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AIKnowledge = require('../models/AIKnowledge');
+        const user = req.session.user;
+
+        const entry = await AIKnowledge.findById(req.params.id);
+        if (!entry) return res.status(404).json({ success: false, error: 'Not found' });
+
+        const { assignedSubjects } = await getTeacherAssignedContext(user._id);
+        const isSubjectPermitted = assignedSubjects.some(s => s.toLowerCase() === entry.subject.toLowerCase());
+        const isOwner = entry.createdBy && entry.createdBy.toString() === user._id.toString();
+
+        if (!isOwner && !isSubjectPermitted) {
+            return res.status(403).json({ success: false, error: 'Unauthorized' });
+        }
+
+        entry.isActive = !entry.isActive;
+        await entry.save();
+
+        res.json({ success: true, isActive: entry.isActive });
+    } catch (err) {
+        console.error('Error toggling Teacher AI Knowledge:', err);
+        res.status(500).json({ success: false, error: 'Server Error' });
+    }
+});
+// ==========================================
+// WRITTEN EVALUATIONS - TEACHER ROUTES
+// Strictly restricted to teacher's assigned classes & subjects
+// ==========================================
+
+// GET /teacher/written-evaluations - List written submissions
+router.get('/written-evaluations', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const user = req.session.user;
+        const QuestionBankAttempt = require('../models/QuestionBankAttempt');
+        const QuestionBank = require('../models/QuestionBank');
+
+        const { bankFilter, context, isUnrestricted } = await getTeacherAccessibleBankQuery(user._id, user);
+
+        // Find all question banks matching teacher's class/subject scope
+        const accessibleBanks = await QuestionBank.find(bankFilter).select('_id title subject classLevel board year').lean();
+        const accessibleBankIds = accessibleBanks.map(b => b._id);
+
+        const statusFilter = req.query.status || 'pending'; // 'pending', 'reviewed', 'all'
+        const subjectFilter = req.query.subject || 'all';
+        const classFilter = req.query.class || 'all';
+        const searchQuery = (req.query.q || '').trim();
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.max(20, parseInt(req.query.limit) || 20);
+
+        // If filtering by subject or class
+        let queryBankIds = accessibleBankIds;
+        if (subjectFilter !== 'all' || classFilter !== 'all') {
+            const sf = subjectFilter.toLowerCase().trim();
+            const cf = classFilter.toLowerCase().trim();
+            queryBankIds = accessibleBanks.filter(b => {
+                let matchSub = true;
+                let matchCls = true;
+                if (subjectFilter !== 'all') {
+                    const bs = String(b.subject || '').toLowerCase().trim();
+                    if (sf === 'math' || sf === 'mathematics') {
+                        matchSub = bs.includes('math');
+                    } else if (sf === 'bangla' || sf === 'bengali') {
+                        matchSub = bs.includes('bangla') || bs.includes('bengali');
+                    } else if (sf === 'english') {
+                        matchSub = bs.includes('english');
+                    } else {
+                        matchSub = bs === sf;
+                    }
+                }
+                if (classFilter !== 'all') {
+                    const bClasses = (Array.isArray(b.classLevel) ? b.classLevel : [b.classLevel]).map(c => String(c || '').toLowerCase().trim());
+                    if (cf === 'class 9' || cf === 'class 10') {
+                        matchCls = bClasses.some(c => c === cf || c === 'ssc' || c === cf.replace('class ', ''));
+                    } else if (cf === 'class 11' || cf === 'class 12') {
+                        matchCls = bClasses.some(c => c === cf || c === 'hsc' || c === cf.replace('class ', ''));
+                    } else {
+                        matchCls = bClasses.some(c => c === cf);
+                    }
+                }
+                return matchSub && matchCls;
+            }).map(b => b._id);
+        }
+
+        let statusCondition = {};
+        if (statusFilter === 'pending') {
+            statusCondition = { writtenStatus: 'pending' };
+        } else if (statusFilter === 'reviewed') {
+            statusCondition = { writtenStatus: 'reviewed' };
+        } else {
+            statusCondition = { writtenStatus: { $in: ['pending', 'reviewed'] } };
+        }
+
+        const attemptQuery = {
+            bank: { $in: queryBankIds },
+            ...statusCondition
+        };
+
+        // Fetch counts for tabs strictly scoped to teacher's accessible banks
+        const [pendingCount, reviewedCount, totalCount] = await Promise.all([
+            QuestionBankAttempt.countDocuments({
+                bank: { $in: accessibleBankIds },
+                writtenStatus: 'pending'
+            }),
+            QuestionBankAttempt.countDocuments({
+                bank: { $in: accessibleBankIds },
+                writtenStatus: 'reviewed'
+            }),
+            QuestionBankAttempt.countDocuments({
+                bank: { $in: accessibleBankIds },
+                writtenStatus: { $in: ['pending', 'reviewed'] }
+            })
+        ]);
+
+        let attempts = await QuestionBankAttempt.find(attemptQuery)
+            .populate('user', 'name email profilePicture profileImage classLevel phone')
+            .populate('bank', 'title subject classLevel board year topic addedBy course')
+            .populate('teacherReview.reviewedBy', 'name')
+            .sort({ submittedAt: -1 })
+            .lean();
+
+        // Format clean bank titles and canonical subjects for attempts
+        attempts.forEach(att => {
+            if (att.bank) {
+                const b = att.bank;
+                if (!b.title || !b.title.trim()) {
+                    const parts = [b.subject, b.topic, b.board, b.year].filter(Boolean).map(s => String(s).trim()).filter(Boolean);
+                    b.displayTitle = parts.length > 0 ? parts.join(' - ') : `${b.subject || 'Written Exam'}`;
+                } else {
+                    b.displayTitle = b.title.trim();
+                }
+
+                // Canonical subject display mapping to teacher's assigned subjects
+                const rawSub = String(b.subject || '').trim();
+                const subLower = rawSub.toLowerCase();
+                if (subLower.includes('bangla') || subLower.includes('bengali')) {
+                    b.displaySubject = 'Bangla';
+                } else if (subLower.includes('english')) {
+                    b.displaySubject = 'English';
+                } else if (subLower.includes('math')) {
+                    b.displaySubject = 'Math';
+                } else {
+                    b.displaySubject = rawSub || 'Subject';
+                }
+            }
+        });
+
+        // Strict subject safeguard: ensure only attempts with assigned subjects are shown
+        if (!isUnrestricted && context.rawAssignedSubjects && context.rawAssignedSubjects.length > 0) {
+            attempts = attempts.filter(att => {
+                const bSub = String(att.bank?.subject || '').toLowerCase().trim();
+                if (bSub === 'general') return false;
+                return context.rawAssignedSubjects.some(as => {
+                    const asLower = String(as).toLowerCase().trim();
+                    if (asLower === 'math' || asLower === 'mathematics') return bSub.includes('math');
+                    if (asLower === 'bangla' || asLower === 'bengali') return bSub.includes('bangla') || bSub.includes('bengali');
+                    if (asLower === 'english') return bSub.includes('english');
+                    return bSub === asLower;
+                });
+            });
+        }
+
+        // Search query filter
+        if (searchQuery) {
+            const sq = searchQuery.toLowerCase();
+            attempts = attempts.filter(att => {
+                const uName = (att.user?.name || '').toLowerCase();
+                const uEmail = (att.user?.email || '').toLowerCase();
+                const bTitle = (att.bank?.displayTitle || att.bank?.title || '').toLowerCase();
+                const bSub = (att.bank?.displaySubject || att.bank?.subject || '').toLowerCase();
+                return uName.includes(sq) || uEmail.includes(sq) || bTitle.includes(sq) || bSub.includes(sq);
+            });
+        }
+
+        const totalFiltered = attempts.length;
+        const totalPages = Math.ceil(totalFiltered / limit) || 1;
+        const paginatedAttempts = attempts.slice((page - 1) * limit, page * limit);
+
+        // Derive subjects and classes for filter dropdowns strictly from teacher's assigned profile
+        const availableSubjects = (!isUnrestricted && context.rawAssignedSubjects && context.rawAssignedSubjects.length > 0)
+            ? context.rawAssignedSubjects
+            : [...new Set(accessibleBanks.map(b => b.subject).filter(Boolean))].sort();
+
+        const availableClasses = (!isUnrestricted && context.rawAssignedClasses && context.rawAssignedClasses.length > 0)
+            ? context.rawAssignedClasses
+            : [...new Set(accessibleBanks.flatMap(b => Array.isArray(b.classLevel) ? b.classLevel : [b.classLevel]).filter(Boolean))].sort();
+
+        res.render('teacher/written-evaluations', {
+            pageTitle: 'Written Exam Evaluations',
+            active: 'written-evaluations',
+            user,
+            attempts: paginatedAttempts,
+            pendingCount,
+            reviewedCount,
+            totalCount,
+            statusFilter,
+            subjectFilter,
+            classFilter,
+            searchQuery,
+            page,
+            totalPages,
+            availableSubjects,
+            availableClasses,
+            assignedSubjects: context.rawAssignedSubjects,
+            assignedClasses: context.rawAssignedClasses,
+            isUnrestricted,
+            successMsg: req.query.success || '',
+            errorMsg: req.query.error || ''
+        });
+    } catch (err) {
+        console.error('Error fetching teacher written evaluations:', err);
+        res.status(500).send('Server error loading written evaluations');
+    }
+});
+
+// GET /teacher/written-evaluations/:attemptId - Dedicated evaluation form for a student attempt
+router.get('/written-evaluations/:attemptId', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const user = req.session.user;
+        const QuestionBankAttempt = require('../models/QuestionBankAttempt');
+        const QuestionBank = require('../models/QuestionBank');
+        const Question = require('../models/Question');
+
+        const attempt = await QuestionBankAttempt.findById(req.params.attemptId)
+            .populate('user', 'name email profilePicture profileImage classLevel phone')
+            .populate('bank')
+            .populate('teacherReview.reviewedBy', 'name')
+            .lean();
+
+        if (!attempt || !attempt.bank) {
+            return res.status(404).render('404', { message: 'Written evaluation submission not found.' });
+        }
+
+        // Authorization check: verify teacher has access to this bank
+        const { bankFilter, isUnrestricted } = await getTeacherAccessibleBankQuery(user._id, user);
+        if (!isUnrestricted) {
+            const isAccessible = await QuestionBank.findOne({
+                _id: attempt.bank._id,
+                ...bankFilter
+            });
+            if (!isAccessible) {
+                return res.status(403).render('404', { message: 'You are not assigned to evaluate this subject or class.' });
+            }
+        }
+
+        // Fetch questions for this bank
+        const questions = await Question.find({ bankId: attempt.bank._id }).sort({ createdAt: 1 }).lean();
+
+        // Filter only written questions (non-MCQ)
+        const writtenQuestions = questions.filter(q => q.questionType !== 'MCQ');
+
+        // Map attempt userAnswers
+        const uaMap = {};
+        (attempt.userAnswers || []).forEach(ua => {
+            if (ua.questionId) uaMap[ua.questionId.toString()] = ua;
+        });
+
+        const questionsWithAnswers = writtenQuestions.map(q => {
+            const ua = uaMap[q._id.toString()] || {};
+            const defaultMark = (q.questionType === 'Medium') ? 2 : ((q.questionType === 'Comprehension') ? 7 : 1);
+            const qMaxMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : (ua.maxMarks || defaultMark);
+            return {
+                ...q,
+                maxMarks: qMaxMark,
+                userAnswer: ua
+            };
+        });
+
+        res.render('teacher/written-evaluation-form', {
+            pageTitle: 'Evaluate Written Submission',
+            active: 'written-evaluations',
+            user,
+            attempt,
+            bank: attempt.bank,
+            student: attempt.user,
+            questions: questionsWithAnswers,
+            successMsg: req.query.success || '',
+            errorMsg: req.query.error || ''
+        });
+    } catch (err) {
+        console.error('Error opening written evaluation form:', err);
+        res.status(500).send('Server error opening evaluation');
+    }
+});
+
+// POST /teacher/written-evaluations/:attemptId - Submit evaluation marks and feedback
+router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const user = req.session.user;
+        const QuestionBankAttempt = require('../models/QuestionBankAttempt');
+        const QuestionBank = require('../models/QuestionBank');
+        const Question = require('../models/Question');
+        const Notification = require('../models/Notification');
+
+        const attempt = await QuestionBankAttempt.findById(req.params.attemptId).populate('bank');
+        if (!attempt || !attempt.bank) {
+            return res.status(404).json({ success: false, error: 'Attempt not found' });
+        }
+
+        // Authorization check
+        const { bankFilter, isUnrestricted } = await getTeacherAccessibleBankQuery(user._id, user);
+        if (!isUnrestricted) {
+            const isAccessible = await QuestionBank.findOne({
+                _id: attempt.bank._id,
+                ...bankFilter
+            });
+            if (!isAccessible) {
+                return res.status(403).json({ success: false, error: 'Unauthorized to evaluate this subject or class.' });
+            }
+        }
+
+        // Fetch questions
+        const questions = await Question.find({ bankId: attempt.bank._id }).lean();
+        const qMap = new Map();
+        questions.forEach(q => qMap.set(q._id.toString(), q));
+
+        let totalWrittenEarned = 0;
+        let totalWrittenMax = 0;
+
+        // Update each answer in attempt.userAnswers
+        attempt.userAnswers.forEach((ua, idx) => {
+            if (ua.questionType !== 'MCQ') {
+                const qIdStr = ua.questionId ? ua.questionId.toString() : String(idx);
+                const qObj = qMap.get(qIdStr);
+                const isComprehension = (ua.questionType === 'Comprehension') || (qObj && qObj.questionType === 'Comprehension');
+                const defaultMark = (ua.questionType === 'Medium') ? 2 : (isComprehension ? 7 : 1);
+                const maxM = (qObj && typeof qObj.marks === 'number' && qObj.marks > 0) ? qObj.marks : (ua.maxMarks || defaultMark);
+
+                ua.maxMarks = maxM;
+
+                let markObtained = 0;
+                if (isComprehension) {
+                    // Check for individual sub-question marks (Question 1 out of 3, Question 2 out of 4)
+                    let q1Input = req.body[`marks_${qIdStr}_q1`];
+                    if (q1Input === undefined) q1Input = req.body[`marks_${idx}_q1`];
+                    let q2Input = req.body[`marks_${qIdStr}_q2`];
+                    if (q2Input === undefined) q2Input = req.body[`marks_${idx}_q2`];
+
+                    if (q1Input !== undefined || q2Input !== undefined) {
+                        const q1Val = parseFloat(q1Input);
+                        const q2Val = parseFloat(q2Input);
+                        const q1Mark = isNaN(q1Val) ? 0 : Math.max(0, Math.min(3, q1Val));
+                        const q2Mark = isNaN(q2Val) ? 0 : Math.max(0, Math.min(4, q2Val));
+                        ua.q1Marks = q1Mark;
+                        ua.q2Marks = q2Mark;
+                        markObtained = q1Mark + q2Mark;
+                    } else {
+                        let inputMark = req.body[`marks_${qIdStr}`];
+                        if (inputMark === undefined) inputMark = req.body[`marks_${idx}`];
+                        const numMark = parseFloat(inputMark);
+                        markObtained = isNaN(numMark) ? 0 : Math.max(0, Math.min(maxM, numMark));
+                    }
+                } else {
+                    // Read mark from form
+                    let inputMark = req.body[`marks_${qIdStr}`];
+                    if (inputMark === undefined) {
+                        inputMark = req.body[`marks_${idx}`];
+                    }
+                    const numMark = parseFloat(inputMark);
+                    markObtained = isNaN(numMark) ? 0 : Math.max(0, Math.min(maxM, numMark));
+                }
+
+                // Read comment from form
+                let inputComment = req.body[`comment_${qIdStr}`];
+                if (inputComment === undefined) {
+                    inputComment = req.body[`comment_${idx}`];
+                }
+                const commQ1 = req.body[`comment_${qIdStr}_q1`] !== undefined ? req.body[`comment_${qIdStr}_q1`] : req.body[`comment_${idx}_q1`];
+                const commQ2 = req.body[`comment_${qIdStr}_q2`] !== undefined ? req.body[`comment_${qIdStr}_q2`] : req.body[`comment_${idx}_q2`];
+                if (commQ1 || commQ2) {
+                    const cParts = [];
+                    if (commQ1 && commQ1.trim()) cParts.push(`[Question 1]: ${commQ1.trim()}`);
+                    if (commQ2 && commQ2.trim()) cParts.push(`[Question 2]: ${commQ2.trim()}`);
+                    inputComment = cParts.join('\n\n');
+                }
+
+                // Read image attachment from form (base64 DataURL or existing image path)
+                let inputImage = req.body[`image_${qIdStr}`];
+                if (!inputImage) inputImage = req.body[`image_${idx}`];
+                if (!inputImage) inputImage = req.body[`image_${qIdStr}_q1`] || req.body[`image_${idx}_q1`];
+                if (!inputImage) inputImage = req.body[`image_${qIdStr}_q2`] || req.body[`image_${idx}_q2`];
+
+                if (typeof inputImage === 'string' && inputImage.startsWith('data:image/')) {
+                    try {
+                        const fs = require('fs');
+                        const path = require('path');
+                        const matches = inputImage.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+                        if (matches && matches.length === 3) {
+                            const mimeType = matches[1].toLowerCase();
+                            let ext = 'png';
+                            if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
+                            else if (mimeType.includes('webp')) ext = 'webp';
+                            else if (mimeType.includes('gif')) ext = 'gif';
+                            
+                            const buffer = Buffer.from(matches[2], 'base64');
+                            const uploadDir = path.join(__dirname, '../../client/public/uploads/evaluations');
+                            fs.mkdirSync(uploadDir, { recursive: true });
+                            const filename = `eval-${Date.now()}-${idx}.${ext}`;
+                            fs.writeFileSync(path.join(uploadDir, filename), buffer);
+                            ua.teacherImage = `/uploads/evaluations/${filename}`;
+                        }
+                    } catch (imgErr) {
+                        console.warn('Failed to save teacher image file:', imgErr);
+                    }
+                } else if (typeof inputImage === 'string') {
+                    ua.teacherImage = inputImage.trim();
+                }
+
+                ua.marksObtained = markObtained;
+                ua.teacherComment = (inputComment || '').trim();
+                ua.isReviewed = true;
+
+                totalWrittenEarned += markObtained;
+                totalWrittenMax += maxM;
+            }
+        });
+
+        // Set overall teacher review
+        const overallFeedback = (req.body.overallFeedback || '').trim();
+        let overallImage = (req.body.overallImage || '').trim();
+        if (typeof overallImage === 'string' && overallImage.startsWith('data:image/')) {
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const matches = overallImage.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+                if (matches && matches.length === 3) {
+                    const mimeType = matches[1].toLowerCase();
+                    let ext = 'png';
+                    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
+                    else if (mimeType.includes('webp')) ext = 'webp';
+                    else if (mimeType.includes('gif')) ext = 'gif';
+                    
+                    const buffer = Buffer.from(matches[2], 'base64');
+                    const uploadDir = path.join(__dirname, '../../client/public/uploads/evaluations');
+                    fs.mkdirSync(uploadDir, { recursive: true });
+                    const filename = `overall-${Date.now()}.${ext}`;
+                    fs.writeFileSync(path.join(uploadDir, filename), buffer);
+                    overallImage = `/uploads/evaluations/${filename}`;
+                }
+            } catch (overallImgErr) {
+                console.warn('Failed to save overall teacher image file:', overallImgErr);
+            }
+        }
+
+        attempt.teacherReview = {
+            reviewedBy: user._id,
+            reviewerName: user.name || 'Teacher',
+            reviewedAt: new Date(),
+            overallFeedback,
+            overallImage: overallImage || '',
+            totalWrittenScore: totalWrittenEarned,
+            maxWrittenScore: totalWrittenMax
+        };
+        attempt.writtenStatus = 'reviewed';
+        attempt.markModified('userAnswers');
+        attempt.markModified('teacherReview');
+
+        await attempt.save();
+
+        // Send notification to student
+        try {
+            const bankTitle = attempt.bank.title || attempt.bank.subject || 'Written Exam';
+            await Notification.create({
+                user: attempt.user,
+                title: 'Written Exam Evaluated',
+                message: `Your written submission for "${bankTitle}" has been evaluated by ${user.name}. Your written score: ${totalWrittenEarned}/${totalWrittenMax}.`,
+                type: 'exam',
+                link: `/question-bank/written-evaluation/${attempt._id}`
+            });
+        } catch (notifErr) {
+            console.warn('Failed to send evaluation notification:', notifErr);
+        }
+
+        // Log system activity
+        await logActivity(req, 'UPDATE', `Evaluated written exam attempt ${attempt._id} with score ${totalWrittenEarned}/${totalWrittenMax}`, 'QuestionBankAttempt', attempt._id);
+
+        if (req.xhr || req.headers.accept?.includes('application/json')) {
+            return res.json({ success: true, redirectUrl: `/teacher/written-evaluations?success=Evaluation+saved+successfully` });
+        }
+
+        res.redirect('/teacher/written-evaluations?success=Evaluation+saved+successfully');
+    } catch (err) {
+        console.error('Error saving teacher written evaluation:', err);
+        if (req.xhr || req.headers.accept?.includes('application/json')) {
+            return res.status(500).json({ success: false, error: err.message });
+        }
+        res.redirect(`/teacher/written-evaluations/${req.params.attemptId}?error=Failed+to+save+evaluation`);
+    }
+});
+
 module.exports = router;
+

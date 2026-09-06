@@ -1,0 +1,1588 @@
+<!DOCTYPE html>
+<html lang="bn" class="h-full">
+
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Oddhay AI - Academic Study Assistant | ODDHAY</title>
+    <!-- Marked.js for Markdown parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- KaTeX for ultra-fast LaTeX Math Equation Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
+
+    <style>
+        .material-symbols-rounded {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            vertical-align: middle;
+            line-height: 1;
+        }
+
+        .chat-scroll-area {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+        }
+        .chat-scroll-area::-webkit-scrollbar {
+            width: 5px;
+        }
+        .chat-scroll-area::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .chat-scroll-area::-webkit-scrollbar-thumb {
+            background-color: rgba(148, 163, 184, 0.3);
+            border-radius: 9999px;
+        }
+
+        .ai-markdown-content {
+            font-size: 0.935rem;
+            line-height: 1.68;
+        }
+        .ai-markdown-content h1, .ai-markdown-content h2, .ai-markdown-content h3, .ai-markdown-content h4 {
+            font-weight: 700;
+            margin-top: 0.85rem;
+            margin-bottom: 0.4rem;
+            color: inherit;
+        }
+        .ai-markdown-content h1 {
+            font-size: 1.18rem;
+        }
+        .ai-markdown-content h2 {
+            font-size: 1.08rem;
+        }
+        .ai-markdown-content h3 {
+            font-size: 1.02rem;
+        }
+        .ai-markdown-content h4 {
+            font-size: 0.95rem;
+        }
+        .ai-markdown-content p {
+            margin-bottom: 0.55rem;
+            line-height: 1.68;
+        }
+        .ai-markdown-content ul, .ai-markdown-content ol {
+            margin-left: 1.25rem;
+            margin-bottom: 0.5rem;
+            list-style-type: disc;
+        }
+        .ai-markdown-content ol {
+            list-style-type: decimal;
+        }
+        .ai-markdown-content li {
+            margin-bottom: 0.25rem;
+        }
+        .ai-markdown-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.75rem 0;
+            font-size: 0.78rem;
+        }
+        .ai-markdown-content th, .ai-markdown-content td {
+            border: 1px solid rgba(203, 213, 225, 0.6);
+            padding: 6px 10px;
+            text-align: left;
+        }
+        .dark .ai-markdown-content th, .dark .ai-markdown-content td {
+            border-color: rgba(51, 65, 85, 0.6);
+        }
+        .ai-markdown-content th {
+            background-color: rgba(241, 245, 249, 0.7);
+            font-weight: bold;
+        }
+        .dark .ai-markdown-content th {
+            background-color: rgba(30, 41, 59, 0.7);
+        }
+        .ai-markdown-content blockquote {
+            border-left: 3px solid #38bdf8;
+            padding-left: 0.75rem;
+            margin: 0.5rem 0;
+            font-style: italic;
+            background-color: rgba(56, 189, 248, 0.05);
+            border-radius: 0 8px 8px 0;
+        }
+        .ai-markdown-content code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            background: rgba(148, 163, 184, 0.15);
+            padding: 0.15rem 0.35rem;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        /* Pulse animation for thinking */
+        @keyframes subtle-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.98); }
+        }
+        .animate-thinking {
+            animation: subtle-pulse 1.5s ease-in-out infinite;
+        }
+
+        /* Clean select overrides: guarantees no duplicate arrow */
+        select.custom-select {
+            -webkit-appearance: none !important;
+            -moz-appearance: none !important;
+            appearance: none !important;
+            background-image: none !important;
+        }
+
+        /* Silky Smooth History Sidebar Drawer Transitions */
+        #historySidebar {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            right: 0;
+            width: 340px;
+            max-width: 88vw;
+            z-index: 30;
+            transform: translate3d(100%, 0, 0);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1), 
+                        opacity 220ms ease,
+                        box-shadow 300ms ease;
+            will-change: transform, opacity;
+            border-left: 1px solid transparent;
+        }
+
+        #historySidebar.sidebar-open {
+            transform: translate3d(0, 0, 0);
+            opacity: 1;
+            pointer-events: auto;
+            border-left-color: rgba(226, 232, 240, 0.8);
+            box-shadow: -12px 0 28px -6px rgba(0, 0, 0, 0.09), -6px 0 12px -4px rgba(0, 0, 0, 0.05);
+        }
+
+        .dark #historySidebar.sidebar-open {
+            border-left-color: rgba(30, 41, 59, 0.8);
+            box-shadow: -12px 0 28px -6px rgba(0, 0, 0, 0.4), -6px 0 12px -4px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Locked inner dimensions to prevent content reflow during animation */
+        .history-sidebar-inner {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #historyBackdrop {
+            transition: opacity 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+
+<body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <%- include('partials/student-header', { pageTitle: 'Oddhay AI' }) %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative bg-white dark:bg-[#0b1120]">
+        <%- include('partials/student-sidebar', { activePage: 'ai' }) %>
+
+        <!-- Main Chat Workspace (Seamless transparent conversation view) -->
+        <main class="flex-1 flex flex-col h-full overflow-hidden bg-white dark:bg-[#0b1120] relative">
+            
+            <!-- Floating Sidebar Toggle Button -->
+            <div class="absolute top-2.5 right-3 sm:right-4 z-20 pointer-events-auto">
+                <button type="button" id="toggleHistoryBtn" onclick="toggleHistorySidebar(true)" class="flex items-center justify-center size-9 sm:size-9.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800/70 transition-all cursor-pointer select-none border border-slate-200/60 dark:border-slate-700/50 shadow-2xs hover:text-indigo-600 dark:hover:text-indigo-400 bg-white/40 dark:bg-[#0b1120]/40 backdrop-blur-sm" title="Open History Sidebar">
+                    <span id="sidebarToggleIcon" class="material-symbols-rounded text-2xl">dock_to_right</span>
+                </button>
+            </div>
+
+            <!-- Chat & Solutions Scrollable Viewport -->
+            <div id="chatContainer" class="flex-1 overflow-y-auto chat-scroll-area px-4 sm:px-6 lg:px-8 pt-4 pb-4 space-y-6">
+                
+                <!-- Welcome Card (Visible when chat is empty) -->
+                <div id="welcomeScreen" class="max-w-2xl mx-auto flex flex-col items-center justify-center text-center py-8 sm:py-14 space-y-6">
+                    
+                    <!-- AI Badge & Greeting -->
+                    <div class="flex flex-col items-center gap-3">
+                        <div class="relative size-16 flex items-center justify-center">
+                            <div class="w-full h-full rounded-2xl bg-gradient-to-tr from-sky-500 via-indigo-500 to-rose-500 p-0.5 shadow-lg shadow-indigo-500/20">
+                                <div class="w-full h-full bg-white dark:bg-[#0f172a] rounded-[14px] flex items-center justify-center text-indigo-600 dark:text-indigo-400 font-black text-2xl tracking-tighter select-none">
+                                    <span>O</span>
+                                </div>
+                            </div>
+                            <div class="absolute -bottom-1 -right-1 size-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-md border-2 border-white dark:border-[#0b1120]">
+                                <span class="material-symbols-rounded text-sm leading-none">auto_awesome</span>
+                            </div>
+                        </div>
+                        <h1 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">
+                            ODDHAY AI
+                        </h1>
+                        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md leading-relaxed font-normal">
+                            Instant smart solutions according to textbook.
+                        </p>
+                    </div>
+
+                    <!-- Platform AI Highlights Checklist -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 w-full pt-4 border-t border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                        <div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                            <span class="material-symbols-rounded text-emerald-500 text-base shrink-0 leading-none">check_circle</span>
+                            <span>Smart Solutions</span>
+                        </div>
+                        <div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                            <span class="material-symbols-rounded text-emerald-500 text-base shrink-0 leading-none">check_circle</span>
+                            <span>NCTB Syllabus Aligned</span>
+                        </div>
+                        <div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                            <span class="material-symbols-rounded text-emerald-500 text-base shrink-0 leading-none">check_circle</span>
+                            <span>Bangla & English Support</span>
+                        </div>
+                        <div class="flex items-center justify-center gap-1.5 whitespace-nowrap">
+                            <span class="material-symbols-rounded text-emerald-500 text-base shrink-0 leading-none">check_circle</span>
+                            <span>Core Math & Science</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Messages Feed (Appended dynamically) -->
+                <div id="messagesList" class="max-w-3xl mx-auto space-y-6">
+                    <!-- Dynamic Messages injected here -->
+                </div>
+
+                <!-- AI Thinking Indicator -->
+                <div id="thinkingIndicator" class="max-w-3xl mx-auto hidden">
+                    <div class="flex items-center gap-2.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 rounded-2xl rounded-tl-none px-4 py-2.5 shadow-xs w-fit">
+                        <span class="material-symbols-rounded text-lg text-indigo-600 dark:text-indigo-400 leading-none animate-spin shrink-0">sync</span>
+                        <span id="thinkingText" class="text-xs sm:text-sm font-normal text-slate-600 dark:text-slate-300 transition-opacity duration-200">Analyzing your question...</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Bottom Query Input & Filter Bar (Seamless floating container) -->
+            <div class="w-full bg-transparent p-3 sm:p-4 shrink-0 z-20">
+                <div class="max-w-3xl mx-auto space-y-2">
+                    
+                    <!-- Hidden Input for Enrolled Class Level -->
+                    <input type="hidden" id="classSelector" value="<%= userClassLevel %>">
+
+                    <!-- Centered Alert Message Above Text Box -->
+                    <div id="subjectAlert" class="hidden flex justify-center transition-all duration-300 -mb-1">
+                        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-500/20 animate-pulse">
+                            <span class="material-symbols-rounded text-base shrink-0 leading-none">warning</span>
+                            <span>Please select a subject first!</span>
+                        </div>
+                    </div>
+
+                    <!-- File Attachment Preview Badge -->
+                    <div id="attachmentPreviewBar" class="hidden flex items-center gap-2 mb-1 px-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50/90 dark:bg-indigo-950/70 border border-indigo-200/80 dark:border-indigo-800/80 text-xs text-indigo-700 dark:text-indigo-300 shadow-xs max-w-full">
+                            <div id="attachmentThumbnail" class="size-7 rounded-lg overflow-hidden flex items-center justify-center bg-indigo-100 dark:bg-indigo-900/60 text-indigo-600 dark:text-indigo-400 shrink-0">
+                                <span class="material-symbols-rounded text-base leading-none">attach_file</span>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <p id="attachmentName" class="font-bold truncate max-w-[180px] sm:max-w-[260px]">file.pdf</p>
+                                <p id="attachmentSize" class="text-[10px] text-slate-400 dark:text-slate-500">120 KB</p>
+                            </div>
+                            <button type="button" onclick="clearAttachment()" class="size-5 rounded-full hover:bg-indigo-200/60 dark:hover:bg-indigo-800/60 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors cursor-pointer" title="Remove attachment">
+                                <span class="material-symbols-rounded text-sm leading-none">close</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Hidden File Inputs -->
+                    <input type="file" id="imageFileInput" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+                    <input type="file" id="cameraFileInput" accept="image/*" capture="environment" class="hidden" onchange="handleFileSelect(event)">
+                    <input type="file" id="pdfFileInput" accept="application/pdf" class="hidden" onchange="handleFileSelect(event)">
+
+                    <!-- Unified Single-Line Query Form -->
+                    <form id="chatForm" onsubmit="submitQuery(event)" class="relative flex items-center gap-1.5 sm:gap-2 rounded-2xl border border-slate-300/80 dark:border-slate-700/80 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 p-1.5 sm:p-2.5 transition-all shadow-md">
+                        
+                        <!-- Left Side: Attachment (+) Button & Popover Menu -->
+                        <div class="relative shrink-0 flex items-center">
+                            <button type="button" id="attachmentBtn" onclick="toggleAttachmentMenu(event)" class="size-9 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all flex items-center justify-center cursor-pointer select-none border border-slate-200/70 dark:border-slate-700/70 active:scale-95 shadow-2xs" title="Attach Image or PDF">
+                                <span class="material-symbols-rounded text-2xl leading-none">add</span>
+                            </button>
+
+                            <!-- Attachment Popover Menu -->
+                            <div id="attachmentMenu" class="hidden absolute bottom-12 left-0 w-52 bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xl p-1.5 z-50 space-y-0.5 backdrop-blur-xl">
+                                <button type="button" onclick="triggerCameraInput()" class="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-2.5 transition-all cursor-pointer">
+                                    <span class="material-symbols-rounded text-base text-sky-500 shrink-0">photo_camera</span>
+                                    <span>Take Photo</span>
+                                </button>
+                                <button type="button" onclick="triggerImageInput()" class="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-2.5 transition-all cursor-pointer">
+                                    <span class="material-symbols-rounded text-base text-indigo-500 shrink-0">image</span>
+                                    <span>Upload Image</span>
+                                </button>
+                                <button type="button" onclick="triggerPdfInput()" class="w-full px-3 py-2 rounded-xl text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 hover:text-indigo-600 dark:hover:text-indigo-400 flex items-center gap-2.5 transition-all cursor-pointer">
+                                    <span class="material-symbols-rounded text-base text-rose-500 shrink-0">picture_as_pdf</span>
+                                    <span>Upload Document (PDF)</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Textarea Input Area (flex-1) -->
+                        <div class="flex-1 min-w-0 flex items-center px-1">
+                            <textarea id="promptInput" rows="1" placeholder="Write your question, equation, or topic here..." class="w-full bg-transparent border-0 resize-none p-0 text-xs sm:text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:ring-0 leading-relaxed font-normal min-h-[24px] max-h-32 no-scrollbar" onkeydown="handleKeyDown(event)" oninput="autoGrow(this)"></textarea>
+                        </div>
+
+                        <!-- Right Side Controls: Subject Selector, Study Modes, and Send Button -->
+                        <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                            <!-- Subject Selector Dropdown -->
+                            <div class="relative flex items-center shrink-0">
+                                <select id="subjectSelector" onchange="onSubjectChange()" class="custom-select h-9 pl-3 pr-7 rounded-xl text-xs font-semibold bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer transition-all shadow-2xs max-w-[120px] sm:max-w-[145px] truncate leading-none">
+                                    <option value="" selected disabled class="bg-white dark:bg-slate-800 text-slate-400">Select Subject</option>
+                                    <% assignedSubjects.forEach(sub => { %>
+                                        <option value="<%= sub %>" class="bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200"><%= sub %></option>
+                                    <% }) %>
+                                </select>
+                                <span class="material-symbols-rounded text-slate-400 text-base absolute right-1.5 pointer-events-none select-none">expand_more</span>
+                            </div>
+
+                            <!-- 2 Study Modes: 1st Concept Explainer, 2nd Problem Solver -->
+                            <div class="hidden sm:inline-flex items-center p-0.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 shrink-0">
+                                <button type="button" onclick="setStudyMode('concept')" id="mode-concept" class="mode-btn px-2.5 py-1.5 rounded-lg text-[11.5px] font-bold transition-all flex items-center gap-1 bg-white dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 shadow-2xs border border-slate-200/60 dark:border-indigo-800 cursor-pointer" title="Concept Explainer">
+                                    <span class="material-symbols-rounded text-sm shrink-0 leading-none">lightbulb</span>
+                                    <span>Concept</span>
+                                </button>
+
+                                <button type="button" onclick="setStudyMode('solver')" id="mode-solver" class="mode-btn px-2.5 py-1.5 rounded-lg text-[11.5px] font-semibold transition-all flex items-center gap-1 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 border border-transparent cursor-pointer" title="Problem Solver">
+                                    <span class="material-symbols-rounded text-sm shrink-0 leading-none">calculate</span>
+                                    <span>Solver</span>
+                                </button>
+                            </div>
+
+                            <!-- Send / Stop Button -->
+                            <button type="submit" id="sendBtn" class="size-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white flex items-center justify-center transition-all shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group shrink-0" title="Send Question">
+                                <span id="sendBtnIcon" class="material-symbols-rounded text-[21px] sm:text-[22px] leading-none transition-transform group-hover:-translate-y-0.5">arrow_upward</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Collapsible AI History Sidebar / Drawer (Solid Opaque Background) -->
+        <aside id="historySidebar" class="bg-slate-50 dark:bg-[#0f172a] shrink-0 flex flex-col h-full border-l border-slate-200 dark:border-slate-800 shadow-2xl z-30">
+            <div class="history-sidebar-inner">
+                <!-- Sidebar Header: Toggle Close Button & New Chat Action -->
+                <div class="p-3 sm:p-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0b1120] flex items-center justify-between gap-2.5 shrink-0">
+                    <button type="button" onclick="toggleHistorySidebar(false)" class="flex items-center justify-center size-9 sm:size-9.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all cursor-pointer select-none border border-slate-200 dark:border-slate-700 shadow-xs active:scale-95" title="Close History">
+                        <span class="material-symbols-rounded text-2xl -scale-x-100">dock_to_right</span>
+                    </button>
+                    
+                    <button type="button" onclick="startNewChat()" class="flex-1 h-9 sm:h-9.5 px-3.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer select-none active:scale-[0.98]" title="Start New Chat">
+                        <span class="material-symbols-rounded text-lg leading-none">add</span>
+                        <span>New Chat</span>
+                    </button>
+                </div>
+
+                <!-- Search Bar & Filter Dropdown in ONE LINE (Solid Background) -->
+                <div class="p-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-[#0b1120]/80 flex items-center gap-2 shrink-0">
+                    <!-- History Search Input with Search Icon on the RIGHT SIDE -->
+                    <div class="relative flex-1 flex items-center min-w-0">
+                        <input type="text" id="historySearchInput" placeholder="Search chats..." oninput="debounceHistorySearch()" class="w-full h-8.5 pl-2.5 pr-8 rounded-lg text-xs font-normal bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-xs">
+                        <span id="historySearchIcon" class="material-symbols-rounded text-slate-400 text-base absolute right-2.5 pointer-events-none select-none">search</span>
+                        <button type="button" id="clearSearchBtn" onclick="clearHistorySearch()" class="hidden absolute right-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer p-0.5" title="Clear Search">
+                            <span class="material-symbols-rounded text-base leading-none">close</span>
+                        </button>
+                    </div>
+
+                    <!-- Subject Filter Dropdown (Solid Background) -->
+                    <div class="relative w-[135px] shrink-0 flex items-center">
+                        <select id="historySubjectFilter" onchange="loadConversations()" class="custom-select w-full h-8.5 pl-2.5 pr-6 rounded-lg text-[11.5px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer truncate shadow-xs">
+                            <option value="all" class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 py-1">📚 All Subjects</option>
+                            <% assignedSubjects.forEach(sub => { %>
+                                <option value="<%= sub %>" class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 py-1"><%= sub %></option>
+                            <% }) %>
+                        </select>
+                        <span class="material-symbols-rounded text-slate-400 text-base absolute right-1.5 pointer-events-none select-none">expand_more</span>
+                    </div>
+                </div>
+
+                <!-- Conversations List Scroll Container -->
+                <div id="conversationsListContainer" class="flex-1 overflow-y-auto chat-scroll-area p-2 space-y-1">
+                    <!-- Injected via JavaScript -->
+                </div>
+
+                <!-- Inline Sidebar Toast Notification (Inside the History Sidebar) -->
+                <div id="sidebarToast" class="absolute bottom-3 left-3 right-3 z-40 transform translate-y-6 opacity-0 pointer-events-none transition-all duration-300 bg-slate-900 dark:bg-slate-800 text-white text-xs font-semibold px-3 py-2 rounded-xl shadow-xl flex items-center justify-between gap-2 border border-slate-700/80">
+                    <div class="flex items-center gap-2">
+                        <span id="sidebarToastIcon" class="material-symbols-rounded text-emerald-400 text-base shrink-0 leading-none">check</span>
+                        <span id="sidebarToastMessage">Conversation deleted</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Backdrop overlay for mobile drawer -->
+        <div id="historyBackdrop" onclick="toggleHistorySidebar(false)" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40 md:hidden opacity-0 pointer-events-none transition-opacity duration-300"></div>
+    </div>
+
+    <!-- Toast Notification for Copying & Validation -->
+    <div id="aiToast" class="fixed bottom-20 right-6 z-50 transform translate-y-10 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 border border-slate-800">
+        <span id="toastIcon" class="material-symbols-rounded text-emerald-400 text-base shrink-0 leading-none">check</span>
+        <span id="toastMessage">Copied to clipboard!</span>
+    </div>
+
+    <!-- System Delete Confirmation Modal -->
+    <div id="deleteConfirmModal" onclick="if(event.target === this) closeDeleteModal()" class="fixed inset-0 bg-slate-950/50 backdrop-blur-xs z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-200">
+        <div class="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 max-w-[290px] w-full shadow-2xl transform scale-95 transition-transform duration-200 space-y-3">
+            <div class="flex items-center gap-3">
+                <div class="size-8.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-500 flex items-center justify-center shrink-0 border border-rose-100 dark:border-rose-900/40">
+                    <span class="material-symbols-rounded text-lg">delete</span>
+                </div>
+                <div>
+                    <h3 class="text-[13px] font-bold text-slate-800 dark:text-slate-100 leading-tight">Delete this chat?</h3>
+                    <p class="text-[11.5px] text-slate-400 dark:text-slate-500">This action cannot be undone.</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/80">
+                <button type="button" onclick="closeDeleteModal()" class="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                    Cancel
+                </button>
+                <button type="button" onclick="executeDeleteConversation()" class="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-rose-600 hover:bg-rose-700 active:scale-95 text-white shadow-xs transition-all cursor-pointer">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentMode = 'concept'; // Default mode is Concept Explainer
+        let isGenerating = false;
+        let activeConversationId = null;
+        let searchDebounceTimer = null;
+        let isHistoryOpen = false;
+        let currentAbortController = null;
+
+        // Initialize on DOM load
+        document.addEventListener('DOMContentLoaded', async () => {
+            autoGrow(document.getElementById('promptInput'));
+
+            // Restore desktop sidebar open/close preference
+            const savedPref = localStorage.getItem('oddhay_ai_history_open');
+            if (window.innerWidth >= 1024) {
+                const shouldOpen = savedPref !== null ? savedPref === 'true' : true;
+                if (shouldOpen) {
+                    toggleHistorySidebar(true);
+                }
+            } else if (window.innerWidth >= 768) {
+                if (savedPref === 'true') {
+                    toggleHistorySidebar(true);
+                }
+            }
+
+            // Load conversations and auto-restore the ongoing active conversation on refresh
+            await loadConversations(true);
+        });
+
+        // Toggle History Sidebar Drawer (Smooth sliding transition without resizing conversation)
+        function toggleHistorySidebar(forceState) {
+            const sidebar = document.getElementById('historySidebar');
+            const backdrop = document.getElementById('historyBackdrop');
+            const toggleBtn = document.getElementById('toggleHistoryBtn');
+            if (!sidebar) return;
+
+            if (typeof forceState === 'boolean') {
+                isHistoryOpen = forceState;
+            } else {
+                isHistoryOpen = !isHistoryOpen;
+            }
+
+            if (window.innerWidth >= 768) {
+                localStorage.setItem('oddhay_ai_history_open', isHistoryOpen);
+            }
+
+            if (isHistoryOpen) {
+                sidebar.classList.add('sidebar-open');
+                if (backdrop) {
+                    backdrop.classList.remove('opacity-0', 'pointer-events-none');
+                    backdrop.classList.add('opacity-100', 'pointer-events-auto');
+                }
+                if (toggleBtn) {
+                    toggleBtn.classList.add('opacity-0', 'pointer-events-none');
+                }
+            } else {
+                sidebar.classList.remove('sidebar-open');
+                if (backdrop) {
+                    backdrop.classList.remove('opacity-100', 'pointer-events-auto');
+                    backdrop.classList.add('opacity-0', 'pointer-events-none');
+                }
+                if (toggleBtn) {
+                    // Reveal toggle button smoothly after sidebar starts sliding off
+                    setTimeout(() => {
+                        if (!isHistoryOpen) {
+                            toggleBtn.classList.remove('opacity-0', 'pointer-events-none');
+                        }
+                    }, 180);
+                }
+            }
+        }
+
+        // Close History Sidebar when clicking anywhere outside it (Mobile, Tablet, Desktop)
+        document.addEventListener('click', (e) => {
+            if (!isHistoryOpen) return;
+            const sidebar = document.getElementById('historySidebar');
+            const toggleBtn = document.getElementById('toggleHistoryBtn');
+            const deleteModal = document.getElementById('deleteConfirmModal');
+            
+            // If click originated inside the history sidebar, on the toggle button, or inside the delete modal, do nothing
+            if (sidebar && sidebar.contains(e.target)) return;
+            if (toggleBtn && toggleBtn.contains(e.target)) return;
+            if (deleteModal && deleteModal.contains(e.target)) return;
+            
+            // Otherwise, close the history sidebar
+            toggleHistorySidebar(false);
+        });
+
+        // Set Active Study Mode
+        function setStudyMode(mode) {
+            currentMode = mode;
+            
+            const solverBtn = document.getElementById('mode-solver');
+            const conceptBtn = document.getElementById('mode-concept');
+            
+            if (solverBtn && conceptBtn) {
+                solverBtn.className = 'mode-btn px-2.5 py-1.5 rounded-lg text-[11.5px] font-semibold transition-all flex items-center gap-1 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 border border-transparent cursor-pointer';
+                conceptBtn.className = 'mode-btn px-2.5 py-1.5 rounded-lg text-[11.5px] font-semibold transition-all flex items-center gap-1 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 border border-transparent cursor-pointer';
+
+                const activeBtn = document.getElementById('mode-' + mode);
+                if (activeBtn) {
+                    activeBtn.className = 'mode-btn px-2.5 py-1.5 rounded-lg text-[11.5px] font-bold transition-all flex items-center gap-1 bg-white dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 shadow-2xs border border-slate-200/60 dark:border-indigo-800 cursor-pointer';
+                }
+            }
+        }
+
+        // On Subject Dropdown Change
+        function onSubjectChange() {
+            const subjectSelect = document.getElementById('subjectSelector');
+            if (subjectSelect) {
+                subjectSelect.classList.remove('!border-rose-500', '!ring-2', '!ring-rose-500/30');
+            }
+            const alertEl = document.getElementById('subjectAlert');
+            if (alertEl) alertEl.classList.add('hidden');
+        }
+
+        // Load AI Conversations List from Server & Auto-restore active chat
+        async function loadConversations(isInitial = false) {
+            const container = document.getElementById('conversationsListContainer');
+            if (!container) return;
+            
+            const subjectFilterEl = document.getElementById('historySubjectFilter');
+            const searchInputEl = document.getElementById('historySearchInput');
+            
+            const subjectFilter = subjectFilterEl ? subjectFilterEl.value : 'all';
+            const searchInput = searchInputEl ? searchInputEl.value.trim() : '';
+
+            try {
+                const params = new URLSearchParams();
+                if (subjectFilter && subjectFilter !== 'all') params.append('subject', subjectFilter);
+                if (searchInput) params.append('q', searchInput);
+
+                const res = await fetch(`/api/ai/conversations?${params.toString()}`);
+                const data = await res.json();
+
+                if (data.success && Array.isArray(data.conversations)) {
+                    renderConversationsList(data.conversations);
+
+                    // If page refresh during an active chat session in this tab: restore that specific chat
+                    if (isInitial) {
+                        const activeSessionId = sessionStorage.getItem('oddhay_session_active_chat');
+                        if (activeSessionId) {
+                            const exists = data.conversations.find(c => c._id === activeSessionId);
+                            if (exists) {
+                                openConversation(activeSessionId, true);
+                            } else {
+                                sessionStorage.removeItem('oddhay_session_active_chat');
+                            }
+                        }
+                    }
+                } else {
+                    container.innerHTML = `<div class="p-4 text-center text-xs text-rose-500 font-medium">${escapeHtml(data.error || 'Failed to load history')}</div>`;
+                }
+            } catch (err) {
+                console.error('Error loading history:', err);
+                container.innerHTML = `<div class="p-4 text-center text-xs text-rose-500 font-medium">Failed to load history</div>`;
+            }
+        }
+
+        // Debounce History Search
+        function debounceHistorySearch() {
+            const searchInput = document.getElementById('historySearchInput');
+            const clearBtn = document.getElementById('clearSearchBtn');
+            const searchIcon = document.getElementById('historySearchIcon');
+            if (searchInput) {
+                if (searchInput.value.trim().length > 0) {
+                    if (clearBtn) clearBtn.classList.remove('hidden');
+                    if (searchIcon) searchIcon.classList.add('hidden');
+                } else {
+                    if (clearBtn) clearBtn.classList.add('hidden');
+                    if (searchIcon) searchIcon.classList.remove('hidden');
+                }
+            }
+            if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {
+                loadConversations();
+            }, 300);
+        }
+
+        // Clear History Search Input
+        function clearHistorySearch() {
+            const searchInput = document.getElementById('historySearchInput');
+            const clearBtn = document.getElementById('clearSearchBtn');
+            const searchIcon = document.getElementById('historySearchIcon');
+            if (searchInput) searchInput.value = '';
+            if (clearBtn) clearBtn.classList.add('hidden');
+            if (searchIcon) searchIcon.classList.remove('hidden');
+            loadConversations();
+        }
+
+        // Select Starter Prompt from Welcome Card
+        function selectStarterPrompt(subject, promptText) {
+            const subSelect = document.getElementById('subjectSelector');
+            if (subSelect && subject) {
+                let matched = false;
+                for (let i = 0; i < subSelect.options.length; i++) {
+                    if (subSelect.options[i].value.toLowerCase() === subject.toLowerCase()) {
+                        subSelect.selectedIndex = i;
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    const opt = document.createElement('option');
+                    opt.value = subject;
+                    opt.textContent = subject;
+                    subSelect.appendChild(opt);
+                    subSelect.value = subject;
+                }
+                onSubjectChange();
+            }
+            const input = document.getElementById('promptInput');
+            if (input) {
+                input.value = promptText;
+                autoGrow(input);
+                input.focus();
+            }
+        }
+
+        // Render Conversations in History Panel
+        function renderConversationsList(conversations) {
+            const container = document.getElementById('conversationsListContainer');
+            if (!container) return;
+            container.innerHTML = '';
+
+            if (conversations.length === 0) {
+                container.innerHTML = `
+                    <div class="py-8 px-3 text-center flex flex-col items-center justify-center text-slate-400 space-y-2">
+                        <span class="material-symbols-rounded text-2xl text-slate-300 dark:text-slate-600">chat_bubble_outline</span>
+                        <p class="text-xs">No conversations found</p>
+                        <button type="button" onclick="startNewChat()" class="text-[11px] font-bold text-indigo-500 hover:underline cursor-pointer">Start a new chat</button>
+                    </div>
+                `;
+                return;
+            }
+
+            const pinned = conversations.filter(c => c.isPinned);
+            const recent = conversations.filter(c => !c.isPinned);
+
+            if (pinned.length > 0) {
+                const pinnedHeader = document.createElement('div');
+                pinnedHeader.className = 'px-2 pt-2 pb-1 text-[10px] font-bold text-amber-500 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1';
+                pinnedHeader.innerHTML = `<span class="material-symbols-rounded text-xs">push_pin</span><span>Pinned</span>`;
+                container.appendChild(pinnedHeader);
+                pinned.forEach(c => container.appendChild(createConversationItem(c)));
+            }
+
+            if (recent.length > 0) {
+                if (pinned.length > 0) {
+                    const recentHeader = document.createElement('div');
+                    recentHeader.className = 'px-2 pt-3 pb-1 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider flex items-center gap-1';
+                    recentHeader.innerHTML = `<span class="material-symbols-rounded text-xs">schedule</span><span>Recent</span>`;
+                    container.appendChild(recentHeader);
+                }
+                recent.forEach(c => container.appendChild(createConversationItem(c)));
+            }
+
+            renderActiveHighlight();
+        }
+
+        // Highlight Active Conversation in the list
+        function renderActiveHighlight() {
+            document.querySelectorAll('#conversationsListContainer [id^="conv-item-"]').forEach(el => {
+                const isCurr = el.id === 'conv-item-' + activeConversationId;
+                if (isCurr) {
+                    el.className = 'group relative p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 bg-indigo-50 dark:bg-indigo-950/80 border-indigo-300 dark:border-indigo-700 shadow-xs ring-1 ring-indigo-500/30';
+                } else {
+                    el.className = 'group relative p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-800 shadow-2xs';
+                }
+            });
+        }
+
+        // Create Individual Conversation Card Element
+        function createConversationItem(c) {
+            const isActive = c._id === activeConversationId;
+            const item = document.createElement('div');
+            item.id = 'conv-item-' + c._id;
+            item.className = `group relative p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2 shadow-2xs ${
+                isActive 
+                    ? 'bg-indigo-50 dark:bg-indigo-950/80 border-indigo-300 dark:border-indigo-700 ring-1 ring-indigo-500/30' 
+                    : 'bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`;
+
+            item.onclick = () => openConversation(c._id);
+
+            const timeAgo = formatRelativeTime(c.updatedAt);
+
+            item.innerHTML = `
+                <div class="flex-1 min-w-0 pr-1 space-y-0.5">
+                    <div class="flex items-center gap-1.5">
+                        <span class="px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-slate-100 dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 truncate max-w-[100px] border border-slate-200/60 dark:border-slate-700/60">${escapeHtml(c.subject || 'General Study')}</span>
+                        <span class="text-[10px] text-slate-400 shrink-0">${timeAgo}</span>
+                    </div>
+                    <h4 class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">${escapeHtml(formatCleanTitle(c.title))}</h4>
+                </div>
+
+                <div class="flex items-center gap-0.5 shrink-0 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button type="button" onclick="togglePinConversation(event, '${c._id}')" class="p-1 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-amber-500 transition-colors cursor-pointer" title="${c.isPinned ? 'Unpin' : 'Pin'}">
+                        <span class="material-symbols-rounded text-sm leading-none ${c.isPinned ? 'text-amber-500 font-bold' : ''}">${c.isPinned ? 'push_pin' : 'keep'}</span>
+                    </button>
+                    <button type="button" onclick="promptDeleteConversation(event, '${c._id}')" class="p-1 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-500 transition-colors cursor-pointer" title="Delete">
+                        <span class="material-symbols-rounded text-sm leading-none">delete</span>
+                    </button>
+                </div>
+            `;
+
+            return item;
+        }
+
+        // Open and Load a Conversation
+        async function openConversation(id, isAutoRestore = false) {
+            if (isGenerating) return;
+            try {
+                const res = await fetch(`/api/ai/conversations/${id}`);
+                const data = await res.json();
+
+                if (data.success && data.conversation) {
+                    const conv = data.conversation;
+                    activeConversationId = conv._id;
+                    sessionStorage.setItem('oddhay_session_active_chat', conv._id);
+
+                    // Update Top Navbar Conversation Title beside "Oddhay AI"
+                    const cleanTitle = formatCleanTitle(conv.title);
+                    const navBox = document.getElementById('headerAiConversationBox');
+                    const navTitle = document.getElementById('headerAiConversationTitle');
+                    if (navBox && navTitle) {
+                        if (cleanTitle) {
+                            navTitle.textContent = cleanTitle;
+                            navBox.classList.remove('hidden');
+                        } else {
+                            navBox.classList.add('hidden');
+                        }
+                    }
+
+                    // Update Top Header Info
+                    const headerInfo = document.getElementById('activeChatHeaderInfo');
+                    const badge = document.getElementById('activeSubjectBadge');
+                    const titleText = document.getElementById('activeTitleText');
+
+                    if (headerInfo && badge && titleText) {
+                        headerInfo.classList.remove('hidden');
+                        badge.textContent = conv.subject || 'General Study';
+                        titleText.textContent = cleanTitle;
+                    }
+
+                    // Update Subject selector & Study mode
+                    const subSelect = document.getElementById('subjectSelector');
+                    if (subSelect && conv.subject) {
+                        let optionFound = false;
+                        for (let i = 0; i < subSelect.options.length; i++) {
+                            if (subSelect.options[i].value.toLowerCase() === conv.subject.toLowerCase()) {
+                                subSelect.selectedIndex = i;
+                                optionFound = true;
+                                break;
+                            }
+                        }
+                        if (!optionFound) {
+                            const opt = document.createElement('option');
+                            opt.value = conv.subject;
+                            opt.textContent = conv.subject;
+                            subSelect.appendChild(opt);
+                            subSelect.value = conv.subject;
+                        }
+                        onSubjectChange();
+                    }
+                    if (conv.mode) {
+                        setStudyMode(conv.mode);
+                    }
+
+                    // Hide Welcome Screen
+                    const welcome = document.getElementById('welcomeScreen');
+                    if (welcome) welcome.classList.add('hidden');
+
+                    // Populate Message Feed
+                    const list = document.getElementById('messagesList');
+                    list.innerHTML = '';
+
+                    if (Array.isArray(conv.messages) && conv.messages.length > 0) {
+                        conv.messages.forEach(msg => {
+                            if (msg.role === 'user') {
+                                let attObj = null;
+                                if (msg.attachmentName || msg.attachmentType) {
+                                    const isPdf = (msg.attachmentType || '').includes('pdf') || (msg.attachmentName || '').endsWith('.pdf');
+                                    attObj = {
+                                        name: msg.attachmentName || (isPdf ? 'document.pdf' : 'image.jpg'),
+                                        size: 'Attached file',
+                                        isPdf: isPdf,
+                                        previewUrl: null
+                                    };
+                                }
+                                appendUserMessage(msg.content, attObj);
+                            } else {
+                                appendAiMessage(msg.content, msg.subject || conv.subject, msg.mode || conv.mode);
+                            }
+                        });
+                    }
+
+                    scrollToBottom();
+                    renderActiveHighlight();
+                    if (!isAutoRestore && window.innerWidth < 768) {
+                        toggleHistorySidebar(false);
+                    }
+                } else {
+                    showToast(data.error || 'Failed to load conversation', 'error');
+                }
+            } catch (err) {
+                console.error('Error opening conversation:', err);
+                showToast('Failed to load conversation', 'error');
+            }
+        }
+
+        // Start a Fresh New Chat
+        function startNewChat(keepSidebarOpen = false) {
+            if (isGenerating) return;
+            activeConversationId = null;
+            sessionStorage.removeItem('oddhay_session_active_chat');
+            
+            // Clear message list & show welcome screen
+            const list = document.getElementById('messagesList');
+            if (list) list.innerHTML = '';
+            const welcome = document.getElementById('welcomeScreen');
+            if (welcome) welcome.classList.remove('hidden');
+
+            const headerInfo = document.getElementById('activeChatHeaderInfo');
+            if (headerInfo) headerInfo.classList.add('hidden');
+
+            const navBox = document.getElementById('headerAiConversationBox');
+            if (navBox) navBox.classList.add('hidden');
+
+            const promptInput = document.getElementById('promptInput');
+            if (promptInput) {
+                promptInput.value = '';
+                autoGrow(promptInput);
+            }
+
+            renderActiveHighlight();
+            if (!keepSidebarOpen && window.innerWidth < 768) {
+                toggleHistorySidebar(false);
+            }
+        }
+
+        // Toggle Pin on Conversation
+        async function togglePinConversation(e, id) {
+            e.stopPropagation();
+            try {
+                const res = await fetch(`/api/ai/conversations/${id}/pin`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showSidebarToast(data.isPinned ? '📌 Conversation pinned' : 'Conversation unpinned');
+                    loadConversations();
+                } else {
+                    showSidebarToast(data.error || 'Failed to toggle pin', 'error');
+                }
+            } catch (err) {
+                showSidebarToast('Failed to pin conversation', 'error');
+            }
+        }
+
+        // Delete Conversation Prompt & Execution
+        let pendingDeleteId = null;
+
+        function promptDeleteConversation(e, id) {
+            e.stopPropagation();
+            pendingDeleteId = id;
+            const modal = document.getElementById('deleteConfirmModal');
+            if (!modal) return;
+            modal.classList.remove('opacity-0', 'pointer-events-none');
+            const card = modal.querySelector('div');
+            if (card) {
+                card.classList.remove('scale-95');
+                card.classList.add('scale-100');
+            }
+        }
+
+        function closeDeleteModal() {
+            pendingDeleteId = null;
+            const modal = document.getElementById('deleteConfirmModal');
+            if (!modal) return;
+            modal.classList.add('opacity-0', 'pointer-events-none');
+            const card = modal.querySelector('div');
+            if (card) {
+                card.classList.remove('scale-100');
+                card.classList.add('scale-95');
+            }
+        }
+
+        async function executeDeleteConversation() {
+            const id = pendingDeleteId;
+            if (!id) return;
+            closeDeleteModal();
+
+            try {
+                const res = await fetch(`/api/ai/conversations/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    showSidebarToast('Conversation deleted', 'delete');
+                    if (activeConversationId === id) {
+                        startNewChat(true); // Keep sidebar open
+                    }
+                    loadConversations();
+                } else {
+                    showSidebarToast(data.error || 'Failed to delete conversation', 'error');
+                }
+            } catch (err) {
+                showSidebarToast('Failed to delete conversation', 'error');
+            }
+        }
+
+        // Auto Grow Textarea
+        function autoGrow(el) {
+            if (!el) return;
+            el.style.height = 'auto';
+            el.style.height = (el.scrollHeight) + 'px';
+        }
+
+        // Handle Keyboard Enter Key
+        function handleKeyDown(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                document.getElementById('chatForm').requestSubmit();
+            }
+        }
+
+        let alertTimeout = null;
+        function highlightSubjectRequired() {
+            const subjectSelect = document.getElementById('subjectSelector');
+            if (subjectSelect) {
+                subjectSelect.classList.add('!border-rose-500', '!ring-2', '!ring-rose-500/30');
+                subjectSelect.focus();
+            }
+            
+            const alertEl = document.getElementById('subjectAlert');
+            if (alertEl) {
+                alertEl.classList.remove('hidden');
+                if (alertTimeout) clearTimeout(alertTimeout);
+                alertTimeout = setTimeout(() => {
+                    alertEl.classList.add('hidden');
+                }, 3500);
+            }
+        }
+
+        let currentAttachment = null;
+
+        // Toggle Attachment Popover Menu
+        function toggleAttachmentMenu(e) {
+            e.stopPropagation();
+            const menu = document.getElementById('attachmentMenu');
+            if (menu) menu.classList.toggle('hidden');
+        }
+
+        // Close Popover when clicking outside
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('attachmentMenu');
+            const btn = document.getElementById('attachmentBtn');
+            if (menu && !menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+
+        function triggerCameraInput() {
+            const menu = document.getElementById('attachmentMenu');
+            if (menu) menu.classList.add('hidden');
+            const input = document.getElementById('cameraFileInput');
+            if (input) input.click();
+        }
+
+        function triggerImageInput() {
+            const menu = document.getElementById('attachmentMenu');
+            if (menu) menu.classList.add('hidden');
+            const input = document.getElementById('imageFileInput');
+            if (input) input.click();
+        }
+
+        function triggerPdfInput() {
+            const menu = document.getElementById('attachmentMenu');
+            if (menu) menu.classList.add('hidden');
+            const input = document.getElementById('pdfFileInput');
+            if (input) input.click();
+        }
+
+        async function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const isPdf = file.type === 'application/pdf' || file.name.endsWith('.pdf');
+            const isImage = file.type.startsWith('image/');
+
+            if (!isPdf && !isImage) {
+                alert('Please upload an image (JPG, PNG, WEBP) or a PDF document.');
+                e.target.value = '';
+                return;
+            }
+
+            if (isPdf) {
+                if (file.size > 15 * 1024 * 1024) {
+                    alert('PDF file size exceeds 15MB limit. Please upload a smaller file.');
+                    e.target.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(loadEvent) {
+                    const rawResult = loadEvent.target.result || '';
+                    const base64String = rawResult.includes(',') ? rawResult.split(',')[1] : rawResult;
+                    currentAttachment = {
+                        name: file.name,
+                        size: formatFileSize(file.size),
+                        mimeType: 'application/pdf',
+                        data: base64String,
+                        previewUrl: null,
+                        isPdf: true
+                    };
+                    renderAttachmentPreview();
+                };
+                reader.readAsDataURL(file);
+            } else {
+                // Instant client-side compression (resizes 12MP photos to crisp 1600px ~200KB)
+                try {
+                    const optimized = await compressImage(file, 1600, 0.85);
+                    currentAttachment = {
+                        name: file.name,
+                        size: formatFileSize(optimized.bytes),
+                        mimeType: 'image/jpeg',
+                        data: optimized.base64,
+                        previewUrl: optimized.dataUrl,
+                        isPdf: false
+                    };
+                    renderAttachmentPreview();
+                } catch (imgErr) {
+                    console.warn('Image compression fallback:', imgErr);
+                    const reader = new FileReader();
+                    reader.onload = function(loadEvent) {
+                        const rawResult = loadEvent.target.result || '';
+                        const base64String = rawResult.includes(',') ? rawResult.split(',')[1] : rawResult;
+                        currentAttachment = {
+                            name: file.name,
+                            size: formatFileSize(file.size),
+                            mimeType: 'image/jpeg',
+                            data: base64String,
+                            previewUrl: rawResult,
+                            isPdf: false
+                        };
+                        renderAttachmentPreview();
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+            e.target.value = '';
+        }
+
+        // Fast Client-Side Image Optimizer
+        function compressImage(file, maxDimension = 1600, quality = 0.85) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > maxDimension || height > maxDimension) {
+                        if (width > height) {
+                            height = Math.round((height * maxDimension) / width);
+                            width = maxDimension;
+                        } else {
+                            width = Math.round((width * maxDimension) / height);
+                            height = maxDimension;
+                        }
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    const dataUrl = canvas.toDataURL('image/jpeg', quality);
+                    const base64 = dataUrl.split(',')[1];
+                    const approxBytes = Math.round((base64.length * 3) / 4);
+
+                    resolve({
+                        dataUrl,
+                        base64,
+                        bytes: approxBytes,
+                        width,
+                        height
+                    });
+                };
+                img.onerror = reject;
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function renderAttachmentPreview() {
+            const bar = document.getElementById('attachmentPreviewBar');
+            const thumb = document.getElementById('attachmentThumbnail');
+            const nameEl = document.getElementById('attachmentName');
+            const sizeEl = document.getElementById('attachmentSize');
+
+            if (!currentAttachment || !bar) {
+                if (bar) bar.classList.add('hidden');
+                return;
+            }
+
+            nameEl.textContent = currentAttachment.name;
+            sizeEl.textContent = currentAttachment.size;
+
+            if (currentAttachment.isPdf) {
+                thumb.innerHTML = `<span class="material-symbols-rounded text-rose-500 text-lg leading-none">picture_as_pdf</span>`;
+            } else if (currentAttachment.previewUrl) {
+                thumb.innerHTML = `<img src="${currentAttachment.previewUrl}" class="size-full object-cover rounded-lg" alt="Preview">`;
+            } else {
+                thumb.innerHTML = `<span class="material-symbols-rounded text-indigo-500 text-lg leading-none">image</span>`;
+            }
+
+            bar.classList.remove('hidden');
+        }
+
+        function clearAttachment() {
+            currentAttachment = null;
+            const bar = document.getElementById('attachmentPreviewBar');
+            if (bar) bar.classList.add('hidden');
+        }
+
+        let thinkingInterval = null;
+        const educationalThinkingPhrases = [
+            'Analyzing your question...',
+            'Reviewing textbook concepts...',
+            'Thinking step-by-step solution...',
+            'Calculating formulas & derivations...',
+            'Structuring clear explanation...',
+            'Verifying syllabus guidelines...',
+            'Preparing the final answer...'
+        ];
+
+        function startThinkingAnimation() {
+            const textEl = document.getElementById('thinkingText');
+            const indicator = document.getElementById('thinkingIndicator');
+            if (indicator) indicator.classList.remove('hidden');
+
+            let phraseIndex = 0;
+            if (textEl) {
+                textEl.textContent = educationalThinkingPhrases[0];
+                textEl.style.opacity = '1';
+            }
+
+            if (thinkingInterval) clearInterval(thinkingInterval);
+            thinkingInterval = setInterval(() => {
+                phraseIndex = (phraseIndex + 1) % educationalThinkingPhrases.length;
+                if (textEl) {
+                    textEl.style.opacity = '0';
+                    setTimeout(() => {
+                        textEl.textContent = educationalThinkingPhrases[phraseIndex];
+                        textEl.style.opacity = '1';
+                    }, 180);
+                }
+            }, 1800);
+        }
+
+        function stopThinkingAnimation() {
+            if (thinkingInterval) {
+                clearInterval(thinkingInterval);
+                thinkingInterval = null;
+            }
+            const indicator = document.getElementById('thinkingIndicator');
+            if (indicator) indicator.classList.add('hidden');
+        }
+
+        // Submit User Query
+        async function submitQuery(e) {
+            e.preventDefault();
+            if (isGenerating) return;
+
+            const subjectSelect = document.getElementById('subjectSelector');
+            const subject = subjectSelect ? subjectSelect.value : '';
+
+            // Validation: Require subject selection
+            if (!subject) {
+                const subjectAlert = document.getElementById('subjectAlert');
+                if (subjectAlert) {
+                    subjectAlert.classList.remove('hidden');
+                    setTimeout(() => {
+                        subjectAlert.classList.add('hidden');
+                    }, 3500);
+                }
+                if (subjectSelect) {
+                    subjectSelect.focus();
+                    subjectSelect.classList.add('ring-2', 'ring-rose-500', 'border-rose-500');
+                    setTimeout(() => {
+                        subjectSelect.classList.remove('ring-2', 'ring-rose-500', 'border-rose-500');
+                    }, 2000);
+                }
+                return;
+            }
+
+            const input = document.getElementById('promptInput');
+            const query = input.value.trim();
+            if (!query && !currentAttachment) return;
+
+            const classLevelEl = document.getElementById('classSelector');
+            const classLevel = classLevelEl ? classLevelEl.value : '';
+
+            // Capture attached file copy
+            const attachedFile = currentAttachment ? { ...currentAttachment } : null;
+
+            // Hide Welcome screen on first query
+            const welcome = document.getElementById('welcomeScreen');
+            if (welcome) welcome.classList.add('hidden');
+
+            // 1. Append User Bubble
+            appendUserMessage(query, attachedFile);
+            input.value = '';
+            autoGrow(input);
+            clearAttachment();
+
+            // 2. Show Thinking indicator with rotating educational phrases & scroll
+            isGenerating = true;
+            currentAbortController = new AbortController();
+            updateSendButtonState(true);
+            startThinkingAnimation();
+            scrollToBottom();
+
+            try {
+                const response = await fetch('/api/ai/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    signal: currentAbortController.signal,
+                    body: JSON.stringify({
+                        prompt: query,
+                        subject: subject,
+                        classLevel: classLevel,
+                        mode: currentMode,
+                        conversationId: activeConversationId,
+                        attachment: attachedFile ? {
+                            data: attachedFile.data,
+                            mimeType: attachedFile.mimeType,
+                            name: attachedFile.name
+                        } : undefined
+                    })
+                });
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (parseErr) {
+                    data = null;
+                }
+
+                stopThinkingAnimation();
+
+                if (response.ok && data && data.success && data.response) {
+                    if (data.conversationId) {
+                        activeConversationId = data.conversationId;
+                        sessionStorage.setItem('oddhay_session_active_chat', data.conversationId);
+                    }
+                    if (data.conversationTitle) {
+                        const cleanT = formatCleanTitle(data.conversationTitle);
+                        const navBox = document.getElementById('headerAiConversationBox');
+                        const navTitle = document.getElementById('headerAiConversationTitle');
+                        if (navBox && navTitle) {
+                            navTitle.textContent = cleanT;
+                            navBox.classList.remove('hidden');
+                        }
+                        const titleText = document.getElementById('activeTitleText');
+                        if (titleText) titleText.textContent = cleanT;
+                    }
+                    appendAiMessage(data.response, subject, currentMode);
+                    loadConversations(); // background refresh history
+                } else {
+                    let fallbackMsg = 'Could not calculate solution at this moment. Please try again.';
+                    if (response.status === 401) {
+                        fallbackMsg = 'Your session has expired. Please refresh or log in again to continue.';
+                    } else if (response.status === 413) {
+                        fallbackMsg = 'The attached file exceeds the maximum size limit. Please upload a smaller file.';
+                    } else if (data && data.error) {
+                        fallbackMsg = data.error;
+                    }
+                    appendAiMessage(fallbackMsg, subject, currentMode);
+                }
+
+            } catch (err) {
+                stopThinkingAnimation();
+                if (err.name === 'AbortError') {
+                    appendAiMessage('Generation was stopped.', subject, currentMode, true);
+                    return;
+                }
+                appendAiMessage('Network connection error. Please check your connection and try again.', subject, currentMode);
+            } finally {
+                isGenerating = false;
+                currentAbortController = null;
+                updateSendButtonState(false);
+                stopThinkingAnimation();
+                scrollToBottom();
+            }
+        }
+
+        // Toggle Send Button to Stop / Send
+        function updateSendButtonState(generating) {
+            const sendBtn = document.getElementById('sendBtn');
+            const sendBtnIcon = document.getElementById('sendBtnIcon');
+            if (!sendBtn || !sendBtnIcon) return;
+
+            if (generating) {
+                sendBtn.title = 'Stop Generating';
+                sendBtn.type = 'button';
+                sendBtn.onclick = abortGeneration;
+                sendBtn.className = 'size-8.5 sm:size-9 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white flex items-center justify-center transition-all shadow-sm cursor-pointer';
+                sendBtnIcon.textContent = 'stop';
+                sendBtnIcon.className = 'material-symbols-rounded text-lg leading-none';
+            } else {
+                sendBtn.title = 'Send Question';
+                sendBtn.type = 'submit';
+                sendBtn.onclick = null;
+                sendBtn.className = 'size-8.5 sm:size-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white flex items-center justify-center transition-all shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed group';
+                sendBtnIcon.textContent = 'arrow_upward';
+                sendBtnIcon.className = 'material-symbols-rounded text-[21px] sm:text-[22px] leading-none transition-transform group-hover:-translate-y-0.5';
+            }
+        }
+
+        // Abort AI generation
+        function abortGeneration() {
+            if (isGenerating && currentAbortController) {
+                currentAbortController.abort();
+            }
+        }
+
+        // Append User Message to thread with optional attachment card
+        function appendUserMessage(text, attachment = null) {
+            const list = document.getElementById('messagesList');
+            if (!list) return;
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'flex justify-end';
+
+            let attachmentHtml = '';
+            if (attachment) {
+                if (attachment.isPdf) {
+                    attachmentHtml = `
+                        <div class="flex items-center gap-2 p-2 rounded-xl bg-white/15 dark:bg-black/20 border border-white/20 mb-2">
+                            <span class="material-symbols-rounded text-rose-300 text-xl leading-none">picture_as_pdf</span>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs font-bold truncate max-w-[200px] text-white">${escapeHtml(attachment.name)}</p>
+                                <p class="text-[10px] text-white/70">PDF Document • ${attachment.size}</p>
+                            </div>
+                        </div>
+                    `;
+                } else if (attachment.previewUrl) {
+                    attachmentHtml = `
+                        <div class="mb-2 max-w-[220px] rounded-xl overflow-hidden border border-white/20">
+                            <img src="${attachment.previewUrl}" class="max-h-48 w-auto object-cover rounded-xl" alt="Attached Image">
+                        </div>
+                    `;
+                }
+            }
+
+            const textHtml = text ? `<p class="whitespace-pre-wrap">${escapeHtml(text)}</p>` : '';
+
+            msgDiv.innerHTML = `
+                <div class="max-w-[85%] sm:max-w-[75%] rounded-2xl rounded-tr-none px-4 py-3 bg-indigo-600 text-white text-[13.5px] sm:text-[14.5px] font-medium leading-relaxed shadow-sm">
+                    ${attachmentHtml}
+                    ${textHtml}
+                </div>
+            `;
+            list.appendChild(msgDiv);
+        }
+
+        // Append AI Message to thread with Rich Markdown & LaTeX Math
+        function appendAiMessage(markdownText, subject, mode, isSystemNotice = false) {
+            const list = document.getElementById('messagesList');
+            if (!list) return;
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'flex items-start w-full';
+
+            const msgId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+
+            if (isSystemNotice) {
+                msgDiv.innerHTML = `
+                    <div class="w-full max-w-[92%] sm:max-w-[85%] rounded-2xl rounded-tl-none px-4 py-2.5 bg-slate-50/90 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800/60 text-slate-500 dark:text-slate-400 text-xs sm:text-sm italic shadow-xs">
+                        ${escapeHtml(markdownText)}
+                    </div>
+                `;
+                list.appendChild(msgDiv);
+                return;
+            }
+
+            let rawHtml = '';
+            try {
+                rawHtml = (typeof marked !== 'undefined' && marked.parse) 
+                    ? marked.parse(markdownText || '') 
+                    : escapeHtml(markdownText || '');
+            } catch (mErr) {
+                rawHtml = escapeHtml(markdownText || '');
+            }
+
+            msgDiv.innerHTML = `
+                <div class="w-full max-w-[92%] sm:max-w-[85%] rounded-2xl rounded-tl-none p-4 sm:p-5.5 bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-slate-800 dark:text-slate-200 text-[13.5px] sm:text-[14.5px] shadow-xs space-y-3">
+                    
+                    <div id="${msgId}" class="ai-markdown-content leading-relaxed">
+                        ${rawHtml}
+                    </div>
+
+                    <!-- AI Actions Footer -->
+                    <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                        <span class="font-semibold text-indigo-500 flex items-center gap-1">
+                            <span class="material-symbols-rounded text-xs shrink-0 leading-none">verified</span>
+                            <span>${escapeHtml(subject || 'General Study')}</span>
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="copySolution('${msgId}')" class="hover:text-indigo-500 flex items-center gap-1 font-semibold transition-colors cursor-pointer" title="Copy Solution">
+                                <span class="material-symbols-rounded text-sm shrink-0 leading-none">content_copy</span>
+                                <span>Copy</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            list.appendChild(msgDiv);
+
+            // Render Math Equations via KaTeX safely
+            const contentEl = document.getElementById(msgId);
+            if (contentEl && typeof renderMathInElement === 'function') {
+                try {
+                    renderMathInElement(contentEl, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                            {left: '\\(', right: '\\)', display: false},
+                            {left: '\\[', right: '\\]', display: true}
+                        ],
+                        throwOnError: false
+                    });
+                } catch (katexErr) {
+                    console.warn('KaTeX render warning:', katexErr);
+                }
+            }
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chatContainer');
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function copySolution(msgId) {
+            const el = document.getElementById(msgId);
+            if (!el) return;
+            navigator.clipboard.writeText(el.innerText).then(() => {
+                showToast('Solution copied to clipboard!');
+            });
+        }
+
+        function showSidebarToast(msg, type = 'success') {
+            const toast = document.getElementById('sidebarToast');
+            if (!toast) return;
+            const msgEl = document.getElementById('sidebarToastMessage');
+            const iconEl = document.getElementById('sidebarToastIcon');
+            if (msgEl) msgEl.textContent = msg;
+            if (iconEl) {
+                if (type === 'error') {
+                    iconEl.textContent = 'warning';
+                    iconEl.className = 'material-symbols-rounded text-rose-400 text-base shrink-0 leading-none';
+                } else if (type === 'delete') {
+                    iconEl.textContent = 'delete';
+                    iconEl.className = 'material-symbols-rounded text-rose-400 text-base shrink-0 leading-none';
+                } else {
+                    iconEl.textContent = 'check';
+                    iconEl.className = 'material-symbols-rounded text-emerald-400 text-base shrink-0 leading-none';
+                }
+            }
+            toast.classList.remove('translate-y-6', 'opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('translate-y-6', 'opacity-0', 'pointer-events-none');
+            }, 2300);
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('aiToast');
+            if (!toast) return;
+            const msgEl = document.getElementById('toastMessage');
+            const iconEl = document.getElementById('toastIcon');
+            if (msgEl) msgEl.textContent = msg;
+            if (iconEl) {
+                if (type === 'error') {
+                    iconEl.textContent = 'warning';
+                    iconEl.className = 'material-symbols-rounded text-rose-400 text-base shrink-0 leading-none';
+                } else {
+                    iconEl.textContent = 'check';
+                    iconEl.className = 'material-symbols-rounded text-emerald-400 text-base shrink-0 leading-none';
+                }
+            }
+            toast.classList.remove('translate-y-10', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0');
+            }, 2500);
+        }
+
+        function formatCleanTitle(str) {
+            if (!str) return 'Chat';
+            const cleaned = String(str)
+                .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{FFFD}\u{FE0F}]/gu, '')
+                .replace(/['"`´’‘“”«»#*_\-–—:;|/\\(){}[\]]/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            return cleaned || 'Chat';
+        }
+
+        function formatRelativeTime(dateStr) {
+            if (!dateStr) return '';
+            const d = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - d;
+            const diffSec = Math.floor(diffMs / 1000);
+            const diffMin = Math.floor(diffSec / 60);
+            const diffHr = Math.floor(diffMin / 60);
+            const diffDays = Math.floor(diffHr / 24);
+
+            if (diffMin < 1) return 'Just now';
+            if (diffMin < 60) return `${diffMin}m ago`;
+            if (diffHr < 24) return `${diffHr}h ago`;
+            if (diffDays === 1) return 'Yesterday';
+            if (diffDays < 7) return `${diffDays}d ago`;
+            return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        function escapeHtml(string) {
+            if (string === null || string === undefined) return '';
+            const entityMap = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            };
+            return String(string).replace(/[&<>"']/g, s => entityMap[s]);
+        }
+    </script>
+</body>
+
+</html>

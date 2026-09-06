@@ -8,16 +8,19 @@
 </head>
 
 <body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
-    <%- include('partials/student-header') %>
-
     <% 
-       const bSubject = (bank.subject || 'Subject').trim();
-       const bBoard = (bank.board || '').trim();
-       const bYear = (bank.year || '').trim();
+       const isExplicitCourse = (typeof fromCourse !== 'undefined' && fromCourse === true) || (locals.fromCourse === true) || (typeof req !== 'undefined' && req.query && req.query.from === 'course' && req.query.courseId);
+       const isFromCourse = !!isExplicitCourse;
+
+       const bSubject = String(bank.subject || 'Subject').trim();
+       const bBoard = String(bank.board || '').trim();
+       const bYear = String(bank.year || '').trim();
 
        const boardWithYear = [bBoard, bYear].filter(Boolean).join(' ');
        let bTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${boardWithYear}`;
-       if (bTitle.includes('Custom Exam') || bTitle.includes('Personalized Exam')) {
+       if (bank.course || isFromCourse) {
+           bTitle = bTitle.replace(/^(mock test|model test)\s*-\s*/i, '').trim() || bTitle;
+       } else if (bTitle.includes('Custom Exam') || bTitle.includes('Personalized Exam')) {
            const subjectsPart = bTitle.split(/Personalized Exam|Custom Exam/i)[0].trim();
            bTitle = `${subjectsPart} Personalized Exam - `;
        } else if (bYear && !bTitle.includes(bYear)) {
@@ -25,13 +28,32 @@
        }
        const durationMins = parseInt(bank.duration) || 30;
 
-       const isMockTest = bank.isMockTest || bTitle.toLowerCase().startsWith('mock test');
-       const isModelTest = bank.isModelTest || bTitle.toLowerCase().startsWith('model test');
+       const isMockTest = bank.isMockTest || bTitle.toLowerCase().includes('mock test');
+       const isModelTest = bank.isModelTest || bTitle.toLowerCase().includes('model test');
        const isCustomExam = bank.isCustom || bTitle.includes('Personalized Exam') || bTitle.includes('Custom Exam') || bTitle.includes('Self Test');
+       const isSubjectTest = bank.isSubjectTest || (typeof req !== 'undefined' && req.query && req.query.from === 'subject') || bTitle.toLowerCase().includes('subject test') || (bank.topic && bank.subject && !bank.board);
 
-       const isExamTab = isMockTest || isModelTest || isCustomExam || (locals.fromExams === true);
-       const activeNavPage = isExamTab ? 'exams' : 'questions';
+       const isExamTab = !isFromCourse;
+       const activeNavPage = isFromCourse ? 'courses' : 'exams';
+
+       let solveReturnUrl = '/exams';
+       if (isFromCourse) {
+           const cId = locals.courseId || (bank.course ? (bank.course._id || bank.course) : '');
+           solveReturnUrl = cId ? `/course-details/${cId}#exams` : '/courses';
+       } else if (isMockTest) {
+           solveReturnUrl = '/exams/mock-tests';
+       } else if (isModelTest) {
+           solveReturnUrl = '/exams/model-tests';
+       } else if (isCustomExam) {
+           solveReturnUrl = '/exams/custom-test';
+       } else if (isSubjectTest) {
+           solveReturnUrl = '/exams/subject-tests';
+       } else {
+           solveReturnUrl = '/exams';
+       }
     %>
+
+    <%- include('partials/student-header', { pageTitle: bTitle, activePage: activeNavPage, backUrl: solveReturnUrl }) %>
 
     <div class="flex-1 flex overflow-hidden w-full relative">
         <%- include('partials/student-sidebar', { activePage: activeNavPage }) %>
@@ -62,7 +84,8 @@
 
             <!-- EXAM QUESTIONS FORM -->
             <form id="examForm" action="/question-bank/solve/<%= bank._id %>" method="POST" class="p-3 sm:p-5 max-w-4xl w-full mx-auto flex-1 flex flex-col space-y-5">
-                
+                <input type="hidden" name="fromOrigin" id="fromOriginInput" value="<%= isFromCourse ? 'course' : 'exams' %>">
+                <input type="hidden" name="courseId" value="<%= (isFromCourse && locals.courseId) ? locals.courseId : '' %>">
                 <input type="hidden" name="timeTakenSeconds" id="timeTakenSecondsInput" value="0">
 
                 <% if (questions.length === 0) { %>
@@ -100,8 +123,19 @@
                                 </div>
 
                                 <!-- QUESTION STATEMENT -->
-                                <div class="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200 leading-relaxed pt-1">
-                                    <%= q.questionText %>
+                                <div class="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200 leading-relaxed pt-1 select-text">
+                                    <% if (qType === 'Comprehension') { %>
+                                        <% if (q.context) { %>
+                                            <div class="space-y-1">
+                                                <span class="text-xs font-bold text-slate-500 dark:text-slate-400 block">উদ্দীপক:</span>
+                                                <div class="whitespace-pre-wrap"><%- q.context %></div>
+                                            </div>
+                                        <% } else { %>
+                                            <div class="whitespace-pre-wrap"><%- q.questionText %></div>
+                                        <% } %>
+                                    <% } else { %>
+                                        <%= q.questionText %>
+                                    <% } %>
                                 </div>
 
                                 <!-- MCQ OPTIONS SELECTION (ANSWER HIDDEN) -->
@@ -124,11 +158,70 @@
                                             </label>
                                         <% }); %>
                                     </div>
+                                <% } else if (qType === 'Comprehension' && (q.q1 || q.q2)) { %>
+                                    <!-- COMPREHENSION: BOTH QUESTIONS WITH ANSWER BOXES & PICTURE BUTTONS -->
+                                    <div class="space-y-5 pt-2">
+                                        <!-- Question 1 -->
+                                        <% if (q.q1) { %>
+                                            <div class="space-y-2">
+                                                <div class="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200 leading-relaxed select-text">
+                                                    <%- q.q1 %>
+                                                </div>
+                                                <div class="space-y-1.5">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5">Answer here...</label>
+                                                        <button type="button" onclick="triggerImageUpload('<%= qIdStr %>_q1')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all shadow-2xs cursor-pointer active:scale-95" title="Upload photo of handwritten solution">
+                                                            <span class="material-symbols-rounded text-base leading-none text-indigo-600 dark:text-indigo-400">add_photo_alternate</span>
+                                                            <span>Submit Picture</span>
+                                                        </button>
+                                                    </div>
+                                                    <textarea name="written_q1_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="Type your answer here..." class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
+                                                    
+                                                    <input type="file" id="file_<%= qIdStr %>_q1" accept="image/*" class="hidden" onchange="handleImageSelected(this, '<%= qIdStr %>_q1')">
+                                                    <input type="hidden" name="image_q1_<%= qIdStr %>" id="imgval_<%= qIdStr %>_q1" value="">
+                                                    <div id="imgprev_<%= qIdStr %>_q1" class="hidden pt-1"></div>
+                                                </div>
+                                            </div>
+                                        <% } %>
+
+                                        <!-- Question 2 -->
+                                        <% if (q.q2) { %>
+                                            <div class="space-y-2 pt-2">
+                                                <div class="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200 leading-relaxed select-text">
+                                                    <%- q.q2 %>
+                                                </div>
+                                                <div class="space-y-1.5">
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5">Answer here...</label>
+                                                        <button type="button" onclick="triggerImageUpload('<%= qIdStr %>_q2')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all shadow-2xs cursor-pointer active:scale-95" title="Upload photo of handwritten solution">
+                                                            <span class="material-symbols-rounded text-base leading-none text-indigo-600 dark:text-indigo-400">add_photo_alternate</span>
+                                                            <span>Submit Picture</span>
+                                                        </button>
+                                                    </div>
+                                                    <textarea name="written_q2_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="Type your answer here..." class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
+
+                                                    <input type="file" id="file_<%= qIdStr %>_q2" accept="image/*" class="hidden" onchange="handleImageSelected(this, '<%= qIdStr %>_q2')">
+                                                    <input type="hidden" name="image_q2_<%= qIdStr %>" id="imgval_<%= qIdStr %>_q2" value="">
+                                                    <div id="imgprev_<%= qIdStr %>_q2" class="hidden pt-1"></div>
+                                                </div>
+                                            </div>
+                                        <% } %>
+                                    </div>
                                 <% } else { %>
                                     <!-- WRITTEN RESPONSE AREA FOR NON-MCQ -->
                                     <div class="space-y-1.5 pt-1">
-                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5">Answer here...</label>
+                                        <div class="flex items-center justify-between gap-2">
+                                            <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5">Answer here...</label>
+                                            <button type="button" onclick="triggerImageUpload('<%= qIdStr %>')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all shadow-2xs cursor-pointer active:scale-95" title="Upload photo of handwritten solution">
+                                                <span class="material-symbols-rounded text-base leading-none text-indigo-600 dark:text-indigo-400">add_photo_alternate</span>
+                                                <span>Submit Picture</span>
+                                            </button>
+                                        </div>
                                         <textarea name="written_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="Type your answer here..." class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
+
+                                        <input type="file" id="file_<%= qIdStr %>" accept="image/*" class="hidden" onchange="handleImageSelected(this, '<%= qIdStr %>')">
+                                        <input type="hidden" name="image_<%= qIdStr %>" id="imgval_<%= qIdStr %>" value="">
+                                        <div id="imgprev_<%= qIdStr %>" class="hidden pt-1"></div>
                                     </div>
                                 <% } %>
 
@@ -245,6 +338,150 @@
             if (shouldSave) saveAnswersToStorage();
         }
 
+        // --- Picture Upload & Preview Handlers ---
+        function triggerImageUpload(key) {
+            const fileInput = document.getElementById(`file_${key}`);
+            if (fileInput) fileInput.click();
+        }
+
+        async function handleImageSelected(input, key) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+
+            if (file.size > 25 * 1024 * 1024) {
+                Swal.fire({
+                    title: 'File Too Large',
+                    text: 'Please select an image smaller than 25MB.',
+                    icon: 'error'
+                });
+                input.value = '';
+                return;
+            }
+
+            const prevEl = document.getElementById(`imgprev_${key}`);
+            const valInput = document.getElementById(`imgval_${key}`);
+            const tempUrl = URL.createObjectURL(file);
+
+            if (prevEl) {
+                prevEl.classList.remove('hidden');
+                prevEl.innerHTML = `
+                    <div class="flex items-center gap-3 p-2.5 rounded-xl bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 text-xs">
+                        <div class="relative size-11 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
+                            <img src="${tempUrl}" class="size-full object-cover opacity-60">
+                            <div class="absolute inset-0 flex items-center justify-center bg-black/30">
+                                <div class="size-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold truncate text-slate-800 dark:text-slate-200">${file.name}</div>
+                            <div class="text-[11px] text-indigo-600 dark:text-indigo-400 flex items-center gap-1 font-semibold">
+                                <span class="material-symbols-rounded text-xs animate-spin">sync</span>
+                                <span>Uploading picture...</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            try {
+                const res = await fetch('/api/upload-written-answer-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.success && data.imageUrl) {
+                    if (valInput) valInput.value = data.imageUrl;
+                    renderImagePreview(key, data.imageUrl, file.name);
+                    updateProgressCount();
+                    saveAnswersToStorage();
+                } else {
+                    throw new Error(data.error || 'Upload failed');
+                }
+            } catch (err) {
+                console.error('Image upload error:', err);
+                Swal.fire({
+                    title: 'Upload Failed',
+                    text: err.message || 'Could not upload your picture. Please try again.',
+                    icon: 'error'
+                });
+                if (prevEl) {
+                    prevEl.innerHTML = '';
+                    prevEl.classList.add('hidden');
+                }
+                if (valInput) valInput.value = '';
+                input.value = '';
+            }
+        }
+
+        function renderImagePreview(key, imageUrl, fileName = 'Handwritten Solution') {
+            const prevEl = document.getElementById(`imgprev_${key}`);
+            if (!prevEl) return;
+            prevEl.classList.remove('hidden');
+            prevEl.innerHTML = `
+                <div class="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 shadow-2xs">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div onclick="openSolveImageFullscreen('${imageUrl}')" class="relative size-12 rounded-lg overflow-hidden border border-emerald-300 dark:border-emerald-700 bg-white dark:bg-slate-900 shrink-0 cursor-pointer group shadow-2xs" title="Click to view full picture">
+                            <img src="${imageUrl}" class="size-full object-cover block transition-transform group-hover:scale-105">
+                            <div class="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                                <span class="material-symbols-rounded text-sm">fullscreen</span>
+                            </div>
+                        </div>
+                        <div class="min-w-0 flex flex-col justify-center gap-1">
+                            <div class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 leading-none">
+                                <span class="material-symbols-rounded text-[16px] leading-none shrink-0 inline-flex items-center justify-center text-emerald-600 dark:text-emerald-400 select-none">check_circle</span>
+                                <span class="leading-none pt-[0.5px]">Picture Attached</span>
+                            </div>
+                            <button type="button" onclick="openSolveImageFullscreen('${imageUrl}')" class="text-[11px] text-slate-500 hover:text-indigo-600 dark:text-slate-400 dark:hover:text-indigo-400 underline font-medium truncate block text-left leading-none">
+                                View full picture
+                            </button>
+                        </div>
+                    </div>
+                    <button type="button" onclick="removeAttachedImage('${key}')" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors shrink-0" title="Remove picture">
+                        <span class="material-symbols-rounded text-base leading-none">delete</span>
+                    </button>
+                </div>
+            `;
+        }
+
+        function removeAttachedImage(key) {
+            const valInput = document.getElementById(`imgval_${key}`);
+            const fileInput = document.getElementById(`file_${key}`);
+            const prevEl = document.getElementById(`imgprev_${key}`);
+            if (valInput) valInput.value = '';
+            if (fileInput) fileInput.value = '';
+            if (prevEl) {
+                prevEl.innerHTML = '';
+                prevEl.classList.add('hidden');
+            }
+            updateProgressCount();
+            saveAnswersToStorage();
+        }
+
+        function openSolveImageFullscreen(src) {
+            const modal = document.getElementById('solveImageModal');
+            const img = document.getElementById('solveModalImage');
+            if (!modal || !img) return;
+            img.src = src;
+            modal.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                modal.classList.remove('opacity-0');
+            });
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeSolveImageFullscreen() {
+            const modal = document.getElementById('solveImageModal');
+            if (!modal) return;
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }, 200);
+        }
+
         function saveAnswersToStorage() {
             const draft = {};
             const radios = document.querySelectorAll('input[type="radio"]:checked');
@@ -259,6 +496,13 @@
                 }
             });
 
+            const hiddenImgs = document.querySelectorAll('input[type="hidden"][name^="image_"]');
+            hiddenImgs.forEach(img => {
+                if (img.value.trim() !== '') {
+                    draft[img.name] = img.value;
+                }
+            });
+
             localStorage.setItem(storageKeyAnswers, JSON.stringify(draft));
         }
 
@@ -270,17 +514,26 @@
                 const draft = JSON.parse(saved);
                 Object.keys(draft).forEach(name => {
                     const val = draft[name];
-                    const radio = document.querySelector(`input[name="${name}"][value="${val}"]`);
-                    if (radio) {
-                        radio.checked = true;
-                        const label = radio.closest('.opt-label');
-                        if (label) onOptionSelect(label, false);
+                    if (name.startsWith('image_')) {
+                        const key = name.replace('image_', '');
+                        const valInput = document.getElementById(`imgval_${key}`);
+                        if (valInput && val) {
+                            valInput.value = val;
+                            renderImagePreview(key, val);
+                        }
                     } else {
-                        const textarea = document.querySelector(`textarea[name="${name}"]`);
-                        if (textarea) {
-                            textarea.value = val;
-                            textarea.style.height = 'auto';
-                            textarea.style.height = textarea.scrollHeight + 'px';
+                        const radio = document.querySelector(`input[name="${name}"][value="${val}"]`);
+                        if (radio) {
+                            radio.checked = true;
+                            const label = radio.closest('.opt-label');
+                            if (label) onOptionSelect(label, false);
+                        } else {
+                            const textarea = document.querySelector(`textarea[name="${name}"]`);
+                            if (textarea) {
+                                textarea.value = val;
+                                textarea.style.height = 'auto';
+                                textarea.style.height = textarea.scrollHeight + 'px';
+                            }
                         }
                     }
                 });
@@ -299,10 +552,12 @@
             let answered = 0;
             cards.forEach(card => {
                 const radioChecked = card.querySelector('input[type="radio"]:checked');
-                const textarea = card.querySelector('textarea');
-                const textVal = textarea ? textarea.value.trim() : '';
+                const textareas = card.querySelectorAll('textarea');
+                const hasText = Array.from(textareas).some(t => t.value.trim() !== '');
+                const hiddenImgs = card.querySelectorAll('input[type="hidden"][name^="image_"]');
+                const hasImg = Array.from(hiddenImgs).some(i => i.value.trim() !== '');
 
-                if (radioChecked || textVal !== '') {
+                if (radioChecked || hasText || hasImg) {
                     answered++;
                 }
             });
@@ -353,6 +608,39 @@
             startExamTimer();
             updateProgressCount();
         };
+
+        window.onBeforeHeaderNavBack = function(proceed) {
+            Swal.fire({
+                title: 'Leave Exam?',
+                text: 'Your progress will not be saved. Are you sure you want to go back?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Leave',
+                cancelButtonText: 'Stay on Exam'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    clearExamStorage();
+                    proceed();
+                }
+            });
+            return true;
+        };
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeSolveImageFullscreen();
+            }
+        });
     </script>
+
+    <!-- FULLSCREEN IMAGE LIGHTBOX MODAL -->
+    <div id="solveImageModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden opacity-0 transition-opacity duration-200 flex items-center justify-center p-4" onclick="closeSolveImageFullscreen()">
+        <button type="button" onclick="closeSolveImageFullscreen()" class="absolute top-4 right-4 size-10 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors">
+            <span class="material-symbols-rounded text-2xl">close</span>
+        </button>
+        <img id="solveModalImage" src="" class="max-h-[92vh] max-w-[95vw] rounded-xl object-contain shadow-2xl" onclick="event.stopPropagation()">
+    </div>
 </body>
 </html>

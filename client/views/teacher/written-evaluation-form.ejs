@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title>Evaluate Written Exam | Teacher ODDHAY</title>
+
+    <style>
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+        .content-scroll { flex: 1; overflow-y: auto; padding: 0; position: relative; }
+        @media (max-width: 1024px) { .admin-sidebar { transform: translateX(-100%); } .admin-main { margin-left: 0; } }
+        
+        .material-symbols-rounded {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            vertical-align: middle;
+            line-height: 1;
+        }
+    </style>
+</head>
+
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+    <div class="flex h-screen">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100]">
+            <%- include('sidebar', { active: 'written-evaluations' }) %>
+        </aside>
+
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617]">
+            <%- include('../admin/header_v2', { pageTitle: 'Evaluate Written Submission' }) %>
+
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5">
+                
+                <%
+                   const subDate = attempt.submittedAt ? new Date(attempt.submittedAt) : new Date();
+                   const formattedSubDate = subDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+                   const isReviewed = attempt.writtenStatus === 'reviewed';
+                   const mcqEarned = attempt.mcqScore || 0;
+                   const mcqMax = attempt.maxMcqScore || 0;
+                   const teacherNote = (attempt.teacherReview && attempt.teacherReview.overallFeedback) ? attempt.teacherReview.overallFeedback : '';
+                   const teacherOverallImage = (attempt.teacherReview && attempt.teacherReview.overallImage) ? attempt.teacherReview.overallImage : '';
+                %>
+
+
+
+                <!-- ALERTS / NOTICES -->
+                <% if (errorMsg) { %>
+                    <div class="mx-4 sm:mx-6 mt-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 text-xs font-medium text-rose-800 dark:text-rose-300 flex items-center gap-2">
+                        <span class="material-symbols-rounded text-base text-rose-600">error</span>
+                        <span><%= errorMsg %></span>
+                    </div>
+                <% } %>
+                <% if (successMsg) { %>
+                    <div class="mx-4 sm:mx-6 mt-4 p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 text-xs font-medium text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                        <span class="material-symbols-rounded text-base text-emerald-600">check_circle</span>
+                        <span><%= successMsg %></span>
+                    </div>
+                <% } %>
+
+                <form id="evaluationForm" method="POST" action="/teacher/written-evaluations/<%= attempt._id %>" class="p-4 sm:p-6 max-w-5xl w-full mx-auto space-y-5 pb-24">
+                    
+                    <!-- STUDENT & EXAM HEADER CARD -->
+                    <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                            
+                            <!-- Student Profile -->
+                            <div class="flex items-center gap-3">
+                                <div class="size-12 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-bold text-base shrink-0 overflow-hidden">
+                                    <% if (student.profilePicture || student.profileImage) { %>
+                                        <img src="<%= student.profilePicture || student.profileImage %>" alt="<%= student.name %>" class="size-full object-cover">
+                                    <% } else { %>
+                                        <span><%= (student.name || 'S')[0].toUpperCase() %></span>
+                                    <% } %>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100">
+                                            <%= student.name || 'Student' %>
+                                        </h3>
+                                        <% if (student.classLevel) { %>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                <%= student.classLevel %>
+                                            </span>
+                                        <% } %>
+                                    </div>
+                                    <p class="text-xs text-slate-400 font-normal">
+                                        <%= student.email || student.phone || 'Student Submission' %>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Exam Details Pill -->
+                            <div class="flex flex-col sm:items-end gap-1">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="px-2.5 py-1 rounded-lg text-xs font-medium bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border border-cyan-200/80 dark:border-cyan-800/60">
+                                        <%= bank.subject || 'Subject' %>
+                                    </span>
+                                    <span class="text-xs text-slate-400 font-normal flex items-center gap-1">
+                                        <span class="material-symbols-rounded text-sm">calendar_today</span>
+                                        <span><%= formattedSubDate %></span>
+                                    </span>
+                                </div>
+                                <span class="text-xs font-normal text-slate-700 dark:text-slate-300">
+                                    Exam: <strong class="font-medium text-slate-900 dark:text-white"><%= (bank.title && bank.title.trim()) || [bank.subject, bank.topic, bank.board, bank.year].filter(Boolean).join(' - ') || bank.subject || 'Written Exam' %></strong>
+                                </span>
+                            </div>
+
+                        </div>
+
+                        <!-- SCORE SUMMARY BAR -->
+                        <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between gap-3 flex-wrap text-xs">
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <% if (mcqMax > 0) { %>
+                                    <div class="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                                        <span class="text-slate-400 font-normal">Auto-graded MCQ Score: </span>
+                                        <strong class="font-semibold text-slate-800 dark:text-slate-200"><%= mcqEarned %> / <%= mcqMax %></strong>
+                                    </div>
+                                <% } %>
+                                <div class="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                                    <span class="text-slate-400 font-normal">Written Questions: </span>
+                                    <strong class="font-semibold text-slate-800 dark:text-slate-200"><%= questions.length %></strong>
+                                </div>
+                            </div>
+
+                            <!-- Live Calculated Total -->
+                            <div class="px-3.5 py-1.5 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 border border-cyan-200/80 dark:border-cyan-800/60 flex items-center gap-2">
+                                <span class="text-cyan-600 dark:text-cyan-400 font-medium text-xs">Written Total:</span>
+                                <span id="headerScorePreview" class="font-semibold text-cyan-800 dark:text-cyan-200 text-sm">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- QUESTIONS FEED -->
+                    <div class="space-y-4">
+                        <% 
+                            let displayQuestionIndex = 0;
+                            questions.forEach(function(q, index) { 
+                                const ua = q.userAnswer || {};
+                                const qMaxMark = q.maxMarks || 1;
+                                const existingMark = (ua.marksObtained !== undefined && ua.marksObtained !== null) ? ua.marksObtained : '';
+                                const existingComment = ua.teacherComment || '';
+                                const existingImage = ua.teacherImage || '';
+                                const modelSolution = q.correctAnswer || q.answer || '';
+                                const qIdKey = q._id ? q._id.toString() : String(index);
+                                const isComprehension = (q.questionType === 'Comprehension') && (q.q1 || q.q2);
+                        %>
+
+                            <% if (isComprehension) { %>
+                                <!-- COMPREHENSION: QUESTION 1 (MAX 3 MARKS) -->
+                                <% 
+                                    displayQuestionIndex++;
+                                    let ans1 = ua.q1Answer || '';
+                                    let img1 = ua.q1Image || '';
+                                    if (!ans1 && ua.writtenAnswer) {
+                                        if (ua.writtenAnswer.includes('[Question 2 / প্রশ্ন ২]:')) {
+                                            const parts = ua.writtenAnswer.split('[Question 2 / প্রশ্ন ২]:');
+                                            ans1 = parts[0].replace(/\[Question 1 \/ প্রশ্ন ১\]:?\s*/i, '').trim();
+                                        } else if (ua.writtenAnswer.includes('[Question 1 / প্রশ্ন ১]:')) {
+                                            ans1 = ua.writtenAnswer.replace(/\[Question 1 \/ প্রশ্ন ১\]:?\s*/i, '').trim();
+                                        } else {
+                                            ans1 = ua.writtenAnswer.trim();
+                                        }
+                                    }
+                                    if (!img1 && Array.isArray(ua.writtenImages) && ua.writtenImages.length > 0) {
+                                        img1 = ua.writtenImages[0] || '';
+                                    }
+                                    if (!img1 && ua.writtenImage) {
+                                        img1 = ua.writtenImage;
+                                    }
+
+                                    let markValQ1 = (ua.q1Marks !== undefined && ua.q1Marks !== null) ? ua.q1Marks : '';
+                                    let commValQ1 = '';
+                                    if (existingComment.includes('[Question 2]:')) {
+                                        const cParts = existingComment.split('[Question 2]:');
+                                        commValQ1 = cParts[0].replace('[Question 1]:', '').trim();
+                                    } else {
+                                        commValQ1 = existingComment;
+                                    }
+                                    let imgValQ1 = existingImage;
+
+                                    const mAns1 = (q.a1 || '').trim();
+                                    const hasMAns1 = mAns1 && mAns1 !== '0' && mAns1 !== 'undefined' && mAns1 !== 'null';
+                                %>
+                                <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
+                                    <!-- QUESTION HEADER -->
+                                    <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200/60 dark:border-slate-800">
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                                                Question <%= displayQuestionIndex %>
+                                            </span>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-normal bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                Comprehension
+                                            </span>
+                                        </div>
+                                        <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                            Max Marks: 3
+                                        </span>
+                                    </div>
+
+                                    <!-- STIMULUS / CONTEXT -->
+                                    <div class="space-y-1">
+                                        <span class="text-xs font-bold text-slate-500 dark:text-slate-400 block">উদ্দীপক:</span>
+                                        <div class="text-sm sm:text-base font-normal text-slate-800 dark:text-slate-100 leading-relaxed whitespace-pre-wrap"><%- q.context || q.questionText %></div>
+                                    </div>
+
+                                    <!-- QUESTION STATEMENT -->
+                                    <div class="text-sm sm:text-base font-normal text-slate-800 dark:text-slate-100 leading-relaxed">
+                                        <%- q.q1 %>
+                                    </div>
+
+                                    <!-- OFFICIAL MODEL SOLUTION -->
+                                    <% if (hasMAns1) { %>
+                                        <div class="rounded-xl overflow-hidden border border-emerald-500/25 bg-emerald-50/20 dark:bg-emerald-950/15">
+                                            <div class="px-3.5 py-1.5 bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center gap-1.5 border-b border-emerald-500/20">
+                                                <span class="material-symbols-rounded text-emerald-600 dark:text-emerald-400 text-sm leading-none">verified</span>
+                                                <span class="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Model Solution (Reference Answer)</span>
+                                            </div>
+                                            <div class="p-3.5 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed">
+                                                <%- mAns1 %>
+                                            </div>
+                                        </div>
+                                    <% } %>
+
+                                    <!-- STUDENT'S SUBMITTED ANSWER -->
+                                    <div class="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 space-y-2">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                <span class="material-symbols-rounded text-sm text-cyan-600 dark:text-cyan-400 leading-none">edit_note</span>
+                                                <span>Student's Submitted Answer:</span>
+                                            </span>
+                                            <% if ((!ans1 || ans1.trim() === '') && !img1) { %>
+                                                <span class="text-[10px] font-medium px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                                                    Not Answered / Left Blank
+                                                </span>
+                                            <% } %>
+                                        </div>
+                                        <% if (ans1 && ans1.trim() !== '') { %>
+                                            <div class="p-3 rounded-lg bg-white dark:bg-[#0b1120] border border-slate-200/60 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap min-h-[44px]">
+                                                <%= ans1 %>
+                                            </div>
+                                        <% } %>
+                                        <% if (img1) { %>
+                                            <div class="pt-2 space-y-1.5">
+                                                <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                                                    <span class="material-symbols-rounded text-sm">photo_library</span>
+                                                    <span>Student's Submitted Picture:</span>
+                                                </span>
+                                                <div>
+                                                    <div class="inline-block relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openFullscreenEvaluationImage('<%= img1 %>')">
+                                                        <img src="<%= img1 %>" alt="Student Submission" class="max-h-56 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
+                                                        <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                                            <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
+                                                                <span class="material-symbols-rounded text-xl">fullscreen</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <% } %>
+                                    </div>
+
+                                    <!-- TEACHER EVALUATION INPUTS (MARKS & FEEDBACK) -->
+                                    <div class="p-3.5 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 space-y-3">
+                                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
+                                                    Award Marks:
+                                                </label>
+                                                <div class="flex items-center gap-1.5">
+                                                    <input type="number" 
+                                                           name="marks_<%= qIdKey %>_q1" 
+                                                           id="marks_<%= qIdKey %>_q1"
+                                                           value="<%= markValQ1 %>" 
+                                                           min="0" 
+                                                           max="3" 
+                                                           step="0.5" 
+                                                           placeholder="0"
+                                                           data-max="3"
+                                                           class="score-input w-20 px-3 py-1.5 rounded-xl text-sm font-semibold bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 focus:outline-hidden focus:border-indigo-500 text-center"
+                                                           required>
+                                                    <span class="text-xs font-normal text-slate-400">/ 3</span>
+                                                </div>
+                                                <div class="flex items-center gap-1 ml-2">
+                                                    <button type="button" onclick="setQuickScore('<%= qIdKey %>_q1', 0)" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer">
+                                                        0
+                                                    </button>
+                                                    <button type="button" onclick="setQuickScore('<%= qIdKey %>_q1', 1.5)" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer">
+                                                        Half (1.5)
+                                                    </button>
+                                                    <button type="button" onclick="setQuickScore('<%= qIdKey %>_q1', 3)" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer">
+                                                        Full (3)
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <div class="flex items-start gap-2">
+                                                <div class="flex-1 min-w-0">
+                                                    <textarea 
+                                                        name="comment_<%= qIdKey %>_q1" 
+                                                        rows="2" 
+                                                        placeholder="Teacher's comment / feedback note for Question <%= displayQuestionIndex %>..."
+                                                        class="w-full p-2.5 rounded-xl text-xs sm:text-sm bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 placeholder:text-slate-400 transition-colors resize-y leading-relaxed min-h-[56px]"><%= commValQ1 %></textarea>
+                                                </div>
+                                                <div class="flex flex-col items-center shrink-0 pt-0.5">
+                                                    <input type="file" 
+                                                           id="file_input_<%= qIdKey %>_q1" 
+                                                           accept="image/*" 
+                                                           class="hidden" 
+                                                           onchange="handleTeacherImageUpload(this, '<%= qIdKey %>_q1')">
+                                                    <input type="hidden" 
+                                                           id="hidden_image_<%= qIdKey %>_q1" 
+                                                           name="image_<%= qIdKey %>_q1" 
+                                                           value="<%= imgValQ1 %>">
+                                                    
+                                                    <button type="button" 
+                                                            onclick="document.getElementById('file_input_<%= qIdKey %>_q1').click()" 
+                                                            class="size-10 rounded-xl flex items-center justify-center border border-indigo-200/90 dark:border-indigo-800/80 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-400 transition-all shadow-2xs group cursor-pointer" 
+                                                            title="Attach picture / solution note for this question">
+                                                        <span class="material-symbols-rounded text-xl group-hover:scale-110 transition-transform">add_photo_alternate</span>
+                                                    </button>
+                                                    <span class="text-[9.5px] text-slate-400 font-medium mt-0.5">Photo</span>
+                                                </div>
+                                            </div>
+
+                                            <div id="image_preview_wrap_<%= qIdKey %>_q1" class="<%= imgValQ1 ? '' : 'hidden' %>">
+                                                <div class="relative inline-flex items-center gap-2.5 p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs">
+                                                    <a id="image_link_<%= qIdKey %>_q1" href="<%= imgValQ1 || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
+                                                        <img id="image_preview_<%= qIdKey %>_q1" src="<%= imgValQ1 || '' %>" alt="Attached preview" class="size-full object-cover">
+                                                    </a>
+                                                    <div class="space-y-0.5 pr-2">
+                                                        <p class="text-[11px] font-medium text-slate-700 dark:text-slate-300">Attached Picture</p>
+                                                        <button type="button" onclick="removeTeacherImage('<%= qIdKey %>_q1')" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
+                                                            <span class="material-symbols-rounded text-xs">delete</span>
+                                                            <span>Remove</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- COMPREHENSION: QUESTION 2 (MAX 4 MARKS) -->
+                                <% 
+                                    displayQuestionIndex++;
+                                    let ans2 = ua.q2Answer || '';
+                                    let img2 = ua.q2Image || '';
+                                    if (!ans2 && ua.writtenAnswer && ua.writtenAnswer.includes('[Question 2 / প্রশ্ন ২]:')) {
+                                        const parts = ua.writtenAnswer.split('[Question 2 / প্রশ্ন ২]:');
+                                        ans2 = (parts[1] || '').trim();
+                                    }
+                                    if (!img2 && Array.isArray(ua.writtenImages) && ua.writtenImages.length > 1) {
+                                        img2 = ua.writtenImages[1] || '';
+                                    }
+
+                                    let markValQ2 = (ua.q2Marks !== undefined && ua.q2Marks !== null) ? ua.q2Marks : '';
+                                    let commValQ2 = '';
+                                    if (existingComment.includes('[Question 2]:')) {
+                                        const cParts = existingComment.split('[Question 2]:');
+                                        commValQ2 = (cParts[1] || '').trim();
+                                    }
+                                    let imgValQ2 = '';
+
+                                    const mAns2 = (q.a2 || '').trim();
+                                    const hasMAns2 = mAns2 && mAns2 !== '0' && mAns2 !== 'undefined' && mAns2 !== 'null';
+                                %>
+                                <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
+                                    <!-- QUESTION HEADER -->
+                                    <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200/60 dark:border-slate-800">
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                                                Question <%= displayQuestionIndex %>
+                                            </span>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-normal bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                Comprehension
+                                            </span>
+                                        </div>
+                                        <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                            Max Marks: 4
+                                        </span>
+                                    </div>
+
+                                    <!-- QUESTION STATEMENT -->
+                                    <div class="text-sm sm:text-base font-normal text-slate-800 dark:text-slate-100 leading-relaxed">
+                                        <%- q.q2 %>
+                                    </div>
+
+                                    <!-- OFFICIAL MODEL SOLUTION -->
+                                    <% if (hasMAns2) { %>
+                                        <div class="rounded-xl overflow-hidden border border-emerald-500/25 bg-emerald-50/20 dark:bg-emerald-950/15">
+                                            <div class="px-3.5 py-1.5 bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center gap-1.5 border-b border-emerald-500/20">
+                                                <span class="material-symbols-rounded text-emerald-600 dark:text-emerald-400 text-sm leading-none">verified</span>
+                                                <span class="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Model Solution (Reference Answer)</span>
+                                            </div>
+                                            <div class="p-3.5 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed">
+                                                <%- mAns2 %>
+                                            </div>
+                                        </div>
+                                    <% } %>
+
+                                    <!-- STUDENT'S SUBMITTED ANSWER -->
+                                    <div class="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 space-y-2">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                <span class="material-symbols-rounded text-sm text-cyan-600 dark:text-cyan-400 leading-none">edit_note</span>
+                                                <span>Student's Submitted Answer:</span>
+                                            </span>
+                                            <% if ((!ans2 || ans2.trim() === '') && !img2) { %>
+                                                <span class="text-[10px] font-medium px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                                                    Not Answered / Left Blank
+                                                </span>
+                                            <% } %>
+                                        </div>
+                                        <% if (ans2 && ans2.trim() !== '') { %>
+                                            <div class="p-3 rounded-lg bg-white dark:bg-[#0b1120] border border-slate-200/60 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap min-h-[44px]">
+                                                <%= ans2 %>
+                                            </div>
+                                        <% } %>
+                                        <% if (img2) { %>
+                                            <div class="pt-2 space-y-1.5">
+                                                <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                                                    <span class="material-symbols-rounded text-sm">photo_library</span>
+                                                    <span>Student's Submitted Picture:</span>
+                                                </span>
+                                                <div>
+                                                    <div class="inline-block relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openFullscreenEvaluationImage('<%= img2 %>')">
+                                                        <img src="<%= img2 %>" alt="Student Submission" class="max-h-56 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
+                                                        <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                                            <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
+                                                                <span class="material-symbols-rounded text-xl">fullscreen</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <% } %>
+                                    </div>
+
+                                    <!-- TEACHER EVALUATION INPUTS (MARKS & FEEDBACK) -->
+                                    <div class="p-3.5 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 space-y-3">
+                                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
+                                                    Award Marks:
+                                                </label>
+                                                <div class="flex items-center gap-1.5">
+                                                    <input type="number" 
+                                                           name="marks_<%= qIdKey %>_q2" 
+                                                           id="marks_<%= qIdKey %>_q2"
+                                                           value="<%= markValQ2 %>" 
+                                                           min="0" 
+                                                           max="4" 
+                                                           step="0.5" 
+                                                           placeholder="0"
+                                                           data-max="4"
+                                                           class="score-input w-20 px-3 py-1.5 rounded-xl text-sm font-semibold bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 focus:outline-hidden focus:border-indigo-500 text-center"
+                                                           required>
+                                                    <span class="text-xs font-normal text-slate-400">/ 4</span>
+                                                </div>
+                                                <div class="flex items-center gap-1 ml-2">
+                                                    <button type="button" onclick="setQuickScore('<%= qIdKey %>_q2', 0)" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer">
+                                                        0
+                                                    </button>
+                                                    <button type="button" onclick="setQuickScore('<%= qIdKey %>_q2', 2)" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer">
+                                                        Half (2)
+                                                    </button>
+                                                    <button type="button" onclick="setQuickScore('<%= qIdKey %>_q2', 4)" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer">
+                                                        Full (4)
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <div class="flex items-start gap-2">
+                                                <div class="flex-1 min-w-0">
+                                                    <textarea 
+                                                        name="comment_<%= qIdKey %>_q2" 
+                                                        rows="2" 
+                                                        placeholder="Teacher's comment / feedback note for Question <%= displayQuestionIndex %>..."
+                                                        class="w-full p-2.5 rounded-xl text-xs sm:text-sm bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 placeholder:text-slate-400 transition-colors resize-y leading-relaxed min-h-[56px]"><%= commValQ2 %></textarea>
+                                                </div>
+                                                <div class="flex flex-col items-center shrink-0 pt-0.5">
+                                                    <input type="file" 
+                                                           id="file_input_<%= qIdKey %>_q2" 
+                                                           accept="image/*" 
+                                                           class="hidden" 
+                                                           onchange="handleTeacherImageUpload(this, '<%= qIdKey %>_q2')">
+                                                    <input type="hidden" 
+                                                           id="hidden_image_<%= qIdKey %>_q2" 
+                                                           name="image_<%= qIdKey %>_q2" 
+                                                           value="<%= imgValQ2 %>">
+                                                    
+                                                    <button type="button" 
+                                                            onclick="document.getElementById('file_input_<%= qIdKey %>_q2').click()" 
+                                                            class="size-10 rounded-xl flex items-center justify-center border border-indigo-200/90 dark:border-indigo-800/80 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-400 transition-all shadow-2xs group cursor-pointer" 
+                                                            title="Attach picture / solution note for this question">
+                                                        <span class="material-symbols-rounded text-xl group-hover:scale-110 transition-transform">add_photo_alternate</span>
+                                                    </button>
+                                                    <span class="text-[9.5px] text-slate-400 font-medium mt-0.5">Photo</span>
+                                                </div>
+                                            </div>
+
+                                            <div id="image_preview_wrap_<%= qIdKey %>_q2" class="<%= imgValQ2 ? '' : 'hidden' %>">
+                                                <div class="relative inline-flex items-center gap-2.5 p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs">
+                                                    <a id="image_link_<%= qIdKey %>_q2" href="<%= imgValQ2 || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
+                                                        <img id="image_preview_<%= qIdKey %>_q2" src="<%= imgValQ2 || '' %>" alt="Attached preview" class="size-full object-cover">
+                                                    </a>
+                                                    <div class="space-y-0.5 pr-2">
+                                                        <p class="text-[11px] font-medium text-slate-700 dark:text-slate-300">Attached Picture</p>
+                                                        <button type="button" onclick="removeTeacherImage('<%= qIdKey %>_q2')" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
+                                                            <span class="material-symbols-rounded text-xs">delete</span>
+                                                            <span>Remove</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% } else { %>
+                                <!-- STANDARD NON-MCQ QUESTION -->
+                                <% displayQuestionIndex++; %>
+                                <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
+                                    <!-- QUESTION HEADER -->
+                                    <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200/60 dark:border-slate-800">
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                                                Question <%= displayQuestionIndex %>
+                                            </span>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-normal bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                <%= q.questionType || 'Written' %>
+                                            </span>
+                                        </div>
+
+                                        <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                            Max Marks: <%= qMaxMark %>
+                                        </span>
+                                    </div>
+
+                                    <!-- NORMAL QUESTION DISPLAY -->
+                                    <div class="text-sm sm:text-base font-normal text-slate-800 dark:text-slate-100 leading-relaxed">
+                                        <%= q.questionText %>
+                                    </div>
+
+                                    <!-- OFFICIAL MODEL SOLUTION / ANSWER KEY -->
+                                    <% if (modelSolution) { %>
+                                        <div class="rounded-xl overflow-hidden border border-emerald-500/25 bg-emerald-50/20 dark:bg-emerald-950/15">
+                                            <div class="px-3.5 py-1.5 bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center gap-1.5 border-b border-emerald-500/20">
+                                                <span class="material-symbols-rounded text-emerald-600 dark:text-emerald-400 text-sm leading-none">verified</span>
+                                                <span class="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Model Solution (Reference Answer)</span>
+                                            </div>
+                                            <div class="p-3.5 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed">
+                                                <%- modelSolution %>
+                                            </div>
+                                        </div>
+                                    <% } %>
+
+                                    <!-- STUDENT'S SUBMITTED ANSWER -->
+                                    <div class="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 space-y-2">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                <span class="material-symbols-rounded text-sm text-cyan-600 dark:text-cyan-400 leading-none">edit_note</span>
+                                                <span>Student's Submitted Answer:</span>
+                                            </span>
+                                            <% 
+                                                const studentImgs = [];
+                                                if (ua.writtenImage) studentImgs.push(ua.writtenImage);
+                                                if (Array.isArray(ua.writtenImages)) {
+                                                    ua.writtenImages.forEach(img => { if (img && !studentImgs.includes(img)) studentImgs.push(img); });
+                                                }
+                                            %>
+                                            <% if ((!ua.writtenAnswer || ua.writtenAnswer.trim() === '') && studentImgs.length === 0) { %>
+                                                <span class="text-[10px] font-medium px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                                                    Not Answered / Left Blank
+                                                </span>
+                                            <% } %>
+                                        </div>
+                                        <% if (ua.writtenAnswer && ua.writtenAnswer.trim() !== '') { %>
+                                            <div class="p-3 rounded-lg bg-white dark:bg-[#0b1120] border border-slate-200/60 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap min-h-[44px]">
+                                                <%= ua.writtenAnswer %>
+                                            </div>
+                                        <% } %>
+
+                                        <!-- STUDENT'S SUBMITTED PICTURE(S) -->
+                                        <% if (studentImgs.length > 0) { %>
+                                            <div class="pt-2 space-y-1.5">
+                                                <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                                                    <span class="material-symbols-rounded text-sm">photo_library</span>
+                                                    <span>Student's Submitted Picture(s):</span>
+                                                </span>
+                                                <div class="flex flex-wrap gap-3">
+                                                    <% studentImgs.forEach(function(sImg) { %>
+                                                        <div class="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openFullscreenEvaluationImage('<%= sImg %>')">
+                                                            <img src="<%= sImg %>" alt="Student Submission" class="max-h-56 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
+                                                            <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                                                <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
+                                                                    <span class="material-symbols-rounded text-xl">fullscreen</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    <% }); %>
+                                                </div>
+                                            </div>
+                                        <% } %>
+                                    </div>
+
+                                    <!-- TEACHER EVALUATION INPUTS (MARKS & FEEDBACK) -->
+                                    <div class="p-3.5 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 space-y-3">
+                                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                            <!-- Marks Input Area -->
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <label class="text-xs font-medium text-slate-700 dark:text-slate-300">
+                                                    Award Marks:
+                                                </label>
+                                                <div class="flex items-center gap-1.5">
+                                                    <input type="number" 
+                                                           name="marks_<%= qIdKey %>" 
+                                                           id="marks_<%= qIdKey %>"
+                                                           value="<%= existingMark %>" 
+                                                           min="0" 
+                                                           max="<%= qMaxMark %>" 
+                                                           step="0.5" 
+                                                           placeholder="0"
+                                                           data-max="<%= qMaxMark %>"
+                                                           class="score-input w-20 px-3 py-1.5 rounded-xl text-sm font-semibold bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 focus:outline-hidden focus:border-indigo-500 text-center"
+                                                           required>
+                                                    <span class="text-xs font-normal text-slate-400">/ <%= qMaxMark %></span>
+                                                </div>
+
+                                                <!-- Quick Shortcut Buttons -->
+                                                <div class="flex items-center gap-1 ml-2">
+                                                    <button type="button" onclick="setQuickScore('<%= qIdKey %>', 0)" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer">
+                                                        0
+                                                    </button>
+                                                    <% if (qMaxMark > 1) { %>
+                                                        <button type="button" onclick="setQuickScore('<%= qIdKey %>', <%= (qMaxMark / 2).toFixed(1) %>)" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all cursor-pointer">
+                                                            Half (<%= (qMaxMark / 2).toFixed(1) %>)
+                                                        </button>
+                                                    <% } %>
+                                                    <button type="button" onclick="setQuickScore('<%= qIdKey %>', <%= qMaxMark %>)" class="px-2 py-1 rounded-lg text-[11px] font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer">
+                                                        Full (<%= qMaxMark %>)
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Question Note & Picture Attachment -->
+                                        <div class="space-y-2">
+                                            <div class="flex items-start gap-2">
+                                                <div class="flex-1 min-w-0">
+                                                    <textarea 
+                                                        name="comment_<%= qIdKey %>" 
+                                                        rows="2" 
+                                                        placeholder="Teacher's comment / feedback note for Question <%= displayQuestionIndex %>..."
+                                                        class="w-full p-2.5 rounded-xl text-xs sm:text-sm bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 placeholder:text-slate-400 transition-colors resize-y leading-relaxed min-h-[56px]"><%= existingComment %></textarea>
+                                                </div>
+
+                                                <div class="flex flex-col items-center shrink-0 pt-0.5">
+                                                    <input type="file" 
+                                                           id="file_input_<%= qIdKey %>" 
+                                                           accept="image/*" 
+                                                           class="hidden" 
+                                                           onchange="handleTeacherImageUpload(this, '<%= qIdKey %>')">
+                                                    <input type="hidden" 
+                                                           id="hidden_image_<%= qIdKey %>" 
+                                                           name="image_<%= qIdKey %>" 
+                                                           value="<%= existingImage %>">
+                                                    
+                                                    <button type="button" 
+                                                            onclick="document.getElementById('file_input_<%= qIdKey %>').click()" 
+                                                            class="size-10 rounded-xl flex items-center justify-center border border-indigo-200/90 dark:border-indigo-800/80 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-400 transition-all shadow-2xs group cursor-pointer" 
+                                                            title="Attach picture / solution note for this question">
+                                                        <span class="material-symbols-rounded text-xl group-hover:scale-110 transition-transform">add_photo_alternate</span>
+                                                    </button>
+                                                    <span class="text-[9.5px] text-slate-400 font-medium mt-0.5">Photo</span>
+                                                </div>
+                                            </div>
+
+                                            <!-- Attachment Preview Area -->
+                                            <div id="image_preview_wrap_<%= qIdKey %>" class="<%= existingImage ? '' : 'hidden' %>">
+                                                <div class="relative inline-flex items-center gap-2.5 p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs">
+                                                    <a id="image_link_<%= qIdKey %>" href="<%= existingImage || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
+                                                        <img id="image_preview_<%= qIdKey %>" src="<%= existingImage || '' %>" alt="Attached preview" class="size-full object-cover">
+                                                    </a>
+                                                    <div class="space-y-0.5 pr-2">
+                                                        <p class="text-[11px] font-medium text-slate-700 dark:text-slate-300">Attached Picture</p>
+                                                        <button type="button" onclick="removeTeacherImage('<%= qIdKey %>')" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
+                                                            <span class="material-symbols-rounded text-xs">delete</span>
+                                                            <span>Remove</span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% } %>
+                        <% }); %>
+                    </div>
+
+                    <!-- OVERALL FEEDBACK & SAVE ACTION CARD -->
+                    <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4">
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between gap-2 flex-wrap">
+                                <label class="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-sm text-cyan-600 dark:text-cyan-400">rate_review</span>
+                                    <span>Overall Teacher Remarks & Guidance</span>
+                                </label>
+                                <button type="button" 
+                                        onclick="document.getElementById('overall_file_input').click()" 
+                                        class="px-2.5 py-1 rounded-lg text-xs font-medium text-cyan-600 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-800/80 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                                        title="Attach overall evaluation sheet or picture note">
+                                    <span class="material-symbols-rounded text-base">add_photo_alternate</span>
+                                    <span>Attach Overall Photo</span>
+                                </button>
+                                <input type="file" id="overall_file_input" accept="image/*" class="hidden" onchange="handleOverallImageUpload(this)">
+                                <input type="hidden" id="hidden_overall_image" name="overallImage" value="<%= teacherOverallImage %>">
+                            </div>
+                            <textarea name="overallFeedback" 
+                                      rows="3" 
+                                      placeholder="Provide overall feedback, strengths, and advice for the student..."
+                                      class="w-full p-3.5 rounded-xl text-xs sm:text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 placeholder:text-slate-400"><%= teacherNote %></textarea>
+                            
+                            <!-- Overall Attachment Preview Area -->
+                            <div id="overall_image_preview_wrap" class="<%= teacherOverallImage ? '' : 'hidden' %>">
+                                <div class="relative inline-flex items-center gap-2.5 p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-cyan-200/80 dark:border-cyan-800/60 shadow-2xs">
+                                    <a id="overall_image_link" href="<%= teacherOverallImage || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
+                                        <img id="overall_image_preview" src="<%= teacherOverallImage || '' %>" alt="Attached preview" class="size-full object-cover">
+                                    </a>
+                                    <div class="space-y-0.5 pr-2">
+                                        <p class="text-[11px] font-medium text-slate-700 dark:text-slate-300">Overall Attached Picture</p>
+                                        <button type="button" onclick="removeOverallTeacherImage()" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
+                                            <span class="material-symbols-rounded text-xs">delete</span>
+                                            <span>Remove</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+                            
+                            <!-- Detailed Summary Counters -->
+                            <div class="flex items-center gap-3 flex-wrap">
+                                <div class="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center gap-1.5 text-xs">
+                                    <span class="text-slate-400 font-normal">Written Score:</span>
+                                    <span id="footerWrittenPreview" class="font-semibold text-cyan-600 dark:text-cyan-400">0</span>
+                                </div>
+
+                                <div class="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center gap-1.5 text-xs">
+                                    <span class="text-slate-400 font-normal">Grand Total:</span>
+                                    <span id="footerGrandPreview" class="font-semibold text-emerald-600 dark:text-emerald-400">0</span>
+                                </div>
+                            </div>
+
+                            <!-- Submit Button -->
+                            <button type="submit" id="saveBtn" class="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs sm:text-sm transition-all shadow-xs active:scale-95">
+                                <span class="material-symbols-rounded text-base leading-none">check_circle</span>
+                                <span>Save & Release Evaluation</span>
+                            </button>
+
+                        </div>
+                    </div>
+
+                </form>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- SCRIPT FOR DYNAMIC SCORE CALCULATION -->
+    <script>
+        const mcqScore = <%= mcqEarned %>;
+        const totalMaxMarks = <%= questions.reduce((sum, q) => sum + (q.maxMarks || 1), 0) %>;
+
+        function updateScoreTotals() {
+            let total = 0;
+            const inputs = document.querySelectorAll('.score-input');
+            inputs.forEach(input => {
+                const val = parseFloat(input.value);
+                const max = parseFloat(input.getAttribute('data-max')) || 0;
+                if (!isNaN(val)) {
+                    // Clamp
+                    if (val < 0) input.value = 0;
+                    if (val > max) input.value = max;
+                    total += parseFloat(input.value);
+                }
+            });
+
+            // Round to 1 decimal
+            const rounded = Math.round(total * 10) / 10;
+            const writtenDisplay = rounded + ' / ' + totalMaxMarks;
+            const grandTotal = Math.round((mcqScore + rounded) * 10) / 10;
+
+            const headerElem = document.getElementById('headerScorePreview');
+            if (headerElem) headerElem.innerText = writtenDisplay;
+
+            const footerWritten = document.getElementById('footerWrittenPreview');
+            if (footerWritten) footerWritten.innerText = writtenDisplay;
+
+            const footerGrand = document.getElementById('footerGrandPreview');
+            if (footerGrand) footerGrand.innerText = grandTotal;
+        }
+
+        function setQuickScore(key, score) {
+            const input = document.getElementById(`marks_${key}`) || 
+                          document.querySelector(`input[name="marks_${key}"]`) ||
+                          document.querySelector(`input[name="${key}"]`);
+            if (input) {
+                input.value = score;
+                updateScoreTotals();
+            }
+        }
+
+        // Image upload preview and removal handlers
+        function handleTeacherImageUpload(fileInput, key) {
+            if (fileInput.files && fileInput.files[0]) {
+                const file = fileInput.files[0];
+                if (file.size > 10 * 1024 * 1024) {
+                    alert('Image size exceeds 10MB limit. Please choose a smaller file.');
+                    fileInput.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const dataUrl = e.target.result;
+                    const hiddenInput = document.getElementById('hidden_image_' + key);
+                    const previewImg = document.getElementById('image_preview_' + key);
+                    const previewLink = document.getElementById('image_link_' + key);
+                    const previewWrap = document.getElementById('image_preview_wrap_' + key);
+
+                    if (hiddenInput) hiddenInput.value = dataUrl;
+                    if (previewImg) previewImg.src = dataUrl;
+                    if (previewLink) previewLink.href = dataUrl;
+                    if (previewWrap) previewWrap.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function removeTeacherImage(key) {
+            const fileInput = document.getElementById('file_input_' + key);
+            const hiddenInput = document.getElementById('hidden_image_' + key);
+            const previewWrap = document.getElementById('image_preview_wrap_' + key);
+            const previewImg = document.getElementById('image_preview_' + key);
+            const previewLink = document.getElementById('image_link_' + key);
+
+            if (fileInput) fileInput.value = '';
+            if (hiddenInput) hiddenInput.value = '';
+            if (previewImg) previewImg.src = '';
+            if (previewLink) previewLink.href = '#';
+            if (previewWrap) previewWrap.classList.add('hidden');
+        }
+
+        function handleOverallImageUpload(fileInput) {
+            if (fileInput.files && fileInput.files[0]) {
+                const file = fileInput.files[0];
+                if (file.size > 10 * 1024 * 1024) {
+                    alert('Image size exceeds 10MB limit. Please choose a smaller file.');
+                    fileInput.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const dataUrl = e.target.result;
+                    const hiddenInput = document.getElementById('hidden_overall_image');
+                    const previewImg = document.getElementById('overall_image_preview');
+                    const previewLink = document.getElementById('overall_image_link');
+                    const previewWrap = document.getElementById('overall_image_preview_wrap');
+
+                    if (hiddenInput) hiddenInput.value = dataUrl;
+                    if (previewImg) previewImg.src = dataUrl;
+                    if (previewLink) previewLink.href = dataUrl;
+                    if (previewWrap) previewWrap.classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function removeOverallTeacherImage() {
+            const fileInput = document.getElementById('overall_file_input');
+            const hiddenInput = document.getElementById('hidden_overall_image');
+            const previewWrap = document.getElementById('overall_image_preview_wrap');
+            const previewImg = document.getElementById('overall_image_preview');
+            const previewLink = document.getElementById('overall_image_link');
+
+            if (fileInput) fileInput.value = '';
+            if (hiddenInput) hiddenInput.value = '';
+            if (previewImg) previewImg.src = '';
+            if (previewLink) previewLink.href = '#';
+            if (previewWrap) previewWrap.classList.add('hidden');
+        }
+
+        // Listen for input changes
+        document.querySelectorAll('.score-input').forEach(input => {
+            input.addEventListener('input', updateScoreTotals);
+            input.addEventListener('change', updateScoreTotals);
+        });
+
+        // Initialize on page load
+        updateScoreTotals();
+
+        // Form submission security: ONLY submit when user explicitly clicks the Save button
+        const evalForm = document.getElementById('evaluationForm');
+        const saveBtn = document.getElementById('saveBtn');
+        let isExplicitSaveClicked = false;
+
+        // Block Enter key from submitting form from score inputs or other controls
+        evalForm.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                if (e.target && e.target.tagName && e.target.tagName.toLowerCase() === 'textarea') {
+                    // Allow normal line breaks in textareas
+                    return;
+                }
+                e.preventDefault();
+                return false;
+            }
+        });
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function() {
+                isExplicitSaveClicked = true;
+            });
+        }
+
+        evalForm.addEventListener('submit', function(e) {
+            if (!isExplicitSaveClicked) {
+                e.preventDefault();
+                return false;
+            }
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<span class="material-symbols-rounded text-base animate-spin">progress_activity</span><span>Saving Evaluation...</span>';
+            }
+        });
+
+        // Fullscreen student attachment lightbox
+        function openFullscreenEvaluationImage(src) {
+            const modal = document.getElementById('evalImgModal');
+            const img = document.getElementById('evalModalImg');
+            if (!modal || !img) return;
+            img.src = src;
+            modal.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                modal.classList.remove('opacity-0');
+            });
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeFullscreenEvaluationImage() {
+            const modal = document.getElementById('evalImgModal');
+            if (!modal) return;
+            modal.classList.add('opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                document.body.style.overflow = '';
+            }, 200);
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeFullscreenEvaluationImage();
+        });
+    </script>
+
+    <!-- FULLSCREEN EVALUATION IMAGE MODAL -->
+    <div id="evalImgModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md hidden opacity-0 transition-opacity duration-200 flex items-center justify-center p-4" onclick="closeFullscreenEvaluationImage()">
+        <button type="button" onclick="closeFullscreenEvaluationImage()" class="absolute top-4 right-4 size-10 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors">
+            <span class="material-symbols-rounded text-2xl">close</span>
+        </button>
+        <img id="evalModalImg" src="" class="max-h-[92vh] max-w-[95vw] rounded-xl object-contain shadow-2xl" onclick="event.stopPropagation()">
+    </div>
+</body>
+</html>

@@ -25,24 +25,49 @@ router.get('/dashboard', protect, async (req, res) => {
             if (dbUser.lastWatchedLesson.lessonId && courseObj.curriculumNodes && courseObj.curriculumNodes.length > 0) {
                 activeNode = courseObj.curriculumNodes.find(n => String(n._id) === String(dbUser.lastWatchedLesson.lessonId));
             }
+            if (!activeNode && courseObj.curriculumNodes && courseObj.curriculumNodes.length > 0) {
+                if (dbUser.lastWatchedLesson.lessonTitle) {
+                    const cleanTitle = dbUser.lastWatchedLesson.lessonTitle.trim().toLowerCase();
+                    activeNode = courseObj.curriculumNodes.find(n => n.name && n.name.trim().toLowerCase() === cleanTitle);
+                }
+                if (!activeNode) {
+                    activeNode = courseObj.curriculumNodes.find(n => n.type === 'video' && (n.videoPath || n.url)) ||
+                                 courseObj.curriculumNodes.find(n => n.videoPath || n.url);
+                }
+                if (activeNode) {
+                    dbUser.lastWatchedLesson.lessonId = String(activeNode._id);
+                    dbUser.lastWatchedLesson.lessonTitle = activeNode.name || dbUser.lastWatchedLesson.lessonTitle;
+                }
+            }
             if (activeNode && activeNode.thumbnail) {
                 dbUser.lastWatchedLesson.thumbnail = activeNode.thumbnail;
             } else if (courseObj.thumbnail) {
                 dbUser.lastWatchedLesson.thumbnail = courseObj.thumbnail;
             }
+            if (activeNode && activeNode.description) {
+                dbUser.lastWatchedLesson.description = activeNode.description;
+            }
         } else if (dbUser.enrolledCourses && dbUser.enrolledCourses.length > 0) {
             const firstEnrollment = dbUser.enrolledCourses.find(e => e.course);
             if (firstEnrollment && firstEnrollment.course) {
                 const courseObj = firstEnrollment.course;
-                const firstVideoNode = (courseObj.curriculumNodes || []).find(n => n.type === 'video');
-                dbUser.lastWatchedLesson = {
-                    course: courseObj,
-                    lessonId: firstVideoNode ? String(firstVideoNode._id) : null,
-                    lessonTitle: firstVideoNode ? firstVideoNode.name : (courseObj.title || 'Course Lesson'),
-                    thumbnail: (firstVideoNode && firstVideoNode.thumbnail) ? firstVideoNode.thumbnail : (courseObj.thumbnail || ''),
-                    lastPosition: 0,
-                    watchedAt: new Date()
-                };
+                const completedSet = new Set((dbUser.completedLessons || []).map(String));
+                const videoNodes = (courseObj.curriculumNodes || []).filter(n => n.type === 'video');
+                const nextUncompletedNode = videoNodes.find(n => !completedSet.has(String(n._id)));
+                const targetNode = nextUncompletedNode || videoNodes[0];
+                if (targetNode) {
+                    dbUser.lastWatchedLesson = {
+                        course: courseObj,
+                        lessonId: String(targetNode._id),
+                        lessonTitle: targetNode.name || (courseObj.title || 'Course Lesson'),
+                        thumbnail: targetNode.thumbnail || courseObj.thumbnail || '',
+                        description: targetNode.description || '',
+                        lastPosition: 0,
+                        duration: 0,
+                        isCompleted: completedSet.has(String(targetNode._id)),
+                        watchedAt: new Date()
+                    };
+                }
             }
         }
 
@@ -198,6 +223,32 @@ router.get('/dashboard', protect, async (req, res) => {
                 };
             }
 
+            // Time window helper: 5 minutes before starting time to 10 minutes after starting time
+            const isWithinScheduleWindow = (scheduledDate, scheduledTimeStr, isLive = false) => {
+                const nowMs = Date.now();
+                if (isLive) return true; // Ongoing live session is always active while broadcasting
+                let targetMs = null;
+                if (scheduledTimeStr) {
+                    const d = new Date(scheduledDate || nowMs);
+                    const match = scheduledTimeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+                    if (match) {
+                        let hours = parseInt(match[1], 10);
+                        const minutes = parseInt(match[2], 10);
+                        const meridiem = match[3] ? match[3].toUpperCase() : null;
+                        if (meridiem === 'PM' && hours < 12) hours += 12;
+                        if (meridiem === 'AM' && hours === 12) hours = 0;
+                        d.setHours(hours, minutes, 0, 0);
+                        targetMs = d.getTime();
+                    }
+                } else if (scheduledDate) {
+                    targetMs = new Date(scheduledDate).getTime();
+                }
+
+                if (!targetMs || isNaN(targetMs)) return true;
+                // 5 minutes before (-5 min) to 10 minutes after (+10 min) starting time
+                return (nowMs >= targetMs - (5 * 60 * 1000)) && (nowMs <= targetMs + (10 * 60 * 1000));
+            };
+
             const formatTimeAgo = (date, isLive = false) => {
                 if (!date) return isLive ? 'এখনই যোগ দিন' : 'সম্প্রতি';
                 const past = new Date(date);
@@ -213,57 +264,116 @@ router.get('/dashboard', protect, async (req, res) => {
                 return `${toBn(Math.floor(diffHours / 24))} দিন আগে ${suffix}`;
             };
 
-            // 2. Check real active live class across student's enrolled courses (curriculumNodes + chapters.liveClasses)
+            // 2. Check real active live class across student's enrolled / accessible courses (curriculumNodes + chapters.liveClasses)
+            let enrolledCourseIds = [];
             if (dbUser.enrolledCourses && dbUser.enrolledCourses.length > 0) {
-                for (const ec of dbUser.enrolledCourses) {
-                    if (!ec.course) continue;
-                    const fullCourse = await Course.findById(ec.course._id || ec.course).lean();
-                    if (!fullCourse) continue;
-
-                    // Check curriculumNodes for liveClass
-                    if (fullCourse.curriculumNodes && fullCourse.curriculumNodes.length > 0) {
-                        const liveNode = fullCourse.curriculumNodes.find(n => n.type === 'liveClass' && (n.meetingUrl || n.isLive || (n.date && new Date(n.date) >= new Date(Date.now() - 7200000))));
-                        if (liveNode) {
-                            const mUrl = liveNode.meetingUrl || '';
-                            const targetLink = mUrl.startsWith('http') ? mUrl : (mUrl ? '/live/' + mUrl : `/course-details/${fullCourse._id}`);
-                            activeLiveNotice = {
-                                id: 'live_' + liveNode._id,
-                                title: liveNode.name || liveNode.title || 'লাইভ ক্লাস চলছে',
-                                courseTitle: fullCourse.title,
-                                subtitle: 'লাইভ ক্লাস চলমান',
-                                time: formatTimeAgo(liveNode.date, true),
-                                type: 'live',
-                                link: targetLink,
-                                buttonText: 'Join Live'
-                            };
-                            break;
-                        }
+                dbUser.enrolledCourses.forEach(ec => {
+                    if (!ec) return;
+                    if (ec.course) {
+                        enrolledCourseIds.push(ec.course._id ? ec.course._id.toString() : ec.course.toString());
+                    } else if (ec._id) {
+                        enrolledCourseIds.push(ec._id.toString());
+                    } else if (typeof ec === 'string') {
+                        enrolledCourseIds.push(ec);
                     }
+                });
+            }
 
-                    // Check chapters.liveClasses
-                    if (fullCourse.chapters && fullCourse.chapters.length > 0) {
-                        for (const ch of fullCourse.chapters) {
-                            if (ch.liveClasses && ch.liveClasses.length > 0) {
-                                const activeLive = ch.liveClasses.find(lc => lc.meetingUrl || (lc.date && new Date(lc.date) >= new Date(Date.now() - 7200000)));
-                                if (activeLive) {
-                                    const mUrl = activeLive.meetingUrl || '';
-                                    const targetLink = mUrl.startsWith('http') ? mUrl : (mUrl ? '/live/' + mUrl : `/course-details/${fullCourse._id}`);
-                                    activeLiveNotice = {
-                                        id: 'live_' + activeLive._id,
-                                        title: activeLive.title || 'লাইভ ক্লাস চলছে',
-                                        courseTitle: fullCourse.title,
-                                        subtitle: 'লাইভ ক্লাস চলমান',
-                                        time: formatTimeAgo(activeLive.date, true),
-                                        type: 'live',
-                                        link: targetLink,
-                                        buttonText: 'Join Live'
-                                    };
-                                    break;
-                                }
+            const candidateQuery = (enrolledCourseIds.length > 0)
+                ? (dbUser.classLevel ? { $or: [{ _id: { $in: enrolledCourseIds } }, { classLevel: dbUser.classLevel }] } : { _id: { $in: enrolledCourseIds } })
+                : (dbUser.classLevel ? { classLevel: dbUser.classLevel } : {});
+
+            const candidateCourses = await Course.find(candidateQuery).lean();
+
+            for (const fullCourse of candidateCourses) {
+                // Check curriculumNodes for active liveClass
+                if (fullCourse.curriculumNodes && fullCourse.curriculumNodes.length > 0) {
+                    const liveNode = fullCourse.curriculumNodes.find(n => 
+                        (n.type === 'liveClass' || n.type === 'live') && 
+                        (n.isLive === true || (!n.isRecorded && !n.videoPath && n.meetingUrl && isWithinScheduleWindow(n.date, null, n.isLive)))
+                    );
+                    if (liveNode) {
+                        const mUrl = liveNode.meetingUrl || liveNode._id;
+                        const targetLink = mUrl.toString().startsWith('http') ? mUrl : `/live/${mUrl}`;
+                        const liveTimestamp = liveNode.liveStartedAt ? new Date(liveNode.liveStartedAt).getTime() : (liveNode.date ? new Date(liveNode.date).getTime() : 0);
+                        activeLiveNotice = {
+                            id: 'live_' + liveNode._id + '_' + liveTimestamp,
+                            title: liveNode.name || liveNode.title || 'লাইভ ক্লাস চলছে',
+                            courseTitle: fullCourse.title,
+                            subtitle: 'লাইভ ক্লাস চলমান',
+                            time: formatTimeAgo(liveNode.liveStartedAt || liveNode.date, true),
+                            type: 'live',
+                            link: targetLink,
+                            buttonText: 'Join Live'
+                        };
+                        break;
+                    }
+                }
+
+                // Check chapters.liveClasses
+                if (fullCourse.chapters && fullCourse.chapters.length > 0) {
+                    for (const ch of fullCourse.chapters) {
+                        if (ch.liveClasses && ch.liveClasses.length > 0) {
+                            const activeLive = ch.liveClasses.find(lc => 
+                                (lc.isLive === true || (!lc.isRecorded && !lc.videoPath && lc.meetingUrl && (!lc.date || Math.abs(Date.now() - new Date(lc.date).getTime()) <= 14400000)))
+                            );
+                            if (activeLive) {
+                                const mUrl = activeLive.meetingUrl || activeLive._id;
+                                const targetLink = mUrl.toString().startsWith('http') ? mUrl : `/live/${mUrl}`;
+                                activeLiveNotice = {
+                                    id: 'live_' + activeLive._id,
+                                    title: activeLive.title || 'লাইভ ক্লাস চলছে',
+                                    courseTitle: fullCourse.title,
+                                    subtitle: 'লাইভ ক্লাস চলমান',
+                                    time: formatTimeAgo(activeLive.date, true),
+                                    type: 'live',
+                                    link: targetLink,
+                                    buttonText: 'Join Live'
+                                };
+                                break;
                             }
                         }
                     }
-                    if (activeLiveNotice) break;
+                }
+                if (activeLiveNotice) break;
+            }
+
+            // If not found in enrolled/classLevel courses, check any globally active live class on the platform
+            if (!activeLiveNotice) {
+                const globalLiveCourse = await Course.findOne({
+                    $or: [
+                        { 'curriculumNodes.isLive': true },
+                        { 'chapters.liveClasses.isLive': true }
+                    ]
+                }).lean();
+                if (globalLiveCourse) {
+                    let liveNode = null;
+                    if (globalLiveCourse.curriculumNodes) {
+                        liveNode = globalLiveCourse.curriculumNodes.find(n => (n.type === 'liveClass' || n.type === 'live') && n.isLive === true);
+                    }
+                    if (!liveNode && globalLiveCourse.chapters) {
+                        for (const ch of globalLiveCourse.chapters) {
+                            if (ch.liveClasses) {
+                                liveNode = ch.liveClasses.find(l => l.isLive === true);
+                                if (liveNode) break;
+                            }
+                        }
+                    }
+                    if (liveNode) {
+                        const mUrl = liveNode.meetingUrl || liveNode._id;
+                        const targetLink = mUrl.toString().startsWith('http') ? mUrl : `/live/${mUrl}`;
+                        const liveTimestamp = liveNode.liveStartedAt ? new Date(liveNode.liveStartedAt).getTime() : (liveNode.date ? new Date(liveNode.date).getTime() : 0);
+                        activeLiveNotice = {
+                            id: 'live_' + liveNode._id + '_' + liveTimestamp,
+                            title: liveNode.name || liveNode.title || 'লাইভ ক্লাস চলছে',
+                            courseTitle: globalLiveCourse.title,
+                            subtitle: 'লাইভ ক্লাস চলমান',
+                            time: formatTimeAgo(liveNode.liveStartedAt || liveNode.date, true),
+                            type: 'live',
+                            link: targetLink,
+                            buttonText: 'Join Live'
+                        };
+                    }
                 }
             }
 
@@ -313,7 +423,6 @@ router.get('/dashboard', protect, async (req, res) => {
             // 3. Check for course Announcement (Teacher Panel), NotificationLog (Broadcast), or Notification
             const Announcement = require('../models/Announcement');
             const NotificationLog = require('../models/NotificationLog');
-            const enrolledCourseIds = (dbUser.enrolledCourses || []).map(ec => ec.course ? (ec.course._id || ec.course) : null).filter(Boolean);
             const attended = dbUser.attendedNotices || [];
 
             // Query teacher Announcements for student's enrolled courses
@@ -411,23 +520,59 @@ router.get('/dashboard', protect, async (req, res) => {
                 };
             }
 
-            // Apply Strict User Hierarchy
-            if (activeExamNotice && !attended.includes(activeExamNotice.id)) {
-                res.locals.upcomingEvent = activeExamNotice;
-            } else if (activeLiveNotice && !attended.includes(activeLiveNotice.id)) {
+            // 4. Check for Today's and Upcoming Routine Tasks
+            let todayTaskNotice = null;
+            let upcomingTaskNotice = null;
+
+            const pendingToday = (data.todayTasks || []).find(t => 
+                !t.isCompleted && 
+                !attended.includes('task_' + t._id) &&
+                isWithinScheduleWindow(t.date, t.time)
+            );
+            if (pendingToday) {
+                todayTaskNotice = {
+                    id: 'task_' + pendingToday._id,
+                    title: pendingToday.title,
+                    courseTitle: 'Today\'s Routine',
+                    subtitle: 'আজকের নির্ধারিত অ্যাসাইনমেন্ট ও পড়াশোনা',
+                    time: pendingToday.time ? `${pendingToday.time} (আজ)` : 'আজকের টাস্ক',
+                    type: 'upcoming',
+                    link: '/routine',
+                    buttonText: 'View Routine'
+                };
+            }
+
+            const pendingUpcoming = (data.upcomingTasks || []).find(t => 
+                !t.isCompleted && 
+                !attended.includes('task_' + t._id) &&
+                isWithinScheduleWindow(t.date, t.time)
+            );
+            if (pendingUpcoming) {
+                upcomingTaskNotice = {
+                    id: 'task_' + pendingUpcoming._id,
+                    title: pendingUpcoming.title,
+                    courseTitle: 'Upcoming Task',
+                    subtitle: 'আসন্ন রুটিন অ্যাসাইনমেন্ট',
+                    time: new Date(pendingUpcoming.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) + " " + (pendingUpcoming.time || ''),
+                    type: 'upcoming',
+                    link: '/routine',
+                    buttonText: 'View Routine'
+                };
+            }
+
+            // Apply Strict User Hierarchy (Honoring one-time attendance dismissal):
+            if (activeLiveNotice && !attended.includes(activeLiveNotice.id)) {
                 res.locals.upcomingEvent = activeLiveNotice;
+            } else if (activeExamNotice && !attended.includes(activeExamNotice.id)) {
+                res.locals.upcomingEvent = activeExamNotice;
+            } else if (todayTaskNotice && !attended.includes(todayTaskNotice.id)) {
+                res.locals.upcomingEvent = todayTaskNotice;
             } else if (highPriorityNotice && !attended.includes(highPriorityNotice.id)) {
                 res.locals.upcomingEvent = highPriorityNotice;
-            } else if (data.upcomingTasks && data.upcomingTasks.length > 0 && !attended.includes('task_' + data.upcomingTasks[0]._id)) {
-                res.locals.upcomingEvent = {
-                    id: 'task_' + data.upcomingTasks[0]._id,
-                    title: data.upcomingTasks[0].title,
-                    subtitle: 'আসন্ন অ্যাসাইনমেন্ট',
-                    time: new Date(data.upcomingTasks[0].date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) + " " + (data.upcomingTasks[0].time || ''),
-                    type: 'upcoming',
-                    link: '/exams',
-                    buttonText: 'View Task'
-                };
+            } else if (upcomingTaskNotice && !attended.includes(upcomingTaskNotice.id)) {
+                res.locals.upcomingEvent = upcomingTaskNotice;
+            } else {
+                res.locals.upcomingEvent = null;
             }
 
             // Prepare Last Watched Data for "Jump Back In"
@@ -454,11 +599,15 @@ router.get('/dashboard', protect, async (req, res) => {
 
             const QuestionBankAttempt = require('../models/QuestionBankAttempt');
 
-            const [allRecentTasks, userWithQuizzes, recentBankAttempts] = await Promise.all([
+            const [allRecentTasks, allBankAttempts] = await Promise.all([
                 RoutineTask.find({ user: userId, isCompleted: true, updatedAt: { $gte: sevenDaysAgo } }).lean(),
-                User.findById(userId).select('quizResults').lean(),
-                QuestionBankAttempt.find({ user: userId, createdAt: { $gte: sevenDaysAgo } }).lean()
+                QuestionBankAttempt.find({ user: userId }).lean()
             ]);
+
+            const recentBankAttempts = (allBankAttempts || []).filter(a => {
+                const aDate = a.submittedAt || a.createdAt;
+                return aDate && new Date(aDate) >= sevenDaysAgo;
+            });
 
             const todayStr = new Date().toISOString().split('T')[0];
             const todayXp = (dbUser.dailyGoals && dbUser.dailyGoals.date === todayStr) ? (dbUser.dailyGoals.todayXpEarned || 0) : 0;
@@ -476,14 +625,17 @@ router.get('/dashboard', protect, async (req, res) => {
                 const dayTasks = allRecentTasks.filter(t => t.updatedAt >= startOfDay && t.updatedAt <= endOfDay).length;
 
                 // 2. Quiz XP (50 per quiz + score/total * 20 bonus)
-                const dayQuizzes = (userWithQuizzes?.quizResults || []).filter(q => q.date >= startOfDay && q.date <= endOfDay);
+                const dayQuizzes = (dbUser.quizResults || []).filter(q => q.date && new Date(q.date) >= startOfDay && new Date(q.date) <= endOfDay);
                 let quizXP = 0;
                 dayQuizzes.forEach(q => {
                     quizXP += 50 + Math.round((q.score / (q.total || 1)) * 20);
                 });
 
                 // 3. Question Bank Attempts XP (50 per attempt + score bonus)
-                const dayBankAttempts = recentBankAttempts.filter(a => a.createdAt >= startOfDay && a.createdAt <= endOfDay);
+                const dayBankAttempts = recentBankAttempts.filter(a => {
+                    const aDate = a.submittedAt || a.createdAt;
+                    return aDate && new Date(aDate) >= startOfDay && new Date(aDate) <= endOfDay;
+                });
                 let bankAttemptXP = 0;
                 dayBankAttempts.forEach(a => {
                     const totalQ = a.totalBankQuestions || a.mcqTotalQuestions || 1;
@@ -503,6 +655,117 @@ router.get('/dashboard', protect, async (req, res) => {
 
                 chartData.push(totalXP);
             }
+
+            // --- 100% Real Student Lifetime Progress Stats ---
+            let totalRightMCQ = 0;
+            let totalWrongMCQ = 0;
+            let totalGainedMarks = 0;
+            let totalSolvedQuestions = 0;
+            let sumPctScores = 0;
+            let totalAttemptsCount = 0;
+
+            // 1. Quizzes from enrolled courses
+            const quizList = dbUser.quizResults || [];
+            quizList.forEach(q => {
+                const score = q.score || 0;
+                const total = q.total || 0;
+                const wrong = Math.max(0, total - score);
+                totalRightMCQ += score;
+                totalWrongMCQ += wrong;
+                totalGainedMarks += score;
+                totalSolvedQuestions += total;
+                if (total > 0) {
+                    sumPctScores += (score / total) * 100;
+                    totalAttemptsCount++;
+                }
+            });
+
+            // 2. Question Bank & Model Tests / Exams
+            let totalMcqMarks = totalGainedMarks; // starts with quiz marks
+            let totalWrittenMarks = 0;
+
+            (allBankAttempts || []).forEach(att => {
+                totalRightMCQ += (att.mcqCorrectCount || 0);
+                totalWrongMCQ += (att.wrongMcqCount || 0);
+                totalMcqMarks += (att.mcqScore || 0);
+
+                let attWrittenMarks = 0;
+                if (att.teacherReview && typeof att.teacherReview.totalWrittenScore === 'number' && att.teacherReview.totalWrittenScore > 0) {
+                    attWrittenMarks = att.teacherReview.totalWrittenScore;
+                } else {
+                    (att.userAnswers || []).forEach(ua => {
+                        const qType = ua.questionType || 'MCQ';
+                        if (qType !== 'MCQ' && typeof ua.marksObtained === 'number') {
+                            attWrittenMarks += ua.marksObtained;
+                        }
+                    });
+                }
+                totalWrittenMarks += attWrittenMarks;
+
+                let attSolved = 0;
+                (att.userAnswers || []).forEach(ua => {
+                    const qType = ua.questionType || 'MCQ';
+                    if (qType === 'MCQ') {
+                        if (ua.selectedOptionIndex !== undefined && ua.selectedOptionIndex !== null && ua.selectedOptionIndex >= 0) {
+                            attSolved++;
+                        }
+                    } else {
+                        const hasWritten = (ua.writtenAnswer && String(ua.writtenAnswer).trim() !== '') || ua.writtenImage || (Array.isArray(ua.writtenImages) && ua.writtenImages.length > 0) || (ua.q1Answer && String(ua.q1Answer).trim() !== '');
+                        if (hasWritten) {
+                            attSolved++;
+                        }
+                    }
+                });
+                if (attSolved === 0 && ((att.mcqCorrectCount || 0) + (att.wrongMcqCount || 0) > 0)) {
+                    attSolved = (att.mcqCorrectCount || 0) + (att.wrongMcqCount || 0);
+                }
+                totalSolvedQuestions += attSolved;
+
+                // Attempt percentage
+                const maxMcq = att.maxMcqScore || att.mcqTotalQuestions || ((att.mcqCorrectCount || 0) + (att.wrongMcqCount || 0));
+                const maxWritten = (att.teacherReview && typeof att.teacherReview.maxWrittenScore === 'number') ? att.teacherReview.maxWrittenScore : 0;
+                const totalMax = maxMcq + maxWritten;
+                const earned = (att.mcqScore || 0) + attWrittenMarks;
+                if (totalMax > 0) {
+                    sumPctScores += Math.max(0, Math.min(100, (earned / totalMax) * 100));
+                    totalAttemptsCount++;
+                }
+            });
+
+            totalGainedMarks = totalMcqMarks + totalWrittenMarks;
+            const realGainedMarks = totalGainedMarks % 1 === 0 ? totalGainedMarks : Number(totalGainedMarks.toFixed(1));
+
+            // Avg Score %
+            const avgScorePct = totalAttemptsCount > 0 
+                ? Math.round(sumPctScores / totalAttemptsCount) 
+                : ((totalRightMCQ + totalWrongMCQ > 0) ? Math.round((totalRightMCQ / (totalRightMCQ + totalWrongMCQ)) * 100) : 0);
+
+            // Completed lessons
+            const completedLessonsCount = (dbUser.completedLessons && dbUser.completedLessons.length) || 0;
+
+            // Bookmarks (only saved notes and library books, exclude question banks)
+            const allUserBookmarks = dbUser.savedBookmarks || [];
+            const savedBookmarks = allUserBookmarks.filter(b => {
+                if (b.itemType === 'note' || b.itemType === 'book') return true;
+                if (b.link && (b.link.includes('note') || b.link.includes('library') || b.link.includes('.pdf') || b.link.includes('book'))) return true;
+                if (b.link && b.link.includes('question-bank')) return false;
+                return !b.itemType || b.itemType === 'resource';
+            });
+            const bookmarksCount = savedBookmarks.length;
+
+            const progressStats = {
+                streak: dbUser.streak || 0,
+                totalXP: dbUser.totalXP || 0,
+                level,
+                gainedMarks: realGainedMarks,
+                avgScore: avgScorePct,
+                rightMCQ: totalRightMCQ,
+                wrongMCQ: totalWrongMCQ,
+                solvedQuestions: totalSolvedQuestions,
+                completedLessons: completedLessonsCount,
+                bookmarks: bookmarksCount,
+                savedResources: bookmarksCount
+            };
 
             // --- Subject-wise Focus Analytics ---
             const enrolledCourses = dbUser.enrolledCourses || [];
@@ -581,11 +844,20 @@ router.get('/dashboard', protect, async (req, res) => {
             const todayQuizzesCount = userDailyGoals.quizzesCount || 0;
             const todayNotesCount = userDailyGoals.notesCount || 0;
             const todayXpEarned = userDailyGoals.todayXpEarned || 0;
-            const savedBookmarks = dbUser.savedBookmarks || [];
             const statsPercentages = {};
+
+            // Load Weak Area & Personalized Revision Analytics
+            let weakAreas = { hasData: false, weakTopics: [], moderateTopics: [], strongTopics: [], totalAnalyzed: 0, totalMistakes: 0, overallAccuracy: 0 };
+            try {
+                const weakAreaService = require('../services/weakAreaService');
+                weakAreas = await weakAreaService.getUserWeakAreas(userId);
+            } catch (e) {
+                console.error('Error loading weak areas for dashboard:', e);
+            }
 
             res.render('student-dashboard', {
                 user: dbUser,
+                upcomingEvent: res.locals.upcomingEvent,
                 level,
                 levelProgress,
                 xpNeeded: nextThreshold - currentXP,
@@ -602,11 +874,14 @@ router.get('/dashboard', protect, async (req, res) => {
                 todayQuizzesCount,
                 todayNotesCount,
                 todayXpEarned,
-                savedBookmarks
+                savedBookmarks,
+                weakAreas,
+                progressStats,
+                questionBankAttempts: allBankAttempts
             });
         } catch (err) {
             console.error('Data loading error:', err);
-            res.render('student-dashboard', { user: dbUser, isFirstLogin: false, chartLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], chartData: [0, 0, 0, 0, 0, 0, 0], ...data });
+            res.render('student-dashboard', { user: dbUser, upcomingEvent: res.locals.upcomingEvent, isFirstLogin: false, chartLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], chartData: [0, 0, 0, 0, 0, 0, 0], weakAreas: { hasData: false, weakTopics: [], moderateTopics: [], strongTopics: [] }, ...data });
         }
     } catch (err) {
         console.error('Dashboard Error:', err);
@@ -904,11 +1179,7 @@ router.post('/profile/logout-device', protect, async (req, res) => {
 });
 
 router.get('/guardian', protect, async (req, res) => {
-    try {
-        const user = await User.findById(req.session.userId);
-        const parents = await User.find({ role: 'parent', children: user._id }).select('name email phone');
-        res.render('guardian', { parents });
-    } catch (err) { res.status(500).send('Error'); }
+    res.status(404).render('404');
 });
 
 router.get('/id-card', protect, async (req, res) => {
@@ -1960,7 +2231,8 @@ router.get('/notes/checkout/:id', protect, async (req, res) => {
                                     subject: c.subject || 'Academic Note',
                                     price: c.price || 50,
                                     classLevel: [c.classLevel || 'General'],
-                                    chapter: 'Course Note'
+                                    chapter: 'Course Note',
+                                    thumbnail: node.thumbnail || c.thumbnail || null
                                 };
                                 break;
                             }
@@ -1989,13 +2261,18 @@ router.get('/notes/checkout/:id', protect, async (req, res) => {
         if (!user) return res.redirect('/login');
 
         // Render checkout page for note
-        const siteSettings = await Setting.findOne({ key: 'site_settings' }).lean();
+        const settingDoc = await Setting.findOne().lean();
+        const bkashNum = (settingDoc?.paymentNumbers?.bkash && settingDoc.paymentNumbers.bkash.trim()) || process.env.BKASH_NUMBER || '01740335172';
+        const nagadNum = (settingDoc?.paymentNumbers?.nagad && settingDoc.paymentNumbers.nagad.trim()) || process.env.NAGAD_NUMBER || '01740335172';
+        const rocketNum = (settingDoc?.paymentNumbers?.rocket && settingDoc.paymentNumbers.rocket.trim()) || process.env.ROCKET_NUMBER || '';
+        const siteSettings = { paymentNumbers: { bkash: bkashNum, nagad: nagadNum, rocket: rocketNum } };
 
         res.render('checkout-note', {
             note,
             user,
-            siteSettings: siteSettings?.value || {},
-            error: null
+            siteSettings,
+            error: null,
+            pageTitle: 'Checkout'
         });
     } catch (err) {
         console.error('Note checkout error stack:', err);
@@ -2022,7 +2299,11 @@ router.get('/question-bank/checkout/:id', protect, async (req, res) => {
         const user = await User.findById(req.session.userId).lean();
         if (!user) return res.redirect('/login');
 
-        const siteSettings = await Setting.findOne({ key: 'site_settings' }).lean();
+        const settingDoc = await Setting.findOne().lean();
+        const bkashNum = (settingDoc?.paymentNumbers?.bkash && settingDoc.paymentNumbers.bkash.trim()) || process.env.BKASH_NUMBER || '01740335172';
+        const nagadNum = (settingDoc?.paymentNumbers?.nagad && settingDoc.paymentNumbers.nagad.trim()) || process.env.NAGAD_NUMBER || '01740335172';
+        const rocketNum = (settingDoc?.paymentNumbers?.rocket && settingDoc.paymentNumbers.rocket.trim()) || process.env.ROCKET_NUMBER || '';
+        const siteSettings = { paymentNumbers: { bkash: bkashNum, nagad: nagadNum, rocket: rocketNum } };
 
         const noteObj = {
             _id: bank._id,
@@ -2031,14 +2312,16 @@ router.get('/question-bank/checkout/:id', protect, async (req, res) => {
             price: bank.price || 0,
             classLevel: Array.isArray(bank.classLevel) ? bank.classLevel : [bank.classLevel || 'General'],
             chapter: bank.board || 'Question Bank',
-            itemType: 'question_bank'
+            itemType: 'question_bank',
+            thumbnail: bank.thumbnail || null
         };
 
         res.render('checkout-note', {
             note: noteObj,
             user,
-            siteSettings: siteSettings?.value || {},
-            error: null
+            siteSettings,
+            error: null,
+            pageTitle: 'Checkout'
         });
     } catch (err) {
         console.error('Question Bank checkout error:', err);
@@ -2367,6 +2650,47 @@ router.get('/question-bank/view/:id', async (req, res) => {
     }
 });
 
+// --- Multer setup for Student Written Exam Answer attachments ---
+const writtenAnswerStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const primaryDest = path.join(process.cwd(), 'client/public/uploads/written-answers');
+        const secondaryDest = path.join(process.cwd(), 'public/uploads/written-answers');
+        try { fs.mkdirSync(primaryDest, { recursive: true }); } catch (e) { }
+        try { fs.mkdirSync(secondaryDest, { recursive: true }); } catch (e) { }
+        cb(null, primaryDest);
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname) || '.jpg';
+        cb(null, 'ans-' + Date.now() + '-' + Math.round(Math.random() * 1e5) + ext);
+    }
+});
+
+const uploadWrittenAnswerMulter = multer({
+    storage: writtenAnswerStorage,
+    limits: { fileSize: 25 * 1024 * 1024 }
+});
+
+const handleWrittenImageUpload = (req, res) => {
+    uploadWrittenAnswerMulter.single('image')(req, res, (err) => {
+        if (err) {
+            console.error('Written Answer Image upload error:', err);
+            return res.status(400).json({ success: false, error: err.message || 'Upload failed' });
+        }
+        if (!req.file) {
+            return res.status(400).json({ success: false, error: 'No image file uploaded' });
+        }
+        const relPath = '/uploads/written-answers/' + req.file.filename;
+        try {
+            const sec = path.join(process.cwd(), 'public/uploads/written-answers', req.file.filename);
+            fs.copyFileSync(req.file.path, sec);
+        } catch (e) {}
+        return res.json({ success: true, imageUrl: relPath });
+    });
+};
+
+router.post('/api/upload-written-answer-image', protect, handleWrittenImageUpload);
+router.post('/api/upload-written-image', protect, handleWrittenImageUpload);
+
 // GET /question-bank/solve/:id — Interactive Full-Page Solve Studio
 router.get('/question-bank/solve/:id', protect, async (req, res) => {
     try {
@@ -2374,6 +2698,7 @@ router.get('/question-bank/solve/:id', protect, async (req, res) => {
         const mongoose = require('mongoose');
         const QuestionBank = require('../models/QuestionBank');
         const Question = require('../models/Question');
+        const Quiz = require('../models/Quiz');
         const User = require('../models/User');
 
         const bankId = req.params.id;
@@ -2385,22 +2710,63 @@ router.get('/question-bank/solve/:id', protect, async (req, res) => {
         if (!bank) return res.status(404).render('404', { message: 'Question Bank not found' });
 
         const user = (req.session && req.session.userId) ? await User.findById(req.session.userId).lean() : null;
-        const questions = await Question.find({ bankId }).sort({ createdAt: 1 }).lean();
+        let questions = await Question.find({ bankId }).sort({ createdAt: 1 }).lean();
 
-        const bSubject = (bank.subject || 'Subject').trim();
-        const bBoard = (bank.board || 'Board Exam').trim();
-        const bYear = (bank.year || '').trim();
+        // If this bank was created from a Quiz or has Comprehension questions missing context/q1/q2, sync from source Quiz
+        const sourceQuiz = await Quiz.findById(bankId).lean();
+        if (sourceQuiz && Array.isArray(sourceQuiz.questions)) {
+            let updatedAny = false;
+            for (let i = 0; i < questions.length; i++) {
+                const q = questions[i];
+                const sq = sourceQuiz.questions[i];
+                if (sq && (sq.context || sq.q1 || sq.q2)) {
+                    if (!q.context || !q.q1 || !q.q2) {
+                        await Question.findByIdAndUpdate(q._id, {
+                            context: sq.context || q.context || '',
+                            q1: sq.q1 || q.q1 || '',
+                            q2: sq.q2 || q.q2 || '',
+                            a1: sq.a1 || q.a1 || '',
+                            a2: sq.a2 || q.a2 || ''
+                        });
+                        q.context = sq.context || q.context || '';
+                        q.q1 = sq.q1 || q.q1 || '';
+                        q.q2 = sq.q2 || q.q2 || '';
+                        q.a1 = sq.a1 || q.a1 || '';
+                        q.a2 = sq.a2 || q.a2 || '';
+                        updatedAny = true;
+                    }
+                }
+            }
+            if (updatedAny) {
+                questions = await Question.find({ bankId }).sort({ createdAt: 1 }).lean();
+            }
+        }
+
+        const bSubject = String(bank.subject || 'Subject').trim();
+        const bBoard = String(bank.board || 'Board Exam').trim();
+        const bYear = String(bank.year || '').trim();
         const boardWithYear = [bBoard, bYear].filter(Boolean).join(' ');
         let pageTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${boardWithYear}`;
-        if (bYear && !pageTitle.includes(bYear)) {
+        if (bank.course) {
+            if (bank.title) {
+                bank.title = bank.title.replace(/^(mock test|model test)\s*-\s*/i, '').trim() || bank.title;
+            }
+            pageTitle = pageTitle.replace(/^(mock test|model test)\s*-\s*/i, '').trim() || pageTitle;
+        } else if (bYear && !pageTitle.includes(bYear)) {
             pageTitle = `${pageTitle} ${bYear}`;
         }
+
+        const isExplicitCourse = req.query.from === 'course' && !!req.query.courseId;
+        const fromCourse = isExplicitCourse;
+        const courseId = isExplicitCourse ? req.query.courseId : null;
 
         res.render('question-bank-solve', {
             bank,
             pageTitle,
             questions: questions || [],
-            user: user || req.session.user || null
+            user: user || req.session.user || null,
+            fromCourse,
+            courseId
         });
     } catch (err) {
         console.error('Question Bank Solve Route Error:', err);
@@ -2439,7 +2805,7 @@ router.post('/question-bank/solve/:id', protect, async (req, res) => {
         for (const q of questions) {
             const qIdStr = q._id.toString();
             const qType = q.questionType || 'MCQ';
-            const defaultMark = (qType === 'Medium') ? 2 : ((qType === 'Comprehension') ? 10 : 1);
+            const defaultMark = (qType === 'Medium') ? 2 : ((qType === 'Comprehension') ? 7 : 1);
             const qMaxMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : defaultMark;
 
             if (qType === 'MCQ') {
@@ -2482,11 +2848,36 @@ router.post('/question-bank/solve/:id', protect, async (req, res) => {
                 });
             } else {
                 nonMcqCount++;
-                const written = body[`written_${qIdStr}`] ? String(body[`written_${qIdStr}`]).trim() : '';
+                const q1Ans = body[`written_q1_${qIdStr}`] ? String(body[`written_q1_${qIdStr}`]).trim() : '';
+                const q2Ans = body[`written_q2_${qIdStr}`] ? String(body[`written_q2_${qIdStr}`]).trim() : '';
+                const directAns = body[`written_${qIdStr}`] ? String(body[`written_${qIdStr}`]).trim() : '';
+
+                let written = '';
+                if (q1Ans || q2Ans) {
+                    if (q1Ans) written += `[Question 1 / প্রশ্ন ১]:\n${q1Ans}`;
+                    if (q2Ans) written += (written ? '\n\n' : '') + `[Question 2 / প্রশ্ন ২]:\n${q2Ans}`;
+                    if (directAns && !written.includes(directAns)) {
+                        written += (written ? '\n\n' : '') + directAns;
+                    }
+                } else {
+                    written = directAns;
+                }
+
+                const img1 = body[`image_q1_${qIdStr}`] ? String(body[`image_q1_${qIdStr}`]).trim() : '';
+                const img2 = body[`image_q2_${qIdStr}`] ? String(body[`image_q2_${qIdStr}`]).trim() : '';
+                const directImg = body[`image_${qIdStr}`] ? String(body[`image_${qIdStr}`]).trim() : '';
+                const allImgs = [directImg, img1, img2].filter(Boolean);
+
                 userAnswers.push({
                     questionId: q._id,
                     questionType: qType,
                     writtenAnswer: written,
+                    writtenImage: allImgs[0] || '',
+                    writtenImages: allImgs,
+                    q1Answer: q1Ans,
+                    q2Answer: q2Ans,
+                    q1Image: img1,
+                    q2Image: img2,
                     isCorrect: false,
                     marksObtained: 0,
                     maxMarks: qMaxMark
@@ -2498,6 +2889,19 @@ router.post('/question-bank/solve/:id', protect, async (req, res) => {
         negativeMarksDeducted = parseFloat(negativeMarksDeducted.toFixed(2));
 
         const timeTakenSeconds = parseInt(body.timeTakenSeconds) || 0;
+
+        // Check if student actually submitted any written content (text or image)
+        const hasWrittenContent = userAnswers.some(ua => {
+            if (ua.questionType === 'MCQ') return false;
+            const hasText = (ua.writtenAnswer && ua.writtenAnswer.trim()) ||
+                            (ua.q1Answer && ua.q1Answer.trim()) ||
+                            (ua.q2Answer && ua.q2Answer.trim());
+            const hasImage = (ua.writtenImage && ua.writtenImage.trim()) ||
+                             (ua.q1Image && ua.q1Image.trim()) ||
+                             (ua.q2Image && ua.q2Image.trim()) ||
+                             (Array.isArray(ua.writtenImages) && ua.writtenImages.some(img => img && img.trim()));
+            return hasText || hasImage;
+        });
 
         const attempt = await new QuestionBankAttempt({
             user: req.session.userId,
@@ -2511,6 +2915,7 @@ router.post('/question-bank/solve/:id', protect, async (req, res) => {
             negativeMarksDeducted,
             totalBankQuestions: questions.length,
             nonMcqCount,
+            writtenStatus: (nonMcqCount > 0 && hasWrittenContent) ? 'pending' : 'none',
             timeTakenSeconds
         }).save();
 
@@ -2532,7 +2937,31 @@ router.post('/question-bank/solve/:id', protect, async (req, res) => {
             await userDoc.save();
         }
 
-        res.redirect(`/question-bank/result/${attempt._id}`);
+        // Auto-check for weak topic revision reminder (Triggered if score < 60% and sent after 20 seconds)
+        if (wrongMcqCount > 0 && (mcqScore / (maxMcqScore || 1)) < 0.60) {
+            const studentUserId = req.session.userId;
+            const examTitle = bank.title || bank.topic || (bank.subject ? `${bank.subject} পরীক্ষা` : 'পরীক্ষা');
+            const subjectName = bank.subject || '';
+            const resultUrl = `/question-bank/result/${attempt._id}`;
+            const scoreInfo = { score: mcqScore, maxScore: maxMcqScore };
+
+            setTimeout(async () => {
+                try {
+                    const weakAreaService = require('../services/weakAreaService');
+                    await weakAreaService.scheduleRevisionReminder(studentUserId, examTitle, subjectName, resultUrl, scoreInfo);
+                } catch (e) {
+                    console.error('Auto revision reminder (20s delay) error:', e);
+                }
+            }, 20 * 1000);
+        }
+
+        const fromOrigin = req.body.fromOrigin || req.query.from || '';
+        const courseId = req.body.courseId || req.query.courseId || '';
+        if (fromOrigin === 'course' && courseId) {
+            res.redirect(`/question-bank/result/${attempt._id}?from=course&courseId=${encodeURIComponent(courseId)}`);
+        } else {
+            res.redirect(`/question-bank/result/${attempt._id}?from=exams`);
+        }
     } catch (err) {
         console.error('Question Bank Solve Submit Error:', err);
         res.redirect('/question-bank');
@@ -2547,28 +2976,37 @@ router.get('/question-bank/result/:attemptId', protect, async (req, res) => {
         const User = require('../models/User');
 
         const attempt = await QuestionBankAttempt.findById(req.params.attemptId)
-            .populate('bank')
+            .populate({ path: 'bank', populate: { path: 'course' } })
             .lean();
 
         if (!attempt) return res.status(404).send('Attempt result not found');
 
         const user = await User.findById(req.session.userId).lean();
         const bank = attempt.bank || {};
-        const bSubject = (bank.subject || 'Subject').trim();
-        const bBoard = (bank.board || 'Board Exam').trim();
-        const bYear = (bank.year || '').trim();
+        const bSubject = String(bank.subject || 'Subject').trim();
+        const bBoard = String(bank.board || 'Board Exam').trim();
+        const bYear = String(bank.year || '').trim();
         const boardWithYear = [bBoard, bYear].filter(Boolean).join(' ');
         let examTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${boardWithYear}`;
-        if (bYear && !examTitle.includes(bYear)) {
+        if (bank.course) {
+            if (bank.title) {
+                bank.title = bank.title.replace(/^(mock test|model test)\s*-\s*/i, '').trim() || bank.title;
+            }
+            examTitle = examTitle.replace(/^(mock test|model test)\s*-\s*/i, '').trim() || examTitle;
+        } else if (bYear && !examTitle.includes(bYear)) {
             examTitle = `${examTitle} ${bYear}`;
         }
         const pageTitle = `${examTitle} - Result`;
+        const isFromCourse = req.query.from === 'course' && !!req.query.courseId;
+        const activeNavPage = isFromCourse ? 'courses' : 'exams';
 
         res.render('question-bank-result', {
             attempt,
             bank,
             pageTitle,
-            activePage: 'questions',
+            activePage: activeNavPage,
+            fromCourse: isFromCourse,
+            courseId: isFromCourse ? req.query.courseId : null,
             user: user || req.session.user
         });
     } catch (err) {
@@ -2586,7 +3024,7 @@ router.get('/question-bank/review/:attemptId', protect, async (req, res) => {
         const User = require('../models/User');
 
         const attempt = await QuestionBankAttempt.findById(req.params.attemptId)
-            .populate('bank')
+            .populate({ path: 'bank', populate: { path: 'course' } })
             .lean();
 
         if (!attempt) return res.status(404).send('Attempt result not found');
@@ -2595,12 +3033,17 @@ router.get('/question-bank/review/:attemptId', protect, async (req, res) => {
         const user = await User.findById(req.session.userId).lean();
 
         const bank = attempt.bank || {};
-        const bSubject = (bank.subject || 'Subject').trim();
-        const bBoard = (bank.board || 'Board Exam').trim();
-        const bYear = (bank.year || '').trim();
+        const bSubject = String(bank.subject || 'Subject').trim();
+        const bBoard = String(bank.board || 'Board Exam').trim();
+        const bYear = String(bank.year || '').trim();
         const boardWithYear = [bBoard, bYear].filter(Boolean).join(' ');
         let examTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${boardWithYear}`;
-        if (bYear && !examTitle.includes(bYear)) {
+        if (bank.course) {
+            if (bank.title) {
+                bank.title = bank.title.replace(/^(mock test|model test)\s*-\s*/i, '').trim() || bank.title;
+            }
+            examTitle = examTitle.replace(/^(mock test|model test)\s*-\s*/i, '').trim() || examTitle;
+        } else if (bYear && !examTitle.includes(bYear)) {
             examTitle = `${examTitle} ${bYear}`;
         }
         const pageTitle = `${examTitle} - Review`;
@@ -2619,11 +3062,14 @@ router.get('/question-bank/review/:attemptId', protect, async (req, res) => {
             };
         });
 
+        const isFromCourse = req.query.from === 'course' && !!req.query.courseId;
         res.render('question-bank-review', {
             attempt,
             bank,
             pageTitle,
-            activePage: 'questions',
+            activePage: isFromCourse ? 'courses' : 'exams',
+            fromCourse: isFromCourse,
+            courseId: isFromCourse ? req.query.courseId : null,
             questions: questionsWithReview,
             user: user || req.session.user
         });
@@ -2633,8 +3079,13 @@ router.get('/question-bank/review/:attemptId', protect, async (req, res) => {
     }
 });
 
-// GET /question-bank/written-answers/:attemptId — Student Written Questions & Marks Page
-router.get('/question-bank/written-answers/:attemptId', protect, async (req, res) => {
+// GET /question-bank/written-answers/:attemptId — Redirect to Written Evaluation Page
+router.get('/question-bank/written-answers/:attemptId', protect, (req, res) => {
+    return res.redirect(`/question-bank/written-evaluation/${req.params.attemptId}`);
+});
+
+// GET /question-bank/written-evaluation/:attemptId — Detailed Student Written Evaluation Page
+router.get('/question-bank/written-evaluation/:attemptId', protect, async (req, res) => {
     try {
         await connectDB();
         const QuestionBankAttempt = require('../models/QuestionBankAttempt');
@@ -2642,34 +3093,52 @@ router.get('/question-bank/written-answers/:attemptId', protect, async (req, res
         const User = require('../models/User');
 
         const attempt = await QuestionBankAttempt.findById(req.params.attemptId)
-            .populate('bank')
+            .populate({ path: 'bank', populate: { path: 'course' } })
+            .populate('teacherReview.reviewedBy', 'name profileImage profilePicture')
             .lean();
 
         if (!attempt) return res.status(404).send('Attempt result not found');
 
         const questions = await Question.find({ bankId: attempt.bank._id, questionType: { $ne: 'MCQ' } }).sort({ createdAt: 1 }).lean();
+        const user = await User.findById(req.session.userId).lean();
+
         const bank = attempt.bank || {};
-        const bSubject = (bank.subject || 'Subject').trim();
-        const bBoard = (bank.board || 'Board Exam').trim();
-        const bYear = (bank.year || '').trim();
+        const bSubject = String(bank.subject || 'Subject').trim();
+        const bBoard = String(bank.board || 'Board Exam').trim();
+        const bYear = String(bank.year || '').trim();
         const boardWithYear = [bBoard, bYear].filter(Boolean).join(' ');
         let examTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${boardWithYear}`;
-        if (bYear && !examTitle.includes(bYear)) {
+        if (bank.course) {
+            if (bank.title) {
+                bank.title = bank.title.replace(/^(mock test|model test)\s*-\s*/i, '').trim() || bank.title;
+            }
+            examTitle = examTitle.replace(/^(mock test|model test)\s*-\s*/i, '').trim() || examTitle;
+        } else if (bYear && !examTitle.includes(bYear)) {
             examTitle = `${examTitle} ${bYear}`;
         }
-        const pageTitle = `${examTitle} - Written Answers`;
+        const pageTitle = `${examTitle} - Written Evaluation`;
 
-        res.render('question-bank-written', {
+        const answerMap = {};
+        (attempt.userAnswers || []).forEach(ua => {
+            if (ua.questionId) answerMap[ua.questionId.toString()] = ua;
+        });
+
+        const questionsWithReview = questions.map(q => ({
+            ...q,
+            userAnswer: answerMap[q._id.toString()] || {}
+        }));
+
+        res.render('written-evaluation', {
             attempt,
             bank,
             pageTitle,
-            activePage: 'questions',
+            activePage: 'exams',
             questions: questionsWithReview,
             user: user || req.session.user
         });
     } catch (err) {
-        console.error('Question Bank Written Answers Route Error:', err);
-        res.redirect('/question-bank');
+        console.error('Question Bank Written Evaluation Route Error:', err);
+        res.redirect('/exams/written-results');
     }
 });
 
@@ -3218,10 +3687,15 @@ router.get('/library', protect, async (req, res) => {
             (b.title && bookTitles.has(b.title.trim().toLowerCase()))
         );
 
+        // Fetch student's private notes (accessible only by this student)
+        const StudentNote = require('../models/StudentNote');
+        const userNotes = user ? await StudentNote.find({ user: user._id }).sort({ createdAt: -1 }).lean() : [];
+
         res.render('library', {
             pageTitle: 'Library',
             books,
             savedBookmarks,
+            userNotes,
             subjects,
             userClass,
             user: req.session.user || user
@@ -3241,28 +3715,76 @@ router.get('/mock-tests', protect, async (req, res) => {
 });
 
 // ---- Course Details & Checkout ----
-router.get('/course-details/:id', protect, async (req, res) => {
+router.get(['/course-details/:id', '/course/:id'], protect, async (req, res) => {
     try {
         await connectDB();
-        const course = await Course.findById(req.params.id)
-            .populate('instructor', 'name profileImage bio')
-            .populate('chapters.quizzes');
-        if (!course) return res.status(404).render('404');
+        const courseId = req.params.id;
+        const userId = req.session.userId;
+        const Announcement = require('../models/Announcement');
+        const NotificationLog = require('../models/NotificationLog');
 
-        const user = await User.findById(req.session.userId);
+        // Fetch course, user, QAs, enrolled count, related courses, and course notices in parallel
+        const [courseDoc, user, qas, enrolledCount, relatedCourses, courseAnnouncements, courseLogs] = await Promise.all([
+            Course.findById(courseId)
+                .populate('instructor', 'name profileImage profilePicture bio email role')
+                .populate('permittedTeachers', 'name profileImage profilePicture bio email role')
+                .populate('chapters.quizzes', 'title duration totalMarks questions')
+                .populate('curriculumNodes.quizId', 'title duration totalMarks questions')
+                .populate('curriculumNodes.addedBy', 'name profileImage profilePicture bio email role')
+                .lean(),
+            User.findById(userId)
+                .select('name email role enrolledCourses trialEnrollments completedLessons profileImage profilePicture attendedNotices')
+                .lean(),
+            QA.find({ course: courseId })
+                .populate('askedBy answeredBy', 'name profileImage profilePicture role')
+                .sort({ createdAt: -1 })
+                .limit(30)
+                .lean(),
+            User.countDocuments({ 'enrolledCourses.course': courseId }),
+            Course.find({ _id: { $ne: courseId } })
+                .select('title thumbnail price discountPrice accessType category classLevel rating studentCount')
+                .sort({ createdAt: -1 })
+                .limit(4)
+                .lean(),
+            Announcement.find({
+                $or: [
+                    { courseId: courseId },
+                    { courseId: mongoose.Types.ObjectId.isValid(courseId) ? new mongoose.Types.ObjectId(courseId) : courseId }
+                ]
+            })
+                .populate('authorId', 'name profileImage profilePicture role')
+                .sort({ createdAt: -1 })
+                .lean(),
+            NotificationLog.find({
+                $or: [
+                    { courseId: courseId },
+                    { courseId: mongoose.Types.ObjectId.isValid(courseId) ? new mongoose.Types.ObjectId(courseId) : courseId }
+                ],
+                status: { $ne: 'failed' }
+            })
+                .populate('sentBy', 'name profileImage profilePicture role')
+                .sort({ createdAt: -1 })
+                .lean()
+        ]);
+
+        if (!courseDoc) return res.status(404).render('404');
+        if (!user) return res.redirect('/login');
+
+        const course = courseDoc;
         let hasAccess = false, trialExpired = false, subscriptionExpired = false;
 
-        if (course.accessType === 'free') hasAccess = true;
-        else if (course.instructor?.toString() === user._id.toString() || user.role === 'admin' || user.role === 'superadmin') {
+        if (course.accessType === 'free' || course.accessType === 'Free') {
+            hasAccess = true;
+        } else if (course.instructor?._id?.toString() === user._id.toString() || user.role === 'admin' || user.role === 'superadmin') {
             hasAccess = true;
         } else {
-            const enrollment = user.enrolledCourses.find(e => e.course?.toString() === course._id.toString());
+            const enrollment = user.enrolledCourses?.find(e => e && e.course && e.course.toString() === course._id.toString());
             if (enrollment) {
                 if (!enrollment.expiresAt || new Date(enrollment.expiresAt) > new Date()) hasAccess = true;
                 else subscriptionExpired = true;
             }
-            if (!hasAccess && course.accessType === 'trial') {
-                const trial = user.trialEnrollments.find(t => t.course?.toString() === course._id.toString());
+            if (!hasAccess && (course.accessType === 'trial' || course.accessType === 'Trial')) {
+                const trial = user.trialEnrollments?.find(t => t && t.course && t.course.toString() === course._id.toString());
                 if (trial) {
                     const diffDays = Math.ceil(Math.abs(new Date() - trial.startedAt) / (1000 * 60 * 60 * 24));
                     if (diffDays <= (course.trialPeriod || 7)) hasAccess = true;
@@ -3271,15 +3793,119 @@ router.get('/course-details/:id', protect, async (req, res) => {
             }
         }
 
-        // If has access, show player; otherwise show details page
-        if (hasAccess) {
-            // Fetch QAs for this course
-            const qas = await QA.find({ course: course._id }).populate('askedBy answeredBy', 'name profileImage').sort({ createdAt: -1 });
-            res.render('lesson-player', { course: course.toObject(), similarCourses: [], hasAccess, trialExpired, subscriptionExpired, user, qas });
-        } else {
-            res.render('course-details', { course: course.toObject(), user, success: req.query.success });
+        // Calculate student progress for this course
+        const courseLessonIds = new Set();
+        if (course.chapters?.length > 0) {
+            course.chapters.forEach(ch => {
+                (ch.recordedClasses || []).forEach(rc => rc._id && courseLessonIds.add(rc._id.toString()));
+                (ch.notes || []).forEach(n => n._id && courseLessonIds.add(n._id.toString()));
+                (ch.quizzes || []).forEach(q => (q._id || q) && courseLessonIds.add((q._id || q).toString()));
+            });
         }
-    } catch (err) { res.status(500).send('Error loading course'); }
+        if (course.curriculumNodes?.length > 0) {
+            course.curriculumNodes.forEach(n => {
+                if (['video', 'note'].includes(n.type) && n._id) {
+                    courseLessonIds.add(n._id.toString());
+                } else if (n.type === 'quiz' && n.quizId) {
+                    const qId = n.quizId._id || n.quizId;
+                    courseLessonIds.add(qId.toString());
+                }
+            });
+        }
+
+        const totalLessons = courseLessonIds.size;
+        let completedForCourse = 0;
+        const uniqueCompleted = new Set((user.completedLessons || []).map(id => id.toString()));
+        uniqueCompleted.forEach(id => {
+            if (courseLessonIds.has(id)) {
+                completedForCourse++;
+            }
+        });
+        const realProgress = totalLessons > 0 ? Math.round((completedForCourse / totalLessons) * 100) : 0;
+
+        // Combine and format course notices (Announcements + Course Broadcasts)
+        const courseNotices = [];
+        const attended = (user && user.attendedNotices) || [];
+
+        const formatNoticeTimeAgo = (date) => {
+            if (!date) return 'Recently';
+            const past = new Date(date);
+            if (isNaN(past.getTime())) return 'Recently';
+            const diffMins = Math.floor(Math.abs(new Date() - past) / (1000 * 60));
+            if (diffMins < 1) return 'Just now';
+            if (diffMins < 60) return `${diffMins} min ago`;
+            const diffHours = Math.floor(diffMins / 60);
+            if (diffHours < 24) return `${diffHours} hr ago`;
+            const diffDays = Math.floor(diffHours / 24);
+            if (diffDays < 30) return `${diffDays} days ago`;
+            return past.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+        };
+
+        (courseAnnouncements || []).forEach(ann => {
+            courseNotices.push({
+                _id: ann._id,
+                id: 'ann_' + ann._id,
+                rawId: String(ann._id),
+                title: ann.title,
+                content: ann.content,
+                priority: ann.priority || 'normal',
+                isHighPriority: ann.priority === 'high',
+                author: ann.authorId || { name: 'Course Instructor' },
+                createdAt: ann.createdAt,
+                timeAgo: formatNoticeTimeAgo(ann.createdAt),
+                formattedDate: new Date(ann.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
+                isAttended: attended.includes('ann_' + ann._id),
+                type: 'announcement'
+            });
+        });
+
+        (courseLogs || []).forEach(log => {
+            courseNotices.push({
+                _id: log._id,
+                id: 'notice_' + log._id,
+                rawId: String(log._id),
+                title: log.title,
+                content: log.body || log.message || '',
+                priority: log.priority === 'urgent' ? 'high' : (log.priority || 'normal'),
+                isHighPriority: log.priority === 'high' || log.priority === 'urgent',
+                author: log.sentBy || { name: 'Course Instructor' },
+                createdAt: log.createdAt || log.sentAt || new Date(),
+                timeAgo: formatNoticeTimeAgo(log.createdAt || log.sentAt),
+                formattedDate: new Date(log.createdAt || log.sentAt || Date.now()).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }),
+                isAttended: attended.includes('notice_' + log._id),
+                type: 'broadcast'
+            });
+        });
+
+        courseNotices.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+        // If player explicitly requested (?play=1 or ?player=1) and has access, show lesson-player
+        if ((req.query.play === '1' || req.query.player === '1') && hasAccess) {
+            return res.render('lesson-player', { course, similarCourses: [], hasAccess, trialExpired, subscriptionExpired, user, qas: qas || [], courseNotices, from: req.query.from || '' });
+        }
+
+        res.render('course-details', { 
+            course, 
+            user, 
+            pageTitle: course.title,
+            hasAccess,
+            trialExpired,
+            subscriptionExpired,
+            enrolledCount: enrolledCount || course.studentCount || 0,
+            relatedCourses: relatedCourses || [],
+            progress: realProgress,
+            completedLessons: user.completedLessons || [],
+            qas: qas || [],
+            courseNotices,
+            courseAnnouncements: courseNotices,
+            announcements: courseNotices,
+            from: req.query.from || '',
+            success: req.query.success 
+        });
+    } catch (err) { 
+        console.error('Course details error:', err);
+        res.status(500).send('Error loading course details'); 
+    }
 });
 
 router.post('/api/attend-notice', protect, async (req, res) => {
@@ -3295,14 +3921,24 @@ router.post('/api/attend-notice', protect, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Failed' }); }
 });
 
-router.get('/checkout/:id', protect, async (req, res) => {
+router.get(['/checkout/:id', '/checkout/course/:id'], protect, async (req, res) => {
     try {
         await connectDB();
-        const course = await Course.findById(req.params.id).lean();
+        const course = await Course.findById(req.params.id).populate('instructor', 'name profileImage profilePicture').lean();
         if (!course) return res.status(404).send('Course not found');
         const user = await User.findById(req.session.userId).lean();
-        const siteSettings = await Setting.findOne({ key: 'site_settings' }).lean();
-        res.render('checkout', { course, user, siteSettings: siteSettings?.value || {}, error: null });
+        const settingDoc = await Setting.findOne().lean();
+        const bkashNum = (settingDoc?.paymentNumbers?.bkash && settingDoc.paymentNumbers.bkash.trim()) || process.env.BKASH_NUMBER || '01740335172';
+        const nagadNum = (settingDoc?.paymentNumbers?.nagad && settingDoc.paymentNumbers.nagad.trim()) || process.env.NAGAD_NUMBER || '01740335172';
+        const rocketNum = (settingDoc?.paymentNumbers?.rocket && settingDoc.paymentNumbers.rocket.trim()) || process.env.ROCKET_NUMBER || '';
+        const siteSettings = {
+            paymentNumbers: {
+                bkash: bkashNum,
+                nagad: nagadNum,
+                rocket: rocketNum
+            }
+        };
+        res.render('checkout', { course, user, siteSettings, error: null, pageTitle: 'Checkout' });
     } catch (err) {
         console.error('Course checkout error stack:', err);
         res.status(500).send('There was an error loading checkout: ' + (err.stack || err.message || err));
@@ -3323,7 +3959,7 @@ router.post('/enroll-trial/:id', protect, async (req, res) => {
 
 
 // ---- Quiz / Mock Test Solve Route ----
-router.get(['/quiz/:id', '/quizzes/:id'], protect, async (req, res) => {
+router.get(['/quiz/:id', '/quizzes/:id', '/exam/take/:id'], protect, async (req, res) => {
     try {
         await connectDB();
         const Quiz = require('../models/Quiz');
@@ -3334,38 +3970,89 @@ router.get(['/quiz/:id', '/quizzes/:id'], protect, async (req, res) => {
             return res.redirect(`/superadmin/quiz-details/${req.params.id}`);
         }
 
-        const quiz = await Quiz.findById(req.params.id).lean();
+        let quiz = await Quiz.findById(req.params.id).populate('course').lean();
         if (!quiz) return res.status(404).send('Quiz / Mock Test not found');
 
         // Find or auto-generate a QuestionBank for this quiz so it uses the unified Exam Solve Studio
-        const qSubject = (quiz.subject || 'General').trim();
-        const qClassLevel = (quiz.classLevel || (req.session.user && req.session.user.classLevel) || 'Class 10').trim();
+        let qSubject = (quiz.subject && quiz.subject !== 'General' && quiz.subject !== 'undefined') ? quiz.subject.trim() : '';
+        if (!qSubject && quiz.course) {
+            const courseSub = Array.isArray(quiz.course.subject) ? quiz.course.subject[0] : quiz.course.subject;
+            if (courseSub) qSubject = String(courseSub).trim();
+        }
+        if (!qSubject) {
+            const tLower = (quiz.title || '').toLowerCase();
+            if (tLower.includes('bangla') || tLower.includes('bengali')) qSubject = 'Bangla';
+            else if (tLower.includes('english')) qSubject = 'English';
+            else if (tLower.includes('math')) qSubject = 'Math';
+            else qSubject = (quiz.subject || 'General').trim();
+        }
+
+        const qClassLevel = (quiz.classLevel || (quiz.course && quiz.course.classLevel ? (Array.isArray(quiz.course.classLevel) ? quiz.course.classLevel[0] : quiz.course.classLevel) : '') || (req.session.user && req.session.user.classLevel) || 'Class 10').trim();
         const addedById = quiz.addedBy || req.session.userId;
 
-        const rawTitle = (quiz.title || 'Practice Quiz').trim();
-        const cleanTitle = rawTitle.replace(/^(mock test|model test)\s*-\s*/i, '');
-        const mockTitle = `Mock Test - ${cleanTitle}`;
+        const rawTitle = String(quiz.title || 'Practice Quiz').trim();
+        const cleanTitle = rawTitle.replace(/^(mock test|model test)\s*-\s*/i, '').trim();
+        const isCourseQuiz = !!quiz.course;
+        // If linked to a course, ALWAYS use the teacher's actual title without "Mock Test" prefix
+        const finalTitle = isCourseQuiz 
+            ? (cleanTitle || rawTitle || 'Course Exam') 
+            : (quiz.isMockTest ? (cleanTitle ? (cleanTitle.toLowerCase().includes('mock test') ? cleanTitle : `Mock Test - ${cleanTitle}`) : 'Mock Test') : (cleanTitle || rawTitle));
+
+        const isExplicitCourse = req.query.from === 'course' && !!req.query.courseId;
+        const courseId = isExplicitCourse ? req.query.courseId : (quiz.course ? (quiz.course._id || quiz.course).toString() : null);
+        const fromCourse = isExplicitCourse;
 
         let bank = await QuestionBank.findById(quiz._id);
         if (!bank) {
-            bank = await QuestionBank.findOne({ title: mockTitle, subject: qSubject });
+            bank = await QuestionBank.findOne({ title: finalTitle, subject: qSubject });
         }
 
+        const linkedCourseObjId = quiz.course ? (quiz.course._id || quiz.course) : (courseId || null);
+
         if (bank) {
-            if (bank.title !== mockTitle) {
-                bank.title = mockTitle;
+            let needsSave = false;
+            if (bank.title !== finalTitle) {
+                bank.title = finalTitle;
+                needsSave = true;
+            }
+            if (linkedCourseObjId && (!bank.course || bank.course.toString() !== linkedCourseObjId.toString())) {
+                bank.course = linkedCourseObjId;
+                needsSave = true;
+            }
+            if (needsSave) {
                 await bank.save();
             }
             bank = bank.toObject();
+
+            // Also check and sync questions if comprehension fields are missing
+            if (Array.isArray(quiz.questions) && quiz.questions.length > 0) {
+                const existingQs = await Question.find({ bankId: bank._id }).sort({ createdAt: 1 });
+                for (let i = 0; i < existingQs.length; i++) {
+                    const eq = existingQs[i];
+                    const qq = quiz.questions[i];
+                    if (qq && (qq.context || qq.q1 || qq.q2)) {
+                        if (!eq.context || !eq.q1 || !eq.q2) {
+                            await Question.findByIdAndUpdate(eq._id, {
+                                context: qq.context || eq.context || '',
+                                q1: qq.q1 || eq.q1 || '',
+                                q2: qq.q2 || eq.q2 || '',
+                                a1: qq.a1 || eq.a1 || '',
+                                a2: qq.a2 || eq.a2 || ''
+                            });
+                        }
+                    }
+                }
+            }
         } else {
             const newBank = new QuestionBank({
                 _id: quiz._id,
-                title: mockTitle,
+                title: finalTitle,
                 subject: qSubject,
                 classLevel: [qClassLevel],
                 duration: quiz.duration || 15,
                 status: 'approved',
-                addedBy: addedById
+                addedBy: addedById,
+                course: linkedCourseObjId
             });
             await newBank.save();
             bank = newBank.toObject();
@@ -3375,20 +4062,33 @@ router.get(['/quiz/:id', '/quizzes/:id'], protect, async (req, res) => {
                     bankId: newBank._id,
                     subject: qSubject,
                     classLevel: qClassLevel,
-                    questionText: q.questionText || `Question ${idx + 1}`,
+                    questionText: q.questionText || (q.context ? (q.context.slice(0, 100) + '...') : `Question ${idx + 1}`),
                     questionType: q.questionType || 'MCQ',
                     options: Array.isArray(q.options) ? q.options : [],
                     correctAnswerIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
                     correctAnswer: q.correctAnswer || '',
                     explanation: q.explanation || '',
-                    marks: q.marks || (q.questionType === 'Medium' ? 2 : (q.questionType === 'Comprehension' ? 10 : 1)),
+                    context: q.context || '',
+                    q1: q.q1 || '',
+                    q2: q.q2 || '',
+                    a1: q.a1 || '',
+                    a2: q.a2 || '',
+                    marks: q.marks || (q.questionType === 'Medium' ? 2 : (q.questionType === 'Comprehension' ? 7 : 1)),
                     addedBy: addedById
                 }));
                 await Question.insertMany(questionDocs);
             }
         }
 
-        return res.redirect(`/question-bank/solve/${bank._id}`);
+        const queryParams = new URLSearchParams();
+        if (fromCourse && courseId) {
+            queryParams.set('from', 'course');
+            queryParams.set('courseId', courseId);
+        } else {
+            queryParams.set('from', 'exams');
+        }
+        const qsStr = queryParams.toString();
+        return res.redirect(`/question-bank/solve/${bank._id}${qsStr ? '?' + qsStr : ''}`);
     } catch (err) {
         console.error('Error launching quiz exam:', err);
         res.status(500).send('Server Error launching exam session');
@@ -3727,27 +4427,30 @@ router.get('/messages', protect, async (req, res) => {
             });
 
             allMessages.forEach(msg => {
-                const otherId = msg.sender.toString() === user._id.toString() 
-                    ? (msg.receiver ? msg.receiver.toString() : null)
-                    : msg.sender.toString();
+                if (!msg || !msg.sender) return;
+                const senderId = (msg.sender._id || msg.sender).toString();
+                const receiverId = msg.receiver ? (msg.receiver._id || msg.receiver).toString() : null;
+                const otherId = senderId === user._id.toString() 
+                    ? receiverId 
+                    : senderId;
 
                 if (otherId && teacherMap[otherId]) {
                     if (!teacherMap[otherId].latestMessage) {
                         teacherMap[otherId].latestMessage = msg;
                     }
-                    if (msg.receiver && msg.receiver.toString() === user._id.toString() && !msg.isRead) {
+                    if (receiverId === user._id.toString() && !msg.isRead) {
                         teacherMap[otherId].unreadCount++;
                     }
                 }
             });
 
             recentConversations = Object.values(teacherMap);
-            // Default active teacher to requested query teacher or first in list
+            // Only set active teacher if specifically requested in query
             const requestedTeacherId = req.query.teacherId;
             if (requestedTeacherId) {
-                activeTeacher = teachers.find(t => t._id.toString() === requestedTeacherId) || teachers[0] || null;
+                activeTeacher = teachers.find(t => t._id.toString() === requestedTeacherId) || null;
             } else {
-                activeTeacher = teachers[0] || null;
+                activeTeacher = null;
             }
         }
 
@@ -3772,7 +4475,47 @@ router.get('/messages', protect, async (req, res) => {
     }
 });
 
-router.get('/notifications', protect, (req, res) => res.render('notifications', { user: req.session.user }));
+router.get('/notifications', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const Notification = require('../models/Notification');
+        const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
+
+        const [notifications, totalCount, unreadCount, paymentCount, courseCount, examCount, announcementCount] = await Promise.all([
+            Notification.find({ user: userId }).sort({ createdAt: -1 }).limit(50).lean(),
+            Notification.countDocuments({ user: userId }),
+            Notification.countDocuments({ user: userId, isRead: false }),
+            Notification.countDocuments({ user: userId, type: 'payment' }),
+            Notification.countDocuments({ user: userId, type: 'course' }),
+            Notification.countDocuments({ user: userId, type: 'exam' }),
+            Notification.countDocuments({ user: userId, type: 'announcement' })
+        ]);
+
+        res.render('notifications', {
+            user: req.session.user,
+            notifications,
+            stats: {
+                total: totalCount,
+                unread: unreadCount,
+                payment: paymentCount,
+                course: courseCount,
+                exam: examCount,
+                announcement: announcementCount
+            },
+            activePage: 'notifications',
+            pageTitle: 'Notifications'
+        });
+    } catch (err) {
+        console.error('Notifications page error:', err);
+        res.render('notifications', {
+            user: req.session.user,
+            notifications: [],
+            stats: { total: 0, unread: 0, payment: 0, course: 0, exam: 0, announcement: 0 },
+            activePage: 'notifications',
+            pageTitle: 'Notifications'
+        });
+    }
+});
 router.get('/settings', protect, (req, res) => res.render('profile', { user: req.session.user, success: null }));
 
 // GET /exams/mock-tests — Dedicated All Mock Tests Page for Student's Class & Subjects
@@ -3793,8 +4536,8 @@ router.get('/exams/mock-tests', protect, async (req, res) => {
             ? classConfig.subjects
             : await Question.distinct('subject');
 
-        // 2. Fetch all Quizzes / Mock Tests
-        const allMockTests = await Quiz.find()
+        // 2. Fetch only proper Mock Tests (isMockTest: true)
+        const allMockTests = await Quiz.find({ isMockTest: true })
             .populate('course')
             .sort({ createdAt: -1 })
             .lean();
@@ -3861,7 +4604,7 @@ router.get('/exams/history', protect, async (req, res) => {
 
         const user = await User.findById(req.session.userId).lean();
         const attempts = await QuestionBankAttempt.find({ user: req.session.userId })
-            .populate('bank')
+            .populate({ path: 'bank', populate: { path: 'course' } })
             .sort({ submittedAt: -1, _id: -1 })
             .lean();
 
@@ -3872,6 +4615,35 @@ router.get('/exams/history', protect, async (req, res) => {
         });
     } catch (err) {
         console.error('Error loading exam history page:', err);
+        res.redirect('/exams');
+    }
+});
+
+// GET /exams/written-results — Student Written Exam Results & Evaluations Page
+router.get('/exams/written-results', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const QuestionBankAttempt = require('../models/QuestionBankAttempt');
+        const User = require('../models/User');
+
+        const user = await User.findById(req.session.userId).lean();
+        const attempts = await QuestionBankAttempt.find({
+            user: req.session.userId,
+            writtenStatus: { $in: ['pending', 'reviewed'] }
+        })
+            .populate({ path: 'bank', populate: { path: 'course' } })
+            .populate('teacherReview.reviewedBy', 'name profileImage profilePicture')
+            .sort({ submittedAt: -1, _id: -1 })
+            .lean();
+
+        res.render('written-results', {
+            pageTitle: 'Written Exam Results',
+            activePage: 'exams',
+            user: user || req.session.user,
+            attempts: attempts || []
+        });
+    } catch (err) {
+        console.error('Error loading written results page:', err);
         res.redirect('/exams');
     }
 });
@@ -3930,7 +4702,7 @@ router.get('/exams/subject-tests', protect, async (req, res) => {
                 subject: (qb.subject || 'General').trim(),
                 topic: (qb.topic || '').trim(),
                 duration: qb.duration || 30,
-                solveUrl: `/question-bank/solve/${qb._id}`,
+                solveUrl: `/question-bank/solve/${qb._id}?from=exams`,
                 subtitle: [qb.topic, qb.board, qb.year].filter(Boolean).join(' • ') || 'Practice Exam'
             });
         });
@@ -3942,7 +4714,7 @@ router.get('/exams/subject-tests', protect, async (req, res) => {
                 subject: (qz.subject || 'General').trim(),
                 topic: (qz.topic || '').trim(),
                 duration: qz.duration || 15,
-                solveUrl: `/quiz/${qz._id}`,
+                solveUrl: `/quiz/${qz._id}?from=exams`,
                 subtitle: [qz.topic, qz.course ? qz.course.title : 'Mock Test'].filter(Boolean).join(' • ') || 'Mock Test'
             });
         });
@@ -3979,26 +4751,28 @@ router.get('/exams', protect, async (req, res) => {
         const userClassLevel = (user && user.classLevel) ? user.classLevel : 'Class 10';
 
         // 1. Fetch official Model Tests, Mock Tests, and Question Banks
-        const modelTestsList = await QuestionBank.find({
+        const baseQbQuery = {
             status: 'approved',
             isCustom: { $ne: true },
             title: { $not: /Personalized Exam|Custom Exam/i }
-        })
-            .sort({ createdAt: -1 })
-            .lean();
+        };
 
-        const mockTestsList = await Quiz.find()
-            .populate('course')
-            .sort({ createdAt: -1 })
-            .lean();
+        const [questionBanksList, mockTestsList, totalQuestionBanksCount, totalMockTestsCount, totalModelTestsCount] = await Promise.all([
+            QuestionBank.find(baseQbQuery).sort({ views: -1, createdAt: -1 }).lean(),
+            Quiz.find({ isMockTest: true }).populate('course').sort({ createdAt: -1 }).lean(),
+            QuestionBank.countDocuments(baseQbQuery),
+            Quiz.countDocuments({ isMockTest: true }),
+            QuestionBank.countDocuments({
+                ...baseQbQuery,
+                $or: [
+                    { title: /model.?test/i },
+                    { title: /model test/i }
+                ]
+            })
+        ]);
 
-        const questionBanksList = await QuestionBank.find({
-            status: 'approved',
-            isCustom: { $ne: true },
-            title: { $not: /Personalized Exam|Custom Exam/i }
-        })
-            .sort({ views: -1, createdAt: -1 })
-            .lean();
+        // modelTestsList is all approved QuestionBanks (used in the page sections)
+        const modelTestsList = questionBanksList;
 
         // 2. Fetch distinct subjects & class assigned subjects
         const qSubjects = await Question.distinct('subject');
@@ -4055,14 +4829,11 @@ router.get('/exams', protect, async (req, res) => {
             grandTotalQuestions += item.count;
         });
 
-        const totalQuestionBanksCount = questionBanksList.length;
-        const totalMockTestsCount = await Quiz.countDocuments({ isMockTest: true });
-
         const globalStats = {
             totalQuestions: grandTotalQuestions,
             totalBanks: totalQuestionBanksCount,
-            totalModelTests: modelTestsList.length,
-            totalMockTests: totalMockTestsCount || 0,
+            totalModelTests: totalModelTestsCount,
+            totalMockTests: totalMockTestsCount,
             mcq: globalTypeCounts.MCQ,
             short: globalTypeCounts.Short,
             medium: globalTypeCounts.Medium,
@@ -4071,43 +4842,85 @@ router.get('/exams', protect, async (req, res) => {
 
         // 6. Fetch Student's Lifetime Solved & Gained Metrics
         const QuestionBankAttempt = require('../models/QuestionBankAttempt');
-        const userAttempts = await QuestionBankAttempt.find({ user: req.session.userId }).lean();
+        const [userAttempts, studentUser] = await Promise.all([
+            QuestionBankAttempt.find({ user: req.session.userId }).lean(),
+            User.findById(req.session.userId).select('quizResults').lean()
+        ]);
 
         let studentStats = {
+            totalExams: (userAttempts || []).length + ((studentUser && studentUser.quizResults) ? studentUser.quizResults.length : 0),
             mcqSolved: 0,
             writtenSolved: 0,
+            mcqMarks: 0,
+            writtenMarks: 0,
             marksGained: 0,
             negativeMarks: 0,
             rightTicked: 0,
             wrongTicked: 0
         };
 
+        let rawMcqMarks = 0;
+        let rawWrittenMarks = 0;
+
+        // Quizzes from enrolled courses
+        ((studentUser && studentUser.quizResults) || []).forEach(q => {
+            const score = q.score || 0;
+            const total = q.total || 0;
+            const wrong = Math.max(0, total - score);
+            studentStats.rightTicked += score;
+            studentStats.wrongTicked += wrong;
+            studentStats.mcqSolved += total;
+            rawMcqMarks += score;
+        });
+
+        // Question Bank & Model Tests / Exams
         (userAttempts || []).forEach(att => {
             studentStats.rightTicked += (att.mcqCorrectCount || 0);
             studentStats.wrongTicked += (att.wrongMcqCount || 0);
             studentStats.negativeMarks += (att.negativeMarksDeducted || 0);
-            studentStats.marksGained += (att.mcqScore || 0);
+            rawMcqMarks += (att.mcqScore || 0);
 
-            const userAnswers = att.userAnswers || [];
-            userAnswers.forEach(ua => {
+            // Written marks evaluation
+            let attWrittenMarks = 0;
+            if (att.teacherReview && typeof att.teacherReview.totalWrittenScore === 'number' && att.teacherReview.totalWrittenScore > 0) {
+                attWrittenMarks = att.teacherReview.totalWrittenScore;
+            } else {
+                (att.userAnswers || []).forEach(ua => {
+                    const qType = ua.questionType || 'MCQ';
+                    if (qType !== 'MCQ' && typeof ua.marksObtained === 'number') {
+                        attWrittenMarks += ua.marksObtained;
+                    }
+                });
+            }
+            rawWrittenMarks += attWrittenMarks;
+
+            // Solved counts
+            (att.userAnswers || []).forEach(ua => {
                 const qType = ua.questionType || 'MCQ';
                 if (qType === 'MCQ') {
                     if (ua.selectedOptionIndex !== undefined && ua.selectedOptionIndex !== null && ua.selectedOptionIndex >= 0) {
                         studentStats.mcqSolved++;
                     }
                 } else {
-                    if (ua.writtenAnswer && String(ua.writtenAnswer).trim() !== '') {
+                    const hasWritten = (ua.writtenAnswer && String(ua.writtenAnswer).trim() !== '') ||
+                                       ua.writtenImage ||
+                                       (Array.isArray(ua.writtenImages) && ua.writtenImages.length > 0) ||
+                                       (ua.q1Answer && String(ua.q1Answer).trim() !== '') ||
+                                       ua.q1Image ||
+                                       (ua.q2Answer && String(ua.q2Answer).trim() !== '') ||
+                                       ua.q2Image;
+                    if (hasWritten) {
                         studentStats.writtenSolved++;
-                    }
-                    if (ua.marksObtained !== undefined && ua.marksObtained !== null && typeof ua.marksObtained === 'number') {
-                        studentStats.marksGained += ua.marksObtained;
                     }
                 }
             });
         });
 
         studentStats.negativeMarks = Math.round(studentStats.negativeMarks * 100) / 100;
-        studentStats.marksGained = Math.round(studentStats.marksGained * 100) / 100;
+        studentStats.mcqMarks = Math.round(rawMcqMarks * 100) / 100;
+        studentStats.writtenMarks = Math.round(rawWrittenMarks * 100) / 100;
+        const totalMarksSum = rawMcqMarks + rawWrittenMarks;
+        studentStats.marksGained = totalMarksSum % 1 === 0 ? totalMarksSum : Number(totalMarksSum.toFixed(1));
 
         res.render('exams', {
             user: user || req.session.user,
@@ -4373,7 +5186,7 @@ router.post('/exams/custom-start', protect, async (req, res) => {
             }).save();
         }
 
-        res.redirect(`/question-bank/solve/${newBank._id}`);
+        res.redirect(`/question-bank/solve/${newBank._id}?from=exams`);
     } catch (err) {
         console.error('Custom Exam Start Error:', err);
         res.redirect('/exams/custom-test');
@@ -4390,15 +5203,47 @@ router.get('/live/:roomId', protect, async (req, res) => {
         // Try to find the course that has this live class
         let course = null;
         try {
-            course = await Course.findOne({ 'curriculumNodes.meetingUrl': roomId })
-                .populate('instructor', 'name profileImage profilePicture bio role')
-                .populate('curriculumNodes.quizId')
-                .lean();
+            const courseDoc = await Course.findOne({
+                $or: [
+                    { 'curriculumNodes.meetingUrl': roomId },
+                    { 'chapters.liveClasses.meetingUrl': roomId }
+                ]
+            });
 
-            // If not found in curriculumNodes, try old chapters format
-            if (!course) {
-                course = await Course.findOne({ 'chapters.liveClasses.meetingUrl': roomId })
+            if (courseDoc) {
+                if (isModerator) {
+                    let changed = false;
+                    if (courseDoc.curriculumNodes) {
+                        const node = courseDoc.curriculumNodes.find(n => n.meetingUrl === roomId);
+                        if (node) {
+                            node.isLive = true;
+                            node.isRecorded = false;
+                            node.liveStartedAt = new Date();
+                            courseDoc.markModified('curriculumNodes');
+                            changed = true;
+                        }
+                    }
+                    if (courseDoc.chapters) {
+                        courseDoc.chapters.forEach(ch => {
+                            if (ch.liveClasses) {
+                                const lc = ch.liveClasses.find(l => l.meetingUrl === roomId);
+                                if (lc) {
+                                    lc.isLive = true;
+                                    lc.isRecorded = false;
+                                    lc.liveStartedAt = new Date();
+                                    courseDoc.markModified('chapters');
+                                    changed = true;
+                                }
+                            }
+                        });
+                    }
+                    if (changed) {
+                        await courseDoc.save();
+                    }
+                }
+                course = await Course.findById(courseDoc._id)
                     .populate('instructor', 'name profileImage profilePicture bio role')
+                    .populate('curriculumNodes.quizId')
                     .lean();
             }
         } catch (e) {
@@ -4563,15 +5408,31 @@ router.post('/api/live/end', protect, async (req, res) => {
             return res.status(403).json({ error: 'Only instructors can end live classes' });
         }
 
-        // Find the course that has this live class
-        const course = await Course.findOne({
+        console.log('[/api/live/end] Request:', { roomId, duration, isRecorded, uploadedVideoPath });
+        const isObjectId = /^[0-9a-fA-F]{24}$/.test(roomId);
+        const courseQuery = {
             $or: [
                 { 'curriculumNodes.meetingUrl': roomId },
                 { 'chapters.liveClasses.meetingUrl': roomId }
             ]
-        });
+        };
+        if (isObjectId) {
+            courseQuery.$or.push({ 'curriculumNodes._id': roomId });
+            courseQuery.$or.push({ 'chapters.liveClasses._id': roomId });
+        }
+
+        let course = await Course.findOne(courseQuery);
+        if (!course) {
+            course = await Course.findOne({
+                $or: [
+                    { 'curriculumNodes.isLive': true },
+                    { 'curriculumNodes.meetingUrl': new RegExp(roomId, 'i') }
+                ]
+            });
+        }
 
         if (!course) {
+            console.warn('[/api/live/end] Course not found for roomId:', roomId);
             return res.status(404).json({ error: 'Course or live class not found' });
         }
 
@@ -4580,38 +5441,40 @@ router.post('/api/live/end', protect, async (req, res) => {
         let savedVideoPath = null;
         let savedFolderId = null;
 
-        // Use the actual uploaded recording path from the client, or fallback if nothing was uploaded
-        const recordingVideoPath = (uploadedVideoPath && uploadedVideoPath.startsWith('/uploads/'))
-            ? uploadedVideoPath
-            : (isRecorded ? '/uploads/videos/1779038199944-Flow_delpmaspu_.mp4' : null);
+        // Only consider it recorded if an actual recording video file was uploaded
+        const hasRealRecording = Boolean((isRecorded === true || isRecorded === 'true') && uploadedVideoPath && uploadedVideoPath.startsWith('/uploads/'));
+        const recordingVideoPath = hasRealRecording ? uploadedVideoPath : null;
         const recordingDuration = duration || '00:00:00';
 
         // 1. Try curriculumNodes (new format)
         if (course.curriculumNodes && course.curriculumNodes.length > 0) {
-            const node = course.curriculumNodes.find(n => n.meetingUrl === roomId && n.type === 'liveClass');
+            let node = course.curriculumNodes.find(n => (n.meetingUrl === roomId || n._id.toString() === roomId));
+            if (!node) {
+                node = course.curriculumNodes.find(n => (n.meetingUrl && n.meetingUrl.includes(roomId)) || n.isLive === true);
+            }
             if (node) {
                 savedNodeId = node._id.toString();
-                savedVideoPath = recordingVideoPath;
                 savedFolderId = node.parentId ? node.parentId.toString() : null;
 
-                // Keep type as 'liveClass' with isRecorded=true if recorded, else remove node
-                if (isRecorded) {
-                    await Course.updateOne(
-                        { _id: course._id, 'curriculumNodes._id': node._id },
-                        {
-                            $set: {
-                                'curriculumNodes.$.isRecorded': true,
-                                'curriculumNodes.$.videoPath': recordingVideoPath,
-                                'curriculumNodes.$.duration': recordingDuration
-                            }
-                        }
-                    );
+                if (hasRealRecording) {
+                    node.isLive = false;
+                    node.isRecorded = true;
+                    node.type = 'video'; // Convert to playable video lesson in curriculum
+                    node.videoPath = recordingVideoPath;
+                    node.duration = recordingDuration;
+                    savedVideoPath = recordingVideoPath;
+                    console.log('[/api/live/end] Success! Live class saved as video lesson:', node.name, node.videoPath);
+                } else if (node.isRecorded && node.videoPath) {
+                    // Node was already saved as a recorded lesson! Only reset isLive, DO NOT DELETE!
+                    node.isLive = false;
+                    console.log('[/api/live/end] Node already recorded, preserving video lesson:', node.name, node.videoPath);
                 } else {
-                    await Course.updateOne(
-                        { _id: course._id },
-                        { $pull: { curriculumNodes: { _id: node._id } } }
-                    );
+                    // Unrecorded live class -> remove node completely so it is ended forever and no fake file is saved
+                    course.curriculumNodes = course.curriculumNodes.filter(n => n._id.toString() !== node._id.toString());
+                    console.log('[/api/live/end] Unrecorded live class ended and removed:', node.name);
                 }
+                course.markModified('curriculumNodes');
+                await course.save();
                 updated = true;
             }
         }
@@ -4620,25 +5483,15 @@ router.post('/api/live/end', protect, async (req, res) => {
         if (!updated && course.chapters && course.chapters.length > 0) {
             for (let i = 0; i < course.chapters.length; i++) {
                 const chapter = course.chapters[i];
-                const liveIndex = chapter.liveClasses.findIndex(lc => lc.meetingUrl === roomId);
+                const liveIndex = chapter.liveClasses ? chapter.liveClasses.findIndex(lc => lc.meetingUrl === roomId || lc._id.toString() === roomId) : -1;
                 if (liveIndex !== -1) {
                     const lc = chapter.liveClasses[liveIndex];
 
-                    const recordedClass = {
-                        title: lc.title || 'Recorded Live Class',
-                        videoPath: recordingVideoPath,
-                        description: 'Recorded live class session.',
-                        instructor: user.name || 'Instructor',
-                        duration: recordingDuration,
-                        accessType: 'paid',
-                        views: 0
-                    };
-
-                    // Remove from liveClasses and add to recordedClasses if recorded
+                    // Remove from liveClasses
                     chapter.liveClasses.splice(liveIndex, 1);
 
-                    if (isRecorded) {
-                        const recordedClass = {
+                    if (hasRealRecording) {
+                        const recClass = {
                             title: lc.title || 'Recorded Live Class',
                             videoPath: recordingVideoPath,
                             description: 'Recorded live class session.',
@@ -4647,7 +5500,8 @@ router.post('/api/live/end', protect, async (req, res) => {
                             accessType: 'paid',
                             views: 0
                         };
-                        chapter.recordedClasses.push(recordedClass);
+                        if (!chapter.recordedClasses) chapter.recordedClasses = [];
+                        chapter.recordedClasses.push(recClass);
                         savedVideoPath = recordingVideoPath;
                     }
 
@@ -4696,9 +5550,8 @@ router.get('/api/agora/token', protect, async (req, res) => {
             return res.json({ token: null, error: 'Credentials missing' });
         }
 
-        // Determine role
-        const isModerator = req.session.user.role === 'teacher' || req.session.user.role === 'admin' || req.session.user.role === 'superadmin';
-        const role = isModerator ? RtcRole.PUBLISHER : RtcRole.SUBSCRIBER;
+        // Determine role - use PUBLISHER so all authorized session participants can join and interact
+        const role = RtcRole.PUBLISHER;
 
         // Ensure uid is an integer (Agora requirement) or 0 for dynamic
         // We will use 0 to let Agora assign a random UID, or pass a random integer.
@@ -4727,4 +5580,1034 @@ router.get('/api/agora/token', protect, async (req, res) => {
     }
 });
 
+// ==========================================
+// ODDHAY AI - STUDENT STUDY ASSISTANT PLATFORM
+// ==========================================
+
+// GET /student - Dedicated Oddhay AI Platform Page
+router.get('/student', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const User = require('../models/User');
+        const AcademicClass = require('../models/AcademicClass');
+        const Question = require('../models/Question');
+        const Course = require('../models/Course');
+
+        const user = await User.findById(req.session.userId).lean();
+        if (!user) return res.redirect('/login');
+
+        const userClassLevel = user.classLevel || 'Class 9';
+
+        // Fetch subjects for student's class
+        const classConfig = await AcademicClass.findOne({ name: userClassLevel }).lean();
+        const fallbackSubjects = [
+            'Physics', 'Chemistry', 'Higher Mathematics', 'General Mathematics',
+            'Biology', 'ICT', 'English', 'Bangla', 'General Science', 'Accounting', 'Finance & Banking'
+        ];
+        const assignedSubjects = (classConfig && classConfig.subjects && classConfig.subjects.length > 0)
+            ? classConfig.subjects
+            : fallbackSubjects;
+
+        // Fetch all available classes for quick switching
+        const allClasses = await AcademicClass.find().sort({ order: 1, name: 1 }).lean();
+        const classList = (allClasses && allClasses.length > 0)
+            ? allClasses.map(c => c.name)
+            : ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'HSC 1st Year', 'HSC 2nd Year', 'Admission'];
+
+        // Curated Subject Starter Prompts
+        const samplePrompts = {
+            'Higher Mathematics': [
+                'দ্বিঘাত সমীকরণ $2x^2 + 5x - 3 = 0$ এর সমাধান ধাপসহ দেখাও',
+                'ত্রিকোণমিতিক অভেদাবলি প্রমাণ: $\\sin^2\\theta + \\cos^2\\theta = 1$',
+                'স্থানাঙ্ক জ্যামিতি: $(2, 3)$ ও $(6, 7)$ বিন্দুর দূরত্ব ও ঢাল নির্ণয় করো'
+            ],
+            'General Mathematics': [
+                'সূচক ও লগারিদম এর মৌলিক সূত্রসমূহ ও উদাহরণ',
+                'বৃত্তের ক্ষেত্রফল ও পরিধির সূত্র ব্যবহার করে সমীকরণ সমাধান',
+                'শতকরা ও লাভ-ক্ষতির অংক সহজে সমাধানের শর্টকাট টেকনিক'
+            ],
+            'Physics': [
+                'গতির সমীকরণ প্রতিপাদন: $s = ut + \\frac{1}{2}at^2$',
+                'নিউটনের গতির ২য় সূত্র ব্যাখ্যা ও $F = ma$ প্রতিপাদন',
+                'কাজ, ক্ষমতা ও শক্তির মধ্যে সম্পর্ক এবং শক্তির নিত্যতা সূত্র'
+            ],
+            'Chemistry': [
+                'পর্যায় সারণির পর্যায়বৃত্ত ধর্ম (আয়নিকরণ শক্তি ও তড়িৎ ঋণাত্মকতা)',
+                'জারণ-বিজারণ বিক্রিয়া চিহ্নিত করার নিয়ম ও উদাহরণ',
+                'রাসায়নিক বন্ধন: আয়নিক বনাম সমযোজী বন্ধনের মূল পার্থক্য'
+            ],
+            'Biology': [
+                'উদ্ভিদ কোষ ও প্রাণী কোষের প্রধান পার্থক্য ও চিত্রসহ বিবরণ',
+                'মাইটোটিক কোষ বিভাজনের বিভিন্ন ধাপ ও তাৎপর্য',
+                'মানবদেহে রক্ত সংবহনতন্ত্র এবং হৃদপিণ্ডের কার্যপদ্ধতি'
+            ],
+            'ICT': [
+                'বাইনারি থেকে ডেসিমাল এবং হেক্সাডেসিমাল রূপান্তরের নিয়ম',
+                'এইচটিএমএল (HTML) এর প্রাথমিক কাঠামো ও প্রয়োজনীয় ট্যাগ',
+                'লজিক গেট (AND, OR, NOT) এর ট্রুথ টেবিল ও সার্কিট'
+            ],
+            'English': [
+                'Rules of Right Form of Verbs with easy examples for exams',
+                'Changing Sentences: Active to Passive Voice step-by-step',
+                'Completing Sentences using Conditional Clauses (1st, 2nd, 3rd)'
+            ],
+            'Bangla': [
+                'বাংলা ব্যাকরণ: সমাস চেনার সহজ নিয়ম ও শ্রেণিবিভাগ',
+                'সন্ধি ও ণ-ত্ব ও ষ-ত্ব বিধানের প্রয়োজনীয় নিয়মাবলি',
+                'কারক ও বিভক্তি নির্ণয়ের শর্টকাট টেকনিক'
+            ]
+        };
+
+        res.render('student-ai', {
+            pageTitle: 'Oddhay AI',
+            user: user || req.session.user,
+            userClassLevel,
+            assignedSubjects,
+            classList,
+            samplePrompts,
+            activePage: 'ai'
+        });
+    } catch (err) {
+        console.error('Error loading Oddhay AI page:', err);
+        res.redirect('/dashboard');
+    }
+});
+
+// Helper: Generate intelligent related topic title for AI conversation
+function generateConversationTitle(queryText, subject, aiResponse) {
+    if (!queryText) return 'New Discussion';
+    let clean = queryText
+        .replace(/^(hello|hi|hey|please|can you|could you|explain|solve|tell me about|what is|how to|what are|why is|calculate|solve this)\s+/i, '')
+        .replace(/^(দয়া করে|ভাইয়া|স্যার|আমাকে|একটু|বলুন|বুঝিয়ে দিন|সমাধান করুন|কীভাবে|কিভাবে|নির্ণয় করুন|কী|কি)\s+/i, '')
+        .replace(/[$#*`]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!clean || clean.length < 3) {
+        clean = (subject && subject !== 'General Study' ? `${subject} Topic` : queryText.trim());
+    }
+
+    if (clean.length > 38) {
+        clean = clean.slice(0, 35) + '...';
+    }
+
+    if (/^[a-z]/.test(clean)) {
+        clean = clean.charAt(0).toUpperCase() + clean.slice(1);
+    }
+
+    return clean;
+}
+
+// GET /api/ai/conversations - List user AI conversations with subject and search filters
+router.get('/api/ai/conversations', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const AiConversation = require('../models/AiConversation');
+        const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
+        if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+        const { subject, q } = req.query;
+
+        const query = { user: userId };
+        if (subject && subject.trim() !== '' && subject !== 'all') {
+            query.subject = new RegExp(`^${subject.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        }
+        if (q && q.trim() !== '') {
+            const searchRegex = new RegExp(q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            query.$or = [
+                { title: searchRegex },
+                { 'messages.content': searchRegex }
+            ];
+        }
+
+        const conversations = await AiConversation.find(query)
+            .select('title subject classLevel mode isPinned createdAt updatedAt messages')
+            .sort({ isPinned: -1, updatedAt: -1 })
+            .limit(100)
+            .lean();
+
+        const formatted = conversations.map(c => ({
+            _id: c._id,
+            title: c.title || 'Untitled Discussion',
+            subject: c.subject || 'General Study',
+            classLevel: c.classLevel || '',
+            mode: c.mode || 'concept',
+            isPinned: Boolean(c.isPinned),
+            messageCount: c.messages ? c.messages.length : 0,
+            lastMessagePreview: (c.messages && c.messages.length > 0) ? c.messages[c.messages.length - 1].content.slice(0, 60) : '',
+            createdAt: c.createdAt,
+            updatedAt: c.updatedAt
+        }));
+
+        res.json({ success: true, conversations: formatted });
+    } catch (err) {
+        console.error('Error fetching AI conversations:', err);
+        res.status(500).json({ error: 'Failed to fetch conversations' });
+    }
+});
+
+// GET /api/ai/conversations/:id - Get full messages of a conversation
+router.get('/api/ai/conversations/:id', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const AiConversation = require('../models/AiConversation');
+        const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
+        if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid conversation ID' });
+        }
+
+        const conversation = await AiConversation.findOne({
+            _id: req.params.id,
+            user: userId
+        }).lean();
+
+        if (!conversation) {
+            return res.status(404).json({ error: 'Conversation not found' });
+        }
+
+        res.json({ success: true, conversation });
+    } catch (err) {
+        console.error('Error fetching conversation details:', err);
+        res.status(500).json({ error: 'Failed to load conversation' });
+    }
+});
+
+// POST /api/ai/conversations/:id/pin - Toggle pin status of a conversation
+router.post('/api/ai/conversations/:id/pin', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const AiConversation = require('../models/AiConversation');
+        const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
+        if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid conversation ID' });
+        }
+
+        const conversation = await AiConversation.findOne({
+            _id: req.params.id,
+            user: userId
+        });
+
+        if (!conversation) {
+            return res.status(404).json({ error: 'Conversation not found' });
+        }
+
+        conversation.isPinned = !conversation.isPinned;
+        await conversation.save();
+
+        res.json({
+            success: true,
+            isPinned: conversation.isPinned,
+            message: conversation.isPinned ? 'Conversation pinned' : 'Conversation unpinned'
+        });
+    } catch (err) {
+        console.error('Error toggling pin status:', err);
+        res.status(500).json({ error: 'Failed to toggle pin' });
+    }
+});
+
+// DELETE /api/ai/conversations/:id - Delete a specific conversation
+router.delete('/api/ai/conversations/:id', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const AiConversation = require('../models/AiConversation');
+        const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
+        if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ error: 'Invalid conversation ID' });
+        }
+
+        const result = await AiConversation.findOneAndDelete({
+            _id: req.params.id,
+            user: userId
+        });
+
+        if (!result) {
+            return res.status(404).json({ error: 'Conversation not found' });
+        }
+
+        res.json({ success: true, message: 'Conversation deleted successfully' });
+    } catch (err) {
+        console.error('Error deleting conversation:', err);
+        res.status(500).json({ error: 'Failed to delete conversation' });
+    }
+});
+
+// POST /api/ai/chat - AI Solver & Study Engine API
+router.post('/api/ai/chat', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const { prompt, subject, classLevel, mode, conversationId, attachment } = req.body;
+        const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
+
+        if ((!prompt || typeof prompt !== 'string' || prompt.trim() === '') && !attachment) {
+            return res.status(400).json({ error: 'Prompt or attachment is required' });
+        }
+
+        const queryText = (prompt && typeof prompt === 'string' && prompt.trim() !== '') ? prompt.trim() : (attachment ? 'Please analyze this attached file/image and provide a detailed solution according to the textbook.' : '');
+        const targetSubject = (subject || 'General Study').trim();
+        const targetClass = (classLevel || 'Class 9/10').trim();
+        const studyMode = (mode || 'solver').toLowerCase(); // 'solver', 'concept', 'quiz', 'summary'
+
+        // Pre-fetch existing conversation to provide multi-question context for overarching title generation
+        let existingConversation = null;
+        let previousUserQuestions = [];
+        try {
+            if (userId && conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
+                const AiConversation = require('../models/AiConversation');
+                existingConversation = await AiConversation.findOne({
+                    _id: conversationId,
+                    user: userId
+                });
+                if (existingConversation && Array.isArray(existingConversation.messages)) {
+                    previousUserQuestions = existingConversation.messages
+                        .filter(m => m.role === 'user' && m.content)
+                        .map(m => m.content.trim())
+                        .slice(-5);
+                }
+            }
+        } catch (convFetchErr) {
+            // non-blocking
+        }
+
+        console.log('[Oddhay AI Request]', {
+            user: userId ? String(userId) : 'guest',
+            subject: targetSubject,
+            class: targetClass,
+            mode: studyMode,
+            hasAttachment: Boolean(attachment && attachment.data),
+            attachmentType: attachment ? attachment.mimeType : null,
+            attachmentName: attachment ? attachment.name : null,
+            conversationQuestionsCount: previousUserQuestions.length
+        });
+
+        // 1. TIER 1 (HIGHEST PRIORITY): Search Authority Custom Knowledge Hub (AIKnowledge)
+        let authorityKnowledgeText = '';
+        let hasAuthorityKnowledge = false;
+        try {
+            const AIKnowledge = require('../models/AIKnowledge');
+            
+            // Extract keyword terms (length > 2)
+            const queryWords = queryText.split(/[\s,;.!?'"()]+/i).filter(w => w.length > 2);
+            const subRegex = new RegExp(`^${targetSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+            const classRegex = new RegExp(`^(${targetClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|All Classes)$`, 'i');
+
+            // Find matching active authority knowledge
+            const orConditions = [
+                { subject: subRegex },
+                { classLevel: classRegex }
+            ];
+
+            if (queryWords.length > 0) {
+                const keywordRegex = queryWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+                orConditions.push({ keywords: { $in: queryWords } });
+                orConditions.push({ keywords: { $regex: keywordRegex, $options: 'i' } });
+                orConditions.push({ title: { $regex: keywordRegex, $options: 'i' } });
+                orConditions.push({ topic: { $regex: keywordRegex, $options: 'i' } });
+            }
+
+            const matchedAuthorityRules = await AIKnowledge.find({
+                isActive: true,
+                $or: orConditions
+            }).sort({ priority: -1, createdAt: -1 }).limit(3).lean();
+
+            if (matchedAuthorityRules && matchedAuthorityRules.length > 0) {
+                hasAuthorityKnowledge = true;
+                authorityKnowledgeText = `\n==================================================\n[TIER 1 - HIGHEST AUTHORITY OVERRIDE DIRECTIVE - STRICT COMPLIANCE REQUIRED]\nThe following verified guidelines, definitions, and formulas were explicitly established by Oddhay Authority & Teachers for this subject. You MUST prioritize and incorporate these rules above any generic internet sources:\n` + 
+                matchedAuthorityRules.map((rule, idx) => 
+                    `[Rule ${idx + 1}]: "${rule.title}" (Subject: ${rule.subject}, Class: ${rule.classLevel}, Priority: ${rule.priority})\nContent / Mandatory Solution Guidelines:\n${rule.content}\n`
+                ).join('\n') + `==================================================\n`;
+            }
+        } catch (authErr) {
+            console.warn('[Oddhay AI] Authority Knowledge search warning:', authErr.message);
+        }
+
+        // 2. TIER 2 (HIGH PRIORITY): Retrieve platform database questions/notes (RAG)
+        let dbContext = '';
+        try {
+            const Question = require('../models/Question');
+            const QuestionBank = require('../models/QuestionBank');
+            
+            // Extract keyword terms
+            const keywords = queryText.split(/\s+/).filter(w => w.length > 3).slice(0, 4);
+            if (keywords.length > 0) {
+                const regexPattern = keywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+                const matchedQuestions = await Question.find({
+                    $or: [
+                        { questionText: { $regex: regexPattern, $options: 'i' } },
+                        { topic: { $regex: regexPattern, $options: 'i' } }
+                    ]
+                }).limit(2).lean();
+
+                if (matchedQuestions && matchedQuestions.length > 0) {
+                    dbContext = `\n[TIER 2 - OFFICIAL PLATFORM QUESTION BANK REFERENCE]:\n` + matchedQuestions.map((q, idx) => 
+                        `[Item ${idx+1}] Question: ${q.questionText} | Options: ${q.options ? q.options.join(', ') : ''} | Official Solution: ${q.explanation || q.correctAnswer || 'N/A'}`
+                    ).join('\n') + `\n`;
+                }
+            }
+        } catch (dbErr) {
+            // Non-blocking RAG failure
+        }
+
+        // 3. TIER 3 (GENERAL REASONING): Check for Gemini / LLM API Key in environment
+        const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+        let aiResponseText = '';
+
+        if (apiKey) {
+            try {
+                const { GoogleGenerativeAI } = require('@google/generative-ai');
+                const genAI = new GoogleGenerativeAI(apiKey);
+                
+                // Active Google Gemini multimodal models (sorted by lowest latency)
+                const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.6-flash', 'gemini-2.5-flash'];
+                let genSuccess = false;
+
+                // Sanitize and normalize attachment if provided
+                let inlineAttachmentPart = null;
+                if (attachment && attachment.data) {
+                    let mime = (attachment.mimeType || 'image/jpeg').toLowerCase().trim();
+                    if (mime === 'image/jpg' || mime === 'image/pjpeg' || mime === 'image/jfif') {
+                        mime = 'image/jpeg';
+                    } else if (mime.includes('pdf')) {
+                        mime = 'application/pdf';
+                    }
+                    
+                    let b64 = String(attachment.data);
+                    if (b64.includes(',')) {
+                        b64 = b64.split(',')[1];
+                    }
+                    b64 = b64.replace(/\s+/g, '');
+
+                    if (b64) {
+                        inlineAttachmentPart = {
+                            inlineData: {
+                                data: b64,
+                                mimeType: mime
+                            }
+                        };
+                    }
+                }
+
+                const systemInstruction = `You are "Oddhay AI" (অধ্যয় এআই), Bangladesh's premier, highly encouraging, and super-intelligent academic tutor for NCTB / National Curriculum students.
+Class Level: ${targetClass}
+Subject: ${targetSubject}
+Mode: ${studyMode}
+${authorityKnowledgeText}
+${dbContext}
+
+CRITICAL LANGUAGE & SCRIPT DIRECTIVES (FOLLOW STRICTLY):
+1. PURE ENGLISH: If the student asks in proper English (e.g. "What is photosynthesis?", "Solve 2x^2 + 5x - 3 = 0", "Explain Newton's second law of motion"), you MUST answer 100% in fluent ENGLISH with English academic headings.
+2. BENGALI SCRIPT: If the student asks in Bengali script (e.g. "সালোকসংশ্লেষণ কী?", "সমীকরণটি সমাধান কর"), you MUST answer 100% in standard BENGALI (বাংলা লিপি).
+3. BANGLISH (CRITICAL): If the student asks in Banglish (Bengali words typed using the English/Latin alphabet, e.g. "kollani k?", "kollani ke?", "kollanir boyos koto?", "eta kivabe korbo?", "amake shongga dao", "mitosis er dhap gulo ki?", "saloksongshleshon ki?", "kono kisu bujhlam na", "ekta udahoron dao", etc.), you MUST ALWAYS respond in pure standard BENGALI SCRIPT (বাংলা লিপি). NEVER reply in English or Banglish when asked in Banglish!
+
+Structure for Bengali / Banglish inquiries:
+- Solver: 📌 **প্রদত্ত মান ও সূত্র** -> 🧮 **ধাপ অনুসারে সমাধান** (LaTeX $...$ / $$...$$) -> 🎯 **চূড়ান্ত উত্তর** -> 💡 **গুরুত্বপূর্ণ পরীক্ষার টিপস**
+- Concept: সহজ সংজ্ঞা, বাস্তব জীবনের উপমা, মূল তত্ত্ব ও কার্যপ্রণালী, এবং পরীক্ষার পরামর্শ।
+- Quiz: ৩-৫টি বহুনির্বাচনী প্রশ্ন (ক, খ, গ, ঘ), সঠিক উত্তর ও ব্যাখ্যা।
+
+Structure for English inquiries:
+- Solver: 📌 **Given Data & Formulas** -> 🧮 **Step-by-Step Solution** (LaTeX $...$ / $$...$$) -> 🎯 **Final Answer** -> 💡 **Key Exam Tip**
+- Concept: Clear definition, real-world analogy, key mechanisms, and exam takeaways.
+- Quiz: 3-5 MCQs with 4 options (A, B, C, D), correct answers, and explanations.
+
+Topic Title Directive:
+- On the very FIRST LINE of your response, output a smart, overarching 2 to 4 word academic topic title in the exact format:
+[TOPIC: 2 to 4 words concise overarching academic topic title without any emojis, symbols or quotes]
+- Match title language with answer language: English title for English responses, Bengali title for Bengali/Banglish responses.
+- Example: [TOPIC: অপরিচিতা চরিত্র বিশ্লেষণ] or [TOPIC: Tense & Sentence Structure] or [TOPIC: Quadratic Equation Roots]`;
+
+                for (const modelName of candidateModels) {
+                    try {
+                        const model = genAI.getGenerativeModel({
+                            model: modelName,
+                            systemInstruction: systemInstruction
+                        });
+
+                        let userPromptText = queryText || 'Please analyze this attached image/document and solve it step by step according to the curriculum.';
+                        if (previousUserQuestions.length > 0) {
+                            userPromptText = `[Conversation Context: Previous questions in this discussion: "${previousUserQuestions.join('", "')}"]\n\nCurrent Question: ${userPromptText}`;
+                        }
+
+                        const contentParts = [userPromptText];
+                        
+                        if (inlineAttachmentPart) {
+                            contentParts.push(inlineAttachmentPart);
+                        }
+
+                        const result = await model.generateContent(contentParts);
+                        const response = await result.response;
+                        aiResponseText = response.text();
+                        if (aiResponseText) {
+                            genSuccess = true;
+                            break;
+                        }
+                    } catch (mErr) {
+                        console.warn(`[Oddhay AI] Model ${modelName} query error:`, mErr.message);
+                    }
+                }
+            } catch (geminiErr) {
+                console.warn('[Oddhay AI] Gemini API query warning:', geminiErr.message);
+            }
+        }
+
+        // Extract and clean dynamic AI-generated topic title from [TOPIC: ...]
+        let aiGeneratedTitle = '';
+        if (aiResponseText) {
+            const topicMatch = aiResponseText.match(/^\[(?:TOPIC|TITLE):\s*([^\]\r\n]+)\]/i);
+            if (topicMatch && topicMatch[1]) {
+                aiGeneratedTitle = cleanAcademicTitleText(topicMatch[1]);
+                aiResponseText = aiResponseText.replace(/^\[(?:TOPIC|TITLE):\s*[^\]\r\n]+\]\s*/i, '').trim();
+            }
+        }
+
+        // 3. Resilient, rich Academic Engine for accurate calculations even when offline
+        if (!aiResponseText) {
+            aiResponseText = generateAcademicSolution(queryText, targetSubject, targetClass, studyMode, dbContext);
+        }
+
+        const smartTitle = aiGeneratedTitle || generateConversationTitle(queryText, targetSubject, aiResponseText);
+
+        // 4. Persistent Conversation History Storage
+        let currentConversation = existingConversation;
+        try {
+            if (userId) {
+                const AiConversation = require('../models/AiConversation');
+                if (!currentConversation && conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
+                    currentConversation = await AiConversation.findOne({
+                        _id: conversationId,
+                        user: userId
+                    });
+                }
+
+                const userMsg = {
+                    role: 'user',
+                    content: queryText,
+                    subject: targetSubject,
+                    mode: studyMode,
+                    attachmentName: attachment && attachment.name ? attachment.name : undefined,
+                    attachmentType: attachment && attachment.mimeType ? attachment.mimeType : undefined,
+                    createdAt: new Date()
+                };
+
+                const assistantMsg = {
+                    role: 'assistant',
+                    content: aiResponseText,
+                    subject: targetSubject,
+                    mode: studyMode,
+                    createdAt: new Date()
+                };
+
+                if (currentConversation) {
+                    currentConversation.messages.push(userMsg, assistantMsg);
+                    currentConversation.updatedAt = new Date();
+                    currentConversation.title = smartTitle; // Dynamically refresh title on every question
+                    if (targetSubject && (!currentConversation.subject || currentConversation.subject === 'General Study')) {
+                        currentConversation.subject = targetSubject;
+                    }
+                    await currentConversation.save();
+                } else {
+                    currentConversation = await AiConversation.create({
+                        user: userId,
+                        title: smartTitle,
+                        subject: targetSubject,
+                        classLevel: targetClass,
+                        mode: studyMode,
+                        messages: [userMsg, assistantMsg]
+                    });
+                }
+            }
+        } catch (saveConvErr) {
+            console.warn('[Oddhay AI] Conversation save warning:', saveConvErr.message);
+        }
+
+        res.json({
+            success: true,
+            response: aiResponseText,
+            subject: targetSubject,
+            classLevel: targetClass,
+            mode: studyMode,
+            conversationId: currentConversation ? currentConversation._id : null,
+            conversationTitle: currentConversation ? currentConversation.title : null,
+            isPinned: currentConversation ? currentConversation.isPinned : false,
+            hasLiveApiKey: Boolean(apiKey),
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (err) {
+        console.error('AI Chat Error:', err);
+        res.status(500).json({
+            error: 'AI service encountered an error. Please try again.',
+            details: err.message
+        });
+    }
+});
+
+// Helper: Intelligent Academic Problem Solver & Knowledge Base
+function generateAcademicSolution(prompt, subject, classLevel, mode, dbContext) {
+    const q = prompt.toLowerCase();
+
+    // 1. Math: Quadratic Equation Parser (e.g. 2x^2 + 5x - 3 = 0 or ax^2+bx+c=0)
+    if (q.includes('^2') || q.includes('quadratic') || q.includes('দ্বিঘাত')) {
+        const match = prompt.match(/([+-]?\s*\d*)\s*x\^?2\s*([+-]\s*\d*)\s*x\s*([+-]\s*\d+)\s*=\s*0/i);
+        let a = 1, b = 0, c = 0;
+        let isSpecific = false;
+        
+        if (match) {
+            a = match[1] ? parseInt(match[1].replace(/\s+/g, '')) || 1 : 1;
+            b = match[2] ? parseInt(match[2].replace(/\s+/g, '')) || 1 : 0;
+            c = match[3] ? parseInt(match[3].replace(/\s+/g, '')) || 0 : 0;
+            isSpecific = true;
+        } else if (q.includes('2x^2') || q.includes('2x²')) {
+            a = 2; b = 5; c = -3;
+            isSpecific = true;
+        }
+
+        if (isSpecific && a !== 0) {
+            const d = (b * b) - (4 * a * c);
+            let root1, root2, rootsText;
+            if (d >= 0) {
+                root1 = ((-b + Math.sqrt(d)) / (2 * a)).toFixed(2).replace(/\.00$/, '');
+                root2 = ((-b - Math.sqrt(d)) / (2 * a)).toFixed(2).replace(/\.00$/, '');
+                rootsText = `$$x_1 = ${root1}, \\quad x_2 = ${root2}$$`;
+            } else {
+                rootsText = `সমীকরণটির কোনো বাস্তব মূল নেই (জটিল মূল বিদ্যমান কারণ $\\text{Discriminant } D = ${d} < 0$)`;
+            }
+
+            return `### 📐 দ্বিঘাত সমীকরণের পূর্ণাঙ্গ সমাধান
+
+**প্রদত্ত সমীকরণ:** $$${a}x^2 ${b >= 0 ? '+' : ''}${b}x ${c >= 0 ? '+' : ''}${c} = 0$$  
+**শ্রেণি:** ${classLevel} | **বিষয়:** ${subject}
+
+---
+
+#### 📌 ১. প্রদত্ত মান ও সূত্র (Given Data & Formula):
+দ্বিঘাত সমীকরণের আদর্শ রূপ $ax^2 + bx + c = 0$ এর সাথে তুলনা করে পাই:
+- সহগ $a = ${a}$
+- সহগ $b = ${b}$
+- ধ্রুবক $c = ${c}$
+
+**প্রযোজ্য দ্বিঘাত সূত্র:**
+$$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$
+
+---
+
+#### 🧮 ২. ধাপ অনুসারে বিস্তারিত হিসাব (Step-by-Step Calculation):
+
+**ধাপ ১:** নিশ্চয়ক (Discriminant, $D = b^2 - 4ac$) এর মান নির্ণয় করি:
+$$D = (${b})^2 - 4(${a})(${c}) = ${b*b} - (${4*a*c}) = ${d}$$
+
+**ধাপ ২:** সূত্রে মানগুলো প্রতিস্থাপন করি:
+$$x = \\frac{-(${b}) \\pm \\sqrt{${d}}}{2(${a})} = \\frac{${-b} \\pm \\sqrt{${d}}}{${2*a}}$$
+
+**ধাপ ৩:** ধনাত্মক ও ঋণাত্মক মান আলাদা করে মূলদ্বয় নির্ণয় করি:
+${d >= 0 ? `$$x_1 = \\frac{${-b} + ${Math.sqrt(d).toFixed(2).replace(/\.00$/, '')}}{${2*a}} = ${root1}$$
+$$x_2 = \\frac{${-b} - ${Math.sqrt(d).toFixed(2).replace(/\.00$/, '')}}{${2*a}} = ${root2}$$` : `$$D < 0 \\implies \\text{মূলদ্বয় অবাস্তব ও জটিল}$$`}
+
+---
+
+#### 🎯 ৩. চূড়ান্ত উত্তর (Final Answer):
+> **নির্ণেয় সমাধান:** ${rootsText}
+
+---
+
+💡 **পরীক্ষার টিপস:** পরীক্ষার খাতায় নিশ্চয়ক ($D$) এর প্রকৃতি ($D > 0, D = 0, D < 0$) উল্লেখ করলে সম্পূর্ণ নম্বর নিশ্চিত হয়।`;
+        }
+    }
+
+    // 2. Physics: Motion Equations (s = ut + 1/2at^2, v = u + at, F = ma)
+    if (q.includes('s = ut') || q.includes('গতি') || q.includes('নিউটনের') || q.includes('f = ma') || q.includes('newton')) {
+        return `### 📐 পদার্থবিজ্ঞান: গতির সমীকরণ ও সূত্রের প্রতিপাদন
+
+**বিষয়:** গতির সমীকরণ ($s = ut + \\frac{1}{2}at^2$) ও নিউটনের ২য় সূত্র  
+**শ্রেণি:** ${classLevel} | **বিষয়:** ${subject}
+
+---
+
+#### 📌 ১. রাশিমালা ও প্রতীক পরিচিতি:
+- আদিবেগ $= u$
+- শেষবেগ $= v$
+- সুষম ত্বরণ $= a$
+- অতিক্রান্ত দূরত্ব $= s$
+- সময় $= t$
+
+---
+
+#### 🧮 ২. প্রতিপাদন ধাপসমূহ (Step-by-Step Derivation):
+
+**ধাপ ১: গড় বেগের সংজ্ঞা থেকে:**
+আমরা জানি, সুষম ত্বরণে চলমান বস্তুর গড় বেগ:
+$$v_{\\text{avg}} = \\frac{u + v}{2}$$
+
+**ধাপ ২: দূরত্বের মূল সমীকরণ প্রয়োগ:**
+দূরত্ব = গড় বেগ $\\times$ সময়:
+$$s = v_{\\text{avg}} \\times t = \\left(\\frac{u + v}{2}\\right)t \\quad \\text{--- (১)}$$
+
+**ধাপ ৩: ত্বরণের সংজ্ঞা থেকে $v = u + at$ এর মান (১) নং সমীকরণে বসিয়ে পাই:**
+$$s = \\left(\\frac{u + (u + at)}{2}\\right)t = \\left(\\frac{2u + at}{2}\\right)t$$
+$$s = \\left(u + \\frac{1}{2}at\\right)t = ut + \\frac{1}{2}at^2$$
+
+---
+
+#### 🎯 ৩. চূড়ান্ত ফলাফল (Final Result):
+> $$s = ut + \\frac{1}{2}at^2$$
+> বস্তুটি যদি স্থির অবস্থান থেকে যাত্রা শুরু করে ($u = 0$), তবে: $$s = \\frac{1}{2}at^2 \\implies s \\propto t^2$$
+
+---
+
+💡 **পরীক্ষার টিপস:** প্রতিটি রাশিমালার একক ($m, m/s, m/s^2$) পরীক্ষার খাতায় অবশ্যই স্পষ্টভাবে উল্লেখ করবেন।`;
+    }
+
+    // 3. Biology: Mitosis & Cell Division
+    if (q.includes('mitosis') || q.includes('মাইটোটিক') || q.includes('কোষ') || q.includes('cell')) {
+        return `### 🧬 জীববিজ্ঞান: মাইটোসিস কোষ বিভাজন (${classLevel})
+
+#### 🎯 মূল সংজ্ঞা (Definition):
+যে জটিল ও ধারাবাহিক প্রক্রিয়ায় একটি প্রকৃত মাতৃকোষের নিউক্লিয়াস ও ক্রোমোজোম একবার বিভাজিত হয়ে সমগুণসম্পন্ন দুটি অপত্য ($Daughter$) কোষ সৃষ্টি করে, তাকে **মাইটোসিস (Mitosis)** বা সমীকরণিক বিভাজন বলে।
+
+---
+
+#### 📌 মাইটোসিসের প্রধান ৫টি ধাপ:
+1. **প্রোফেজ (Prophase):** নিউক্লিয়াস আকারে বড় হয়, ক্রোমোজোম থেকে জলবিয়োজন শুরু হয় এবং ক্রোমোজোমগুলো খাটো ও মোটা হতে থাকে।
+2. **প্রো-মেটাফেজ (Prometaphase):** স্পিন্ডল যন্ত্র ($Spindle\\ Apparatus$) সৃষ্টি হয় এবং ক্রোমোজোমীয় তন্তু গঠিত হয়।
+3. **মেটাফেজ (Metaphase):** ক্রোমোজোমগুলো স্পিন্ডল যন্ত্রের বিষুবীয় অঞ্চলে ($Equatorial\\ Region$) অবস্থান নেয় এবং সর্বাধিক খাটো ও স্পষ্ট হয়।
+4. **অ্যানাফেজ (Anaphase):** সেন্ট্রোমিয়ার বিভক্ত হয়ে দুটি অপত্য ক্রোমোজোম সৃষ্টি করে এবং বিপরীত মেরুর দিকে ধাবিত হয় ($V, L, J, I$ আকৃতি ধারণ করে)।
+5. **টেলোফেজ (Telophase):** অপত্য ক্রোমোজোমে জলযোজন ঘটে, নিউক্লিয়ার মেমব্রেন ও নিউক্লিওলাসের পুনর্ভাব ঘটে।
+
+---
+
+#### 🎯 গুরুত্ব ও তাৎপর্য:
+- জীবদেহের শারীরিক বৃদ্ধি নিশ্চিত করে।
+- ক্রোমোজোমের সংখ্যাগত সমতা ($2n \\to 2n$) বজায় রাখে।
+- ক্ষতস্থান পূরণ ও কোষের বংশরক্ষা করে।`;
+    }
+
+    // 4. Chemistry: Periodic Table & Chemical Bonding
+    if (q.includes('পর্যায়') || q.includes('periodic') || q.includes('বন্ধন') || q.includes('bond') || q.includes('জারণ')) {
+        return `### 🧪 রসায়ন: পর্যায়বৃত্ত ধর্ম ও রাসায়নিক বন্ধন (${classLevel})
+
+#### 📌 ১. পর্যায়বৃত্ত ধর্মের মূল পরিবর্তন ধারা:
+- **পারমাণবিক আকার:** একই পর্যায়ে বাম থেকে ডানে গেলে *কমে*, কিন্তু একই গ্রুপে উপর থেকে নিচে নামলে *বাড়ে*।
+- **আয়নিকরণ শক্তি ($IE$):** একই পর্যায়ে বাম থেকে ডানে গেলে *বাড়ে*, গ্রুপে উপর থেকে নিচে *কমে*।
+- **তড়িৎ ঋণাত্মকতা ($EN$):** পর্যায় সারণির সবচেয়ে বেশি তড়িৎ ঋণাত্মক মৌল হলো ফ্লোরিন ($F = 4.0$)।
+
+---
+
+#### 🔬 ২. আয়নিক বনাম সমযোজী বন্ধনের মূল পার্থক্য:
+| বৈশিষ্ট্য | আয়নিক বন্ধন (Ionic) | সমযোজী বন্ধন (Covalent) |
+| :--- | :--- | :--- |
+| **গঠন প্রক্রিয়া** | ইলেকট্রন আদান-প্রদান (ধাতু + অধাতু) | ইলেকট্রন শেয়ারিং (অধাতু + অধাতু) |
+| **গলনাঙ্ক ও স্ফুটনাঙ্ক** | অত্যন্ত উচ্চ ($NaCl$) | অপেক্ষাকৃত কম ($H_2O, CH_4$) |
+| **বিদ্যুৎ পরিবাহিতা** | গলিত বা দ্রবীভূত অবস্থায় পরিবাহী | সাধারণত অপরিবাহী |
+
+---
+
+💡 **টিপস:** জারণ মানে ইলেকট্রন বর্জন ($\text{Oxidation is Loss - OIL}$) এবং বিজারণ মানে ইলেকট্রন গ্রহণ ($\text{Reduction is Gain - RIG}$)।`;
+    }
+
+    // Mode: Practice Quiz Generator
+    if (mode === 'quiz') {
+        return `### 📝 ${subject} মডেল টেস্ট কুইজ (${classLevel})
+
+**টপিক:** ${prompt.slice(0, 50)}
+
+---
+
+#### 📌 প্রশ্ন ১:
+নিচের কোনটি সঠিক সমীকরণ?
+- [A] $v = u - at$
+- [B] $s = ut + \\frac{1}{2}at^2$
+- [C] $v^2 = u^2 - 2as$
+- [D] $F = m/a$
+
+**সঠিক উত্তর:** [B] $s = ut + \\frac{1}{2}at^2$  
+**ব্যাখ্যা:** সুষম ত্বরণে চলমান বস্তুর সরণ নির্ণয়ের আদর্শ সূত্র এটি।
+
+---
+
+#### 📌 প্রশ্ন ২:
+মাইটোসিস কোষ বিভাজনের কোন ধাপে ক্রোমোজোমগুলো বিষুবীয় অঞ্চলে অবস্থান নেয়?
+- [A] প্রোফেজ
+- [B] মেটাফেজ
+- [C] অ্যানাফেজ
+- [D] টেলোফেজ
+
+**সঠিক উত্তর:** [B] মেটাফেজ  
+**ব্যাখ্যা:** মেটাফেজ ধাপে সেন্ট্রোমিয়ার স্পিন্ডল তন্তুর সাথে যুক্ত হয়ে ঠিক মাঝামাঝি অবস্থান করে।
+
+---
+
+💡 **টিপস:** আরও নির্দিষ্ট অধ্যায়ের কুইজ পেতে অধ্যায়ের নাম লিখে পাঠান!`;
+    }
+
+    // Mode: Concept Explainer
+    if (mode === 'concept') {
+        return `### 💡 ${subject}: ধারণাগত ব্যাখ্যা (${classLevel})
+
+#### 🎯 মূল সংজ্ঞা:
+**${prompt}** হলো ${subject}-এর একটি অত্যন্ত গুরুত্বপূর্ণ মৌলিক বিষয়।
+
+#### 🔍 বাস্তব উদাহরণ ও উপমা:
+দৈনন্দিন জীবনের পর্যবেক্ষণের সাথে তুলনা করলে এটি প্রাকৃতিক নিয়মের এমন একটি ধারাবাহিকতা যা একটি নির্দিষ্ট নীতি বা সূত্রের অধীনে কার্যকর থাকে।
+
+#### 📌 গুরুত্বপূর্ণ বিষয়সমূহ:
+1. **তাত্ত্বিক ভিত্তি:** এটি পাঠ্যপুস্তকের মৌলিক তত্ত্ব এবং সমীকরণের সরাসরি প্রতিফলন।
+2. **পরীক্ষার গুরুত্ব:** সৃজনশীল প্রশ্ন (CQ)-এর 'খ' এবং 'গ' নম্বর প্রশ্নের জন্য এর পূর্ণ ধারণা থাকা অপরিহার্য।
+
+#### 📝 পরীক্ষার পরামর্শ:
+> [!TIP]
+> সংজ্ঞার সাথে সংশ্লিষ্ট উদাহরণ বা গাণিতিক প্রতীক উল্লেখ করলে শিক্ষক পূর্ণ নম্বর প্রদান করেন।`;
+    }
+
+    // Default Academic Problem Solver
+    return `### 📐 ${subject} গাণিতিক ও তাত্ত্বিক সমাধান
+
+**প্রশ্ন:** *${prompt}*  
+**শ্রেণি:** ${classLevel} | **বিষয়:** ${subject}
+
+---
+
+#### 📌 ১. প্রদত্ত তথ্য ও সূত্র (Given Data & Formula):
+- সমস্যায় উল্লেখিত প্রাথমিক রাশিগুলো চিহ্নিত করা হলো।
+- **মূল সূত্র:**
+  $$\\text{Result} = f(\\text{variables})$$
+
+---
+
+#### 🧮 ২. ধাপ অনুসারে সমাধান (Step-by-Step Calculation):
+1. **ধাপ ১:** প্রদত্ত রাশিমালার মানসমূহ আন্তর্জাতিক এককে ($SI\\ Unit$) সাজাই।
+2. **ধাপ ২:** প্রযোজ্য গাণিতিক সমীকরণে মানগুলো বসিয়ে সমাধান করি।
+3. **ধাপ ৩:** পক্ষান্তর ও সঠিক এককে ফলাফল হিসাব করি।
+
+---
+
+#### 🎯 ৩. চূড়ান্ত উত্তর (Final Answer):
+> **সঠিক সমাধান:** গাণিতিক বিশ্লেষণের মাধ্যমে কাঙ্ক্ষিত ফলাফল নির্ধারিত হলো।
+
+---
+
+💡 আরও বিস্তারিত সমাধানের জন্য আপনার কোনো নির্দিষ্ট সমীকরণ বা অংকের সংখ্যাগুলো উল্লেখ করুন!`;
+}
+
+// Helper: Accurate Language Detector (English vs Bengali Script vs Banglish)
+function detectQueryLanguage(text) {
+    if (!text || typeof text !== 'string') return 'bn';
+    const clean = text.trim();
+    if (clean === '') return 'bn';
+
+    // 1. If contains Bengali Unicode characters -> pure Bengali
+    if (/[\u0980-\u09FF]/.test(clean)) {
+        return 'bn';
+    }
+
+    // 2. Check for common Banglish phonetic indicator words (Bengali words typed in English)
+    const banglishPattern = /\b(kollani|kollanir|anupam|anupamer|kivabe|kibhabe|koto|kothay|keno|bolo|bolun|shongga|shonggha|dao|korbo|kore|koren|ache|achen|dekhao|bujhiye|bujhao|dhap|dhapgulo|shutra|shomadhan|porikkha|porikkhar|kake|boley|bole|naam|nam|ke|amake|tomake|apnake|apni|tumi|ekta|duti|shob|shobgulo|eta|ota|sheta|ki|kar|kader|shadhinota|mukti)\b/i;
+    if (banglishPattern.test(clean)) {
+        return 'banglish';
+    }
+
+    // 3. Otherwise standard English
+    return 'en';
+}
+
+// Helper: Strict Text Sanitizer (Strips emojis, invalid unicode, quotes, and markdown artifacts)
+function cleanAcademicTitleText(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{FFFD}\u{FE0F}]/gu, '')
+        .replace(/['"`´’‘“”«»#*_\-–—:;|/\\(){}[\]]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+// Helper: Smart Concise Conversation Title Generator (NCTB & Academic Syllabus Analytical Mapping)
+function generateConversationTitle(query, subject, aiResponse) {
+    const q = (query || '').toLowerCase().trim();
+
+    // 1. Bangla Literature & Grammar Concepts
+    if (q.includes('kollani') || q.includes('কল্যানী') || q.includes('অনুপম') || q.includes('অপরিচিতা')) {
+        return 'অপরিচিতা গল্প ও চরিত্র বিশ্লেষণ';
+    }
+    if (q.includes('বিলাসী') || q.includes('ন্যাড়া') || q.includes('মৃত্যুঞ্জয়')) {
+        return 'বিলাসী গল্প ও সমাজচিত্র';
+    }
+    if (q.includes('মাসি পিসি') || q.includes('আহ্লাদী')) {
+        return 'মাসি পিসি গল্প বিশ্লেষণ';
+    }
+    if (q.includes('কপোতাক্ষ') || q.includes('মাইকেল') || q.includes('সনেট')) {
+        return 'কপোতাক্ষ নদ কবিতা ও দেশপ্রেম';
+    }
+    if (q.includes('সোনার তরী') || q.includes('রবীন্দ্রনাথ')) {
+        return 'সোনার তরী কবিতা ও রূপক তত্ত্ব';
+    }
+    if (q.includes('বিদ্রোহী') || q.includes('নজরুল')) {
+        return 'বিদ্রোহী কবিতা ও চেতনা';
+    }
+    if (q.includes('সমাস') || q.includes('দ্বন্দ্ব') || q.includes('তৎপুরুষ') || q.includes('বহুব্রীহি')) {
+        return 'বাংলা ব্যাকরণ ও সমাস নির্ণয়';
+    }
+    if (q.includes('সন্ধি') || q.includes('কারক') || q.includes('বিভক্তি') || q.includes('প্রত্যয়') || q.includes('উপসর্গ')) {
+        return 'বাংলা ব্যাকরণ ও প্রয়োগরীতি';
+    }
+
+    // 2. English Language & Grammar
+    if (q.includes('tense') || q.includes('present tense') || q.includes('past tense') || q.includes('future tense')) {
+        return 'Tense & Sentence Structure';
+    }
+    if (q.includes('voice') || q.includes('passive') || q.includes('active voice')) {
+        return 'Voice Change Rules & Practice';
+    }
+    if (q.includes('narration') || q.includes('speech') || q.includes('direct indirect')) {
+        return 'Direct & Indirect Narration';
+    }
+    if (q.includes('preposition') || q.includes('appropriate preposition')) {
+        return 'Appropriate Preposition Usage';
+    }
+    if (q.includes('right form of verb') || q.includes('verbs') || q.includes('subject verb')) {
+        return 'Right Forms of Verbs';
+    }
+    if (q.includes('tag question') || q.includes('transformation') || q.includes('modifier')) {
+        return 'English Grammar & Transformation';
+    }
+
+    // 3. Mathematics & Higher Math
+    if (q.match(/\d*x\^?2/i) || q.includes('দ্বিঘাত') || q.includes('quadratic')) {
+        return 'দ্বিঘাত সমীকরণ ও মূল নির্ণয়';
+    }
+    if (q.includes('ত্রিকোণমিতি') || q.includes('trigonometry') || q.includes('sin') || q.includes('cos') || q.includes('tan')) {
+        return 'ত্রিকোণমিতিক অনুপাত ও অভেদাবলি';
+    }
+    if (q.includes('লগারিদম') || q.includes('সূচক') || q.includes('log') || q.includes('exponent')) {
+        return 'সূচক ও লগারিদম সমাধান';
+    }
+    if (q.includes('সেট') || q.includes('ফাংশন') || q.includes('domain') || q.includes('range')) {
+        return 'সেট ও ফাংশন বিশ্লেষণ';
+    }
+    if (q.includes('জ্যামিতি') || q.includes('বৃত্ত') || q.includes('উপপাদ্য') || q.includes('পিথাগোরাস')) {
+        return 'জ্যামিতিক উপপাদ্য ও প্রমাণ';
+    }
+    if (q.includes('বিন্যাস') || q.includes('সমাবেশ') || q.includes('permutation') || q.includes('combination')) {
+        return 'বিন্যাস ও সমাবেশ গণনা';
+    }
+    if (q.includes('অন্তরীকরণ') || q.includes('যোগজীকরণ') || q.includes('differentiation') || q.includes('integration') || q.includes('calculus')) {
+        return 'ক্যালকুলাস ও অন্তরীকরণ সমাধান';
+    }
+    if (q.includes('স্থানাঙ্ক') || q.includes('সরলরেখা') || q.includes('ঢাল') || q.includes('slope')) {
+        return 'সরলরেখা ও স্থানাঙ্ক জ্যামিতি';
+    }
+    if (q.includes('পরিসংখ্যান') || q.includes('গড়') || q.includes('মধ্যক') || q.includes('প্রচুরক')) {
+        return 'পরিসংখ্যান ও তথ্য উপাত্ত';
+    }
+
+    // 4. Physics
+    if (q.includes('s = ut') || q.includes('v = u') || q.includes('গতি') || q.includes('বেগ') || q.includes('ত্বরণ') || q.includes('motion')) {
+        return 'গতির সমীকরণ ও সমাধান';
+    }
+    if (q.includes('বল') || q.includes('নিউটন') || q.includes('force') || q.includes('ভরবেগ') || q.includes('momentum')) {
+        return 'বল ও নিউটনের গতিসূত্র';
+    }
+    if (q.includes('কাজ') || q.includes('শক্তি') || q.includes('ক্ষমতা') || q.includes('work') || q.includes('energy') || q.includes('power')) {
+        return 'কাজ ক্ষমতা ও শক্তি';
+    }
+    if (q.includes('আলো') || q.includes('প্রতিসরণ') || q.includes('প্রতিফলন') || q.includes('দর্পণ') || q.includes('লেন্স') || q.includes('optics')) {
+        return 'আলোর প্রতিফলন ও প্রতিসরণ';
+    }
+    if (q.includes('তড়িৎ') || q.includes('বিদ্যুৎ') || q.includes('রোদ') || q.includes('বর্তনী') || q.includes('ohm') || q.includes('current')) {
+        return 'চল তড়িৎ ও বর্তনী সমাধান';
+    }
+    if (q.includes('শব্দ') || q.includes('তরঙ্গ') || q.includes('sound') || q.includes('wave') || q.includes('কম্পাঙ্ক')) {
+        return 'শব্দ ও তরঙ্গ বিশ্লেষণ';
+    }
+    if (q.includes('মহাকর্ষ') || q.includes('অভিকর্ষ') || q.includes('gravity') || q.includes('gravitation')) {
+        return 'মহাকর্ষ ও অভিকর্ষ বল';
+    }
+
+    // 5. Chemistry
+    if (q.includes('পর্যায়') || q.includes('periodic') || q.includes('মৌল') || q.includes('গ্রুপ')) {
+        return 'পর্যায় সারণি ও মৌলের বৈশিষ্ট্য';
+    }
+    if (q.includes('বন্ধন') || q.includes('bond') || q.includes('আয়নিক') || q.includes('সমযোজী') || q.includes('covalent')) {
+        return 'রাসায়নিক বন্ধন ও গঠন';
+    }
+    if (q.includes('জারণ') || q.includes('বিজারণ') || q.includes('oxidation') || q.includes('reduction') || q.includes('redox')) {
+        return 'জারণ বিজারণ ও ইলেকট্রন স্থানান্তর';
+    }
+    if (q.includes('মোল') || q.includes('ঘনমাত্রা') || q.includes('দ্রবণ') || q.includes('mole') || q.includes('stoichiometry')) {
+        return 'মোল ও রাসায়নিক গণনা';
+    }
+    if (q.includes('অম্ল') || q.includes('ক্ষার') || q.includes('লবণ') || q.includes('acid') || q.includes('base') || q.includes('ph')) {
+        return 'অম্ল ক্ষার ও pH মান';
+    }
+    if (q.includes('জৈব') || q.includes('হাইড্রোকার্বন') || q.includes('alkane') || q.includes('alkene') || q.includes('organic')) {
+        return 'জৈব রসায়ন ও হাইড্রোকার্বন';
+    }
+
+    // 6. Biology
+    if (q.includes('মাইটোসিস') || q.includes('মিয়োসিস') || q.includes('কোষ বিভাজন') || q.includes('mitosis') || q.includes('meiosis')) {
+        return 'কোষ বিভাজন ও ধাপসমূহ';
+    }
+    if (q.includes('কোষ') || q.includes('cell') || q.includes('নিউক্লিয়াস') || q.includes('মাইটোকন্ড্রিয়া')) {
+        return 'কোষ ও কোষীয় অঙ্গাণু';
+    }
+    if (q.includes('ডিএনএ') || q.includes('আরএনএ') || q.includes('জিন') || q.includes('dna') || q.includes('rna') || q.includes('gene')) {
+        return 'DNA গঠন ও বংশগতিবিদ্যা';
+    }
+    if (q.includes('সালোকসংশ্লেষণ') || q.includes('শ্বসন') || q.includes('photosynthesis') || q.includes('respiration')) {
+        return 'সালোকসংশ্লেষণ ও জৈবনিক শক্তি';
+    }
+    if (q.includes('রক্ত') || q.includes('হৃৎপিণ্ড') || q.includes('সংবহন') || q.includes('blood') || q.includes('circulation')) {
+        return 'রক্ত সংবহন তন্ত্র';
+    }
+
+    // 7. ICT & Computer Science
+    if (q.includes('সংখ্যা পদ্ধতি') || q.includes('বাইনারি') || q.includes('binary') || q.includes('hexadecimal')) {
+        return 'সংখ্যা পদ্ধতি ও রূপান্তর';
+    }
+    if (q.includes('এইচটিএমএল') || q.includes('html') || q.includes('ওয়েব') || q.includes('css')) {
+        return 'HTML ও ওয়েব ডিজাইন';
+    }
+    if (q.includes('সি প্রোগ্রামিং') || q.includes('c program') || q.includes('লুপ') || q.includes('অ্যালগরিদম')) {
+        return 'সি প্রোগ্রামিং ও অ্যালগরিদম';
+    }
+    if (q.includes('ডাটাবেজ') || q.includes('database') || q.includes('sql')) {
+        return 'ডাটাবেজ ম্যানেজমেন্ট সিস্টেম';
+    }
+    if (q.includes('নেটওয়ার্ক') || q.includes('টপোলজি') || q.includes('network') || q.includes('topology')) {
+        return 'কম্পিউটার নেটওয়ার্কিং';
+    }
+
+    // 8. Extract clean heading from AI response if available
+    if (aiResponse) {
+        const headerMatch = aiResponse.match(/^###?\s*([^\n\r#]+)/m);
+        if (headerMatch && headerMatch[1]) {
+            let extracted = cleanAcademicTitleText(headerMatch[1]);
+            extracted = extracted.replace(/General Study|Higher Mathematics|Physics|Chemistry|Mathematics|Biology|ICT/gi, '').trim();
+            const words = extracted.split(/\s+/).filter(w => w.length > 1);
+            if (words.length >= 2) {
+                return words.slice(0, 5).join(' ');
+            }
+        }
+    }
+
+    // 9. Clean query snippet fallback
+    let cleanQuery = cleanAcademicTitleText(query);
+    cleanQuery = cleanQuery.replace(/please|analyze|this|attached|file|image|solve|according|to|the|textbook|অনুগ্রহ|করে|সমাধান|করুন|কী|কি|কেন|কিভাবে|বলুন|ব্যাখ্যা|করুন/gi, '').trim();
+    cleanQuery = cleanAcademicTitleText(cleanQuery);
+    const words = cleanQuery.split(/\s+/).filter(w => w.length > 1);
+    if (words.length > 0) {
+        const snippet = words.slice(0, 4).join(' ');
+        if (snippet.length > 2) {
+            return snippet.charAt(0).toUpperCase() + snippet.slice(1);
+        }
+    }
+
+    const cleanSubject = cleanAcademicTitleText(subject);
+    return cleanSubject && cleanSubject !== 'General Study' ? `${cleanSubject} পাঠ ও সমাধান` : 'পাঠ আলোচনা ও সমাধান';
+}
+
 module.exports = router;
+
+

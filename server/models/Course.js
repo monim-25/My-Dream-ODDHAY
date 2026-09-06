@@ -18,6 +18,13 @@ const courseSchema = new mongoose.Schema({
     price: { type: Number, default: 0 },
     discountPrice: { type: Number, default: 0 },
     difficulty: { type: String, enum: ['Beginner', 'Intermediate', 'Advanced'], default: 'Beginner' },
+    totalRecordedClasses: { type: Number, default: 0 },
+    totalLiveClasses: { type: Number, default: 0 },
+    totalLectureNotes: { type: Number, default: 0 },
+    totalQuizzes: { type: Number, default: 0 },
+    isCompleted: { type: Boolean, default: false },
+    learningHighlights: [{ type: String }], // Checklist points under About Course
+    courseBenefits: [{ type: String }], // Checklist points under pricing card
     tags: [{ type: String }],
     trailerUrl: { type: String },
     instructor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -45,7 +52,9 @@ const courseSchema = new mongoose.Schema({
         liveClasses: [{
             title: String,
             meetingUrl: String,
-            date: Date
+            date: Date,
+            isLive: { type: Boolean, default: false },
+            liveStartedAt: Date
         }],
         notes: [{
             title: String,
@@ -68,6 +77,8 @@ const courseSchema = new mongoose.Schema({
         filePath: String,
         meetingUrl: String,
         date: Date,
+        isLive: { type: Boolean, default: false },
+        liveStartedAt: Date,
         quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz' },
         addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
         views: { type: Number, default: 0 },
@@ -75,5 +86,10 @@ const courseSchema = new mongoose.Schema({
         isRecorded: { type: Boolean, default: false }
     }]
 });
+
+courseSchema.index({ instructor: 1 });
+courseSchema.index({ permittedTeachers: 1 });
+courseSchema.index({ "curriculumNodes._id": 1 });
+courseSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Course', courseSchema);

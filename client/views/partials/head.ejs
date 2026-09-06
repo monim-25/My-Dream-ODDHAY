@@ -1,11 +1,162 @@
 <meta charset="utf-8" />
 <meta content="width=device-width, initial-scale=1.0" name="viewport" />
 <script>
-    if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-        document.documentElement.classList.add('dark');
-    } else {
-        document.documentElement.classList.remove('dark')
-    }
+    (function() {
+        // ---- Professional Theme Management Engine ----
+        window.OddhayTheme = {
+            STORAGE_KEY: 'theme',
+            
+            getPreference: function() {
+                try {
+                    const saved = localStorage.getItem(this.STORAGE_KEY);
+                    if (saved === 'dark' || saved === 'light') return saved;
+                } catch (e) {}
+
+                const serverUserTheme = "<%= (locals.user && user.theme && user.theme !== 'system') ? user.theme : '' %>";
+                if (serverUserTheme === 'dark' || serverUserTheme === 'light') {
+                    return serverUserTheme;
+                }
+
+                if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                    return 'dark';
+                }
+                return 'light';
+            },
+
+            isDark: function() {
+                return document.documentElement.classList.contains('dark');
+            },
+
+            setTheme: function(theme, options) {
+                options = options || {};
+                const isDark = theme === 'dark';
+                const html = document.documentElement;
+
+                // Smooth CSS transition only when manually triggered
+                if (options.animated && !html.classList.contains('theme-transitioning')) {
+                    html.classList.add('theme-transitioning');
+                    clearTimeout(window.__oddhayThemeTimer);
+                    window.__oddhayThemeTimer = setTimeout(function() {
+                        html.classList.remove('theme-transitioning');
+                    }, 350);
+                }
+
+                if (isDark) {
+                    html.classList.add('dark');
+                    html.setAttribute('data-theme', 'dark');
+                    html.style.colorScheme = 'dark';
+                } else {
+                    html.classList.remove('dark');
+                    html.setAttribute('data-theme', 'light');
+                    html.style.colorScheme = 'light';
+                }
+
+                if (!options.skipStorage) {
+                    try {
+                        localStorage.setItem(this.STORAGE_KEY, isDark ? 'dark' : 'light');
+                    } catch (e) {}
+                }
+
+                this.syncButtons(isDark, options.animated);
+
+                if (!options.skipServer) {
+                    this.syncServer(isDark ? 'dark' : 'light');
+                }
+
+                window.dispatchEvent(new CustomEvent('themechanged', { 
+                    detail: { theme: isDark ? 'dark' : 'light', isDark: isDark } 
+                }));
+            },
+
+            toggle: function() {
+                const nextTheme = this.isDark() ? 'light' : 'dark';
+                this.setTheme(nextTheme, { animated: true });
+            },
+
+            syncButtons: function(isDark, animated) {
+                if (typeof isDark === 'undefined') isDark = this.isDark();
+                
+                // Update #themeIcon and .theme-icon elements
+                const icons = document.querySelectorAll('#themeIcon, .theme-icon');
+                icons.forEach(function(icon) {
+                    icon.textContent = isDark ? 'light_mode' : 'dark_mode';
+                    if (animated) {
+                        icon.classList.remove('theme-icon-spin');
+                        void icon.offsetWidth; // trigger reflow
+                        icon.classList.add('theme-icon-spin');
+                    }
+                });
+
+                // Update #themeToggleBtn and .theme-toggle-btn elements
+                const btns = document.querySelectorAll('#themeToggleBtn, .theme-toggle-btn');
+                btns.forEach(function(btn) {
+                    const title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+                    btn.setAttribute('title', title);
+                    btn.setAttribute('aria-label', title);
+                    btn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+                });
+            },
+
+            syncServer: function(theme) {
+                clearTimeout(window.__oddhayThemeServerTimer);
+                window.__oddhayThemeServerTimer = setTimeout(function() {
+                    fetch('/api/user/theme', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ theme: theme })
+                    }).catch(function() {});
+                }, 400);
+            },
+
+            init: function() {
+                const theme = this.getPreference();
+                const isDark = theme === 'dark';
+                const html = document.documentElement;
+
+                if (isDark) {
+                    html.classList.add('dark');
+                    html.setAttribute('data-theme', 'dark');
+                    html.style.colorScheme = 'dark';
+                } else {
+                    html.classList.remove('dark');
+                    html.setAttribute('data-theme', 'light');
+                    html.style.colorScheme = 'light';
+                }
+
+                window.toggleTheme = function() {
+                    window.OddhayTheme.toggle();
+                };
+            }
+        };
+
+        // Anti-flash initialization (instant synchronous execution)
+        window.OddhayTheme.init();
+
+        // Cross-tab synchronization
+        window.addEventListener('storage', function(e) {
+            if (e.key === window.OddhayTheme.STORAGE_KEY && (e.newValue === 'dark' || e.newValue === 'light')) {
+                window.OddhayTheme.setTheme(e.newValue, { skipStorage: true, animated: true });
+            }
+        });
+
+        // System theme preference listener
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+                if (!localStorage.getItem(window.OddhayTheme.STORAGE_KEY)) {
+                    window.OddhayTheme.setTheme(e.matches ? 'dark' : 'light', { animated: true });
+                }
+            });
+        }
+
+        // DOM Ready sync
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                window.OddhayTheme.syncButtons();
+            });
+        } else {
+            window.OddhayTheme.syncButtons();
+        }
+    })();
 </script>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,23 +169,53 @@
 <style>
     .material-symbols-outlined,
     .material-symbols-rounded {
-        font-family: inherit !important;
-        /* Will be overridden by specific font if available */
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
         line-height: 1;
-        width: 1em;
-        height: 1em;
-        overflow: hidden;
+        letter-spacing: normal;
+        text-transform: none;
         white-space: nowrap;
-        vertical-align: middle;
+        word-wrap: normal;
+        direction: ltr;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        font-feature-settings: 'liga';
+        user-select: none;
     }
 
     .material-symbols-outlined {
         font-family: 'Material Symbols Outlined' !important;
+        font-weight: normal !important;
+        font-style: normal !important;
     }
 
     .material-symbols-rounded {
         font-family: 'Material Symbols Rounded' !important;
+        font-weight: normal !important;
+        font-style: normal !important;
+    }
+
+    /* Professional Smooth Theme Transition - only active during explicit toggle */
+    .theme-transitioning,
+    .theme-transitioning *,
+    .theme-transitioning *:before,
+    .theme-transitioning *:after {
+        transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                    border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                    color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                    fill 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    /* Icon micro-animation when toggling */
+    @keyframes themeIconSpin {
+        0% { transform: rotate(0deg) scale(0.75); opacity: 0.5; }
+        50% { transform: rotate(180deg) scale(1.18); opacity: 0.9; }
+        100% { transform: rotate(360deg) scale(1); opacity: 1; }
+    }
+    .theme-icon-spin {
+        animation: themeIconSpin 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
     }
 </style>
 <script id="tailwind-config">

@@ -16,6 +16,11 @@ const questionSchema = new mongoose.Schema({
     accessType: { type: String, enum: ['Free', 'Paid'], default: 'Free' },
     fileUrl: { type: String, default: '' },
     explanation: { type: String, default: '' },
+    context: { type: String, default: '' },
+    q1: { type: String, default: '' },
+    q2: { type: String, default: '' },
+    a1: { type: String, default: '' },
+    a2: { type: String, default: '' },
     marks: { type: Number, default: 1 },
     bankId: { type: mongoose.Schema.Types.ObjectId, ref: 'QuestionBank' }
 });

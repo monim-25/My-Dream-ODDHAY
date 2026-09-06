@@ -1,6 +1,9 @@
 // ---- Push Notification API ----
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fs = require('fs');
+const multer = require('multer');
 const { connectDB, protect, adminProtect, superAdminProtect, User, Notification, NotificationLog, Message } = require('../config');
 const pushNotificationService = require('../services/pushNotificationService');
 
@@ -27,6 +30,21 @@ router.post('/push/test', protect, async (req, res) => {
         const result = await pushNotificationService.sendToUser(req.session.userId, { title: 'ODDHAY পরীক্ষা নোটিফিকেশন', body: `হ্যালো ${user.name}! নোটিফিকেশন কাজ করছে ✅`, icon: '/images/icon-192.png', url: '/dashboard', type: 'system' });
         res.json({ success: true, result });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+router.post('/user/theme', async (req, res) => {
+    try {
+        const { theme } = req.body;
+        if (!['light', 'dark', 'system'].includes(theme)) {
+            return res.status(400).json({ success: false, error: 'Invalid theme' });
+        }
+        if (req.session && req.session.userId) {
+            await User.findByIdAndUpdate(req.session.userId, { theme });
+        }
+        res.json({ success: true, theme });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 router.post('/push/send-to-user', adminProtect, async (req, res) => {
@@ -281,6 +299,27 @@ router.post('/course/:courseId/progress/:nodeId', protect, async (req, res) => {
         
         cp.lastAccessed = Date.now();
         await cp.save();
+
+        if (completed) {
+            try {
+                const User = require('../models/User');
+                const u = await User.findById(req.session.userId || req.session.user?._id);
+                if (u) {
+                    const nid = String(req.params.nodeId);
+                    if (!u.completedLessons.includes(nid)) {
+                        u.completedLessons.push(nid);
+                    }
+                    if (u.lastWatchedLesson && String(u.lastWatchedLesson.lessonId) === nid) {
+                        u.lastWatchedLesson.isCompleted = true;
+                    }
+                    u.markModified('completedLessons');
+                    u.markModified('lastWatchedLesson');
+                    await u.save();
+                }
+            } catch(userErr) {
+                console.error('Error syncing user completion:', userErr);
+            }
+        }
         
         res.json({ success: true });
     } catch (err) {
@@ -313,22 +352,26 @@ router.get('/curriculum/node/:nodeId/comments', protect, async (req, res) => {
         const Course = require('../models/Course');
         const limit = parseInt(req.query.limit) || 10;
         const skip = parseInt(req.query.skip) || 0;
+        const nodeId = req.params.nodeId;
 
-        // Check if comments are disabled for students
-        const course = await Course.findOne({ "curriculumNodes._id": req.params.nodeId });
+        const [course, total, comments] = await Promise.all([
+            Course.findOne({ "curriculumNodes._id": nodeId })
+                .select('curriculumNodes._id curriculumNodes.commentsDisabled')
+                .lean(),
+            Comment.countDocuments({ nodeId }),
+            Comment.find({ nodeId })
+                .populate('user', 'name profilePicture profileImage role')
+                .sort({ highlighted: -1, createdAt: -1 })
+                .skip(skip)
+                .limit(limit)
+                .lean()
+        ]);
+
         let commentsDisabled = false;
-        if (course) {
-            const node = course.curriculumNodes.id(req.params.nodeId);
+        if (course && course.curriculumNodes) {
+            const node = course.curriculumNodes.find(n => String(n._id) === String(nodeId));
             if (node) commentsDisabled = !!node.commentsDisabled;
         }
-
-        const total = await Comment.countDocuments({ nodeId: req.params.nodeId });
-        const comments = await Comment.find({ nodeId: req.params.nodeId })
-            .populate('user', 'name profilePicture profileImage role')
-            .sort({ highlighted: -1, createdAt: -1 })
-            .skip(skip)
-            .limit(limit)
-            .lean();
 
         res.json({ success: true, comments, hasMore: skip + comments.length < total, commentsDisabled });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
@@ -505,8 +548,10 @@ router.delete('/curriculum/comment/:commentId', protect, async (req, res) => {
         const comment = await Comment.findById(req.params.commentId);
         if (!comment) return res.status(404).json({ success: false, error: 'Comment not found' });
 
-        // Security check: Must be the original author
-        if (comment.user.toString() !== req.session.user._id.toString()) {
+        // Security check: Must be the original author or staff/teacher
+        const isAuthor = comment.user && comment.user.toString() === req.session.user._id.toString();
+        const isStaff = ['teacher', 'admin', 'superadmin'].includes(req.session.user.role);
+        if (!isAuthor && !isStaff) {
             return res.status(403).json({ success: false, error: 'Unauthorized to delete this comment' });
         }
 
@@ -526,8 +571,10 @@ router.delete('/curriculum/comment/:commentId/reply/:replyId', protect, async (r
         const reply = comment.replies.id(req.params.replyId);
         if (!reply) return res.status(404).json({ success: false, error: 'Reply not found' });
 
-        // Security check: Must be the original author of the reply
-        if (reply.user.toString() !== req.session.user._id.toString()) {
+        // Security check: Must be the original author of the reply or staff/teacher
+        const isAuthor = reply.user && reply.user.toString() === req.session.user._id.toString();
+        const isStaff = ['teacher', 'admin', 'superadmin'].includes(req.session.user.role);
+        if (!isAuthor && !isStaff) {
             return res.status(403).json({ success: false, error: 'Unauthorized to delete this reply' });
         }
 
@@ -802,10 +849,53 @@ router.post('/active-heartbeat', protect, async (req, res) => {
     }
 });
 
+// Mark Lesson Complete (called from course details / lesson player)
+router.post('/user/complete-lesson', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const { courseId, lessonId, lessonTitle } = req.body;
+        const User = require('../models/User');
+        const CourseProgress = require('../models/CourseProgress');
+        
+        const user = await User.findById(req.session.userId || req.session.user?._id);
+        if (!user) return res.status(404).json({ success: false, error: 'User not found' });
+        
+        const lessonIdStr = String(lessonId);
+        if (lessonId && !user.completedLessons.includes(lessonIdStr)) {
+            user.completedLessons.push(lessonIdStr);
+        }
+        
+        if (user.lastWatchedLesson && String(user.lastWatchedLesson.lessonId) === lessonIdStr) {
+            user.lastWatchedLesson.isCompleted = true;
+        }
+        
+        if (courseId) {
+            let cp = await CourseProgress.findOne({ userId: user._id, courseId });
+            if (!cp) {
+                cp = new CourseProgress({ userId: user._id, courseId });
+            }
+            if (!cp.completedNodes.includes(lessonIdStr)) {
+                cp.completedNodes.push(lessonIdStr);
+            }
+            cp.lastAccessed = Date.now();
+            await cp.save();
+        }
+        
+        user.markModified('completedLessons');
+        user.markModified('lastWatchedLesson');
+        await user.save();
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('complete-lesson error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 router.post('/progress', protect, async (req, res) => {
     try {
         await connectDB();
-        const { lessonId, courseId, lessonTitle, lastPosition, isPlayEvent } = req.body;
+        const { lessonId, courseId, lessonTitle, lastPosition, duration, isPlayEvent, completed, isCompleted } = req.body;
         const User = require('../models/User');
         const Course = require('../models/Course');
         const user = await User.findById(req.session.userId);
@@ -826,12 +916,23 @@ router.post('/progress', protect, async (req, res) => {
             }
         }
 
-        if (lessonId && !user.completedLessons.includes(lessonId)) {
-            user.completedLessons.push(lessonId);
+        // Full watching criteria: explicit completed flag OR watched >= 92% OR remaining <= 25s
+        const durSec = Number(duration) || 0;
+        const posSec = Number(lastPosition) || 0;
+        const isLessonFullyCompleted = Boolean(
+            completed === true || 
+            isCompleted === true || 
+            (durSec > 0 && posSec > 0 && ((posSec / durSec >= 0.92) || (durSec >= 300 && durSec - posSec <= 25)))
+        );
+
+        if (lessonId && isLessonFullyCompleted && !user.completedLessons.includes(String(lessonId))) {
+            user.completedLessons.push(String(lessonId));
         }
 
         if (courseId) {
             const currentPos = lastPosition !== undefined ? Number(lastPosition) : (user.lastWatchedLesson?.lastPosition || 0);
+            const currentDur = duration !== undefined ? Number(duration) : (user.lastWatchedLesson?.duration || 0);
+            const isFinished = isLessonFullyCompleted;
             
             let lessonThumbnail = req.body.thumbnail || '';
             if (!lessonThumbnail && lessonId) {
@@ -850,6 +951,8 @@ router.post('/progress', protect, async (req, res) => {
                 lessonTitle: lessonTitle || 'Lesson',
                 thumbnail: lessonThumbnail || '',
                 lastPosition: currentPos,
+                duration: currentDur,
+                isCompleted: isFinished,
                 watchedAt: new Date()
             };
 
@@ -986,6 +1089,180 @@ router.post('/attend-notice', protect, async (req, res) => {
         }
         res.json({ success: true });
     } catch (err) { res.json({ success: false }); }
+});
+
+// ---- Weak Area Analytics & Revision Reminders ----
+router.get('/student/weak-areas', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const weakAreaService = require('../services/weakAreaService');
+        const data = await weakAreaService.getUserWeakAreas(req.session.userId);
+        res.json({ success: true, ...data });
+    } catch (err) {
+        console.error('Error fetching weak areas:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.post('/student/set-revision-reminder', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const { topic, subject, link, delayMinutes } = req.body;
+        if (!topic) return res.status(400).json({ success: false, error: 'Topic is required' });
+
+        const parsedDelay = parseInt(delayMinutes, 10) || 0;
+        const weakAreaService = require('../services/weakAreaService');
+        const result = await weakAreaService.scheduleRevisionReminder(
+            req.session.userId,
+            topic,
+            subject,
+            link,
+            null,
+            parsedDelay
+        );
+
+        let delayText = 'তাৎক্ষণিকভাবে নোটিফিকেশন পাঠানো হয়েছে!';
+        if (parsedDelay > 0) {
+            if (parsedDelay < 60) {
+                delayText = `${parsedDelay} মিনিট পর পাঠানো হবে!`;
+            } else if (parsedDelay % 60 === 0) {
+                delayText = `${parsedDelay / 60} ঘণ্টা পর পাঠানো হবে!`;
+            } else {
+                delayText = `${Math.floor(parsedDelay / 60)} ঘণ্টা ${parsedDelay % 60} মিনিট পর পাঠানো হবে!`;
+            }
+        }
+
+        res.json({
+            success: true,
+            message: `"${topic}"-এর জন্য রিভিশন রিমাইন্ডার সফলভাবে নির্ধারিত হয়েছে (${delayText})`,
+            delayMinutes: parsedDelay,
+            result
+        });
+    } catch (err) {
+        console.error('Error setting revision reminder:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// --- Student Personal Notes Upload (Library -> Your Notes) ---
+const studentNoteStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const primaryDest = path.join(process.cwd(), 'client/public/uploads/user-notes');
+        const secondaryDest = path.join(process.cwd(), 'public/uploads/user-notes');
+        try { fs.mkdirSync(primaryDest, { recursive: true }); } catch (e) { }
+        try { fs.mkdirSync(secondaryDest, { recursive: true }); } catch (e) { }
+        cb(null, primaryDest);
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const cleanName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_').substring(0, 30);
+        cb(null, `note-${req.session.userId || 'user'}-${Date.now()}-${cleanName}${ext}`);
+    }
+});
+
+const uploadStudentNoteMulter = multer({
+    storage: studentNoteStorage,
+    limits: { fileSize: 35 * 1024 * 1024 }, // 35MB limit
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg'];
+        if (allowedExtensions.includes(ext)) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only PDF and image files (.pdf, .png, .jpg, .jpeg) are allowed!'));
+        }
+    }
+});
+
+router.post('/library/upload-note', protect, (req, res) => {
+    uploadStudentNoteMulter.single('noteFile')(req, res, async (err) => {
+        if (err) {
+            return res.status(400).json({ success: false, error: err.message });
+        }
+        try {
+            await connectDB();
+            if (!req.file) {
+                return res.status(400).json({ success: false, error: 'Please select a PDF or image file to upload.' });
+            }
+
+            const title = (req.body.title || '').trim();
+            if (!title) {
+                try { fs.unlinkSync(req.file.path); } catch (e) { }
+                return res.status(400).json({ success: false, error: 'Note title is required.' });
+            }
+
+            const subject = (req.body.subject || 'General').trim();
+            const ext = path.extname(req.file.originalname).toLowerCase();
+            const isPdf = ext === '.pdf';
+            const fileType = isPdf ? 'pdf' : 'image';
+
+            // Also copy to secondary public directory if exists
+            try {
+                const secondaryDest = path.join(process.cwd(), 'public/uploads/user-notes', req.file.filename);
+                if (req.file.path !== secondaryDest) {
+                    fs.copyFileSync(req.file.path, secondaryDest);
+                }
+            } catch (copyErr) { }
+
+            // Format file size
+            const bytes = req.file.size || 0;
+            let formattedSize = '1.0 MB';
+            if (bytes < 1024 * 1024) {
+                formattedSize = `${Math.round(bytes / 1024)} KB`;
+            } else {
+                formattedSize = `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+            }
+
+            const fileUrl = `/uploads/user-notes/${req.file.filename}`;
+            const StudentNote = require('../models/StudentNote');
+
+            const newNote = await StudentNote.create({
+                user: req.session.userId,
+                title,
+                subject: subject || 'General',
+                fileUrl,
+                fileType,
+                originalFilename: req.file.originalname,
+                fileSize: formattedSize
+            });
+
+            res.json({
+                success: true,
+                message: 'Note uploaded successfully!',
+                note: newNote
+            });
+        } catch (dbErr) {
+            console.error('Error saving student note:', dbErr);
+            res.status(500).json({ success: false, error: 'Server error saving note.' });
+        }
+    });
+});
+
+router.delete('/library/delete-note/:id', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const noteId = req.params.id;
+        const StudentNote = require('../models/StudentNote');
+        const note = await StudentNote.findOne({ _id: noteId, user: req.session.userId });
+        if (!note) {
+            return res.status(404).json({ success: false, error: 'Note not found or permission denied.' });
+        }
+
+        // Remove files from disks
+        if (note.fileUrl) {
+            const filename = path.basename(note.fileUrl);
+            const p1 = path.join(process.cwd(), 'client/public/uploads/user-notes', filename);
+            const p2 = path.join(process.cwd(), 'public/uploads/user-notes', filename);
+            try { if (fs.existsSync(p1)) fs.unlinkSync(p1); } catch (e) { }
+            try { if (fs.existsSync(p2)) fs.unlinkSync(p2); } catch (e) { }
+        }
+
+        await StudentNote.findByIdAndDelete(noteId);
+        res.json({ success: true, message: 'Note deleted successfully!' });
+    } catch (err) {
+        console.error('Error deleting student note:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 module.exports = router;

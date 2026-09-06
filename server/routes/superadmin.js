@@ -702,14 +702,16 @@ router.post('/add-course', superAdminProtect, (req, res, next) => {
 }, async (req, res) => {
     try {
         await connectDB();
-        const { title, subject, category, classLevel, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine } = req.body;
+        const { title, subject, category, classLevel, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
 
         // Handle images
         const thumbnail = req.files && req.files.thumbnail ? `/uploads/thumbnails/${req.files.thumbnail[0].filename}` : null;
         const routineImage = req.files && req.files.routineImage ? `/uploads/routines/${req.files.routineImage[0].filename}` : null;
 
-        // Handle tags
+        // Handle tags, highlights & benefits
         const tagsArray = tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+        const highlightsArray = Array.isArray(learningHighlights) ? learningHighlights.filter(Boolean) : (typeof learningHighlights === 'string' ? learningHighlights.split('\n').map(s => s.trim()).filter(Boolean) : []);
+        const benefitsArray = Array.isArray(courseBenefits) ? courseBenefits.filter(Boolean) : (typeof courseBenefits === 'string' ? courseBenefits.split('\n').map(s => s.trim()).filter(Boolean) : []);
 
         const newCourse = new Course({
             title,
@@ -720,6 +722,13 @@ router.post('/add-course', superAdminProtect, (req, res, next) => {
             price: price || 0,
             discountPrice: discountPrice || 0,
             difficulty: difficulty || 'Beginner',
+            totalRecordedClasses: parseInt(totalRecordedClasses) || 0,
+            totalLiveClasses: parseInt(totalLiveClasses) || 0,
+            totalLectureNotes: parseInt(totalLectureNotes) || 0,
+            totalQuizzes: parseInt(totalQuizzes) || 0,
+            isCompleted: isCompleted === 'true' || isCompleted === true || isCompleted === 'on',
+            learningHighlights: highlightsArray,
+            courseBenefits: benefitsArray,
             thumbnail,
             routineImage,
             routine: Array.isArray(routine) ? routine.filter(r => r.day) : [],
@@ -774,7 +783,7 @@ router.post('/course/:id/edit', superAdminProtect, (req, res, next) => {
 }, async (req, res) => {
     try {
         await connectDB();
-        const { title, subject, category, classLevel, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine } = req.body;
+        const { title, subject, category, classLevel, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
         
         const course = await Course.findById(req.params.id);
         if (!course) return res.status(404).send('Course not found');
@@ -785,8 +794,14 @@ router.post('/course/:id/edit', superAdminProtect, (req, res, next) => {
             if (req.files.routineImage) course.routineImage = `/uploads/routines/${req.files.routineImage[0].filename}`;
         }
         
-        // Handle tags
+        // Handle tags, highlights & benefits
         const tagsArray = tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+        if (learningHighlights !== undefined) {
+            course.learningHighlights = Array.isArray(learningHighlights) ? learningHighlights.filter(Boolean) : (typeof learningHighlights === 'string' ? learningHighlights.split('\n').map(s => s.trim()).filter(Boolean) : []);
+        }
+        if (courseBenefits !== undefined) {
+            course.courseBenefits = Array.isArray(courseBenefits) ? courseBenefits.filter(Boolean) : (typeof courseBenefits === 'string' ? courseBenefits.split('\n').map(s => s.trim()).filter(Boolean) : []);
+        }
 
         // Update fields
         course.title = title;
@@ -797,6 +812,11 @@ router.post('/course/:id/edit', superAdminProtect, (req, res, next) => {
         course.price = price || 0;
         course.discountPrice = discountPrice || 0;
         course.difficulty = difficulty || 'Beginner';
+        if (totalRecordedClasses !== undefined) course.totalRecordedClasses = parseInt(totalRecordedClasses) || 0;
+        if (totalLiveClasses !== undefined) course.totalLiveClasses = parseInt(totalLiveClasses) || 0;
+        if (totalLectureNotes !== undefined) course.totalLectureNotes = parseInt(totalLectureNotes) || 0;
+        if (totalQuizzes !== undefined) course.totalQuizzes = parseInt(totalQuizzes) || 0;
+        course.isCompleted = isCompleted === 'true' || isCompleted === true || isCompleted === 'on';
         course.tags = tagsArray;
         course.trailerUrl = trailerUrl;
         course.description = description;
@@ -3333,11 +3353,29 @@ router.post('/settings', superAdminProtect, async (req, res) => {
         await connectDB();
         const Setting = require('../models/Setting');
 
-        const { isMaintenanceMode, bkash, nagad, rocket, email, phone, whatsapp, facebook, youtube } = req.body;
+        const { 
+            isMaintenanceMode, bkash, nagad, rocket, email, phone, whatsapp, facebook, youtube,
+            gatewayMode, bkashAppKey, bkashAppSecret, bkashUsername, bkashPassword,
+            nagadMerchantId, nagadPublicKey, nagadPrivateKey
+        } = req.body;
 
         const updateData = {
             isMaintenanceMode: isMaintenanceMode === 'on',
             paymentNumbers: { bkash, nagad, rocket },
+            paymentGateway: {
+                mode: gatewayMode === 'live' ? 'live' : 'sandbox',
+                bkash: {
+                    appKey: bkashAppKey || '',
+                    appSecret: bkashAppSecret || '',
+                    username: bkashUsername || '',
+                    password: bkashPassword || ''
+                },
+                nagad: {
+                    merchantId: nagadMerchantId || '',
+                    publicKey: nagadPublicKey || '',
+                    privateKey: nagadPrivateKey || ''
+                }
+            },
             contactInfo: { email, phone, whatsapp },
             socialLinks: { facebook, youtube },
             updatedBy: req.session.user._id
@@ -4666,4 +4704,182 @@ router.delete('/academic-setup/:id', superAdminProtect, async (req, res) => {
     }
 });
 
+// ==========================================
+// AI KNOWLEDGE HUB - SUPERADMIN ROUTES
+// ==========================================
+
+router.get('/ai-knowledge', superAdminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AIKnowledge = require('../models/AIKnowledge');
+        const AcademicClass = require('../models/AcademicClass');
+        const Question = require('../models/Question');
+
+        const { subject, classLevel, search } = req.query;
+        const filter = {};
+
+        if (subject && subject !== 'all') {
+            filter.subject = new RegExp(`^${subject.trim()}$`, 'i');
+        }
+        if (classLevel && classLevel !== 'all') {
+            filter.classLevel = new RegExp(`^${classLevel.trim()}$`, 'i');
+        }
+        if (search && search.trim() !== '') {
+            const sRegex = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+            filter.$or = [
+                { title: sRegex },
+                { topic: sRegex },
+                { content: sRegex },
+                { keywords: sRegex }
+            ];
+        }
+
+        const [knowledgeList, allClasses, qSubjects] = await Promise.all([
+            AIKnowledge.find(filter).populate('createdBy', 'name email').sort({ priority: -1, createdAt: -1 }).lean(),
+            AcademicClass.find().sort({ order: 1, name: 1 }).lean(),
+            Question.distinct('subject')
+        ]);
+
+        const classNames = (allClasses && allClasses.length > 0)
+            ? allClasses.map(c => c.name)
+            : ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'HSC 1st Year', 'HSC 2nd Year', 'Admission', 'All Classes'];
+
+        const fallbackSubjects = [
+            'Physics', 'Chemistry', 'Higher Mathematics', 'General Mathematics',
+            'Biology', 'ICT', 'English', 'Bangla', 'Accounting', 'General Science'
+        ];
+        const subjectList = Array.from(new Set([...(qSubjects || []), ...fallbackSubjects])).filter(Boolean);
+
+        const totalItems = await AIKnowledge.countDocuments();
+        const activeItems = await AIKnowledge.countDocuments({ isActive: true });
+        const distinctSubjectsCount = (await AIKnowledge.distinct('subject')).length;
+
+        res.render('superadmin/ai-knowledge', {
+            user: req.session.user,
+            isSuperAdmin: true,
+            active: 'ai-knowledge',
+            knowledgeList: knowledgeList || [],
+            classList: classNames,
+            subjectList,
+            selectedSubject: subject || 'all',
+            selectedClass: classLevel || 'all',
+            searchQuery: search || '',
+            stats: {
+                total: totalItems,
+                active: activeItems,
+                subjects: distinctSubjectsCount
+            }
+        });
+    } catch (err) {
+        console.error('Error loading SuperAdmin AI Knowledge Hub:', err);
+        res.status(500).send('Error loading AI Knowledge Hub');
+    }
+});
+
+router.post('/ai-knowledge/create', superAdminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AIKnowledge = require('../models/AIKnowledge');
+        const { title, classLevel, subject, topic, keywords, content, priority, isActive } = req.body;
+
+        if (!title || !subject || !content) {
+            return res.status(400).json({ success: false, error: 'Title, Subject and Content are required.' });
+        }
+
+        const parsedKeywords = (keywords || '')
+            .split(/[,;\n]+/)
+            .map(k => k.trim())
+            .filter(Boolean);
+
+        const newEntry = new AIKnowledge({
+            title: title.trim(),
+            classLevel: (classLevel || 'All Classes').trim(),
+            subject: subject.trim(),
+            topic: (topic || '').trim(),
+            keywords: parsedKeywords,
+            content: content.trim(),
+            priority: parseInt(priority, 10) || 100,
+            isActive: isActive === 'true' || isActive === true || isActive === 'on',
+            createdBy: req.session.userId
+        });
+
+        await newEntry.save();
+        await logActivity(req, 'CREATE_AI_KNOWLEDGE', `SuperAdmin created AI Knowledge rule: ${newEntry.title}`, 'AIKnowledge');
+
+        res.redirect('/superadmin/ai-knowledge?success=created');
+    } catch (err) {
+        console.error('Error creating AI Knowledge:', err);
+        res.redirect('/superadmin/ai-knowledge?error=create_failed');
+    }
+});
+
+router.post('/ai-knowledge/:id/edit', superAdminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AIKnowledge = require('../models/AIKnowledge');
+        const { title, classLevel, subject, topic, keywords, content, priority, isActive } = req.body;
+
+        const entry = await AIKnowledge.findById(req.params.id);
+        if (!entry) return res.redirect('/superadmin/ai-knowledge?error=not_found');
+
+        const parsedKeywords = (keywords || '')
+            .split(/[,;\n]+/)
+            .map(k => k.trim())
+            .filter(Boolean);
+
+        entry.title = title ? title.trim() : entry.title;
+        entry.classLevel = classLevel ? classLevel.trim() : entry.classLevel;
+        entry.subject = subject ? subject.trim() : entry.subject;
+        entry.topic = topic !== undefined ? topic.trim() : entry.topic;
+        entry.keywords = parsedKeywords;
+        entry.content = content ? content.trim() : entry.content;
+        entry.priority = priority !== undefined ? parseInt(priority, 10) : entry.priority;
+        entry.isActive = isActive === 'true' || isActive === true || isActive === 'on';
+
+        await entry.save();
+        await logActivity(req, 'UPDATE_AI_KNOWLEDGE', `SuperAdmin updated AI Knowledge rule: ${entry.title}`, 'AIKnowledge');
+
+        res.redirect('/superadmin/ai-knowledge?success=updated');
+    } catch (err) {
+        console.error('Error updating AI Knowledge:', err);
+        res.redirect('/superadmin/ai-knowledge?error=update_failed');
+    }
+});
+
+router.post('/ai-knowledge/:id/delete', superAdminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AIKnowledge = require('../models/AIKnowledge');
+        const entry = await AIKnowledge.findByIdAndDelete(req.params.id);
+
+        if (entry) {
+            await logActivity(req, 'DELETE_AI_KNOWLEDGE', `SuperAdmin deleted AI Knowledge rule: ${entry.title}`, 'AIKnowledge');
+        }
+
+        res.redirect('/superadmin/ai-knowledge?success=deleted');
+    } catch (err) {
+        console.error('Error deleting AI Knowledge:', err);
+        res.redirect('/superadmin/ai-knowledge?error=delete_failed');
+    }
+});
+
+router.post('/ai-knowledge/:id/toggle', superAdminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AIKnowledge = require('../models/AIKnowledge');
+        const entry = await AIKnowledge.findById(req.params.id);
+
+        if (!entry) return res.status(404).json({ success: false, error: 'Not found' });
+
+        entry.isActive = !entry.isActive;
+        await entry.save();
+
+        res.json({ success: true, isActive: entry.isActive });
+    } catch (err) {
+        console.error('Error toggling AI Knowledge:', err);
+        res.status(500).json({ success: false, error: 'Server Error' });
+    }
+});
+
 module.exports = router;
+

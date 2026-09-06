@@ -1,164 +1,431 @@
-<div id="notificationDropdown" class="hidden absolute right-0 mt-3 w-[340px] md:w-[400px] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[2rem] shadow-2xl shadow-slate-200/50 dark:shadow-black/40 z-[100] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-300">
-    <div class="px-6 py-5 border-b border-slate-50 dark:border-slate-800 flex items-center justify-between">
-        <h4 class="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2">
-            <span class="material-symbols-rounded text-primary text-xl">notifications</span>
-            নোটিফিকেশন
-        </h4>
-        <button onclick="markAllNotificationsRead()" class="text-[10px] font-black text-primary uppercase tracking-widest hover:opacity-70 transition-opacity">সব পড়া হয়েছে</button>
+<div id="notificationDropdown" class="hidden absolute right-0 top-full mt-2 w-[340px] sm:w-[380px] bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl shadow-slate-900/10 dark:shadow-black/60 z-[100] overflow-hidden transition-all duration-200">
+    <!-- Dropdown Header -->
+    <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
+        <div class="flex items-center gap-2">
+            <span class="material-symbols-rounded text-primary text-[18px] leading-none shrink-0">notifications</span>
+            <h4 class="text-[13px] font-bold text-slate-800 dark:text-white leading-none">Notifications</h4>
+            <span id="dropdownUnreadPill" class="hidden text-[10px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full leading-none">0 new</span>
+        </div>
+        <button type="button" id="markAllReadBtn" onclick="markAllNotificationsRead()" class="text-[11px] font-semibold text-primary hover:text-blue-600 transition-colors cursor-pointer">
+            Mark all read
+        </button>
     </div>
 
-    <div id="notificationList" class="max-h-[400px] overflow-y-auto no-scrollbar p-2">
-        <!-- Notifications will be injected here via JS -->
-        <div class="py-12 text-center opacity-40">
-            <span class="material-symbols-rounded text-4xl mb-2">notifications_off</span>
-            <p class="text-xs font-bold">কোনো নোটিফিকেশন নেই</p>
+    <!-- Filter Tabs (All / Unread) -->
+    <div class="px-3 pt-2 pb-1 flex items-center gap-1 border-b border-slate-100 dark:border-slate-800/60 bg-white dark:bg-[#0f172a]">
+        <button type="button" onclick="setDropdownFilter('all')" id="tabFilterAll" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white transition-colors cursor-pointer">
+            All
+        </button>
+        <button type="button" onclick="setDropdownFilter('unread')" id="tabFilterUnread" class="px-2.5 py-1 text-[11px] font-semibold rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
+            Unread
+        </button>
+    </div>
+
+    <!-- Notifications List -->
+    <div id="notificationList" class="max-h-[360px] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
+        <!-- Injected via JavaScript -->
+        <div id="dropdownLoadingState" class="py-10 text-center text-slate-400">
+            <span class="material-symbols-rounded text-2xl animate-spin">progress_activity</span>
+            <p class="text-[11px] font-medium mt-1">Loading notifications...</p>
         </div>
     </div>
 
-    <div class="p-4 border-t border-slate-50 dark:border-slate-800 text-center">
-        <a href="/notifications" class="text-[11px] font-bold text-slate-400 hover:text-primary transition-colors uppercase tracking-widest">সব নোটিফিকেশন দেখুন</a>
+    <!-- Empty State -->
+    <div id="dropdownEmptyState" class="hidden py-10 px-4 text-center">
+        <div class="size-11 mx-auto rounded-full bg-slate-100 dark:bg-slate-800/80 text-slate-400 flex items-center justify-center mb-2.5">
+            <span class="material-symbols-rounded text-2xl leading-none">notifications_off</span>
+        </div>
+        <p class="text-[12px] font-bold text-slate-700 dark:text-slate-300">No notifications yet</p>
+    </div>
+
+    <!-- Dropdown Footer -->
+    <div class="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 text-center">
+        <a href="/notifications" class="text-[11px] font-bold text-slate-500 hover:text-primary dark:text-slate-400 dark:hover:text-primary transition-colors inline-flex items-center gap-1">
+            <span>View All Notifications</span>
+            <span class="material-symbols-rounded text-[14px] leading-none">arrow_forward</span>
+        </a>
     </div>
 </div>
 
-<template id="notificationItemTemplate">
-    <a href="#" class="notification-item flex items-start gap-4 p-4 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-800 group relative">
-        <div class="notification-icon size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-            <span class="material-symbols-rounded">notifications</span>
-        </div>
-        <div class="flex-1 min-w-0">
-            <h5 class="notification-title text-[13px] font-bold text-slate-800 dark:text-white mb-1 line-clamp-1"></h5>
-            <p class="notification-message text-[12px] font-medium text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed mb-1.5"></p>
-            <span class="notification-time text-[9px] font-bold text-slate-300 dark:text-slate-500 uppercase tracking-widest"></span>
-        </div>
-        <div class="unread-dot absolute top-5 right-5 size-2 bg-primary rounded-full hidden"></div>
-    </a>
-</template>
-
+<script src="/socket.io/socket.io.js"></script>
 <script>
-    const notificationList = document.getElementById('notificationList');
-    const notificationBadge = document.getElementById('notificationBadge');
-    const notificationDot = document.getElementById('notificationDot');
+(function() {
+    let cachedNotifications = [];
+    let currentFilter = 'all';
 
-    async function fetchNotifications() {
+    <% 
+        const serverUserId = (locals.user && (locals.user._id || locals.user.id)) || '';
+        const serverUserName = (locals.user && locals.user.name) || 'Student';
+        const serverUserRole = (locals.user && locals.user.role) || 'student';
+        const serverClassLevel = (locals.user && locals.user.classLevel) || 'none';
+    %>
+
+    window.currentUserId = window.currentUserId || "<%= serverUserId %>";
+    window.currentUserName = window.currentUserName || "<%= serverUserName %>";
+    window.currentUserRole = window.currentUserRole || "<%= serverUserRole %>";
+    window.currentUserClass = window.currentUserClass || "<%= serverClassLevel %>";
+
+    // Type styling configuration
+    const TYPE_CONFIG = {
+        payment: {
+            icon: 'receipt_long',
+            bg: 'bg-emerald-500/10 dark:bg-emerald-500/15',
+            text: 'text-emerald-600 dark:text-emerald-400'
+        },
+        course: {
+            icon: 'school',
+            bg: 'bg-blue-500/10 dark:bg-blue-500/15',
+            text: 'text-blue-600 dark:text-blue-400'
+        },
+        exam: {
+            icon: 'quiz',
+            bg: 'bg-amber-500/10 dark:bg-amber-500/15',
+            text: 'text-amber-600 dark:text-amber-400'
+        },
+        announcement: {
+            icon: 'campaign',
+            bg: 'bg-purple-500/10 dark:bg-purple-500/15',
+            text: 'text-purple-600 dark:text-purple-400'
+        },
+        reminder: {
+            icon: 'alarm',
+            bg: 'bg-rose-500/10 dark:bg-rose-500/15',
+            text: 'text-rose-600 dark:text-rose-400'
+        },
+        message: {
+            icon: 'chat',
+            bg: 'bg-teal-500/10 dark:bg-teal-500/15',
+            text: 'text-teal-600 dark:text-teal-400'
+        },
+        system: {
+            icon: 'notifications',
+            bg: 'bg-slate-500/10 dark:bg-slate-500/15',
+            text: 'text-slate-600 dark:text-slate-400'
+        }
+    };
+
+    function formatTimeAgo(dateStr) {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        const now = new Date();
+        const seconds = Math.floor((now - date) / 1000);
+        if (seconds < 60) return 'Just now';
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}m ago`;
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h ago`;
+        const days = Math.floor(hours / 24);
+        if (days === 1) return 'Yesterday';
+        if (days < 7) return `${days}d ago`;
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function updateBadge(count) {
+        const num = parseInt(count, 10) || 0;
+        const badgeEl = document.getElementById('notificationBadge');
+        const pillEl = document.getElementById('dropdownUnreadPill');
+        if (num > 0) {
+            if (badgeEl) {
+                badgeEl.textContent = num > 9 ? '9+' : String(num);
+                badgeEl.classList.remove('hidden');
+            }
+            if (pillEl) {
+                pillEl.textContent = `${num} new`;
+                pillEl.classList.remove('hidden');
+            }
+        } else {
+            if (badgeEl) badgeEl.classList.add('hidden');
+            if (pillEl) pillEl.classList.add('hidden');
+        }
+    }
+    window.updateNotificationBadge = updateBadge;
+
+    function renderList() {
+        const notificationList = document.getElementById('notificationList');
+        const emptyState = document.getElementById('dropdownEmptyState');
+        const loadingState = document.getElementById('dropdownLoadingState');
+
+        if (loadingState) loadingState.classList.add('hidden');
+        if (!notificationList || !emptyState) return;
+
+        const filtered = currentFilter === 'unread'
+            ? cachedNotifications.filter(n => !n.isRead)
+            : cachedNotifications;
+
+        if (filtered.length === 0) {
+            notificationList.innerHTML = '';
+            emptyState.classList.remove('hidden');
+            return;
+        }
+
+        emptyState.classList.add('hidden');
+        notificationList.innerHTML = filtered.map(notif => {
+            const conf = TYPE_CONFIG[notif.type] || TYPE_CONFIG.system;
+            const isUnread = !notif.isRead;
+            const unreadClasses = isUnread 
+                ? 'bg-blue-50/40 dark:bg-primary/5 hover:bg-blue-50/70 dark:hover:bg-primary/10' 
+                : 'bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/40';
+
+            return `
+                <div class="notification-item flex items-start gap-3 p-3 transition-colors cursor-pointer relative ${unreadClasses}"
+                     data-id="${notif._id}" data-link="${notif.link || '#'}" onclick="handleNotificationClick('${notif._id}', '${notif.link || '#'}')">
+                    <!-- Icon Box -->
+                    <div class="size-8.5 rounded-xl ${conf.bg} ${conf.text} flex items-center justify-center shrink-0 mt-0.5">
+                        <span class="material-symbols-rounded text-[17px] leading-none">${conf.icon}</span>
+                    </div>
+
+                    <!-- Content -->
+                    <div class="flex-1 min-w-0 pr-2">
+                        <div class="flex items-baseline justify-between gap-1 mb-0.5">
+                            <h5 class="text-[12px] font-bold text-slate-800 dark:text-slate-100 truncate">${escapeHtml(notif.title)}</h5>
+                            <span class="text-[10px] font-medium text-slate-400 shrink-0">${formatTimeAgo(notif.createdAt)}</span>
+                        </div>
+                        <p class="text-[11px] font-normal text-slate-600 dark:text-slate-300 line-clamp-2 leading-snug">${escapeHtml(notif.message)}</p>
+                    </div>
+
+                    <!-- Unread Dot -->
+                    ${isUnread ? '<span class="size-2 rounded-full bg-primary shrink-0 self-center"></span>' : ''}
+                </div>
+            `;
+        }).join('');
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    window.fetchNotifications = async function() {
         try {
             const res = await fetch('/api/notifications/latest');
             const data = await res.json();
             if (data.success) {
-                renderNotifications(data.notifications);
+                cachedNotifications = data.notifications || [];
+                const exactUnread = data.unreadCount !== undefined ? data.unreadCount : cachedNotifications.filter(n => !n.isRead).length;
+                updateBadge(exactUnread);
+                renderList();
+
+                // If user id returned, ensure socket room is joined on this page
+                if (data.userId) {
+                    window.currentUserId = String(data.userId);
+                    if (window.socket && window.socket.connected) {
+                        window.socket.emit('user:join', {
+                            userId: window.currentUserId,
+                            name: window.currentUserName || 'Student',
+                            role: window.currentUserRole || 'student'
+                        });
+                    }
+                }
             }
-            
-            const countRes = await fetch('/api/notifications/unread-count');
-            const countData = await countRes.json();
-            if (countData.success) {
-                updateNotificationBadge(countData.count);
-            }
-        } catch (error) {
-            console.error('Failed to fetch notifications:', error);
+        } catch (err) {
+            console.error('Failed to load notifications:', err);
         }
-    }
+    };
 
-    function renderNotifications(notifications) {
-        if (!notifications || notifications.length === 0) return;
-
-        notificationList.innerHTML = '';
-        const template = document.getElementById('notificationItemTemplate');
-
-        notifications.forEach(notif => {
-            const clone = template.content.cloneNode(true);
-            const item = clone.querySelector('.notification-item');
-            
-            item.href = notif.link || '#';
-            clone.querySelector('.notification-title').innerText = notif.title;
-            clone.querySelector('.notification-message').innerText = notif.message;
-            clone.querySelector('.notification-time').innerText = formatTime(notif.createdAt);
-            
-            const typeIcons = {
-                announcement: 'campaign',
-                system: 'settings',
-                course: 'school',
-                message: 'chat',
-                exam: 'quiz',
-                reminder: 'alarm'
-            };
-            clone.querySelector('.notification-icon .material-symbols-rounded').innerText = typeIcons[notif.type] || 'notifications';
-
-            if (!notif.isRead) {
-                clone.querySelector('.unread-dot').classList.remove('hidden');
-                item.classList.add('bg-blue-50/50', 'dark:bg-primary/5');
-            }
-
-            item.addEventListener('click', () => markAsRead(notif._id));
-            notificationList.appendChild(clone);
-        });
-    }
-
-    function updateNotificationBadge(count) {
-        if (count > 0) {
-            if (notificationBadge) {
-                notificationBadge.innerText = count > 9 ? '9+' : count;
-                notificationBadge.classList.remove('hidden');
-            }
-            if (notificationDot) notificationDot.classList.remove('hidden');
+    window.setDropdownFilter = function(filter) {
+        currentFilter = filter;
+        const tabAll = document.getElementById('tabFilterAll');
+        const tabUnread = document.getElementById('tabFilterUnread');
+        if (filter === 'all') {
+            if (tabAll) tabAll.className = 'px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white transition-colors cursor-pointer';
+            if (tabUnread) tabUnread.className = 'px-2.5 py-1 text-[11px] font-semibold rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer';
         } else {
-            if (notificationBadge) notificationBadge.classList.add('hidden');
-            if (notificationDot) notificationDot.classList.add('hidden');
+            if (tabUnread) tabUnread.className = 'px-2.5 py-1 text-[11px] font-bold rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white transition-colors cursor-pointer';
+            if (tabAll) tabAll.className = 'px-2.5 py-1 text-[11px] font-semibold rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer';
         }
-    }
+        renderList();
+    };
 
-    async function markAsRead(id) {
-        try {
-            await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
-            fetchNotifications(); // Refresh
-        } catch (e) { console.error(e); }
-    }
+    window.toggleNotifications = function(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        const dd = document.getElementById('notificationDropdown');
+        if (!dd) return;
+        const isHidden = dd.classList.contains('hidden');
+        if (isHidden) {
+            dd.classList.remove('hidden');
+            if (typeof window.fetchNotifications === 'function') window.fetchNotifications();
+        } else {
+            dd.classList.add('hidden');
+        }
+    };
 
-    async function markAllNotificationsRead() {
+    window.handleNotificationClick = async function(id, link) {
+        const item = cachedNotifications.find(n => n._id === id);
+        if (item && !item.isRead) {
+            item.isRead = true;
+            renderList();
+            try {
+                await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+                const countRes = await fetch('/api/notifications/unread-count');
+                const countData = await countRes.json();
+                if (countData.success) {
+                    updateBadge(countData.count);
+                }
+            } catch (e) {}
+        }
+
+        if (link && link !== '#' && link !== '/') {
+            window.location.href = link;
+        }
+    };
+
+    window.markAllNotificationsRead = async function() {
+        cachedNotifications.forEach(n => n.isRead = true);
+        renderList();
+        updateBadge(0);
+
         try {
             await fetch('/api/notifications/mark-all-read', { method: 'POST' });
-            fetchNotifications();
-        } catch (e) { console.error(e); }
-    }
-
-    function formatTime(dateStr) {
-        const date = new Date(dateStr);
-        const now = new Date();
-        const diff = Math.floor((now - date) / 1000);
-        
-        if (diff < 60) return 'এইমাত্র';
-        if (diff < 3600) return Math.floor(diff / 60) + ' মিনিট আগে';
-        if (diff < 86400) return Math.floor(diff / 3600) + ' ঘণ্টা আগে';
-        return date.toLocaleDateString('bn-BD');
-    }
-
-    // Toggle Dropdown
-    function toggleNotifications() {
-        const dropdown = document.getElementById('notificationDropdown');
-        dropdown.classList.toggle('hidden');
-        if (!dropdown.classList.contains('hidden')) {
-            fetchNotifications();
+            updateBadge(0);
+        } catch (err) {
+            console.error('Failed to mark all as read:', err);
         }
-    }
+    };
 
-    // Close on click outside
+    // Close on outside click
     window.addEventListener('click', (e) => {
-        const dropdown = document.getElementById('notificationDropdown');
+        const dd = document.getElementById('notificationDropdown');
         const btn = document.getElementById('notificationBtn');
-        if (dropdown && !dropdown.contains(e.target) && !btn.contains(e.target)) {
-            dropdown.classList.add('hidden');
+        if (dd && !dd.classList.contains('hidden')) {
+            if (!dd.contains(e.target) && !btn?.contains(e.target)) {
+                dd.classList.add('hidden');
+            }
         }
     });
 
-    // Real-time listener
-    if (window.socket) {
-        socket.on('notification:new', (notif) => {
-            fetchNotifications();
-            // Show a mini toast
-            if (window.showRealtimeToast) {
-                window.showRealtimeToast(notif.title, notif.message, notif.link, notif.type);
+    // Close on Escape key
+    window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const dd = document.getElementById('notificationDropdown');
+            if (dd && !dd.classList.contains('hidden')) {
+                dd.classList.add('hidden');
+            }
+        }
+    });
+
+    // Hook socket real-time events for live, instant notification delivery
+    function setupSocketListener() {
+        if (!window.socket && typeof io === 'function') {
+            window.socket = io();
+        }
+        const socket = window.socket;
+        if (!socket) {
+            setTimeout(setupSocketListener, 500);
+            return;
+        }
+
+        function emitJoin() {
+            if (!socket || !window.currentUserId) return;
+            socket.emit('user:join', {
+                userId: window.currentUserId,
+                name: window.currentUserName || 'Student',
+                role: window.currentUserRole || 'student'
+            });
+        }
+
+        emitJoin();
+        socket.off('connect', emitJoin);
+        socket.on('connect', emitJoin);
+
+        function handleIncomingNotification(notif) {
+            if (!notif) return;
+            const item = {
+                _id: notif._id || ('temp_' + Date.now()),
+                title: notif.title || 'New Notification',
+                message: notif.message || notif.body || '',
+                type: notif.type || 'system',
+                link: notif.link || notif.url || '/',
+                isRead: false,
+                createdAt: notif.createdAt || new Date().toISOString()
+            };
+
+            // Avoid duplicates
+            const existingIdx = cachedNotifications.findIndex(n => n._id === item._id);
+            if (existingIdx === -1) {
+                cachedNotifications.unshift(item);
+                renderList();
+            }
+
+            // Immediately refresh exact unread count from server
+            fetch('/api/notifications/unread-count')
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) {
+                        updateBadge(d.count);
+                    } else {
+                        const badgeEl = document.getElementById('notificationBadge');
+                        const cur = parseInt(badgeEl?.textContent, 10) || 0;
+                        updateBadge(cur + 1);
+                    }
+                })
+                .catch(() => {
+                    const badgeEl = document.getElementById('notificationBadge');
+                    const cur = parseInt(badgeEl?.textContent, 10) || 0;
+                    updateBadge(cur + 1);
+                });
+
+            // Dispatch global event for /notifications page
+            try {
+                window.dispatchEvent(new CustomEvent('oddhay:live-notification', { detail: item }));
+            } catch (e) {}
+
+            // Subtle gentle audio chime (optional silent fallback)
+            try {
+                const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                audio.volume = 0.3;
+                audio.play().catch(() => {});
+            } catch (e) {}
+        }
+
+        socket.off('notification:new');
+        socket.on('notification:new', handleIncomingNotification);
+
+        socket.off('new_notice');
+        socket.on('new_notice', (data) => {
+            let shouldShow = false;
+            const role = window.currentUserRole || 'student';
+            const classLevel = window.currentUserClass || 'none';
+            const myId = window.currentUserId;
+
+            if (data.target === 'all') shouldShow = true;
+            else if (data.target === 'role' && data.role === role) shouldShow = true;
+            else if (data.target === 'class' && data.classLevel === classLevel && role === 'student') shouldShow = true;
+            else if (data.target === 'user' && data.userId === myId) shouldShow = true;
+
+            if (shouldShow) {
+                handleIncomingNotification({
+                    _id: data._id || ('notice_' + Date.now()),
+                    title: data.title,
+                    message: data.body || data.message,
+                    type: data.type || 'announcement',
+                    link: data.url || data.link || '/notifications',
+                    createdAt: new Date().toISOString()
+                });
             }
         });
     }
 
-    // Initial Fetch
-    fetchNotifications();
+    // Periodic heartbeat sync every 30 seconds
+    setInterval(() => {
+        fetch('/api/notifications/unread-count')
+            .then(r => r.json())
+            .then(d => { if (d.success) updateBadge(d.count); })
+            .catch(() => {});
+    }, 30000);
+
+    // Initial load
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            window.fetchNotifications();
+            setupSocketListener();
+        });
+    } else {
+        window.fetchNotifications();
+        setupSocketListener();
+    }
+})();
 </script>

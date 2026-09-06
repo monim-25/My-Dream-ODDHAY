@@ -7,13 +7,33 @@
 </head>
 
 <body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans min-h-screen flex flex-col transition-colors duration-300">
-    <%- include('partials/student-header') %>
+    <% 
+       const isExplicitCourse = (typeof fromCourse !== 'undefined' && fromCourse === true) || (locals.fromCourse === true) || (typeof req !== 'undefined' && req.query && req.query.from === 'course' && !!req.query.courseId);
+       const isFromCourse = !!isExplicitCourse;
+       const activeNavPage = isFromCourse ? 'courses' : 'exams';
+
+       let returnUrl = '/exams';
+       let returnLabel = 'Back to Exams & Quizzes';
+
+       if (isFromCourse) {
+           const cId = locals.courseId || (bank.course ? (bank.course._id || bank.course) : '');
+           returnUrl = cId ? `/course-details/${cId}#exams` : '/courses';
+           returnLabel = 'Back to Course';
+       } else {
+           returnUrl = '/exams';
+           returnLabel = 'Back to Exams & Quizzes';
+       }
+    %>
+    <%- include('partials/student-header', { pageTitle: 'Performance Summary', activePage: activeNavPage, backUrl: returnUrl }) %>
 
     <% 
-       const bSubject = (bank.subject || 'Subject').trim();
-       const bBoard = (bank.board || 'Board Exam').trim();
-       const bYear = (bank.year || '').trim();
-       const bTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${bBoard} ${bYear}`.trim();
+       const bSubject = String(bank.subject || 'Subject').trim();
+       const bBoard = String(bank.board || 'Board Exam').trim();
+       const bYear = String(bank.year || '').trim();
+       let bTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${bBoard} ${bYear}`.trim();
+       if (bank.course || isFromCourse) {
+           bTitle = bTitle.replace(/^(mock test|model test)\s*-\s*/i, '').trim() || bTitle;
+       }
 
        const mcqScore = attempt.mcqScore || 0;
        const maxMcqScore = attempt.maxMcqScore || 0;
@@ -37,24 +57,11 @@
 
        const isMockTest = (bank.isMockTest || bTitle.toLowerCase().includes('mock test'));
        const isModelTest = bTitle.toLowerCase().includes('model test');
-       const isCustomExam = bTitle.includes('Personalized Exam') || bTitle.includes('Custom Exam') || bTitle.includes('Self Test');
+       const isCustomExam = bTitle.includes('Personalized Exam') || bTitle.includes('Custom Exam') || bTitle.includes('Self Test') || bank.isCustom;
+       const isSubjectTest = bank.isSubjectTest || bTitle.toLowerCase().includes('subject test') || (bank.topic && bank.subject && !bank.board);
+       const isExamSection = (locals.activePage === 'exams') || (locals.fromExams === true) || isMockTest || isModelTest || isCustomExam || isSubjectTest;
 
-       let returnUrl = '/question-bank';
-       let returnLabel = 'Go to Question Bank';
-
-       if (isMockTest) {
-           returnUrl = '/exams/mock-tests';
-           returnLabel = 'Back to Mock Tests';
-       } else if (isModelTest) {
-           returnUrl = '/exams/model-tests';
-           returnLabel = 'Back to Model Tests';
-       } else if (isCustomExam) {
-           returnUrl = '/exams';
-           returnLabel = 'Back to Exams & Quizzes';
-       }
-
-       const isExamTab = isMockTest || isModelTest || isCustomExam;
-       const activeNavPage = isExamTab ? 'exams' : 'questions';
+       const isExamTab = !isFromCourse;
     %>
 
     <div class="flex-1 flex overflow-hidden w-full relative">
@@ -156,22 +163,35 @@
                 </div>
 
                 <!-- SHORTENED WRITTEN QUESTIONS NOTICE WITH SEE WRITTEN MARKS BUTTON -->
-                <% if (nonMcqTotal > 0) { %>
-                    <div class="bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 rounded-2xl p-4 flex items-center justify-between gap-3">
+                <% if (nonMcqTotal > 0 && attempt.writtenStatus && attempt.writtenStatus !== 'none') { %>
+                    <% const isWrittenReviewed = attempt.writtenStatus === 'reviewed'; %>
+                    <div class="<%= isWrittenReviewed ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20' : 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20' %> border rounded-2xl p-4 flex items-center justify-between gap-3">
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <span class="material-symbols-rounded text-amber-600 dark:text-amber-400 text-lg leading-none flex items-center justify-center shrink-0">lightbulb</span>
-                            <p class="text-xs font-semibold text-amber-800 dark:text-amber-300 truncate">Written questions (<%= nonMcqTotal %> Items) evaluated by instructor</p>
+                            <span class="material-symbols-rounded <%= isWrittenReviewed ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400' %> text-lg leading-none flex items-center justify-center shrink-0"><%= isWrittenReviewed ? 'task_alt' : 'lightbulb' %></span>
+                            <p class="text-xs font-semibold <%= isWrittenReviewed ? 'text-emerald-800 dark:text-emerald-300' : 'text-amber-800 dark:text-amber-300' %> truncate">
+                                <%= isWrittenReviewed ? 'Written questions evaluated by instructor' : `Written questions (${nonMcqTotal} Items) evaluated by instructor` %>
+                            </p>
                         </div>
-                        <a href="/question-bank/written-answers/<%= attempt._id %>" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0">
+                        <a href="/question-bank/written-evaluation/<%= attempt._id %><%= isFromCourse ? ('?from=course&courseId=' + (locals.courseId || '')) : '?from=exams' %>" class="px-3.5 py-1.5 rounded-xl <%= isWrittenReviewed ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-amber-600 hover:bg-amber-500' %> text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0">
                             <span>See Written Marks</span>
                             <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0">arrow_forward</span>
                         </a>
                     </div>
+                <% } else if (nonMcqTotal > 0 && (!attempt.writtenStatus || attempt.writtenStatus === 'none')) { %>
+                    <!-- WARNING: Exam had written questions but student didn't answer any -->
+                    <div class="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 rounded-2xl p-4 flex items-start gap-3">
+                        <span class="material-symbols-rounded text-red-500 dark:text-red-400 text-xl leading-none flex items-center justify-center shrink-0 mt-0.5">warning</span>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-xs font-bold text-red-700 dark:text-red-300">Written Questions Not Answered</p>
+                            <p class="text-[11px] text-red-600/80 dark:text-red-400/80 mt-0.5">You skipped all <%= nonMcqTotal %> written <%= nonMcqTotal === 1 ? 'question' : 'questions' %>. No marks counted, not sent for review.</p>
+                        </div>
+                    </div>
                 <% } %>
+
 
                 <!-- ACTION BUTTONS SECTION -->
                 <div class="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800 gap-3">
-                    <a href="/question-bank/review/<%= attempt._id %>" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all active:scale-95">
+                    <a href="/question-bank/review/<%= attempt._id %><%= isFromCourse ? ('?from=course&courseId=' + (locals.courseId || '')) : '?from=exams' %>" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all active:scale-95">
                         <span class="material-symbols-rounded text-base leading-none flex items-center justify-center shrink-0">fact_check</span>
                         <span>See Answers</span>
                     </a>

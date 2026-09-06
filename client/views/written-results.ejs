@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= locals.user && user.theme === 'dark' ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Written Exam Results | ODDHAY</title>
+</head>
+
+<body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <%- include('partials/student-header', { pageTitle: 'Written Results', activePage: 'exams', backUrl: '/exams' }) %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'exams' }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-4 sm:p-6 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative space-y-4 pb-12">
+            
+            <%
+               const allAttempts = locals.attempts || [];
+               let reviewedCount = 0;
+               let pendingCount = 0;
+               let totalWrittenEarned = 0;
+               let totalWrittenMax = 0;
+
+               allAttempts.forEach(att => {
+                   const isRev = att.writtenStatus === 'reviewed';
+                   if (isRev) {
+                       reviewedCount++;
+                       const revScore = (att.teacherReview && typeof att.teacherReview.totalWrittenScore === 'number')
+                           ? att.teacherReview.totalWrittenScore
+                           : (att.userAnswers || []).filter(u => u.questionType !== 'MCQ').reduce((sum, u) => sum + (u.marksObtained || 0), 0);
+                       const maxScore = (att.teacherReview && typeof att.teacherReview.maxWrittenScore === 'number' && att.teacherReview.maxWrittenScore > 0)
+                           ? att.teacherReview.maxWrittenScore
+                           : (att.userAnswers || []).filter(u => u.questionType !== 'MCQ').reduce((sum, u) => sum + (u.maxMarks || 5), 0);
+                       totalWrittenEarned += revScore;
+                       totalWrittenMax += maxScore;
+                   } else {
+                       pendingCount++;
+                   }
+               });
+
+               const avgPercentage = totalWrittenMax > 0 ? Math.round((totalWrittenEarned / totalWrittenMax) * 100) : 0;
+            %>
+
+            <!-- METRIC STATS ROW -->
+            <div class="max-w-5xl w-full mx-auto grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 flex flex-col gap-0.5">
+                    <span class="text-[11px] text-slate-400 font-semibold flex items-center gap-1.5">
+                        <span class="material-symbols-rounded text-[15px] leading-none text-indigo-500 flex items-center justify-center shrink-0">assignment</span>
+                        <span>Total Written</span>
+                    </span>
+                    <span class="text-lg font-bold text-slate-900 dark:text-white"><%= allAttempts.length %></span>
+                </div>
+
+                <div class="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex flex-col gap-0.5">
+                    <span class="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1.5">
+                        <span class="material-symbols-rounded text-[15px] leading-none text-emerald-500 flex items-center justify-center shrink-0">verified</span>
+                        <span>Reviewed</span>
+                    </span>
+                    <span class="text-lg font-bold text-emerald-600 dark:text-emerald-300"><%= reviewedCount %></span>
+                </div>
+
+                <div class="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col gap-0.5">
+                    <span class="text-[11px] text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-1.5">
+                        <span class="material-symbols-rounded text-[15px] leading-none text-amber-500 flex items-center justify-center shrink-0">hourglass_top</span>
+                        <span>Pending</span>
+                    </span>
+                    <span class="text-lg font-bold text-amber-600 dark:text-amber-300"><%= pendingCount %></span>
+                </div>
+
+                <div class="p-3 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex flex-col gap-0.5">
+                    <span class="text-[11px] text-cyan-700 dark:text-cyan-400 font-semibold flex items-center gap-1.5">
+                        <span class="material-symbols-rounded text-[15px] leading-none text-cyan-500 flex items-center justify-center shrink-0">trending_up</span>
+                        <span>Average Score</span>
+                    </span>
+                    <span class="text-lg font-bold text-cyan-600 dark:text-cyan-300"><%= reviewedCount > 0 ? avgPercentage + '%' : 'N/A' %></span>
+                </div>
+            </div>
+
+            <!-- FILTER TABS & FULL HISTORY BAR -->
+            <div class="max-w-5xl w-full mx-auto flex items-center justify-between border-b border-slate-200/80 dark:border-slate-800 pb-2 flex-wrap gap-2">
+                <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="filterWrittenResults('all')" id="tabBtn-all" class="tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-white dark:bg-cyan-600 shadow-xs flex items-center gap-1">
+                        <span>All</span>
+                        <span class="tab-count px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 text-white font-bold"><%= allAttempts.length %></span>
+                    </button>
+                    <button type="button" onclick="filterWrittenResults('reviewed')" id="tabBtn-reviewed" class="tab-btn px-3 py-1.5 rounded-xl text-xs font-semibold transition-all text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1">
+                        <span>Reviewed</span>
+                        <span class="tab-count px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-bold"><%= reviewedCount %></span>
+                    </button>
+                    <button type="button" onclick="filterWrittenResults('pending')" id="tabBtn-pending" class="tab-btn px-3 py-1.5 rounded-xl text-xs font-semibold transition-all text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1">
+                        <span>Pending</span>
+                        <span class="tab-count px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold"><%= pendingCount %></span>
+                    </button>
+                </div>
+
+                <a href="/exams/history" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 shrink-0" title="Full Exam History">
+                    <span class="material-symbols-rounded text-sm text-cyan-500 leading-none flex items-center justify-center shrink-0">history</span>
+                    <span>Full History</span>
+                </a>
+            </div>
+
+            <!-- WRITTEN EXAMS LIST -->
+            <div class="max-w-5xl w-full mx-auto space-y-3">
+                <% if (allAttempts.length === 0) { %>
+                    <div class="py-16 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                        <span class="material-symbols-rounded text-4xl text-slate-400 leading-none flex items-center justify-center shrink-0 mx-auto">rate_review</span>
+                        <h3 class="text-xs font-bold text-slate-600 dark:text-slate-400">No Written Exams Found</h3>
+                        <p class="text-[11px] text-slate-400">You have not taken any exams with written questions yet.</p>
+                        <div class="pt-2">
+                            <a href="/exams" class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-cyan-600 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all">
+                                <span>Browse Exams</span>
+                            </a>
+                        </div>
+                    </div>
+                <% } else { %>
+                    <div id="resultsContainer" class="space-y-3">
+                        <% allAttempts.forEach(function(att) { %>
+                            <%
+                               const bankObj = att.bank || {};
+                               // Build display title: prefer explicit title, then compose from metadata
+                               const hasExplicitTitle = bankObj.title && bankObj.title.trim() !== '';
+                               const rawTitle = hasExplicitTitle ? bankObj.title.trim() : '';
+                               let displayTitle = rawTitle;
+
+                               if (!hasExplicitTitle) {
+                                   // No explicit title — build one from subject + topic + board + year
+                                   const parts = [
+                                       bankObj.subject,
+                                       bankObj.topic,
+                                       bankObj.board,
+                                       bankObj.year
+                                   ].filter(p => p && String(p).trim());
+                                   displayTitle = parts.length > 0 ? parts.join(' — ') : 'Written Exam';
+                               } else if (bankObj.isMockTest || rawTitle.toLowerCase().includes('mock test')) {
+                                   const cleanName = rawTitle.replace(/^(mock test|model test)\s*-\s*/i, '').trim();
+                                   displayTitle = `Mock Test — ${cleanName}`;
+                               } else if (rawTitle.toLowerCase().includes('model test')) {
+                                   const cleanName = rawTitle.replace(/^(model test|mock test)\s*-\s*/i, '').trim();
+                                   displayTitle = `Model Test — ${cleanName}`;
+                               }
+
+                               // Append topic/board/year as subtitle hint if not already in title
+                               const metaParts = [bankObj.board, bankObj.year].filter(p => p && String(p).trim() && !displayTitle.includes(String(p).trim()));
+                               const metaHint = metaParts.join(' · ');
+
+                               const isReviewed = att.writtenStatus === 'reviewed';
+                               const userAnswers = att.userAnswers || [];
+                               const writtenAnswers = userAnswers.filter(u => u.questionType !== 'MCQ');
+
+                                let writtenEarned = 0;
+                                let writtenMax = 0;
+                                if (att.teacherReview && typeof att.teacherReview.totalWrittenScore === 'number') {
+                                    writtenEarned = att.teacherReview.totalWrittenScore;
+                                    writtenMax = att.teacherReview.maxWrittenScore || writtenAnswers.reduce((sum, u) => sum + (u.maxMarks || 5), 0);
+                                } else {
+                                    writtenAnswers.forEach(u => {
+                                        writtenEarned += (u.marksObtained || 0);
+                                        writtenMax += (u.maxMarks || 5);
+                                    });
+                                }
+
+                                const mcqEarned = att.mcqScore || 0;
+                                const mcqMax = att.maxMcqScore || 0;
+                                const grandEarned = mcqEarned + (isReviewed ? writtenEarned : 0);
+                                const grandMax = mcqMax + writtenMax;
+
+                                const subDate = att.submittedAt ? new Date(att.submittedAt) : new Date();
+                                const formattedSubDate = subDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+                                const teacherNote = (att.teacherReview && att.teacherReview.overallFeedback) ? att.teacherReview.overallFeedback.trim() : '';
+                                const reviewerName = (att.teacherReview && att.teacherReview.reviewerName) ? att.teacherReview.reviewerName : 'Teacher';
+                            %>
+
+                            <div class="result-card bg-slate-50 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col gap-3 transition-all duration-200 hover:border-cyan-500/50 shadow-2xs" data-status="<%= isReviewed ? 'reviewed' : 'pending' %>">
+                                
+                                <!-- CARD TOP HEADER -->
+                                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                                    <div class="space-y-1 min-w-0 flex-1">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/20">
+                                                <%= bankObj.subject || 'General' %>
+                                            </span>
+                                            <% if (bankObj.topic) { %>
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-violet-50 dark:bg-violet-500/10 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-500/20">
+                                                    <%= bankObj.topic %>
+                                                </span>
+                                            <% } %>
+                                            <% if (bankObj.course) { %>
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20">
+                                                    <%= bankObj.course.title || 'Course Exam' %>
+                                                </span>
+                                            <% } %>
+                                            <span class="text-[10px] text-slate-400 font-medium">
+                                                Submitted: <%= formattedSubDate %>
+                                            </span>
+                                        </div>
+
+                                        <h3 class="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                                            <%= displayTitle %>
+                                        </h3>
+                                        <% if (metaHint) { %>
+                                            <p class="text-[11px] text-slate-400 font-medium leading-none"><%= metaHint %></p>
+                                        <% } %>
+                                    </div>
+
+                                    <!-- STATUS BADGE -->
+                                    <div class="shrink-0">
+                                        <% if (isReviewed) { %>
+                                            <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 shadow-2xs">
+                                                <span class="size-2 rounded-full bg-emerald-500 shrink-0"></span>
+                                                <span class="leading-none">Reviewed by <%= reviewerName %></span>
+                                            </span>
+                                        <% } else { %>
+                                            <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1.5 shadow-2xs">
+                                                <span class="size-2 rounded-full bg-amber-500 shrink-0"></span>
+                                                <span class="leading-none">Pending Evaluation</span>
+                                            </span>
+                                        <% } %>
+                                    </div>
+                                </div>
+
+                                <!-- MARKS METRICS ROW -->
+                                <div class="flex items-center gap-2 sm:gap-3 flex-wrap text-xs font-semibold py-1">
+                                    <!-- Written Score -->
+                                    <div class="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1.5">
+                                        <span class="text-slate-400 font-medium text-[11px]">Written:</span>
+                                        <% if (isReviewed) { %>
+                                            <span class="font-bold text-emerald-600 dark:text-emerald-400"><%= writtenEarned %> / <%= writtenMax %></span>
+                                        <% } else { %>
+                                            <span class="font-bold text-amber-600 dark:text-amber-400">Awaiting Grade</span>
+                                        <% } %>
+                                    </div>
+
+                                    <!-- MCQ Score (if exam has MCQs) -->
+                                    <% if (mcqMax > 0) { %>
+                                        <div class="px-2.5 py-1 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-1.5">
+                                            <span class="text-slate-400 font-medium text-[11px]">MCQ:</span>
+                                            <span class="font-bold text-slate-800 dark:text-slate-200"><%= mcqEarned %> / <%= mcqMax %></span>
+                                        </div>
+                                    <% } %>
+
+                                    <!-- Grand Total Score -->
+                                    <div class="px-2.5 py-1 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-200/80 dark:border-cyan-500/30 flex items-center gap-1.5">
+                                        <span class="text-cyan-700 dark:text-cyan-400 font-medium text-[11px]">Total:</span>
+                                        <% if (isReviewed) { %>
+                                            <span class="font-extrabold text-cyan-800 dark:text-cyan-200"><%= grandEarned %> / <%= grandMax %></span>
+                                        <% } else { %>
+                                            <span class="font-bold text-amber-600 dark:text-amber-400">Pending</span>
+                                        <% } %>
+                                    </div>
+                                </div>
+
+                                <!-- TEACHER FEEDBACK SNIPPET (IF REVIEWED) -->
+                                <% if (isReviewed && teacherNote) { %>
+                                    <div class="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 text-xs flex items-start gap-2">
+                                        <span class="material-symbols-rounded text-base text-cyan-500 leading-none flex items-center justify-center shrink-0 mt-0.5">format_quote</span>
+                                        <div class="min-w-0 flex-1">
+                                            <p class="text-slate-700 dark:text-slate-300 font-medium italic">"<%= teacherNote %>"</p>
+                                        </div>
+                                    </div>
+                                <% } %>
+
+                                <!-- CARD FOOTER ACTION -->
+                                <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-800">
+                                    <span class="text-[11px] text-slate-400 font-medium">
+                                        <%= writtenAnswers.length %> <%= writtenAnswers.length === 1 ? 'Written Question' : 'Written Questions' %>
+                                    </span>
+
+                                    <a href="/question-bank/written-evaluation/<%= att._id %>?from=exams" class="px-4 py-1.5 rounded-xl text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 dark:bg-cyan-600 dark:hover:bg-cyan-500 transition-all shadow-2xs active:scale-95 flex items-center gap-1.5" title="View Detailed Evaluation">
+                                        <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0">visibility</span>
+                                        <span>View Evaluation</span>
+                                    </a>
+                                </div>
+
+                            </div>
+                        <% }); %>
+                    </div>
+                <% } %>
+            </div>
+
+        </main>
+    </div>
+
+    <%- include('partials/student-bottom-nav', { activePage: 'exams' }) %>
+    <%- include('partials/app-scripts') %>
+
+    <script>
+        function filterWrittenResults(filter) {
+            const cards = document.querySelectorAll('.result-card');
+            const btns = document.querySelectorAll('.tab-btn');
+
+            btns.forEach(b => {
+                b.className = 'tab-btn px-3 py-1.5 rounded-xl text-xs font-semibold transition-all text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center gap-1';
+            });
+
+            const activeBtn = document.getElementById('tabBtn-' + filter);
+            if (activeBtn) {
+                activeBtn.className = 'tab-btn px-3 py-1.5 rounded-xl text-xs font-bold transition-all bg-slate-900 text-white dark:bg-cyan-600 shadow-xs flex items-center gap-1';
+            }
+
+            cards.forEach(card => {
+                const status = card.getAttribute('data-status');
+                if (filter === 'all') {
+                    card.style.display = 'flex';
+                } else if (filter === status) {
+                    card.style.display = 'flex';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+    </script>
+</body>
+</html>

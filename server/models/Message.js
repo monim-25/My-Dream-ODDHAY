@@ -25,9 +25,28 @@ const messageSchema = new mongoose.Schema({
     },
     // Room: 'global' for public chat, or userId for private
     room: { type: String, default: 'global' },
-    text: { type: String, required: true, maxlength: 1000 },
+    text: { type: String, default: '', maxlength: 2000 },
+    attachment: {
+        url: { type: String },
+        fileType: { type: String, enum: ['image', 'video', 'audio', 'pdf', 'document', 'other'] },
+        fileName: { type: String },
+        fileSize: { type: Number },
+        duration: { type: Number } // For voice notes / audio in seconds
+    },
     isRead: { type: Boolean, default: false },
     highlighted: { type: Boolean, default: false },
+    isPinned: { type: Boolean, default: false },
+    pinnedAt: { type: Date },
+    pinnedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    replyTo: {
+        messageId: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' },
+        senderName: { type: String },
+        text: { type: String },
+        fileType: { type: String }
+    },
+    deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    deletedForEveryone: { type: Boolean, default: false },
+    likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     replies: [replySchema],
     createdAt: { type: Date, default: Date.now }
 });

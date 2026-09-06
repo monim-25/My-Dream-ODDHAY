@@ -20,5 +20,6 @@ const commentSchema = new mongoose.Schema({
 
 // Index for fast comment fetching per lesson node
 commentSchema.index({ nodeId: 1, createdAt: -1 });
+commentSchema.index({ nodeId: 1, highlighted: -1, createdAt: -1 });
 
 module.exports = mongoose.model('Comment', commentSchema);

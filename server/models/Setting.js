@@ -10,6 +10,20 @@ const SettingSchema = new mongoose.Schema({
         nagad: { type: String, default: '' },
         rocket: { type: String, default: '' }
     },
+    paymentGateway: {
+        mode: { type: String, enum: ['sandbox', 'live'], default: 'sandbox' },
+        bkash: {
+            appKey: { type: String, default: '' },
+            appSecret: { type: String, default: '' },
+            username: { type: String, default: '' },
+            password: { type: String, default: '' }
+        },
+        nagad: {
+            merchantId: { type: String, default: '' },
+            publicKey: { type: String, default: '' },
+            privateKey: { type: String, default: '' }
+        }
+    },
     contactInfo: {
         email: { type: String, default: 'support@oddhay.com' },
         phone: { type: String, default: '+8801XXXXXXXXX' },

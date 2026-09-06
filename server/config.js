@@ -27,7 +27,12 @@ const connectDB = async () => {
 const protect = (req, res, next) => {
     const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
     if (userId) { if (!req.session.userId) req.session.userId = userId; next(); }
-    else res.redirect('/login');
+    else {
+        if (req.path.startsWith('/api') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json'))) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        res.redirect('/login');
+    }
 };
 
 const adminProtect = (req, res, next) => {

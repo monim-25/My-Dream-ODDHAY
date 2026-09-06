@@ -7,7 +7,7 @@
 </head>
 
 <body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
-    <%- include('partials/student-header') %>
+    <%- include('partials/student-header', { pageTitle: 'Exam History', activePage: 'exams', backUrl: '/exams' }) %>
 
     <div class="flex-1 flex overflow-hidden w-full relative">
         <%- include('partials/student-sidebar', { activePage: 'exams' }) %>
@@ -28,12 +28,16 @@
                        let lifeWritten = 0;
                        attempts.forEach(function(a) {
                            lifeMcq += (a.mcqScore || 0);
-                           if (Array.isArray(a.userAnswers)) {
-                               a.userAnswers.forEach(function(ua) {
-                                   if (ua.questionType !== 'MCQ' && ua.marksObtained !== undefined && ua.marksObtained !== null) {
-                                       lifeWritten += ua.marksObtained;
-                                   }
-                               });
+                           if (a.writtenStatus === 'reviewed') {
+                               if (a.teacherReview && typeof a.teacherReview.totalWrittenScore === 'number') {
+                                   lifeWritten += a.teacherReview.totalWrittenScore;
+                               } else if (Array.isArray(a.userAnswers)) {
+                                   a.userAnswers.forEach(function(ua) {
+                                       if (ua.questionType !== 'MCQ' && ua.marksObtained !== undefined && ua.marksObtained !== null) {
+                                           lifeWritten += ua.marksObtained;
+                                       }
+                                   });
+                               }
                            }
                        });
                        let lifeTotal = lifeMcq + lifeWritten;
@@ -52,21 +56,38 @@
                 </div>
 
                 <div class="flex items-center gap-2 shrink-0">
+                    <!-- WRITTEN RESULTS BUTTON -->
+                    <a href="/exams/written-results" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 shrink-0" title="Written Exam Results & Evaluations">
+                        <span class="material-symbols-rounded text-sm text-cyan-500 leading-none flex items-center justify-center shrink-0">rate_review</span>
+                        <span>Written Results</span>
+                    </a>
+
                     <!-- TOTAL ATTEMPTS BADGE -->
                     <span class="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 shrink-0">
                         <span class="material-symbols-rounded text-sm text-cyan-500 leading-none">assignment_turned_in</span>
                         <span id="attemptCountBadge"><%= attempts.length %> <%= attempts.length === 1 ? 'Attempt' : 'Attempts' %></span>
                     </span>
                 </div>
+
+                <!-- SEARCH INPUT -->
+                <div class="relative w-full sm:w-64">
+                    <span class="material-symbols-rounded absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">search</span>
+                    <input type="text" id="historySearchInput" placeholder="Search exam name..." class="w-full pl-9 pr-4 py-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none focus:border-cyan-500 transition-colors">
+                </div>
             </div>
 
-            <!-- HISTORY LIST / CARDS -->
+            <!-- EXAM HISTORY LIST -->
             <div class="max-w-5xl w-full mx-auto space-y-3">
                 <% if (attempts.length === 0) { %>
                     <div class="py-16 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
-                        <span class="material-symbols-rounded text-4xl text-slate-400 leading-none">history_toggle_off</span>
+                        <span class="material-symbols-rounded text-4xl text-slate-400 leading-none flex items-center justify-center shrink-0 mx-auto">sentiment_dissatisfied</span>
                         <h3 class="text-xs font-bold text-slate-600 dark:text-slate-400">No Exam History Found</h3>
-                        <p class="text-[11px] text-slate-400">You have not completed any exams yet.</p>
+                        <p class="text-[11px] text-slate-400">You have not attempted any exams yet.</p>
+                        <div class="pt-2">
+                            <a href="/exams" class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-cyan-600 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all">
+                                <span>Browse Exams</span>
+                            </a>
+                        </div>
                     </div>
                 <% } else { %>
                     <div id="historyContainer" class="space-y-2.5">
@@ -76,11 +97,15 @@
                                const rawTitle = (bankObj.title && bankObj.title.trim() !== '') ? bankObj.title.trim() : (bankObj.subject || 'Practice Exam');
                                
                                let displayTitle = rawTitle;
-                               if (bankObj.isMockTest || rawTitle.toLowerCase().includes('mock test')) {
-                                   const cleanName = rawTitle.replace(/^(mock test|model test)\s*-\s*/i, '');
+                               if (bankObj.course) {
+                                   // Course-linked exam: ALWAYS show actual title set by the teacher, never "Mock Test"
+                                   const cleanTeacherTitle = rawTitle.replace(/^(mock test|model test)\s*-\s*/i, '').trim();
+                                   displayTitle = cleanTeacherTitle || rawTitle;
+                               } else if (bankObj.isMockTest || rawTitle.toLowerCase().includes('mock test')) {
+                                   const cleanName = rawTitle.replace(/^(mock test|model test)\s*-\s*/i, '').trim();
                                    displayTitle = `Mock Test - ${cleanName}`;
                                } else if (rawTitle.toLowerCase().includes('model test')) {
-                                   const cleanName = rawTitle.replace(/^(model test|mock test)\s*-\s*/i, '');
+                                   const cleanName = rawTitle.replace(/^(model test|mock test)\s*-\s*/i, '').trim();
                                    displayTitle = `Model Test - ${cleanName}`;
                                }
 
@@ -95,33 +120,38 @@
                                let writtenMaxMarks = 0;
                                let isWrittenPending = false;
 
-                               if (hasWritten) {
-                                   let pendingCount = 0;
-                                   writtenAnswers.forEach(ua => {
-                                       writtenMaxMarks += (ua.maxMarks || 5);
-                                       if (ua.marksObtained !== undefined && ua.marksObtained !== null) {
-                                           writtenScoreObtained += ua.marksObtained;
-                                       } else {
-                                           pendingCount++;
-                                       }
-                                   });
-                                   if (att.writtenStatus === 'pending' || pendingCount > 0) {
-                                       isWrittenPending = true;
-                                   }
-                               }
+                                if (hasWritten) {
+                                    if (att.writtenStatus === 'reviewed') {
+                                        isWrittenPending = false;
+                                        if (att.teacherReview && typeof att.teacherReview.totalWrittenScore === 'number') {
+                                            writtenScoreObtained = att.teacherReview.totalWrittenScore;
+                                            writtenMaxMarks = att.teacherReview.maxWrittenScore || writtenAnswers.reduce((sum, u) => sum + (u.maxMarks || 5), 0);
+                                        } else {
+                                            writtenAnswers.forEach(ua => {
+                                                writtenMaxMarks += (ua.maxMarks || 5);
+                                                writtenScoreObtained += (ua.marksObtained || 0);
+                                            });
+                                        }
+                                    } else {
+                                        isWrittenPending = true;
+                                        writtenAnswers.forEach(ua => {
+                                            writtenMaxMarks += (ua.maxMarks || 5);
+                                        });
+                                    }
+                                }
 
-                               const totalObtainedMarks = mcqScore + (isWrittenPending ? 0 : writtenScoreObtained);
-                               const totalMaxMarks = maxMcqScore + writtenMaxMarks;
+                                const totalObtainedMarks = mcqScore + (isWrittenPending ? 0 : writtenScoreObtained);
+                                const totalMaxMarks = maxMcqScore + writtenMaxMarks;
 
-                               const totalExamMins = parseInt(bankObj.duration) || 30;
-                               const timeSecs = att.timeTakenSeconds || 0;
-                               const timeMins = Math.floor(timeSecs / 60);
-                               const remSecs = timeSecs % 60;
-                               const timeTakenStr = (timeMins > 0) ? `${timeMins}m ${remSecs}s` : `${remSecs}s`;
-                               const formattedDuration = `${timeTakenStr}/${totalExamMins}m`;
+                                const totalExamMins = parseInt(bankObj.duration) || 30;
+                                const timeSecs = att.timeTakenSeconds || 0;
+                                const timeMins = Math.floor(timeSecs / 60);
+                                const remSecs = timeSecs % 60;
+                                const timeTakenStr = (timeMins > 0) ? `${timeMins}m ${remSecs}s` : `${remSecs}s`;
+                                const formattedDuration = `${timeTakenStr}/${totalExamMins}m`;
 
-                               const subDate = att.submittedAt ? new Date(att.submittedAt) : new Date();
-                               const formattedSubmission = subDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                                const subDate = att.submittedAt ? new Date(att.submittedAt) : new Date();
+                                const formattedSubmission = subDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
                             %>
                             
                             <div class="history-item bg-slate-50 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all duration-200 hover:border-cyan-500/50 shadow-2xs" data-title="<%= displayTitle.toLowerCase() %>">
@@ -131,6 +161,11 @@
                                         <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/20">
                                             <%= bankObj.subject || 'General' %>
                                         </span>
+                                        <% if (bankObj.course) { %>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20">
+                                                <%= bankObj.course.title || 'Course Exam' %>
+                                            </span>
+                                        <% } %>
                                         <span class="text-[10px] text-slate-400 font-medium">
                                             Submitted: <%= formattedSubmission %> • <span class="text-slate-900 dark:text-white font-bold">Total: <%= isWrittenPending ? 'Pending' : (totalObtainedMarks + '/' + totalMaxMarks) %></span>
                                         </span>
@@ -153,10 +188,10 @@
                                                 <span class="text-slate-400 font-medium text-[11px]">Written:</span>
                                                 <% if (isWrittenPending) { %>
                                                     <span class="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
-                                                        Pending
+                                                        Pending Review
                                                     </span>
                                                 <% } else { %>
-                                                    <span class="font-bold text-slate-800 dark:text-slate-100"><%= writtenScoreObtained %>/<%= writtenMaxMarks %></span>
+                                                    <span class="font-bold text-emerald-600 dark:text-emerald-400"><%= writtenScoreObtained %>/<%= writtenMaxMarks %> (Reviewed)</span>
                                                 <% } %>
                                             </div>
                                         <% } %>
@@ -169,9 +204,15 @@
                                     </div>
                                 </div>
 
-                                <!-- SEE ANSWERS ACTION ICON BUTTON -->
-                                <div class="shrink-0 flex items-center justify-end w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/60 dark:border-slate-800">
-                                    <a href="/question-bank/review/<%= att._id %>" class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-cyan-600 dark:hover:bg-cyan-500 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs active:scale-95" title="See Answers">
+                                <!-- ACTION BUTTONS -->
+                                <div class="shrink-0 flex items-center justify-end gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/60 dark:border-slate-800">
+                                    <% if (hasWritten) { %>
+                                        <a href="/question-bank/written-evaluation/<%= att._id %>?from=exams" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1 shadow-2xs active:scale-95" title="View Written Evaluation">
+                                            <span class="material-symbols-rounded text-sm leading-none">rate_review</span>
+                                            <span>Written Result</span>
+                                        </a>
+                                    <% } %>
+                                    <a href="/question-bank/review/<%= att._id %>?from=exams" class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-cyan-600 dark:hover:bg-cyan-500 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs active:scale-95" title="See Answers">
                                         <span class="material-symbols-rounded text-sm leading-none">visibility</span>
                                         <span>See Answers</span>
                                     </a>

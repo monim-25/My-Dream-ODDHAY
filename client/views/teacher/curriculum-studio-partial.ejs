@@ -18,7 +18,7 @@
 <div id="curriculum-tree-container" class="space-y-4">
     <div class="py-20 text-center">
         <div class="inline-block size-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <p class="text-xs font-bold text-slate-400 mt-4">Loading Curriculum Studio...</p>
+        <p class="text-xs font-bold text-slate-400 mt-4">Loading Curriculum...</p>
     </div>
 </div>
 
@@ -93,10 +93,9 @@
                         </div>
                         <div class="flex items-center gap-1.5 shrink-0 w-40 md:w-52">
                             <div class="relative flex-1">
-                                <span class="material-symbols-rounded absolute left-2.5 top-1/2 -translate-y-1/2 text-[14px] text-slate-400">search</span>
-                                <input type="text" id="playlistSearchInput" oninput="filterPlaylist()" placeholder="Search..." class="w-full pl-8 pr-3 py-1.5 text-[11px] bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all text-slate-700 dark:text-slate-300 placeholder-slate-400">
+                                <input type="text" id="playlistSearchInput" oninput="filterPlaylist()" placeholder="Search lessons..." class="w-full px-3 py-1.5 text-[11px] bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/20 transition-all text-slate-700 dark:text-slate-300 placeholder-slate-400">
                             </div>
-                            <button type="button" onclick="filterPlaylist()" class="size-7 flex items-center justify-center shrink-0 bg-slate-900 dark:bg-white hover:bg-primary dark:hover:bg-primary text-white dark:text-slate-900 dark:hover:text-white rounded-full transition-all shadow-sm">
+                            <button type="button" onclick="filterPlaylist()" class="size-7 flex items-center justify-center shrink-0 bg-slate-900 dark:bg-white hover:bg-primary dark:hover:bg-primary text-white dark:text-slate-900 dark:hover:text-white rounded-full transition-all shadow-sm" title="Search">
                                 <span class="material-symbols-rounded text-[14px]">search</span>
                             </button>
                         </div>
@@ -461,12 +460,17 @@
     const currentCourseId = '<%= course._id %>';
     const currentCourseSubject = '<%= course.subject %>';
     const currentCourseClass = '<%= course.classLevel %>';
-    let curriculumNodes = [];
+    let curriculumNodes = <%- JSON.stringify(course.curriculumNodes || []) %>;
     let currentFolderId = null;
     let activePopoverParentId = null;
     let redirectQuizCreatedId = new URLSearchParams(window.location.search).get('quizCreatedId') || '';
     let selectionMode = false;
     let activePlayingNodeId = null;
+
+    // Render immediately if nodes are present
+    if (curriculumNodes && curriculumNodes.length > 0) {
+        try { renderCurriculumTree(); } catch(e) {}
+    }
 
     // Initialize state from URL hash if present
     let pendingVideoNodeId = null;
@@ -734,15 +738,26 @@
                 
                 if (node.type === 'video') {
                     icon = 'play_circle';
-                    typeLabel = 'Video Lesson';
+                    typeLabel = 'Video Class';
                     detailHtml = node.duration ? `<span class="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-none font-mono font-bold">${node.duration}</span>` : '';
                 } else if (node.type === 'note') {
-                    icon = 'description';
-                    typeLabel = 'Note';
+                    const ext = (node.filePath ? node.filePath.split('.').pop() : '').toLowerCase();
+                    const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'].includes(ext);
+                    const isPdf = ext === 'pdf';
+                    
+                    if (isPdf) {
+                        icon = 'picture_as_pdf';
+                        typeLabel = 'PDF File';
+                    } else if (isImage) {
+                        icon = 'image';
+                        typeLabel = 'Image Note';
+                    } else {
+                        icon = 'description';
+                        typeLabel = 'Lecture Note';
+                    }
+                    
                     if (node.filePath) {
-                        const ext = node.filePath.split('.').pop().toLowerCase();
-                        const isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext);
-                        detailHtml = `<a href="${node.filePath}" target="_blank" class="text-[9px] text-emerald-500 hover:underline flex items-center gap-0.5 font-bold"><span class="material-symbols-rounded text-xs">${isImage ? 'image' : 'picture_as_pdf'}</span>View File</a>`;
+                        detailHtml = `<a href="${node.filePath}" target="_blank" class="text-[9px] text-emerald-500 hover:underline flex items-center gap-0.5 font-bold"><span class="material-symbols-rounded text-xs">${isImage ? 'image' : 'picture_as_pdf'}</span>View</a>`;
                     }
                 } else if (node.type === 'liveClass') {
                     icon = 'podcasts';
@@ -750,11 +765,11 @@
                     const isEnded = node.videoPath || node.isRecorded;
                     
                     if (isEnded) {
-                        typeLabel = 'Video Lesson';
+                        typeLabel = 'Recorded Class';
                         icon = 'play_circle';
-                        detailHtml = node.duration ? `<span class="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-none font-mono font-bold">${node.duration}</span>` : `<span class="text-[10px] text-slate-500 font-bold">Recorded Video</span>`;
+                        detailHtml = node.duration ? `<span class="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-none font-mono font-bold">${node.duration}</span>` : `<span class="text-[10px] text-slate-500 font-bold">Recorded</span>`;
                     } else if (isScheduled) {
-                        typeLabel = 'scheduled Live Class';
+                        typeLabel = 'Scheduled Live';
                         detailHtml = `
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-[10px] text-slate-500 font-bold countdown-timer" data-time="${node.date}"></span>
@@ -830,12 +845,12 @@
                         <div class="node-select-col flex items-center gap-3 mr-2 shrink-0">
                             <input type="checkbox" class="node-select-checkbox size-4 accent-primary cursor-pointer" data-id="${node._id}" ${node.isReadonly ? 'disabled title="Restricted"' : ''} onclick="event.stopPropagation(); handleCheckboxChange();">
                         </div>
-                        <div class="flex items-center gap-4 min-w-0 flex-1">
-                            <span class="material-symbols-rounded ${isFolder ? 'text-amber-500' : 'text-slate-400 dark:text-slate-500'} shrink-0 text-[28px]">${icon}</span>
+                        <div class="flex items-center gap-3.5 min-w-0 flex-1">
+                            <span class="material-symbols-rounded ${isFolder ? 'text-amber-500' : 'text-slate-400 dark:text-slate-500'} shrink-0 text-[26px]">${icon}</span>
                             <div class="min-w-0 flex-1">
-                                <h5 class="text-sm font-bold text-slate-800 dark:text-white truncate leading-normal font-sans">${node.name}</h5>
-                                <div class="flex items-center gap-2.5 mt-1">
-                                    <span class="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">${typeLabel}</span>
+                                <h5 class="text-sm font-semibold text-slate-800 dark:text-white truncate leading-normal font-sans">${node.name}</h5>
+                                <div class="flex items-center gap-2 mt-0.5">
+                                    <span class="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider">${typeLabel}</span>
                                     ${detailHtml}
                                 </div>
                             </div>
@@ -1734,7 +1749,7 @@
                 window.open(`/teacher/quiz-details/${qId}`, '_blank');
                 return;
             } else if (node.type === 'liveClass') {
-                window.open(`/live/${node.meetingUrl || node._id}`, '_blank');
+                window.location.href = `/live/${node.meetingUrl || node._id}`;
                 return;
             }
             alert('This item does not have a valid video attached.');
@@ -1780,11 +1795,10 @@
             const currentSpeed = parseFloat(localStorage.getItem('video-speed') || '1.0');
             videoEl.playbackRate = currentSpeed;
             
-            // Add error handling to notify if the browser can't decode the video format
+            // Add error handling to log if the browser can't decode the video format
             videoEl.onerror = function() {
-                // Only show alert if src is actually valid and not empty or during a deliberate state reset
-                if (videoEl.src && videoEl.src !== window.location.href) {
-                    alert('Error: The browser cannot play this video format. Make sure it is a standard MP4 (H.264 codec).');
+                if (videoEl.getAttribute('src')) {
+                    console.warn('Video format or source load error:', videoEl.src);
                 }
             };
             

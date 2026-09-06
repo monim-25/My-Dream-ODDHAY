@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Notifications | ODDHAY</title>
+</head>
+
+<body class="bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <%- include('partials/student-header') %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: 'notifications' }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-0 m-0 space-y-0 no-scrollbar bg-[#FFFFFF] dark:bg-[#0b1120] relative">
+            
+            <% const u = locals.user || {}; %>
+            <% const notifList = locals.notifications || []; %>
+            <% const st = locals.stats || { total: 0, unread: 0, payment: 0, course: 0, exam: 0, announcement: 0 }; %>
+
+            <!-- FILTER TABS, ACTIONS & SEARCH BAR -->
+            <div class="sticky top-0 z-20 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
+                <!-- Filter Pills -->
+                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                    <button type="button" onclick="setPageCategory('all')" id="catBtn-all" class="cat-pill active-cat px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 bg-primary text-white shadow-xs cursor-pointer">
+                        All <span class="ml-1 opacity-80" id="count-all">(<%= st.total %>)</span>
+                    </button>
+                    <button type="button" onclick="setPageCategory('unread')" id="catBtn-unread" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shrink-0 cursor-pointer">
+                        Unread <span class="ml-1 text-rose-500 font-bold" id="count-unread">(<%= st.unread %>)</span>
+                    </button>
+                    <button type="button" onclick="setPageCategory('payment')" id="catBtn-payment" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shrink-0 flex items-center gap-1 cursor-pointer">
+                        <span class="material-symbols-rounded text-[15px] leading-none text-emerald-500">payments</span>
+                        <span>Payments</span>
+                    </button>
+                    <button type="button" onclick="setPageCategory('course')" id="catBtn-course" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shrink-0 flex items-center gap-1 cursor-pointer">
+                        <span class="material-symbols-rounded text-[15px] leading-none text-blue-500">school</span>
+                        <span>Courses</span>
+                    </button>
+                    <button type="button" onclick="setPageCategory('exam')" id="catBtn-exam" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shrink-0 flex items-center gap-1 cursor-pointer">
+                        <span class="material-symbols-rounded text-[15px] leading-none text-amber-500">quiz</span>
+                        <span>Exams</span>
+                    </button>
+                    <button type="button" onclick="setPageCategory('announcement')" id="catBtn-announcement" class="cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shrink-0 flex items-center gap-1 cursor-pointer">
+                        <span class="material-symbols-rounded text-[15px] leading-none text-purple-500">campaign</span>
+                        <span>Notices</span>
+                    </button>
+                </div>
+
+                <!-- Right Tools: Search Bar & Actions -->
+                <div class="flex items-center gap-2 shrink-0 ml-auto w-full sm:w-auto">
+                    <!-- Live Search -->
+                    <div class="relative flex items-center shrink-0 flex-1 sm:w-52">
+                        <span class="material-symbols-rounded absolute left-3 text-slate-400 text-base pointer-events-none select-none">search</span>
+                        <input type="text" id="notifSearchInput" oninput="handleSearch(this.value)" placeholder="Search notifications..."
+                            class="w-full h-9.5 sm:h-10 pl-9 pr-7 text-xs font-semibold bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl outline-none focus:border-primary transition-all text-slate-800 dark:text-white placeholder-slate-400" />
+                        <button type="button" id="notifClearSearchBtn" onclick="clearSearch()" class="hidden absolute right-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer">
+                            <span class="material-symbols-rounded text-sm">cancel</span>
+                        </button>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <button type="button" onclick="pageMarkAllRead()" class="h-9.5 sm:h-10 px-3.5 sm:px-4 rounded-xl border border-slate-200 dark:border-slate-700/90 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs active:translate-y-0.5" title="Mark all as read">
+                        <span class="material-symbols-rounded text-[18px] leading-none text-primary">done_all</span>
+                        <span class="hidden md:inline">Mark All as Read</span>
+                    </button>
+                    <button type="button" onclick="pageClearRead()" class="h-9.5 sm:h-10 px-3 sm:px-3.5 rounded-xl border border-slate-200 dark:border-slate-700/90 bg-white dark:bg-slate-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:border-rose-200 dark:hover:border-rose-900/40 text-slate-600 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-400 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 shadow-xs active:translate-y-0.5" title="Clear read notifications">
+                        <span class="material-symbols-rounded text-[18px] leading-none">delete_sweep</span>
+                        <span class="hidden md:inline">Clear Read</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2. NOTIFICATIONS CONTAINER -->
+            <div class="max-w-4xl mx-auto p-4 sm:p-6">
+                <!-- Notifications Card List -->
+                <div id="pageNotificationList" class="space-y-3">
+                    <!-- Populated dynamically via JS or SSR initial render -->
+                    <% if (notifList.length === 0) { %>
+                        <div id="initialEmptyState" class="py-16 text-center">
+                            <div class="size-16 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-800/60 text-slate-400 flex items-center justify-center mb-3">
+                                <span class="material-symbols-rounded text-3xl leading-none">notifications_none</span>
+                            </div>
+                            <h3 class="text-base font-bold text-slate-800 dark:text-white">No notifications yet</h3>
+                        </div>
+                    <% } else { %>
+                        <% notifList.forEach(notif => { 
+                            let icon = 'notifications';
+                            let bgClass = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300';
+                            let borderClass = notif.isRead ? 'border-slate-200/80 dark:border-slate-800/80' : 'border-blue-200 dark:border-primary/40 bg-blue-50/20 dark:bg-primary/5';
+                            
+                            if (notif.type === 'payment') {
+                                icon = 'receipt_long';
+                                bgClass = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
+                            } else if (notif.type === 'course') {
+                                icon = 'school';
+                                bgClass = 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
+                            } else if (notif.type === 'exam') {
+                                icon = 'quiz';
+                                bgClass = 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
+                            } else if (notif.type === 'announcement') {
+                                icon = 'campaign';
+                                bgClass = 'bg-purple-500/10 text-purple-600 dark:text-purple-400';
+                            }
+                        %>
+                            <div class="notif-card p-4 rounded-2xl border bg-white dark:bg-[#0f172a] <%= borderClass %> hover:shadow-md transition-all duration-200 flex items-start gap-3.5 relative group"
+                                 data-id="<%= notif._id %>" data-type="<%= notif.type %>" data-read="<%= notif.isRead %>" data-title="<%= notif.title %>" data-msg="<%= notif.message %>">
+                                
+                                <!-- Icon -->
+                                <div class="size-10 rounded-xl <%= bgClass %> flex items-center justify-center shrink-0 mt-0.5">
+                                    <span class="material-symbols-rounded text-xl leading-none"><%= icon %></span>
+                                </div>
+
+                                <!-- Body -->
+                                <div class="flex-1 min-w-0 pr-4">
+                                    <div class="flex flex-wrap items-baseline gap-2 mb-1">
+                                        <h4 class="text-[13.5px] font-bold text-slate-800 dark:text-white leading-snug">
+                                            <%= notif.title %>
+                                        </h4>
+                                        <% if (!notif.isRead) { %>
+                                            <span class="inline-flex items-center px-1.5 py-0.2 text-[9px] font-extrabold uppercase tracking-wide bg-primary text-white rounded-full leading-normal">
+                                                New
+                                            </span>
+                                        <% } %>
+                                        <span class="text-[11px] font-medium text-slate-400 ml-auto shrink-0">
+                                            <%= new Date(notif.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed"><%= notif.message %></p>
+
+                                    <!-- Action Link if present -->
+                                    <% if (notif.link && notif.link !== '#' && notif.link !== '/') { %>
+                                        <div class="mt-2.5">
+                                            <a href="<%= notif.link %>" onclick="pageItemRead('<%= notif._id %>')" class="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:text-blue-600 transition-colors">
+                                                <span>Open Details</span>
+                                                <span class="material-symbols-rounded text-sm leading-none">arrow_forward</span>
+                                            </a>
+                                        </div>
+                                    <% } %>
+                                </div>
+
+                                <!-- Action buttons on hover -->
+                                <div class="flex items-center gap-1 opacity-80 group-hover:opacity-100 shrink-0">
+                                    <% if (!notif.isRead) { %>
+                                        <button type="button" onclick="pageItemRead('<%= notif._id %>')" title="Mark as read" class="size-7 rounded-lg text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center cursor-pointer">
+                                            <span class="material-symbols-rounded text-base leading-none">check_circle</span>
+                                        </button>
+                                    <% } %>
+                                    <button type="button" onclick="pageItemDelete('<%= notif._id %>')" title="Delete" class="size-7 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center justify-center cursor-pointer">
+                                        <span class="material-symbols-rounded text-base leading-none">delete</span>
+                                    </button>
+                                </div>
+                            </div>
+                        <% }) %>
+                    <% } %>
+                </div>
+
+                <!-- Empty Filter State -->
+                <div id="filterEmptyState" class="hidden py-16 text-center">
+                    <div class="size-14 mx-auto rounded-2xl bg-slate-100 dark:bg-slate-800/60 text-slate-400 flex items-center justify-center mb-3">
+                        <span class="material-symbols-rounded text-2xl leading-none">filter_list_off</span>
+                    </div>
+                    <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300">No matching notifications</h3>
+                    <p class="text-xs text-slate-400 mt-1">Try switching to another tab or clearing your search term.</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <script>
+    let currentCategory = 'all';
+    let searchQuery = '';
+
+    function filterNotificationsDOM() {
+        const cards = document.querySelectorAll('.notif-card');
+        const emptyState = document.getElementById('filterEmptyState');
+        const initialEmpty = document.getElementById('initialEmptyState');
+        let visibleCount = 0;
+
+        cards.forEach(card => {
+            const type = card.dataset.type;
+            const isRead = card.dataset.read === 'true';
+            const title = (card.dataset.title || '').toLowerCase();
+            const msg = (card.dataset.msg || '').toLowerCase();
+
+            let matchesCat = true;
+            if (currentCategory === 'unread') {
+                matchesCat = !isRead;
+            } else if (currentCategory !== 'all') {
+                matchesCat = type === currentCategory;
+            }
+
+            let matchesSearch = true;
+            if (searchQuery) {
+                matchesSearch = title.includes(searchQuery) || msg.includes(searchQuery);
+            }
+
+            if (matchesCat && matchesSearch) {
+                card.classList.remove('hidden');
+                visibleCount++;
+            } else {
+                card.classList.add('hidden');
+            }
+        });
+
+        if (emptyState) {
+            if (visibleCount === 0 && cards.length > 0) {
+                emptyState.classList.remove('hidden');
+            } else {
+                emptyState.classList.add('hidden');
+            }
+        }
+    }
+
+    function setPageCategory(cat) {
+        currentCategory = cat;
+        document.querySelectorAll('.cat-pill').forEach(btn => {
+            btn.className = 'cat-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all shrink-0 flex items-center gap-1 cursor-pointer';
+        });
+        const activeBtn = document.getElementById('catBtn-' + cat);
+        if (activeBtn) {
+            activeBtn.className = 'cat-pill active-cat px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 bg-primary text-white shadow-xs flex items-center gap-1 cursor-pointer';
+        }
+        filterNotificationsDOM();
+    }
+
+    function handleSearch(val) {
+        searchQuery = (val || '').toLowerCase().trim();
+        const clearBtn = document.getElementById('notifClearSearchBtn');
+        if (clearBtn) {
+            if (searchQuery.length > 0) clearBtn.classList.remove('hidden');
+            else clearBtn.classList.add('hidden');
+        }
+        filterNotificationsDOM();
+    }
+
+    function clearSearch() {
+        const input = document.getElementById('notifSearchInput');
+        if (input) input.value = '';
+        handleSearch('');
+    }
+
+    async function pageItemRead(id) {
+        try {
+            await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+            const card = document.querySelector(`.notif-card[data-id="${id}"]`);
+            if (card) {
+                card.dataset.read = 'true';
+                card.classList.remove('border-blue-200', 'dark:border-primary/40', 'bg-blue-50/20', 'dark:bg-primary/5');
+                card.classList.add('border-slate-200/80', 'dark:border-slate-800/80');
+                const newBadge = card.querySelector('span.bg-primary');
+                if (newBadge) newBadge.remove();
+                const readBtn = card.querySelector('button[title="Mark as read"]');
+                if (readBtn) readBtn.remove();
+            }
+            // Update unread count in header & pill
+            updateCounters();
+        } catch (e) {
+            console.error('Error marking read:', e);
+        }
+    }
+
+    function showSystemConfirm({
+        title = 'Confirm Action',
+        description = 'Are you sure you want to proceed?',
+        icon = 'delete_sweep',
+        iconColor = 'rose',
+        confirmText = 'Confirm',
+        cancelText = 'Cancel',
+        isAlertOnly = false
+    } = {}) {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('systemConfirmModal');
+            const card = document.getElementById('systemConfirmCard');
+            const titleEl = document.getElementById('systemConfirmTitle');
+            const descEl = document.getElementById('systemConfirmDesc');
+            const iconEl = document.getElementById('systemConfirmIcon');
+            const iconBoxEl = document.getElementById('systemConfirmIconBox');
+            const okBtn = document.getElementById('systemConfirmOkBtn');
+            const cancelBtn = document.getElementById('systemConfirmCancelBtn');
+
+            if (!modal || !card) {
+                resolve(true);
+                return;
+            }
+
+            titleEl.textContent = title;
+            descEl.textContent = description;
+            iconEl.textContent = icon;
+            okBtn.textContent = confirmText;
+
+            if (iconColor === 'rose') {
+                iconBoxEl.className = 'size-12 rounded-2xl flex items-center justify-center mb-3.5 bg-rose-500/10 text-rose-500 dark:bg-rose-500/15 dark:text-rose-400';
+                okBtn.className = 'flex-1 h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-600/20 active:translate-y-0.5 transition-all cursor-pointer';
+            } else if (iconColor === 'amber') {
+                iconBoxEl.className = 'size-12 rounded-2xl flex items-center justify-center mb-3.5 bg-amber-500/10 text-amber-500 dark:bg-amber-500/15 dark:text-amber-400';
+                okBtn.className = 'flex-1 h-10 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-md shadow-amber-600/20 active:translate-y-0.5 transition-all cursor-pointer';
+            } else {
+                iconBoxEl.className = 'size-12 rounded-2xl flex items-center justify-center mb-3.5 bg-primary/10 text-primary dark:bg-primary/15 dark:text-blue-400';
+                okBtn.className = 'flex-1 h-10 rounded-xl bg-primary hover:bg-blue-600 text-white font-bold text-xs shadow-md shadow-blue-600/20 active:translate-y-0.5 transition-all cursor-pointer';
+            }
+
+            if (isAlertOnly) {
+                cancelBtn.classList.add('hidden');
+            } else {
+                cancelBtn.classList.remove('hidden');
+                cancelBtn.textContent = cancelText;
+            }
+
+            modal.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                modal.classList.remove('opacity-0');
+                card.classList.remove('scale-95');
+                card.classList.add('scale-100');
+            });
+
+            function cleanup(result) {
+                modal.classList.add('opacity-0');
+                card.classList.remove('scale-100');
+                card.classList.add('scale-95');
+                setTimeout(() => {
+                    modal.classList.add('hidden');
+                }, 200);
+
+                okBtn.removeEventListener('click', onOk);
+                cancelBtn.removeEventListener('click', onCancel);
+                modal.removeEventListener('click', onBackdrop);
+                document.removeEventListener('keydown', onKeyDown);
+                resolve(result);
+            }
+
+            function onOk() { cleanup(true); }
+            function onCancel() { cleanup(false); }
+            function onBackdrop(e) { if (e.target === modal) cleanup(false); }
+            function onKeyDown(e) { if (e.key === 'Escape') cleanup(false); }
+
+            okBtn.addEventListener('click', onOk);
+            cancelBtn.addEventListener('click', onCancel);
+            modal.addEventListener('click', onBackdrop);
+            document.addEventListener('keydown', onKeyDown);
+        });
+    }
+
+    async function pageItemDelete(id) {
+        const confirmed = await showSystemConfirm({
+            title: 'Delete Notification?',
+            description: 'Are you sure you want to permanently delete this notification? This action cannot be undone.',
+            icon: 'delete',
+            iconColor: 'rose',
+            confirmText: 'Delete',
+            cancelText: 'Cancel'
+        });
+        if (!confirmed) return;
+
+        try {
+            await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+            const card = document.querySelector(`.notif-card[data-id="${id}"]`);
+            if (card) card.remove();
+            updateCounters();
+            filterNotificationsDOM();
+            if (window.fetchNotifications) window.fetchNotifications();
+        } catch (e) {
+            console.error('Error deleting notification:', e);
+        }
+    }
+
+    async function pageMarkAllRead() {
+        try {
+            await fetch('/api/notifications/mark-all-read', { method: 'POST' });
+            const cards = document.querySelectorAll('.notif-card');
+            cards.forEach(card => {
+                card.dataset.read = 'true';
+                card.classList.remove('border-blue-200', 'dark:border-primary/40', 'bg-blue-50/20', 'dark:bg-primary/5');
+                card.classList.add('border-slate-200/80', 'dark:border-slate-800/80');
+                const newBadge = card.querySelector('span.bg-primary');
+                if (newBadge) newBadge.remove();
+                const readBtn = card.querySelector('button[title="Mark as read"]');
+                if (readBtn) readBtn.remove();
+            });
+            updateCounters();
+            filterNotificationsDOM();
+            if (window.fetchNotifications) window.fetchNotifications();
+        } catch (e) {
+            console.error('Error marking all as read:', e);
+        }
+    }
+
+    async function pageClearRead() {
+        const readCards = document.querySelectorAll('.notif-card[data-read="true"]');
+        if (readCards.length === 0) {
+            await showSystemConfirm({
+                title: 'No Read Notifications',
+                description: 'You do not have any read notifications to clear.',
+                icon: 'notifications_paused',
+                iconColor: 'primary',
+                confirmText: 'Got It',
+                isAlertOnly: true
+            });
+            return;
+        }
+
+        const confirmed = await showSystemConfirm({
+            title: 'Clear Read Notifications?',
+            description: `All ${readCards.length} previously read notification${readCards.length > 1 ? 's' : ''} will be permanently removed from your inbox.`,
+            icon: 'delete_sweep',
+            iconColor: 'rose',
+            confirmText: 'Clear Read',
+            cancelText: 'Cancel'
+        });
+        if (!confirmed) return;
+
+        try {
+            await fetch('/api/notifications/clear/read', { method: 'DELETE' });
+            readCards.forEach(c => c.remove());
+            updateCounters();
+            filterNotificationsDOM();
+            if (window.fetchNotifications) window.fetchNotifications();
+        } catch (e) {
+            console.error('Error clearing read:', e);
+        }
+    }
+
+    function updateCounters() {
+        const allCards = document.querySelectorAll('.notif-card');
+        const unreadCards = document.querySelectorAll('.notif-card[data-read="false"]');
+        const unreadCount = unreadCards.length;
+        const totalCount = allCards.length;
+
+        const countAllEl = document.getElementById('count-all');
+        if (countAllEl) countAllEl.textContent = `(${totalCount})`;
+
+        const countUnreadEl = document.getElementById('count-unread');
+        if (countUnreadEl) countUnreadEl.textContent = `(${unreadCount})`;
+
+        const headerBadge = document.getElementById('headerUnreadBadge');
+        if (headerBadge) {
+            if (unreadCount > 0) {
+                headerBadge.textContent = `${unreadCount} Unread`;
+                headerBadge.classList.remove('hidden');
+            } else {
+                headerBadge.classList.add('hidden');
+            }
+        }
+
+        // Sync with navbar bell
+        const navBadge = document.getElementById('notificationBadge');
+        if (navBadge) {
+            if (unreadCount > 0) {
+                navBadge.textContent = unreadCount > 9 ? '9+' : unreadCount;
+                navBadge.classList.remove('hidden');
+            } else {
+                navBadge.classList.add('hidden');
+            }
+        }
+    }
+
+    // Real-time live notification arrival listener on page
+    window.addEventListener('oddhay:live-notification', function(e) {
+        const notif = e.detail;
+        if (!notif) return;
+
+        const listContainer = document.getElementById('pageNotificationList');
+        const initialEmpty = document.getElementById('initialEmptyState');
+        if (initialEmpty) initialEmpty.classList.add('hidden');
+
+        let icon = 'notifications';
+        let bgClass = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300';
+        if (notif.type === 'payment') {
+            icon = 'receipt_long';
+            bgClass = 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
+        } else if (notif.type === 'course') {
+            icon = 'school';
+            bgClass = 'bg-blue-500/10 text-blue-600 dark:text-blue-400';
+        } else if (notif.type === 'exam') {
+            icon = 'quiz';
+            bgClass = 'bg-amber-500/10 text-amber-600 dark:text-amber-400';
+        } else if (notif.type === 'announcement') {
+            icon = 'campaign';
+            bgClass = 'bg-purple-500/10 text-purple-600 dark:text-purple-400';
+        }
+
+        const dateFormatted = new Date(notif.createdAt || Date.now()).toLocaleDateString('en-US', {
+            month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+        });
+
+        const card = document.createElement('div');
+        card.className = 'notif-card p-4 rounded-2xl border bg-white dark:bg-[#0f172a] border-blue-200 dark:border-primary/40 bg-blue-50/20 dark:bg-primary/5 hover:shadow-md transition-all duration-200 flex items-start gap-3.5 relative group animate-in fade-in slide-in-from-top-2 duration-300';
+        card.dataset.id = notif._id;
+        card.dataset.type = notif.type || 'system';
+        card.dataset.read = 'false';
+        card.dataset.title = notif.title || '';
+        card.dataset.msg = notif.message || '';
+
+        card.innerHTML = `
+            <div class="size-10 rounded-xl ${bgClass} flex items-center justify-center shrink-0 mt-0.5">
+                <span class="material-symbols-rounded text-xl leading-none">${icon}</span>
+            </div>
+            <div class="flex-1 min-w-0 pr-4">
+                <div class="flex flex-wrap items-baseline gap-2 mb-1">
+                    <h4 class="text-[13.5px] font-bold text-slate-800 dark:text-white leading-snug">${notif.title || ''}</h4>
+                    <span class="inline-flex items-center px-1.5 py-0.2 text-[9px] font-extrabold uppercase tracking-wide bg-primary text-white rounded-full leading-normal">New</span>
+                    <span class="text-[11px] font-medium text-slate-400 ml-auto shrink-0">${dateFormatted}</span>
+                </div>
+                <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">${notif.message || ''}</p>
+                ${notif.link && notif.link !== '#' && notif.link !== '/' ? `
+                    <div class="mt-2.5">
+                        <a href="${notif.link}" onclick="pageItemRead('${notif._id}')" class="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:text-blue-600 transition-colors">
+                            <span>Open Details</span>
+                            <span class="material-symbols-rounded text-sm leading-none">arrow_forward</span>
+                        </a>
+                    </div>
+                ` : ''}
+            </div>
+            <div class="flex items-center gap-1 opacity-80 group-hover:opacity-100 shrink-0">
+                <button type="button" onclick="pageItemRead('${notif._id}')" title="Mark as read" class="size-7 rounded-lg text-slate-400 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center cursor-pointer">
+                    <span class="material-symbols-rounded text-base leading-none">check_circle</span>
+                </button>
+                <button type="button" onclick="pageItemDelete('${notif._id}')" title="Delete" class="size-7 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center justify-center cursor-pointer">
+                    <span class="material-symbols-rounded text-base leading-none">delete</span>
+                </button>
+            </div>
+        `;
+
+        if (listContainer) {
+            listContainer.prepend(card);
+        }
+
+        updateCounters();
+        filterNotificationsDOM();
+    });
+    </script>
+    <!-- System Confirmation & Alert Modal -->
+    <div id="systemConfirmModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-xs hidden opacity-0 transition-opacity duration-200">
+        <div id="systemConfirmCard" class="w-full max-w-sm rounded-2xl bg-white dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 shadow-2xl p-5 sm:p-6 flex flex-col items-center text-center transform scale-95 transition-all duration-200">
+            <div id="systemConfirmIconBox" class="size-12 rounded-2xl bg-rose-500/10 text-rose-500 dark:bg-rose-500/15 dark:text-rose-400 flex items-center justify-center mb-3.5">
+                <span id="systemConfirmIcon" class="material-symbols-rounded text-2xl leading-none">delete_sweep</span>
+            </div>
+            <h3 id="systemConfirmTitle" class="text-base font-bold text-slate-800 dark:text-white mb-1.5 leading-snug">Clear Read Notifications?</h3>
+            <p id="systemConfirmDesc" class="text-xs text-slate-500 dark:text-slate-400 mb-5 leading-relaxed max-w-xs">All previously read notifications will be permanently removed.</p>
+            <div class="flex items-center gap-2.5 w-full">
+                <button type="button" id="systemConfirmCancelBtn" class="flex-1 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-xs transition-colors cursor-pointer">Cancel</button>
+                <button type="button" id="systemConfirmOkBtn" class="flex-1 h-10 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-md shadow-rose-600/20 active:translate-y-0.5 transition-all cursor-pointer">Clear Read</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

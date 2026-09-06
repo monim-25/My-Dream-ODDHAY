@@ -43,6 +43,8 @@ const userSchema = new mongoose.Schema({
         lessonTitle: { type: String },
         thumbnail: { type: String },
         lastPosition: { type: Number, default: 0 },
+        duration: { type: Number, default: 0 },
+        isCompleted: { type: Boolean, default: false },
         watchedAt: { type: Date, default: Date.now }
     },
     attendedNotices: [{ type: String }],
@@ -64,6 +66,11 @@ const userSchema = new mongoose.Schema({
     }],
     savedQuestionBanks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'QuestionBank' }],
     purchasedQuestionBanks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'QuestionBank' }],
+    remindedWeakTopics: [{
+        topic: { type: String },
+        subject: { type: String },
+        remindedAt: { type: Date, default: Date.now }
+    }],
     createdAt: { type: Date, default: Date.now },
     status: { type: String, enum: ['active', 'suspended'], default: 'active' },
     passwordResetRequired: { type: Boolean, default: false },
@@ -74,6 +81,7 @@ const userSchema = new mongoose.Schema({
     totalXP: { type: Number, default: 0 },
     restrictionExpires: { type: Date },
     restrictionReason: { type: String },
+    theme: { type: String, enum: ['light', 'dark', 'system'], default: 'light' },
 
     // Teacher Profile Fields
     designation: { type: String },           // e.g. "Senior Physics Teacher"
@@ -101,6 +109,8 @@ const userSchema = new mongoose.Schema({
         lastActive: { type: Date, default: Date.now }
     }],
 
+    blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+
     socialLinks: {
         facebook: { type: String },
         youtube: { type: String },
@@ -113,6 +123,7 @@ userSchema.index({ role: 1, status: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ lastActive: -1 });
 userSchema.index({ 'quizResults.date': -1 });
+userSchema.index({ 'enrolledCourses.course': 1 });
 
 // Hash password before saving
 userSchema.pre('save', async function () {

@@ -1,4 +1,4 @@
-// Forced restart at 2026-04-18
+// Forced restart at 2026-08-31T20:14:50
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 // ODDHAY Command Center - Force Design Sync
@@ -93,10 +93,32 @@ const upload = multer({ storage });
 // ---- MIDDLEWARE ----
 app.set('view engine', 'ejs');
 app.set('views', path.join(clientPath, 'views'));
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(clientPath, 'public')));
 app.use(express.static(path.join(process.cwd(), 'public')));
+
+// Smart fallback for uploads stored in category subfolders (thumbnails, avatars, routines, videos, notes)
+app.use('/uploads', (req, res, next) => {
+    const rawPath = req.path.replace(/^\//, '');
+    if (!rawPath || rawPath.includes('..')) return next();
+    
+    const uploadsDir = path.join(clientPath, 'public/uploads');
+    const directFile = path.join(uploadsDir, rawPath);
+    if (fs.existsSync(directFile) && fs.statSync(directFile).isFile()) {
+        return res.sendFile(directFile);
+    }
+    
+    // Check inside subfolders if not found directly
+    const subfolders = ['thumbnails', 'avatars', 'videos', 'notes', 'routines', 'questions', 'messages', 'evaluations', 'user-notes'];
+    for (const sub of subfolders) {
+        const candidate = path.join(uploadsDir, sub, rawPath);
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+            return res.sendFile(candidate);
+        }
+    }
+    next();
+});
 
 let cachedAcademicClasses = null;
 let lastAcademicCacheTime = 0;
@@ -106,6 +128,26 @@ app.use(async (req, res, next) => {
     res.locals.user = req.session.user || null;
     res.locals.isSuperAdmin = req.session.user && (req.session.user.role === 'superadmin' || req.session.user.email === process.env.SUPER_ADMIN_EMAIL);
     res.locals.SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL; // Also provide the email if needed
+    res.locals.unreadNotificationCount = 0;
+
+    const uid = req.session && (req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null));
+    if (uid && mongoose.connection.readyState === 1) {
+        try {
+            if (!res.locals.user) {
+                const User = require('./models/User');
+                const dbUser = await User.findById(uid).lean();
+                if (dbUser) {
+                    res.locals.user = dbUser;
+                    req.session.user = dbUser;
+                }
+            }
+            const Notification = require('./models/Notification');
+            res.locals.unreadNotificationCount = await Notification.countDocuments({
+                user: uid,
+                isRead: false
+            });
+        } catch (e) {}
+    }
     
     // Add helpers to locals
     res.locals.formatText = (str) => {
@@ -162,10 +204,24 @@ app.use(async (req, res, next) => {
             res.locals.siteSettings = {};
             res.locals.globalAcademicClasses = [];
         }
+        res.locals.getImg = (p) => {
+            if (!p) return '';
+            if (p.startsWith('http://') || p.startsWith('https://')) return p;
+            let normalized = String(p).replace(/\\/g, '/');
+            if (!normalized.startsWith('/')) normalized = '/' + normalized;
+            return normalized;
+        };
     } catch (err) {
         console.warn('Error fetching global settings/classes:', err.message);
         res.locals.siteSettings = {};
         res.locals.globalAcademicClasses = cachedAcademicClasses || [];
+        res.locals.getImg = (p) => {
+            if (!p) return '';
+            if (p.startsWith('http://') || p.startsWith('https://')) return p;
+            let normalized = String(p).replace(/\\/g, '/');
+            if (!normalized.startsWith('/')) normalized = '/' + normalized;
+            return normalized;
+        };
     }
     next();
 });
@@ -321,6 +377,9 @@ setInterval(async () => {
                     const users = await (await connectDB()).model('User').find({ 'enrolledCourses.course': log.courseId }).select('_id');
                     const userIds = users.map(u => u._id);
                     result = await pushNotificationService.sendToMultipleUsers(userIds, notificationPayload);
+                } else if (log.user) {
+                    const sendRes = await pushNotificationService.sendToUser(log.user, notificationPayload);
+                    result = { sent: sendRes && sendRes.success ? 1 : 0, total: 1 };
                 } else {
                     continue;
                 }
@@ -406,6 +465,12 @@ io.on('connection', (socket) => {
         }
         updateRoomParticipantsCount(roomId);
         broadcastParticipantsList(roomId);
+    });
+
+    socket.on('course:join', (courseId) => {
+        if (courseId) {
+            socket.join(`course_${courseId}`);
+        }
     });
 
     socket.on('room:toggle_lock', ({ roomId, lock }) => {

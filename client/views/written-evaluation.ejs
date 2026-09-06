@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= (locals.user && user.theme === 'dark') ? 'dark' : '' %>">
+<head>
+    <%- include('partials/head') %>
+    <%- include('partials/app-styles') %>
+    <title>Written Evaluation | <%= bank.title || bank.subject %></title>
+</head>
+
+<body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+    <% 
+       const isExplicitCourse = (typeof fromCourse !== 'undefined' && fromCourse === true) || (locals.fromCourse === true) || (typeof req !== 'undefined' && req.query && req.query.from === 'course' && !!req.query.courseId);
+       const isFromCourse = !!isExplicitCourse;
+       const cId = locals.courseId || (bank.course ? (bank.course._id || bank.course) : '');
+       const writtenReturnUrl = isFromCourse ? (cId ? `/course-details/${cId}#exams` : '/courses') : '/exams/written-results';
+       const activeNavPage = isFromCourse ? 'courses' : 'exams';
+
+       const bSubject = String(bank.subject || 'Subject').trim();
+       const bBoard = String(bank.board || 'Board Exam').trim();
+       const bYear = String(bank.year || '').trim();
+       let bTitle = bank.title && bank.title.trim() !== '' ? bank.title.trim() : `${bSubject} - ${bBoard} ${bYear}`.trim();
+       if (bank.course || isFromCourse) {
+           bTitle = bTitle.replace(/^(mock test|model test)\s*-\s*/i, '').trim() || bTitle;
+       }
+    %>
+
+    <%- include('partials/student-header', { pageTitle: 'Written Evaluation', activePage: activeNavPage, backUrl: writtenReturnUrl }) %>
+
+    <div class="flex-1 flex overflow-hidden w-full relative">
+        <%- include('partials/student-sidebar', { activePage: activeNavPage }) %>
+
+        <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative">
+            
+            <% 
+               const isReviewed = attempt.writtenStatus === 'reviewed';
+               const userAnswers = attempt.userAnswers || [];
+               const writtenAnswers = userAnswers.filter(u => u.questionType !== 'MCQ');
+
+               let writtenEarned = 0;
+               let writtenMax = 0;
+               if (attempt.teacherReview && typeof attempt.teacherReview.totalWrittenScore === 'number') {
+                   writtenEarned = attempt.teacherReview.totalWrittenScore;
+                   writtenMax = attempt.teacherReview.maxWrittenScore || writtenAnswers.reduce((sum, u) => sum + (u.maxMarks || 5), 0);
+               } else {
+                   writtenAnswers.forEach(u => {
+                       writtenEarned += (u.marksObtained || 0);
+                       writtenMax += (u.maxMarks || 5);
+                   });
+               }
+
+               const mcqEarned = attempt.mcqScore || 0;
+               const mcqMax = attempt.maxMcqScore || 0;
+               const grandEarned = mcqEarned + (isReviewed ? writtenEarned : 0);
+               const grandMax = mcqMax + writtenMax;
+
+               const subDate = attempt.submittedAt ? new Date(attempt.submittedAt) : new Date();
+               const formattedSubDate = subDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+
+               const revDate = (attempt.teacherReview && attempt.teacherReview.reviewedAt) ? new Date(attempt.teacherReview.reviewedAt) : null;
+               const formattedRevDate = revDate ? (revDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + revDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })) : '';
+               const reviewerName = (attempt.teacherReview && attempt.teacherReview.reviewerName) ? attempt.teacherReview.reviewerName : 'Teacher';
+               const teacherFeedback = (attempt.teacherReview && attempt.teacherReview.overallFeedback) ? attempt.teacherReview.overallFeedback.trim() : '';
+            %>
+
+            <!-- MAIN EVALUATION CONTENT CONTAINER -->
+            <div class="p-3 sm:p-5 max-w-4xl w-full mx-auto flex-1 flex flex-col space-y-4 pb-12">
+                
+                <!-- EVALUATION SUMMARY HERO CARD -->
+                <div class="rounded-2xl border p-4 sm:p-6 shadow-xs space-y-4 <%= isReviewed ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-amber-500/5 border-amber-500/20' %>">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div class="space-y-2">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-xs text-slate-400 font-medium flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-sm text-cyan-500 leading-none flex items-center justify-center shrink-0">calendar_today</span>
+                                    <span>Submitted: <%= formattedSubDate %></span>
+                                </span>
+                            </div>
+
+                            <div>
+                                <a href="/question-bank/result/<%= attempt._id %>" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 dark:border-cyan-500/40 text-sm font-medium transition-all shadow-xs hover:shadow active:scale-95" title="View Full Exam Result">
+                                    <span class="material-symbols-rounded text-lg text-cyan-600 dark:text-cyan-400 leading-none flex items-center justify-center shrink-0">poll</span>
+                                    <span>Exam Result</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- TOTAL SCORES -->
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <div class="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 flex flex-col items-center">
+                                <span class="text-[10px] text-slate-400 font-normal">Written Score</span>
+                                <span class="text-sm sm:text-base font-semibold <%= isReviewed ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400' %>">
+                                    <%= isReviewed ? (writtenEarned + ' / ' + writtenMax) : 'Pending' %>
+                                </span>
+                            </div>
+
+                            <div class="px-3 py-1.5 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 border border-cyan-200/80 dark:border-cyan-500/30 flex flex-col items-center">
+                                <span class="text-[10px] text-cyan-600 dark:text-cyan-400 font-normal">Grand Total</span>
+                                <span class="text-sm sm:text-base font-semibold text-cyan-800 dark:text-cyan-200">
+                                    <%= isReviewed ? (grandEarned + ' / ' + grandMax) : 'Pending' %>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TEACHER FEEDBACK QUOTE BOX -->
+                    <% 
+                       const overallImg = (attempt.teacherReview && attempt.teacherReview.overallImage) ? attempt.teacherReview.overallImage.trim() : '';
+                    %>
+                    <% if (isReviewed && (teacherFeedback || overallImg)) { %>
+                        <div class="p-4 rounded-xl bg-white dark:bg-slate-800 border border-emerald-500/20 space-y-3 shadow-xs">
+                            <div class="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                                <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0">rate_review</span>
+                                <span>Teacher's Overall Remarks</span>
+                            </div>
+                            <% if (teacherFeedback) { %>
+                                <p class="text-xs sm:text-sm font-normal text-slate-700 dark:text-slate-300 leading-relaxed italic">
+                                    "<%= teacherFeedback %>"
+                                </p>
+                            <% } %>
+                            <% if (overallImg) { %>
+                                <div class="pt-1.5">
+                                    <div class="relative inline-block group rounded-xl overflow-hidden border border-emerald-500/30 bg-slate-900/5 shadow-xs cursor-pointer select-none" onclick="openEvaluationImageFullscreen('<%= overallImg %>')">
+                                        <img src="<%= overallImg %>" alt="Teacher Overall Feedback" class="max-h-60 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.01]">
+                                        <!-- FULLSCREEN ICON ON HOVER -->
+                                        <div class="absolute inset-0 bg-slate-950/25 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                            <div class="size-10 rounded-xl bg-black/65 backdrop-blur-md text-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition-all duration-200 border border-white/20">
+                                                <span class="material-symbols-rounded text-2xl leading-none">fullscreen</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            <% } %>
+                        </div>
+                    <% } else if (!isReviewed) { %>
+                        <div class="p-3 rounded-xl bg-white dark:bg-slate-800/80 border border-amber-500/20 text-xs text-slate-600 dark:text-slate-300 font-normal flex items-center gap-2">
+                            <span class="material-symbols-rounded text-base text-amber-500 leading-none flex items-center justify-center shrink-0">info</span>
+                            <span>Your submission has been received. Your teacher will evaluate your answers and award marks soon.</span>
+                        </div>
+                    <% } %>
+                </div>
+
+                <!-- QUESTIONS FEED -->
+                <% if (questions.length === 0) { %>
+                    <div class="bg-slate-50 dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center space-y-2">
+                        <span class="material-symbols-rounded text-5xl text-slate-300 dark:text-slate-700 leading-none flex items-center justify-center shrink-0 mx-auto">edit_note</span>
+                        <h3 class="text-sm font-medium text-slate-700 dark:text-slate-300">No Written Questions</h3>
+                        <p class="text-xs text-slate-400 font-normal">This question bank contains MCQs only.</p>
+                    </div>
+                <% } else { %>
+                    <div class="space-y-4">
+                        <% questions.forEach(function(q, index) { %>
+                            <% 
+                               const qType = q.questionType || 'Short';
+                               const ua = q.userAnswer || {};
+                               const defaultMark = (qType === 'Medium') ? 2 : ((qType === 'Comprehension') ? 7 : 1);
+                               const qMaxMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : defaultMark;
+                               const expText = String(q.explanation || q.explanationText || q.solution || '').trim();
+
+                               const isQuestionEvaluated = isReviewed || ua.isReviewed;
+                               const marksAwarded = (ua.marksObtained !== undefined && ua.marksObtained !== null) ? ua.marksObtained : 0;
+                               const teacherQuestionComment = ua.teacherComment ? ua.teacherComment.trim() : '';
+                            %>
+
+                            <div class="bg-slate-50 dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3.5">
+                                
+                                <!-- QUESTION HEADER -->
+                                <div class="flex items-center justify-between gap-2 pb-2 border-b border-slate-200/60 dark:border-slate-800">
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2.5 py-0.5 rounded-lg text-[11px] font-medium bg-primary/10 text-primary border border-primary/20">
+                                            Question <%= index + 1 %>
+                                        </span>
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-normal bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700">
+                                            <%= qType %>
+                                        </span>
+                                    </div>
+
+                                    <!-- MARKS BADGE -->
+                                    <div class="flex items-center gap-1.5">
+                                        <% if (isQuestionEvaluated) { %>
+                                            <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shadow-2xs">
+                                                <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">grade</span>
+                                                <span>Awarded: <%= marksAwarded %> / <%= qMaxMark %></span>
+                                            </span>
+                                        <% } else { %>
+                                            <span class="px-2.5 py-0.5 rounded text-[10px] font-normal bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                                Pending (<%= qMaxMark %> Marks)
+                                            </span>
+                                        <% } %>
+                                    </div>
+                                </div>
+
+                                <% 
+                                    const isComprehension = (qType === 'Comprehension') && (q.q1 || q.q2);
+
+                                    let ans1 = ua.q1Answer || '';
+                                    let ans2 = ua.q2Answer || '';
+                                    if (!ans1 && !ans2 && ua.writtenAnswer) {
+                                        if (ua.writtenAnswer.includes('[Question 2 / প্রশ্ন ২]:')) {
+                                            const parts = ua.writtenAnswer.split('[Question 2 / প্রশ্ন ২]:');
+                                            ans1 = parts[0].replace(/\[Question 1 \/ প্রশ্ন ১\]:?\s*/i, '').trim();
+                                            ans2 = (parts[1] || '').trim();
+                                        } else if (ua.writtenAnswer.includes('[Question 1 / প্রশ্ন ১]:')) {
+                                            ans1 = ua.writtenAnswer.replace(/\[Question 1 \/ প্রশ্ন ১\]:?\s*/i, '').trim();
+                                        } else {
+                                            ans1 = ua.writtenAnswer.trim();
+                                        }
+                                    }
+
+                                    let img1 = ua.q1Image || '';
+                                    let img2 = ua.q2Image || '';
+                                    if (!img1 && !img2 && Array.isArray(ua.writtenImages) && ua.writtenImages.length > 0) {
+                                        img1 = ua.writtenImages[0] || '';
+                                        img2 = ua.writtenImages[1] || '';
+                                    }
+                                    if (!img1 && ua.writtenImage) {
+                                        img1 = ua.writtenImage;
+                                    }
+                                %>
+
+                                <% if (isComprehension) { %>
+                                    <!-- STIMULUS / CONTEXT -->
+                                    <div class="space-y-1">
+                                        <span class="text-xs font-bold text-slate-500 dark:text-slate-400 block">উদ্দীপক:</span>
+                                        <div class="text-sm sm:text-base font-normal text-slate-800 dark:text-slate-100 leading-relaxed whitespace-pre-wrap"><%- q.context || q.questionText %></div>
+                                    </div>
+
+                                    <!-- SEPARATE QUESTIONS WITH INDIVIDUAL MODEL SOLUTIONS & STUDENT SOLUTIONS -->
+                                    <div class="space-y-4 pt-1">
+                                        <% 
+                                            const subQuestions = [
+                                                { num: 1, title: q.q1, modelSol: q.a1, studentAns: ans1, studentImg: img1, maxMark: 3, awardedMark: (ua.q1Marks !== undefined && ua.q1Marks !== null ? ua.q1Marks : null) },
+                                                { num: 2, title: q.q2, modelSol: q.a2, studentAns: ans2, studentImg: img2, maxMark: 4, awardedMark: (ua.q2Marks !== undefined && ua.q2Marks !== null ? ua.q2Marks : null) }
+                                            ].filter(sq => sq.title && sq.title.trim() !== '');
+                                        %>
+                                        <% subQuestions.forEach(function(sq) { %>
+                                            <div class="p-4 rounded-xl bg-slate-100/70 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-3">
+                                                <!-- Sub-question statement & Marks Badge -->
+                                                <div class="flex items-center justify-between gap-2">
+                                                    <div class="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100 leading-relaxed">
+                                                        <%- sq.title %>
+                                                    </div>
+                                                    <div class="shrink-0">
+                                                        <% if (isQuestionEvaluated && sq.awardedMark !== null) { %>
+                                                            <span class="px-2.5 py-0.5 rounded-lg text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1 shadow-2xs">
+                                                                <span class="material-symbols-rounded text-xs leading-none">grade</span>
+                                                                <span>Awarded: <%= sq.awardedMark %> / <%= sq.maxMark %></span>
+                                                            </span>
+                                                        <% } else { %>
+                                                            <span class="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700">
+                                                                <%= sq.maxMark %> Marks
+                                                            </span>
+                                                        <% } %>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Model Solution -->
+                                                <% 
+                                                    const mAns = (sq.modelSol || '').trim();
+                                                    const hasMAns = mAns && mAns !== '0' && mAns !== 'undefined' && mAns !== 'null';
+                                                %>
+                                                <% if (hasMAns) { %>
+                                                    <div class="rounded-xl overflow-hidden border border-emerald-500/25 bg-emerald-50/20 dark:bg-emerald-950/15">
+                                                        <div class="px-3.5 py-1.5 bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center gap-1.5 border-b border-emerald-500/20">
+                                                            <span class="material-symbols-rounded text-emerald-600 dark:text-emerald-400 text-sm leading-none flex items-center justify-center shrink-0">verified</span>
+                                                            <span class="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Model Solution (Reference Answer)</span>
+                                                        </div>
+                                                        <div class="p-3.5 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed">
+                                                            <%- mAns %>
+                                                        </div>
+                                                    </div>
+                                                <% } %>
+
+                                                <!-- Student Answer for this question -->
+                                                <div class="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
+                                                    <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">Your submitted answer:</span>
+                                                    <% if (sq.studentAns && sq.studentAns.trim() !== '') { %>
+                                                        <p class="text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                                                            <%= sq.studentAns %>
+                                                        </p>
+                                                    <% } %>
+
+                                                    <% if (sq.studentImg) { %>
+                                                        <div class="pt-1.5 space-y-1.5">
+                                                            <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                                                                <span class="material-symbols-rounded text-sm">photo_library</span>
+                                                                <span>Attached Picture:</span>
+                                                            </span>
+                                                            <div>
+                                                                <div class="inline-block relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openEvaluationImageFullscreen('<%= sq.studentImg %>')">
+                                                                    <img src="<%= sq.studentImg %>" alt="Your Attached Solution" class="max-h-56 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
+                                                                    <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                                                        <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
+                                                                            <span class="material-symbols-rounded text-xl">fullscreen</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    <% } %>
+
+                                                    <% if ((!sq.studentAns || sq.studentAns.trim() === '') && !sq.studentImg) { %>
+                                                        <p class="text-xs sm:text-sm font-normal text-slate-400 italic">No answer submitted for this question.</p>
+                                                    <% } %>
+                                                </div>
+                                            </div>
+                                        <% }); %>
+                                    </div>
+                                <% } else { %>
+                                    <!-- NORMAL QUESTION DISPLAY -->
+                                    <div class="text-sm sm:text-base font-normal text-slate-800 dark:text-slate-100 leading-relaxed">
+                                        <%= q.questionText %>
+                                    </div>
+
+                                    <!-- OFFICIAL MODEL SOLUTION / ANSWER KEY -->
+                                    <% 
+                                        const normAns = (q.correctAnswer || '').trim();
+                                        const hasNormAns = normAns && normAns !== '0' && normAns !== 'undefined' && normAns !== 'null';
+                                    %>
+                                    <% if (hasNormAns) { %>
+                                        <div class="rounded-xl overflow-hidden border border-emerald-500/25 bg-emerald-50/20 dark:bg-emerald-950/15">
+                                            <div class="px-3.5 py-1.5 bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center gap-1.5 border-b border-emerald-500/20">
+                                                <span class="material-symbols-rounded text-emerald-600 dark:text-emerald-400 text-sm leading-none flex items-center justify-center shrink-0">verified</span>
+                                                <span class="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Model Solution (Reference Answer)</span>
+                                            </div>
+                                            <div class="p-3.5 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed">
+                                                <%- normAns %>
+                                            </div>
+                                        </div>
+                                    <% } %>
+
+                                    <!-- STUDENT ANSWER -->
+                                    <div class="p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
+                                        <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 block">Your submitted answer:</span>
+                                        <% if (ua.writtenAnswer && ua.writtenAnswer.trim() !== '') { %>
+                                            <p class="text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap">
+                                                <%= ua.writtenAnswer %>
+                                            </p>
+                                        <% } %>
+
+                                        <!-- Student Attached Pictures -->
+                                        <% 
+                                            const studentImgs = [];
+                                            if (ua.writtenImage) studentImgs.push(ua.writtenImage);
+                                            if (Array.isArray(ua.writtenImages)) {
+                                                ua.writtenImages.forEach(img => { if (img && !studentImgs.includes(img)) studentImgs.push(img); });
+                                            }
+                                        %>
+                                        <% if (studentImgs.length > 0) { %>
+                                            <div class="pt-2 space-y-1.5">
+                                                <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                                                    <span class="material-symbols-rounded text-sm">photo_library</span>
+                                                    <span>Your Attached Picture(s):</span>
+                                                </span>
+                                                <div class="flex flex-wrap gap-3">
+                                                    <% studentImgs.forEach(function(sImg) { %>
+                                                        <div class="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openEvaluationImageFullscreen('<%= sImg %>')">
+                                                            <img src="<%= sImg %>" alt="Your Attached Solution" class="max-h-56 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
+                                                            <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                                                <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
+                                                                    <span class="material-symbols-rounded text-xl">fullscreen</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    <% }); %>
+                                                </div>
+                                            </div>
+                                        <% } else if (!ua.writtenAnswer || ua.writtenAnswer.trim() === '') { %>
+                                            <p class="text-xs sm:text-sm font-normal text-slate-400 italic">No answer submitted.</p>
+                                        <% } %>
+                                    </div>
+                                <% } %>
+
+                                <!-- TEACHER COMMENT & PICTURE ON THIS QUESTION (IF AVAILABLE) -->
+                                <% if (isQuestionEvaluated && (teacherQuestionComment || ua.teacherImage)) { %>
+                                    <div class="p-3.5 sm:p-4 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/60 text-xs space-y-2">
+                                        <div class="flex items-center gap-1.5 text-[11px] font-medium text-indigo-700 dark:text-indigo-400 pb-1.5 border-b border-indigo-200/50 dark:border-indigo-800/40">
+                                            <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0">rate_review</span>
+                                            <span>Teacher's Feedback for Question <%= index + 1 %></span>
+                                        </div>
+
+                                        <% if (teacherQuestionComment) { %>
+                                            <p class="text-slate-700 dark:text-slate-300 font-normal leading-relaxed whitespace-pre-wrap"><%= teacherQuestionComment %></p>
+                                        <% } %>
+
+                                        <% if (ua.teacherImage) { %>
+                                            <div class="pt-1.5">
+                                                <div class="relative inline-block group rounded-xl overflow-hidden border border-indigo-200 dark:border-indigo-800/80 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openEvaluationImageFullscreen('<%= ua.teacherImage %>')">
+                                                    <img src="<%= ua.teacherImage %>" alt="Teacher Attachment" class="max-h-64 sm:max-h-80 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.01]">
+                                                    <!-- FULLSCREEN ICON ON HOVER -->
+                                                    <div class="absolute inset-0 bg-slate-950/25 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                                        <div class="size-10 rounded-xl bg-black/65 backdrop-blur-md text-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition-all duration-200 border border-white/20">
+                                                            <span class="material-symbols-rounded text-2xl leading-none">fullscreen</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <% } %>
+                                    </div>
+                                <% } %>
+
+                                <!-- EXPLANATION -->
+                                <% if (expText !== '') { %>
+                                    <div class="bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 rounded-xl p-3 text-xs space-y-1">
+                                        <div class="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium text-[11px]">
+                                            <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0">lightbulb</span>
+                                            <span>Explanation</span>
+                                        </div>
+                                        <div class="text-slate-700 dark:text-slate-300 font-normal leading-relaxed">
+                                            <%= expText %>
+                                        </div>
+                                    </div>
+                                <% } %>
+
+                            </div>
+                        <% }); %>
+                    </div>
+                <% } %>
+
+            </div>
+
+        </main>
+    </div>
+
+    <!-- FULL BROWSER SCREEN VIEWER (JUST A CLOSE ICON, NO EXTRA SECTION/GRID, NO TAB CHANGE) -->
+    <div id="evalImageFullscreenOverlay" class="fixed inset-0 z-[99999] hidden bg-black/95 flex items-center justify-center p-2 sm:p-4 transition-opacity duration-200 opacity-0 select-none" onclick="closeEvaluationImageFullscreen()">
+        <!-- JUST A CLOSE ICON -->
+        <button type="button" onclick="closeEvaluationImageFullscreen()" class="absolute top-4 right-4 sm:top-6 sm:right-6 size-12 rounded-full bg-white/15 hover:bg-white/30 active:scale-95 text-white flex items-center justify-center transition-all cursor-pointer shadow-2xl border border-white/25 z-20" title="Close">
+            <span class="material-symbols-rounded text-2xl leading-none">close</span>
+        </button>
+
+        <!-- IMAGE DISPLAYED NATIVELY FULLSCREEN IN BROWSER -->
+        <img id="evalFullscreenImageEl" src="" alt="Evaluation Picture" class="max-h-[94vh] max-w-[96vw] w-auto h-auto object-contain rounded-md shadow-2xl" onclick="event.stopPropagation()">
+    </div>
+
+    <script>
+        function openEvaluationImageFullscreen(src) {
+            const overlay = document.getElementById('evalImageFullscreenOverlay');
+            const img = document.getElementById('evalFullscreenImageEl');
+            if (!overlay || !img) return;
+
+            img.src = src;
+            overlay.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                overlay.classList.remove('opacity-0');
+            });
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeEvaluationImageFullscreen() {
+            const overlay = document.getElementById('evalImageFullscreenOverlay');
+            if (!overlay) return;
+            overlay.classList.add('opacity-0');
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                document.body.style.overflow = '';
+            }, 200);
+        }
+        window.closeEvaluationImageFullscreen = closeEvaluationImageFullscreen;
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeEvaluationImageFullscreen();
+            }
+        });
+    </script>
+
+    <%- include('partials/student-bottom-nav', { activePage: 'exams' }) %>
+    <%- include('partials/app-scripts') %>
+</body>
+</html>

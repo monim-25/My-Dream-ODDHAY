@@ -6,18 +6,35 @@
         overlay.classList.toggle('active');
     }
 
-    function toggleNotifications() {
+    function toggleNotifications(e) {
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (typeof window.toggleNotifications === 'function' && window.toggleNotifications !== toggleNotifications) {
+            return window.toggleNotifications(e);
+        }
+        const dropdown = document.getElementById('notificationDropdown');
+        if (dropdown) {
+            const isHidden = dropdown.classList.contains('hidden');
+            if (isHidden) {
+                dropdown.classList.remove('hidden');
+                if (typeof window.fetchNotifications === 'function') window.fetchNotifications();
+            } else {
+                dropdown.classList.add('hidden');
+            }
+            return;
+        }
         const panel = document.getElementById('notif-panel');
         const overlay = document.getElementById('notif-overlay');
-        panel.classList.toggle('active');
-        overlay.classList.toggle('active');
-        if (!panel.classList.contains('active')) {
+        if (panel) panel.classList.toggle('active');
+        if (overlay) overlay.classList.toggle('active');
+        if (panel && !panel.classList.contains('active')) {
             updateUnreadCount();
         }
     }
 
     function toggleTheme() {
-        if (document.documentElement.classList.contains('dark')) {
+        if (window.OddhayTheme) {
+            window.OddhayTheme.toggle();
+        } else if (document.documentElement.classList.contains('dark')) {
             document.documentElement.classList.remove('dark');
             localStorage.setItem('theme', 'light');
         } else {
@@ -30,11 +47,23 @@
         try {
             const res = await fetch('/api/notifications/unread-count');
             const data = await res.json();
-            const dot = document.getElementById('notif-dot');
-            if (data.count > 0) {
-                dot.classList.remove('hidden');
-            } else {
-                dot.classList.add('hidden');
+            if (data && data.success) {
+                const count = parseInt(data.count, 10) || 0;
+                const badge = document.getElementById('notificationBadge');
+                if (badge) {
+                    if (count > 0) {
+                        badge.textContent = count > 9 ? '9+' : String(count);
+                        badge.classList.remove('hidden');
+                    } else {
+                        badge.textContent = '0';
+                        badge.classList.add('hidden');
+                    }
+                }
+                const dot = document.getElementById('notif-dot');
+                if (dot) {
+                    if (count > 0) dot.classList.remove('hidden');
+                    else dot.classList.add('hidden');
+                }
             }
         } catch (e) {
             console.error('Unread count error:', e);
@@ -76,3 +105,5 @@
         document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
     });
 </script>
+
+<%- include('image-viewer') %>

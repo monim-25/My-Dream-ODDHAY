@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title>Written Exam Evaluations | Teacher ODDHAY</title>
+
+    <style>
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+        .content-scroll { flex: 1; overflow-y: auto; padding: 0; position: relative; }
+        @media (max-width: 1024px) { .admin-sidebar { transform: translateX(-100%); } .admin-main { margin-left: 0; } }
+        
+        .material-symbols-rounded {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            vertical-align: middle;
+            line-height: 1;
+        }
+    </style>
+</head>
+
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+    <div class="flex h-screen">
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100]">
+            <%- include('sidebar', { active: 'written-evaluations' }) %>
+        </aside>
+
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617]">
+            <%- include('../admin/header_v2', { pageTitle: 'Written Exam Evaluations' }) %>
+
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5">
+                
+                <!-- ALERTS / NOTICES (ATTACHED WITH BORDER) -->
+                <% if (successMsg) { %>
+                    <div class="px-4 sm:px-6 py-2.5 bg-emerald-50 dark:bg-emerald-950/30 border-b border-emerald-200 dark:border-emerald-800/60 text-xs font-medium text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                        <span class="material-symbols-rounded text-base text-emerald-600">check_circle</span>
+                        <span><%= successMsg %></span>
+                    </div>
+                <% } %>
+                <% if (errorMsg) { %>
+                    <div class="px-4 sm:px-6 py-2.5 bg-rose-50 dark:bg-rose-950/30 border-b border-rose-200 dark:border-rose-800/60 text-xs font-medium text-rose-800 dark:text-rose-300 flex items-center gap-2">
+                        <span class="material-symbols-rounded text-base text-rose-600">error</span>
+                        <span><%= errorMsg %></span>
+                    </div>
+                <% } %>
+
+                <!-- SECTION 1: STATS OVERVIEW SECTION (PERFECTLY ATTACHED WITH BORDER) -->
+                <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/80 p-2 sm:p-2.5">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        
+                        <!-- Pending Evaluation Card -->
+                        <div class="p-1.5 rounded-md bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-2xs">
+                            <div class="p-3 border border-slate-100 dark:border-white/5 rounded-sm flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02] h-full">
+                                <div class="space-y-0.5">
+                                    <p class="text-[11px] font-bold text-amber-600 dark:text-amber-400">Pending Evaluation</p>
+                                    <h3 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight"><%= pendingCount %></h3>
+                                </div>
+                                <div class="size-9 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                                    <span class="material-symbols-rounded text-lg">pending_actions</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Evaluations Completed Card -->
+                        <div class="p-1.5 rounded-md bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-2xs">
+                            <div class="p-3 border border-slate-100 dark:border-white/5 rounded-sm flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02] h-full">
+                                <div class="space-y-0.5">
+                                    <p class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">Evaluations Completed</p>
+                                    <h3 class="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400 tracking-tight"><%= reviewedCount %></h3>
+                                </div>
+                                <div class="size-9 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                                    <span class="material-symbols-rounded text-lg">task_alt</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Total Submissions Card -->
+                        <div class="p-1.5 rounded-md bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-2xs">
+                            <div class="p-3 border border-slate-100 dark:border-white/5 rounded-sm flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02] h-full">
+                                <div class="space-y-0.5">
+                                    <p class="text-[11px] font-bold text-cyan-600 dark:text-cyan-400">Total Submissions</p>
+                                    <h3 class="text-xl sm:text-2xl font-bold text-cyan-600 dark:text-cyan-400 tracking-tight"><%= totalCount %></h3>
+                                </div>
+                                <div class="size-9 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
+                                    <span class="material-symbols-rounded text-lg">rate_review</span>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- SECTION 2: STICKY FILTERS BAR (PERFECTLY ATTACHED WITH BORDER) -->
+                <div class="sticky top-0 z-30 bg-white/95 dark:bg-[#0b1120]/95 backdrop-blur-md px-4 sm:px-6 py-2.5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+                    <form method="GET" action="/teacher/written-evaluations" class="w-full flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5">
+                        
+                        <!-- TAB SELECTOR -->
+                        <div class="flex items-center gap-1 p-1 bg-slate-100/80 dark:bg-slate-800/80 rounded-xl shrink-0">
+                            <a href="/teacher/written-evaluations?status=pending&subject=<%= subjectFilter %>&class=<%= classFilter %>&q=<%= encodeURIComponent(searchQuery) %>" 
+                               class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all <%= statusFilter === 'pending' ? 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-400 shadow-2xs font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900' %>">
+                                Pending (<%= pendingCount %>)
+                            </a>
+                            <a href="/teacher/written-evaluations?status=reviewed&subject=<%= subjectFilter %>&class=<%= classFilter %>&q=<%= encodeURIComponent(searchQuery) %>" 
+                               class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all <%= statusFilter === 'reviewed' ? 'bg-white dark:bg-slate-900 text-emerald-600 dark:text-emerald-400 shadow-2xs font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900' %>">
+                                Reviewed (<%= reviewedCount %>)
+                            </a>
+                            <a href="/teacher/written-evaluations?status=all&subject=<%= subjectFilter %>&class=<%= classFilter %>&q=<%= encodeURIComponent(searchQuery) %>" 
+                               class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all <%= statusFilter === 'all' ? 'bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-400 shadow-2xs font-semibold' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900' %>">
+                                All (<%= totalCount %>)
+                            </a>
+                        </div>
+
+                        <!-- SEARCH & DROPDOWNS -->
+                        <div class="flex items-center gap-2 flex-1 lg:justify-end flex-wrap">
+                            <input type="hidden" name="status" value="<%= statusFilter %>">
+
+                            <!-- Search Input -->
+                            <div class="relative flex-1 min-w-[170px] sm:min-w-[200px] max-w-xs">
+                                <input type="text" name="q" value="<%= searchQuery %>" placeholder="Search exam title or subject..." 
+                                       class="w-full pl-3 pr-8.5 py-1.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 transition-colors">
+                                <span class="material-symbols-rounded text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 text-sm leading-none pointer-events-none">search</span>
+                            </div>
+
+                            <!-- Subject Filter -->
+                            <% 
+                               const filterSubjects = (!isUnrestricted && assignedSubjects && assignedSubjects.length > 0) ? assignedSubjects : availableSubjects;
+                            %>
+                            <% if (filterSubjects && filterSubjects.length > 0) { %>
+                                <div class="min-w-[120px] sm:min-w-[135px]">
+                                    <select name="subject" onchange="this.form.submit()" class="w-full px-3 py-1.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 cursor-pointer">
+                                        <option value="all" <%= subjectFilter === 'all' ? 'selected' : '' %>>All Subjects</option>
+                                        <% filterSubjects.forEach(sub => { %>
+                                            <option value="<%= sub %>" <%= subjectFilter.toLowerCase() === sub.toLowerCase() ? 'selected' : '' %>><%= sub %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                            <% } %>
+
+                            <!-- Class Filter -->
+                            <% 
+                               const filterClasses = (!isUnrestricted && assignedClasses && assignedClasses.length > 0) ? assignedClasses : availableClasses;
+                            %>
+                            <% if (filterClasses && filterClasses.length > 0) { %>
+                                <div class="min-w-[110px] sm:min-w-[125px]">
+                                    <select name="class" onchange="this.form.submit()" class="w-full px-3 py-1.5 rounded-xl text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 cursor-pointer">
+                                        <option value="all" <%= classFilter === 'all' ? 'selected' : '' %>>All Classes</option>
+                                        <% filterClasses.forEach(cls => { %>
+                                            <option value="<%= cls %>" <%= classFilter.toLowerCase() === cls.toLowerCase() ? 'selected' : '' %>><%= cls %></option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+                            <% } %>
+
+                            <!-- Reset Button -->
+                            <a href="/teacher/written-evaluations?status=<%= statusFilter %>" 
+                               class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200/90 dark:border-slate-700 transition-all shadow-2xs shrink-0 active:scale-95" 
+                               title="Reset all filters">
+                                <span class="material-symbols-rounded text-sm leading-none">restart_alt</span>
+                                <span>Reset</span>
+                            </a>
+                        </div>
+
+                    </form>
+                </div>
+
+                <!-- SECTION 3: SUBMISSIONS LIST SECTION (ATTACHED WITH BORDERS & DIVIDERS LIKE SUPERADMIN) -->
+                <div class="bg-white dark:bg-[#0f172a] flex flex-col flex-1 border-b border-slate-200 dark:border-slate-800">
+                    
+                    <% 
+                       const strictlyAssignedAttempts = attempts;
+                    %>
+
+                    <% if (strictlyAssignedAttempts.length === 0) { %>
+                        <div class="p-16 text-center space-y-3">
+                            <span class="material-symbols-rounded text-5xl text-slate-300 dark:text-slate-700 leading-none mx-auto">rate_review</span>
+                            <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                                <% if (statusFilter === 'pending') { %>
+                                    No Pending Written Evaluations
+                                <% } else if (statusFilter === 'reviewed') { %>
+                                    No Reviewed Evaluations Found
+                                <% } else { %>
+                                    No Written Exam Submissions Found
+                                <% } %>
+                            </h3>
+                            <p class="text-xs text-slate-400 max-w-md mx-auto">
+                                <% if (statusFilter === 'pending') { %>
+                                    All student written submissions under your assigned classes and subjects have been evaluated. Great job!
+                                <% } else { %>
+                                    When students complete exams containing written questions matching your assigned classes and subjects, they will appear here.
+                                <% } %>
+                            </p>
+                        </div>
+                    <% } else { %>
+                        <div class="w-full overflow-x-auto">
+                            <table class="w-full text-left border-collapse table-fixed min-w-[760px]">
+                                <colgroup>
+                                    <col class="w-auto">
+                                    <col class="w-28 sm:w-32">
+                                    <col class="w-28 sm:w-32">
+                                    <col class="w-44 sm:w-48">
+                                    <col class="w-32 sm:w-36">
+                                </colgroup>
+                                <thead>
+                                    <tr class="bg-slate-50/70 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 text-[10.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                        <th class="px-4 sm:px-6 py-2.5 text-left">Exam Details</th>
+                                        <th class="px-3 py-2.5 text-center">Subject</th>
+                                        <th class="px-3 py-2.5 text-center">Class</th>
+                                        <th class="px-3 py-2.5 text-center">Score & Status</th>
+                                        <th class="px-4 sm:px-6 py-2.5 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60 bg-white dark:bg-[#0f172a]">
+                                    <% strictlyAssignedAttempts.forEach(function(att) { %>
+                                        <%
+                                           const student = att.user || {};
+                                           const bank = att.bank || {};
+                                           const isReviewed = att.writtenStatus === 'reviewed';
+                                           const userAnswers = att.userAnswers || [];
+                                           const writtenAnswers = userAnswers.filter(u => u.questionType !== 'MCQ');
+
+                                           let writtenEarned = 0;
+                                           let writtenMax = 0;
+                                           if (att.teacherReview && typeof att.teacherReview.totalWrittenScore === 'number') {
+                                               writtenEarned = att.teacherReview.totalWrittenScore;
+                                               writtenMax = att.teacherReview.maxWrittenScore || writtenAnswers.reduce((sum, u) => sum + (u.maxMarks || 5), 0);
+                                           } else {
+                                               writtenAnswers.forEach(u => {
+                                                   writtenEarned += (u.marksObtained || 0);
+                                                   writtenMax += (u.maxMarks || 5);
+                                               });
+                                           }
+
+                                           const subDate = att.submittedAt ? new Date(att.submittedAt) : new Date();
+                                           const formattedSubDate = subDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                                        %>
+
+                                        <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors group">
+                                            
+                                            <%
+                                               const boardName = bank.board ? (String(bank.board).toLowerCase().includes('board') ? bank.board : bank.board + ' Board') : '';
+                                               const displayTitle = (bank.title && bank.title.trim()) 
+                                                   || [bank.subject, bank.topic, boardName, bank.year].filter(Boolean).map(s => String(s).trim()).filter(Boolean).join(' - ')
+                                                   || (bank.subject ? bank.subject + ' Written Exam' : 'Written Exam');
+                                            %>
+
+                                            <!-- EXAM INFO & USER AVATAR -->
+                                            <td class="px-4 sm:px-6 py-3.5 align-middle">
+                                                <div class="flex items-center gap-3.5 min-w-0">
+                                                    <div class="size-10 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center font-bold text-xs shrink-0 overflow-hidden shadow-2xs" title="Student: <%= student.name || 'Student' %>">
+                                                        <% if (student.profilePicture || student.profileImage) { %>
+                                                            <img src="<%= student.profilePicture || student.profileImage %>" alt="Avatar" class="size-full object-cover">
+                                                        <% } else { %>
+                                                            <span><%= (student.name || 'S')[0].toUpperCase() %></span>
+                                                        <% } %>
+                                                    </div>
+
+                                                    <div class="space-y-1 min-w-0 flex-1">
+                                                        <h4 class="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 truncate" title="<%= displayTitle %>">
+                                                            <%= displayTitle %>
+                                                        </h4>
+
+                                                        <div class="flex items-center gap-2 flex-wrap text-[11px] text-slate-500 dark:text-slate-400 font-normal">
+                                                            <span class="font-medium text-slate-800 dark:text-slate-200 inline-flex items-center gap-1">
+                                                                <span class="material-symbols-rounded text-xs text-cyan-600 dark:text-cyan-400">person</span>
+                                                                <%= student.name || 'Student' %>
+                                                            </span>
+                                                            <span>•</span>
+                                                            <span>Submitted: <%= formattedSubDate %></span>
+                                                            <span>•</span>
+                                                            <span><%= writtenAnswers.length %> Written <%= writtenAnswers.length === 1 ? 'Question' : 'Questions' %></span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <!-- SUBJECT COLUMN -->
+                                            <%
+                                               let rowSub = bank.displaySubject || bank.subject || 'Subject';
+                                               const rsLower = String(rowSub).toLowerCase().trim();
+                                               if (rsLower.includes('bangla') || rsLower.includes('bengali')) rowSub = 'Bangla';
+                                               else if (rsLower.includes('english')) rowSub = 'English';
+                                               else if (rsLower.includes('math')) rowSub = 'Math';
+                                            %>
+                                            <td class="px-3 py-3.5 text-center align-middle">
+                                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border border-cyan-200/80 dark:border-cyan-800/60 truncate max-w-[110px]">
+                                                    <%= rowSub %>
+                                                </span>
+                                            </td>
+
+                                            <!-- CLASS COLUMN -->
+                                            <td class="px-3 py-3.5 text-center align-middle">
+                                                <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 truncate max-w-[110px]">
+                                                    <%= Array.isArray(bank.classLevel) ? bank.classLevel.join(', ') : (bank.classLevel || student.classLevel || 'Class 9') %>
+                                                </span>
+                                            </td>
+
+                                            <!-- SCORES & STATUS COLUMN -->
+                                            <td class="px-3 py-3.5 text-center align-middle">
+                                                <div class="flex flex-col items-center justify-center gap-1">
+                                                    <% if (isReviewed) { %>
+                                                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1.5 shadow-2xs">
+                                                            <span class="size-1.5 rounded-full bg-emerald-500"></span>
+                                                            <span>Reviewed</span>
+                                                        </span>
+                                                        <span class="text-[11px] text-slate-400 font-normal">
+                                                            Score: <strong class="text-emerald-600 dark:text-emerald-400 font-semibold"><%= writtenEarned %></strong> / <%= writtenMax %>
+                                                        </span>
+                                                    <% } else { %>
+                                                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center gap-1.5 shadow-2xs">
+                                                            <span class="size-1.5 rounded-full bg-amber-500"></span>
+                                                            <span>Pending Review</span>
+                                                        </span>
+                                                        <span class="text-[11px] text-slate-400 font-normal">
+                                                            Max Marks: <%= writtenMax %>
+                                                        </span>
+                                                    <% } %>
+                                                </div>
+                                            </td>
+
+                                            <!-- ACTION BUTTON COLUMN -->
+                                            <td class="px-4 sm:px-6 py-3.5 text-right align-middle">
+                                                <a href="/teacher/written-evaluations/<%= att._id %>" 
+                                                   class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all shadow-2xs <%= isReviewed ? 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700' : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-xs active:scale-95' %>">
+                                                    <span class="material-symbols-rounded text-sm leading-none">
+                                                        <%= isReviewed ? 'edit_note' : 'rate_review' %>
+                                                    </span>
+                                                    <span><%= isReviewed ? 'Edit Review' : 'Evaluate' %></span>
+                                                </a>
+                                            </td>
+
+                                        </tr>
+                                    <% }); %>
+                                </tbody>
+                            </table>
+                        </div>
+                    <% } %>
+
+                    <!-- SECTION 4: PAGINATION FOOTER (PERFECTLY ATTACHED AT BOTTOM) -->
+                    <% if (totalPages > 1) { %>
+                        <div class="px-4 sm:px-6 py-3 bg-white dark:bg-[#0f172a] border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                            <div class="text-slate-500 font-normal">
+                                Showing page <%= page %> of <%= totalPages %>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <% if (page > 1) { %>
+                                    <a href="/teacher/written-evaluations?page=<%= page - 1 %>&status=<%= statusFilter %>&subject=<%= subjectFilter %>&class=<%= classFilter %>&q=<%= encodeURIComponent(searchQuery) %>" 
+                                       class="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 transition-all">
+                                        Previous
+                                    </a>
+                                <% } %>
+                                <% if (page < totalPages) { %>
+                                    <a href="/teacher/written-evaluations?page=<%= page + 1 %>&status=<%= statusFilter %>&subject=<%= subjectFilter %>&class=<%= classFilter %>&q=<%= encodeURIComponent(searchQuery) %>" 
+                                       class="px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 transition-all">
+                                        Next
+                                    </a>
+                                <% } %>
+                            </div>
+                        </div>
+                    <% } %>
+
+                </div>
+
+            </div>
+        </main>
+    </div>
+</body>
+</html>
