@@ -83,18 +83,40 @@
                             </label>
                         </div>
                     </div>
-                    <div id="class-group" class="group">
+                    <div id="class-group" class="group transition-all duration-300">
                         <label
                             class="block text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2">শ্রেণী
                             / স্তর</label>
-                        <select name="classLevel"
-                            class="w-full px-6 h-15 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border-2 border-transparent focus:border-primary/20 focus:bg-white dark:focus:bg-slate-900 transition-all font-bold text-base shadow-inner appearance-none cursor-pointer">
-                            <% (globalAcademicClasses || []).forEach(cls => { %>
-                                <option value="<%= cls.name %>">
-                                    <%= cls.name %>
-                                </option>
-                            <% }) %>
-                        </select>
+                        <%
+                            const defaultClassesList = [
+                                'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12', 'Admission', 'Skill Development'
+                            ];
+                            let renderedClasses = [];
+                            const sourceList = (typeof academicClasses !== 'undefined' && Array.isArray(academicClasses) && academicClasses.length > 0)
+                                ? academicClasses
+                                : ((typeof globalAcademicClasses !== 'undefined' && Array.isArray(globalAcademicClasses) && globalAcademicClasses.length > 0)
+                                    ? globalAcademicClasses
+                                    : []);
+                            if (sourceList.length > 0) {
+                                renderedClasses = sourceList.map(c => typeof c === 'object' && c ? (c.name || '') : String(c)).filter(Boolean);
+                            }
+                            if (renderedClasses.length === 0) {
+                                renderedClasses = defaultClassesList;
+                            }
+                        %>
+                        <div class="relative">
+                            <select name="classLevel" id="class-select"
+                                class="w-full px-6 pr-12 h-15 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 border-slate-200/60 dark:border-slate-800 focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition-all font-bold text-base text-slate-800 dark:text-slate-100 shadow-inner appearance-none cursor-pointer">
+                                <% renderedClasses.forEach(clsName => { %>
+                                    <option value="<%= clsName %>" class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-semibold py-2">
+                                        <%= clsName %>
+                                    </option>
+                                <% }) %>
+                            </select>
+                            <div class="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 flex items-center justify-center text-slate-400 dark:text-slate-500">
+                                <span class="material-symbols-outlined text-2xl">unfold_more</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -102,17 +124,16 @@
                 <div id="step-3" class="step-content hidden space-y-6">
                     <div class="group">
                         <label
-                            class="block text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2">পাসওয়ার্ড</label>
-                        <input type="password" name="password" placeholder="••••••••"
-                            class="w-full px-6 h-15 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border-2 border-transparent focus:border-primary/20 focus:bg-white dark:focus:bg-slate-900 transition-all font-bold text-base shadow-inner"
+                            class="block text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2">পাসওয়ার্ড (কমপক্ষে ৬ অক্ষর)</label>
+                        <input type="password" name="password" placeholder="••••••••" minlength="6"
+                            class="w-full px-6 h-15 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border-2 border-transparent focus:border-primary/20 focus:bg-white dark:focus:bg-slate-900 transition-all font-bold text-base shadow-inner text-slate-800 dark:text-slate-100"
                             required>
                     </div>
                     <div class="group">
                         <label
-                            class="block text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2">পুনরায়
-                            লিখুন</label>
-                        <input type="password" name="confirmPassword" placeholder="••••••••"
-                            class="w-full px-6 h-15 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border-2 border-transparent focus:border-primary/20 focus:bg-white dark:focus:bg-slate-900 transition-all font-bold text-base shadow-inner"
+                            class="block text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2">পাসওয়ার্ড নিশ্চিত করুন</label>
+                        <input type="password" name="confirmPassword" placeholder="••••••••" minlength="6"
+                            class="w-full px-6 h-15 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border-2 border-transparent focus:border-primary/20 focus:bg-white dark:focus:bg-slate-900 transition-all font-bold text-base shadow-inner text-slate-800 dark:text-slate-100"
                             required>
                     </div>
                 </div>
@@ -130,7 +151,7 @@
                     </button>
                     <button type="submit" id="submit-btn"
                         class="hidden flex-[2] h-16 rounded-[1.5rem] bg-primary text-white font-extrabold shadow-xl shadow-primary/30 hover:shadow-primary/50 hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 flex items-center justify-center gap-2 group">
-                        <span id="finish-text" class="text-lg">রেজিস্ট্রেশন করুন</span>
+                        <span id="finish-text" class="text-lg">রেজিস্ট্রেশন সম্পন্ন করুন</span>
                         <span
                             class="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">task_alt</span>
                     </button>
@@ -221,11 +242,26 @@
                 submitBtn.classList.toggle('hidden', currentStep !== 3);
             }
 
+            // Keyboard enter handling: advance step rather than early form submit
+            form.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    if (currentStep < 3) {
+                        e.preventDefault();
+                        nextBtn.click();
+                    }
+                }
+            });
+
             nextBtn.onclick = () => {
-                const stepInputs = steps[currentStep - 1].querySelectorAll('input, select');
+                const currentStepContainer = steps[currentStep - 1];
+                const stepInputs = currentStepContainer.querySelectorAll('input:not([type="radio"]), select');
                 let valid = true;
+                let errorMsg = '';
+
                 stepInputs.forEach(input => {
-                    if (input.hasAttribute('required') && !input.value.trim()) {
+                    if (input.disabled) return;
+                    const val = input.value.trim();
+                    if (input.hasAttribute('required') && !val) {
                         valid = false;
                         input.classList.add('!border-red-500');
                     } else {
@@ -233,12 +269,39 @@
                     }
                 });
 
-                if (valid) {
-                    currentStep++;
-                    updateStep();
-                } else {
-                    showToast('দয়া করে সব তথ্য পূরণ করুন');
+                if (currentStep === 1) {
+                    const idInput = currentStepContainer.querySelector('input[name="identifier"]');
+                    if (idInput) {
+                        const raw = idInput.value.trim();
+                        const isEmail = raw.includes('@');
+                        const bengaliDigits = {'০':'0','১':'1','২':'2','৩':'3','৪':'4','৫':'5','৬':'6','৭':'7','৮':'8','৯':'9'};
+                        const norm = raw.replace(/[০-৯]/g, d => bengaliDigits[d]).replace(/[\s\-\+\(\)]/g, '');
+                        const cleanPhone = norm.startsWith('880') ? '0' + norm.substring(3) : norm;
+
+                        if (isEmail) {
+                            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                            if (!emailRegex.test(raw)) {
+                                valid = false;
+                                idInput.classList.add('!border-red-500');
+                                errorMsg = 'সঠিক ইমেইল এড্রেস লিখুন';
+                            }
+                        } else {
+                            if (!/^01[3-9]\d{8}$/.test(cleanPhone)) {
+                                valid = false;
+                                idInput.classList.add('!border-red-500');
+                                errorMsg = 'সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)';
+                            }
+                        }
+                    }
                 }
+
+                if (!valid) {
+                    showToast(errorMsg || 'দয়া করে সব তথ্য সঠিকভাবে পূরণ করুন');
+                    return;
+                }
+
+                currentStep++;
+                updateStep();
             };
 
             prevBtn.onclick = () => {
@@ -247,15 +310,29 @@
             };
 
             const roleInputs = document.querySelectorAll('input[name="role"]');
+            const classGroup = document.getElementById('class-group');
+            const classSelect = document.getElementById('class-select');
+
             roleInputs.forEach(input => {
                 input.onchange = () => {
-                    document.getElementById('class-group').classList.toggle('hidden', input.value === 'parent');
+                    const isParent = input.value === 'parent';
+                    if (classGroup) classGroup.classList.toggle('hidden', isParent);
+                    if (classSelect) classSelect.disabled = isParent;
                 };
             });
 
             form.onsubmit = async (e) => {
                 e.preventDefault();
+                if (currentStep !== 3) {
+                    nextBtn.click();
+                    return;
+                }
+
                 const formData = Object.fromEntries(new FormData(form));
+
+                if (!formData.password || formData.password.length < 6) {
+                    return showToast('পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে');
+                }
 
                 if (formData.password !== formData.confirmPassword) {
                     return showToast('পাসওয়ার্ড দুটি মিলছে না');
@@ -279,7 +356,7 @@
                     if (result.success) {
                         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#137fec', '#ffffff'] });
                         showToast('নিবন্ধন সফল হয়েছে! ড্যাশবোর্ডে নিয়ে যাওয়া হচ্ছে...', 'success');
-                        setTimeout(() => window.location.href = result.redirect, 2000);
+                        setTimeout(() => window.location.href = (result.redirect || '/dashboard'), 1500);
                     } else {
                         showToast(result.error || 'নিবন্ধন ব্যর্থ হয়েছে');
                         finishText.textContent = origText;
