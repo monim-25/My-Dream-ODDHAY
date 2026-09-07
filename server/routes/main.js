@@ -77,6 +77,9 @@ router.get('/dashboard', protect, async (req, res) => {
         console.log('--- DASHBOARD ACCESS ---');
         console.log('User:', dbUser ? dbUser.name : 'NULL');
         if (!dbUser) return res.redirect('/login');
+        if (dbUser.role === 'superadmin') return res.redirect('/superadmin');
+        if (dbUser.role === 'admin' || dbUser.role === 'content_manager' || dbUser.role === 'support' || dbUser.role === 'moderator') return res.redirect('/admin');
+        if (dbUser.role === 'teacher') return res.redirect('/teacher');
         if (dbUser.role === 'parent') return res.redirect('/parent/dashboard');
 
         // --- Streak Calculation Logic ---
