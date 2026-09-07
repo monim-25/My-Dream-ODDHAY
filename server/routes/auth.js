@@ -184,11 +184,17 @@ router.post('/login', authLimiter, async (req, res) => {
         const isMatch = await user.comparePassword(password);
         if (!isMatch) return res.status(401).send('ইমেইল/ফোন বা পাসওয়ার্ড ভুল।');
 
-        // Super Admin auto-promotion
+        // Super Admin auto-promotion & role normalization
         const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
         const userEmail = (user.email || '').toLowerCase().trim();
-        if (superEmail && userEmail === superEmail && user.role !== 'superadmin') {
-            user.role = 'superadmin';
+        if (superEmail && userEmail === superEmail) {
+            if (user.role !== 'superadmin') {
+                user.role = 'superadmin';
+                await user.save();
+            }
+        } else if (superEmail && user.role === 'superadmin') {
+            // Without the email no one else is superadmin!
+            user.role = 'admin';
             await user.save();
         }
 
@@ -201,8 +207,8 @@ router.post('/login', authLimiter, async (req, res) => {
             // Force password change if admin reset it
             if (user.passwordResetRequired) return res.redirect('/change-password');
             
-            if (user.role === 'superadmin') return res.redirect('/superadmin');
-            if (user.role === 'admin') return res.redirect('/admin');
+            if (superEmail && userEmail === superEmail) return res.redirect('/superadmin');
+            if (user.role === 'admin' || user.role === 'superadmin') return res.redirect('/admin');
             if (user.role === 'content_manager' || user.role === 'support' || user.role === 'moderator') return res.redirect('/admin');
             if (user.role === 'teacher') return res.redirect('/teacher');
             if (user.role === 'parent') return res.redirect('/parent/dashboard');

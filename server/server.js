@@ -9,6 +9,7 @@ const multer = require('multer');
 const fs = require('fs');
 const session = require('express-session');
 const MongoStore = require('connect-mongo').default || require('connect-mongo').MongoStore || require('connect-mongo');
+const { isSuperAdmin, superAdminProtect } = require('./config');
 
 const app = express();
 const http = require('http').createServer(app);
@@ -126,7 +127,6 @@ const ACADEMIC_CACHE_TTL = 10 * 60 * 1000;
 
 app.use(async (req, res, next) => {
     res.locals.user = req.session.user || null;
-    res.locals.isSuperAdmin = req.session.user && (req.session.user.role === 'superadmin' || req.session.user.email === process.env.SUPER_ADMIN_EMAIL);
     res.locals.SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL; // Also provide the email if needed
     res.locals.unreadNotificationCount = 0;
 
@@ -148,6 +148,24 @@ app.use(async (req, res, next) => {
             });
         } catch (e) {}
     }
+
+    // Role Enforcement: Only process.env.SUPER_ADMIN_EMAIL can be superadmin
+    if (req.session && req.session.user) {
+        const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
+        const userEmail = (req.session.user.email || '').toLowerCase().trim();
+        if (superEmail) {
+            if (userEmail === superEmail) {
+                req.session.user.role = 'superadmin';
+                if (res.locals.user) res.locals.user.role = 'superadmin';
+            } else if (req.session.user.role === 'superadmin') {
+                // Without the email no one else is superadmin!
+                req.session.user.role = 'admin';
+                if (res.locals.user) res.locals.user.role = 'admin';
+            }
+        }
+    }
+
+    res.locals.isSuperAdmin = isSuperAdmin(req.session ? req.session.user : null);
     
     // Add helpers to locals
     res.locals.formatText = (str) => {
@@ -304,7 +322,7 @@ teacherRouter.upload = upload;
 // Mount routers
 app.use('/', require('./routes/auth'));
 app.use('/', mainRouter);
-app.use('/superadmin', superadminRouter);
+app.use('/superadmin', superAdminProtect, superadminRouter);
 app.use('/admin', adminRouter);
 app.use('/teacher', teacherRouter);
 app.use('/payment', require('./routes/payment'));
@@ -313,7 +331,7 @@ app.use('/admin/payments', (req, res) => res.redirect('/payment/admin'));
 app.use('/api', require('./routes/api'));
 app.use('/api/notifications', require('./routes/notification'));
 app.use('/admin/coupons', require('./routes/coupons'));
-app.use('/superadmin/coupons', require('./routes/coupons'));
+app.use('/superadmin/coupons', superAdminProtect, require('./routes/coupons'));
 // Legacy VAPID route
 app.get('/messages/vapid-public-key', (req, res) => {
     const pushNotificationService = require('./services/pushNotificationService');

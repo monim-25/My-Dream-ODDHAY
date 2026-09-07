@@ -36,9 +36,12 @@ router.param('cid', validateObjectId);
 router.param('chid', validateObjectId);
 router.param('qid', validateObjectId);
 
+// STRICT SECURITY: Protect entire router for Super Admin only
+router.use(superAdminProtect);
+
 // Admin main dashboard
 // Quizzes
-router.get('/quizzes', adminProtect, async (req, res) => {
+router.get('/quizzes', superAdminProtect, async (req, res) => {
     try {
         await connectDB();
         const user = req.session.user;
@@ -341,12 +344,18 @@ router.post('/quizzes/bulk-action', contentAdminProtect, async (req, res) => {
 });
 
 
-router.get('/', adminProtect, async (req, res) => {
+router.get('/', superAdminProtect, async (req, res) => {
     try {
         await connectDB();
         const user = req.session.user;
-        const isMaster = user.email && user.email === process.env.SUPER_ADMIN_EMAIL;
-        const isSuperAdmin = user.role === 'superadmin' || isMaster;
+        const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
+        const userEmail = (user && user.email ? user.email : '').toLowerCase().trim();
+        const isMaster = superEmail && userEmail === superEmail;
+        const isSuperAdmin = isMaster || (user && user.role === 'superadmin' && !superEmail);
+
+        if (!isSuperAdmin) {
+            return res.redirect('/admin');
+        }
 
         if (isSuperAdmin) {
             const startOfDay = new Date();

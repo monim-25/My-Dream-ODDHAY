@@ -77,8 +77,12 @@ router.get('/dashboard', protect, async (req, res) => {
         console.log('--- DASHBOARD ACCESS ---');
         console.log('User:', dbUser ? dbUser.name : 'NULL');
         if (!dbUser) return res.redirect('/login');
-        if (dbUser.role === 'superadmin') return res.redirect('/superadmin');
-        if (dbUser.role === 'admin' || dbUser.role === 'content_manager' || dbUser.role === 'support' || dbUser.role === 'moderator') return res.redirect('/admin');
+        const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
+        const userEmail = (dbUser.email || '').toLowerCase().trim();
+        const isSuper = superEmail ? (userEmail === superEmail) : (dbUser.role === 'superadmin');
+
+        if (isSuper) return res.redirect('/superadmin');
+        if (dbUser.role === 'admin' || dbUser.role === 'superadmin' || dbUser.role === 'content_manager' || dbUser.role === 'support' || dbUser.role === 'moderator') return res.redirect('/admin');
         if (dbUser.role === 'teacher') return res.redirect('/teacher');
         if (dbUser.role === 'parent') return res.redirect('/parent/dashboard');
 

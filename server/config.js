@@ -35,32 +35,71 @@ const protect = (req, res, next) => {
     }
 };
 
-const adminProtect = (req, res, next) => {
-    const role = req.session.user ? req.session.user.role : null;
-    const email = req.session.user ? (req.session.user.email || '').toLowerCase().trim() : '';
+// Strict Super Admin verification helper
+const isSuperAdmin = (user) => {
+    if (!user) return false;
     const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
-    const isMaster = email && superEmail && email === superEmail;
-
-    if (req.session.user && (['admin', 'superadmin', 'teacher', 'content_manager', 'support', 'moderator'].includes(role) || isMaster)) next();
-    else if (!req.session.user) res.redirect('/login');
-    else {
-        console.warn(`Admin Access Denied: User=${email}, Role=${role}, Master=${isMaster}`);
-        res.status(403).send('Access Denied');
+    const userEmail = (user.email || '').toLowerCase().trim();
+    if (superEmail) {
+        // Without this exact email, NO ONE ELSE is superadmin!
+        return userEmail === superEmail;
     }
+    return user.role === 'superadmin';
+};
+
+const adminProtect = (req, res, next) => {
+    if (!req.session || !req.session.user) {
+        if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        return res.redirect('/login');
+    }
+
+    const user = req.session.user;
+    const role = user.role;
+    const isSuper = isSuperAdmin(user);
+
+    if (isSuper || ['admin', 'teacher', 'content_manager', 'support', 'moderator'].includes(role)) {
+        return next();
+    }
+
+    console.warn(`Admin Access Denied: User=${user.email}, Role=${role}`);
+    if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+        return res.status(403).json({ success: false, error: 'Access Denied: Staff only.' });
+    }
+    res.status(403).send('Access Denied: Staff only.');
 };
 
 const superAdminProtect = (req, res, next) => {
-    const role = req.session.user ? req.session.user.role : null;
-    const email = req.session.user ? (req.session.user.email || '').toLowerCase().trim() : '';
-    const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
-    const isMaster = email && superEmail && email === superEmail;
-
-    if (req.session.user && (role === 'superadmin' || isMaster)) next();
-    else if (!req.session.user) res.redirect('/login');
-    else {
-        console.warn(`SuperAdmin Access Denied: User=${email}, Role=${role}, Master=${isMaster}`);
-        res.status(403).send('Access Denied');
+    if (!req.session || !req.session.user) {
+        if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        return res.redirect('/login');
     }
+
+    const user = req.session.user;
+    if (isSuperAdmin(user)) {
+        return next();
+    }
+
+    console.warn(`[SECURITY] SuperAdmin Access Denied: User=${user.email}, Role=${user.role}. Required SUPER_ADMIN_EMAIL: ${process.env.SUPER_ADMIN_EMAIL}`);
+
+    // If API/AJAX call
+    if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+        return res.status(403).json({ success: false, error: 'Access Denied: Super Admin only.' });
+    }
+
+    // Admins have their own panel — redirect them to /admin!
+    if (user.role === 'admin' || user.role === 'content_manager' || user.role === 'support' || user.role === 'moderator') {
+        return res.redirect('/admin');
+    }
+
+    if (user.role === 'teacher') {
+        return res.redirect('/teacher');
+    }
+
+    res.redirect('/dashboard');
 };
 
 const teacherProtect = (req, res, next) => {
@@ -104,4 +143,4 @@ const models = {
     Folder: require('./models/Folder'),
 };
 
-module.exports = { connectDB, protect, adminProtect, superAdminProtect, contentAdminProtect, teacherProtect, parentProtect, ...models };
+module.exports = { connectDB, isSuperAdmin, protect, adminProtect, superAdminProtect, contentAdminProtect, teacherProtect, parentProtect, ...models };
