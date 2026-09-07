@@ -969,7 +969,8 @@ router.post('/profile/update', protect, (req, res, next) => {
         const user = await User.findById(req.session.userId);
 
         if (req.file) {
-            let filePath = `/uploads/avatars/${req.file.filename}`;
+            const { processUploadedFile } = require('../services/cloudinaryService');
+            let filePath = await processUploadedFile(req.file, 'avatars');
             user.profilePicture = filePath;
             user.profileImage = filePath;
             if (req.session.user) {
@@ -1015,7 +1016,8 @@ router.post('/profile/upload-picture', protect, (req, res, next) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
 
-        let filePath = `/uploads/avatars/${req.file.filename}`;
+        const { processUploadedFile } = require('../services/cloudinaryService');
+        let filePath = await processUploadedFile(req.file, 'avatars');
 
         try {
             const secPath = path.join(process.cwd(), 'public/uploads/avatars', req.file.filename);
@@ -2671,7 +2673,7 @@ const uploadWrittenAnswerMulter = multer({
 });
 
 const handleWrittenImageUpload = (req, res) => {
-    uploadWrittenAnswerMulter.single('image')(req, res, (err) => {
+    uploadWrittenAnswerMulter.single('image')(req, res, async (err) => {
         if (err) {
             console.error('Written Answer Image upload error:', err);
             return res.status(400).json({ success: false, error: err.message || 'Upload failed' });
@@ -2679,11 +2681,8 @@ const handleWrittenImageUpload = (req, res) => {
         if (!req.file) {
             return res.status(400).json({ success: false, error: 'No image file uploaded' });
         }
-        const relPath = '/uploads/written-answers/' + req.file.filename;
-        try {
-            const sec = path.join(process.cwd(), 'public/uploads/written-answers', req.file.filename);
-            fs.copyFileSync(req.file.path, sec);
-        } catch (e) {}
+        const { processUploadedFile } = require('../services/cloudinaryService');
+        const relPath = await processUploadedFile(req.file, 'written-answers');
         return res.json({ success: true, imageUrl: relPath });
     });
 };
@@ -3543,7 +3542,8 @@ router.post('/qa-ask', protect, (req, res, next) => {
 
         let imageUrl = null;
         if (req.file) {
-            imageUrl = '/uploads/qa/' + req.file.filename;
+            const { processUploadedFile } = require('../services/cloudinaryService');
+            imageUrl = await processUploadedFile(req.file, 'qa');
         }
 
         await new QA({
@@ -3605,7 +3605,8 @@ router.post('/qa/reply/:id', protect, (req, res, next) => {
 
         let imageUrl = null;
         if (req.file) {
-            imageUrl = '/uploads/qa/' + req.file.filename;
+            const { processUploadedFile } = require('../services/cloudinaryService');
+            imageUrl = await processUploadedFile(req.file, 'qa');
         }
 
         if (!qa.replies) qa.replies = [];

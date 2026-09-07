@@ -563,7 +563,8 @@ router.post('/course/:id/curriculum/node', teacherProtect, lazyUploadMiddleware,
             newNode.duration = duration || '';
             newNode.description = description || '';
             if (req.files && req.files.video && req.files.video[0]) {
-                newNode.videoPath = '/uploads/videos/' + path.basename(req.files.video[0].path);
+                const { processUploadedFile } = require('../services/cloudinaryService');
+                newNode.videoPath = await processUploadedFile(req.files.video[0], 'videos');
             } else if (req.body.videoPath) {
                 newNode.videoPath = req.body.videoPath;
             } else {
@@ -571,13 +572,15 @@ router.post('/course/:id/curriculum/node', teacherProtect, lazyUploadMiddleware,
             }
 
             if (req.files && req.files.thumbnail && req.files.thumbnail[0]) {
-                newNode.thumbnail = '/uploads/thumbnails/' + path.basename(req.files.thumbnail[0].path);
+                const { processUploadedFile } = require('../services/cloudinaryService');
+                newNode.thumbnail = await processUploadedFile(req.files.thumbnail[0], 'thumbnails');
             } else if (req.body.thumbnailPath) {
                 newNode.thumbnail = req.body.thumbnailPath;
             }
         } else if (type === 'note') {
             if (req.files && req.files.note && req.files.note[0]) {
-                newNode.filePath = '/uploads/notes/' + path.basename(req.files.note[0].path);
+                const { processUploadedFile } = require('../services/cloudinaryService');
+                newNode.filePath = await processUploadedFile(req.files.note[0], 'notes');
             } else if (req.body.filePath) {
                 newNode.filePath = req.body.filePath;
             } else {
@@ -827,13 +830,15 @@ router.put('/course/:id/curriculum/node/:nodeId', teacherProtect, lazyUploadMidd
 
         if (node.type === 'video') {
             if (req.files && req.files.video && req.files.video[0]) {
-                node.videoPath = '/uploads/videos/' + path.basename(req.files.video[0].path);
+                const { processUploadedFile } = require('../services/cloudinaryService');
+                node.videoPath = await processUploadedFile(req.files.video[0], 'videos');
             } else if (videoPath && videoPath.trim()) {
                 node.videoPath = videoPath.trim();
             }
 
             if (req.files && req.files.thumbnail && req.files.thumbnail[0]) {
-                node.thumbnail = '/uploads/thumbnails/' + path.basename(req.files.thumbnail[0].path);
+                const { processUploadedFile } = require('../services/cloudinaryService');
+                node.thumbnail = await processUploadedFile(req.files.thumbnail[0], 'thumbnails');
             } else if (thumbnailPath && thumbnailPath.trim()) {
                 node.thumbnail = thumbnailPath.trim();
             }
@@ -1028,7 +1033,8 @@ router.post('/course/:id/edit', teacherProtect, (req, res, next) => {
 
         // Handle images
         if (req.files && req.files.routineImage) {
-            course.routineImage = `/uploads/routines/${req.files.routineImage[0].filename}`;
+            const { processUploadedFile } = require('../services/cloudinaryService');
+            course.routineImage = await processUploadedFile(req.files.routineImage[0], 'routines');
         }
         
         // Update allowed fields
@@ -1353,10 +1359,8 @@ router.post('/course/:id/chapter/:chid/video/add', teacherProtect, (req, res, ne
         const { title, description, accessType } = req.body;
         const teacherId = req.session.user._id;
 
-        // Extract filename from full path if needed, but usually multer gives us req.file.filename or path
-        // Based on server.js logic, it's stored in /tmp/uploads/videos/ or client/public/uploads/videos/
-        // We just store the filename or relative path
-        const videoPath = req.file ? `/uploads/videos/${req.file.filename}` : '';
+        const { processUploadedFile } = require('../services/cloudinaryService');
+        const videoPath = req.file ? await processUploadedFile(req.file, 'videos') : '';
 
         const course = await Course.findOneAndUpdate(
             { 
@@ -1392,7 +1396,8 @@ router.post('/course/:id/chapter/:chid/note/add', teacherProtect, (req, res, nex
         await connectDB();
         const { title } = req.body;
         const teacherId = req.session.user._id;
-        const filePath = req.file ? `/uploads/notes/${req.file.filename}` : '';
+        const { processUploadedFile } = require('../services/cloudinaryService');
+        const filePath = req.file ? await processUploadedFile(req.file, 'notes') : '';
 
         const course = await Course.findOneAndUpdate(
             { 
@@ -1873,7 +1878,8 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
     try {
         await connectDB();
         const { title, subject, classLevel, chapter, parentFolderId, description, accessType, course } = req.body;
-        const fileUrl = req.file ? `/uploads/notes/${req.file.filename}` : null;
+        const { processUploadedFile } = require('../services/cloudinaryService');
+        const fileUrl = req.file ? await processUploadedFile(req.file, 'notes') : null;
         
         const noteCourseId = course && mongoose.Types.ObjectId.isValid(course) ? course : undefined;
 

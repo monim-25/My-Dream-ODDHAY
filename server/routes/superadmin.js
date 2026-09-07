@@ -705,8 +705,9 @@ router.post('/add-course', superAdminProtect, (req, res, next) => {
         const { title, subject, category, classLevel, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
 
         // Handle images
-        const thumbnail = req.files && req.files.thumbnail ? `/uploads/thumbnails/${req.files.thumbnail[0].filename}` : null;
-        const routineImage = req.files && req.files.routineImage ? `/uploads/routines/${req.files.routineImage[0].filename}` : null;
+        const { processUploadedFile } = require('../services/cloudinaryService');
+        const thumbnail = req.files && req.files.thumbnail ? await processUploadedFile(req.files.thumbnail[0], 'thumbnails') : null;
+        const routineImage = req.files && req.files.routineImage ? await processUploadedFile(req.files.routineImage[0], 'routines') : null;
 
         // Handle tags, highlights & benefits
         const tagsArray = tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [];
@@ -790,8 +791,9 @@ router.post('/course/:id/edit', superAdminProtect, (req, res, next) => {
 
         // Handle images
         if (req.files) {
-            if (req.files.thumbnail) course.thumbnail = `/uploads/thumbnails/${req.files.thumbnail[0].filename}`;
-            if (req.files.routineImage) course.routineImage = `/uploads/routines/${req.files.routineImage[0].filename}`;
+            const { processUploadedFile } = require('../services/cloudinaryService');
+            if (req.files.thumbnail) course.thumbnail = await processUploadedFile(req.files.thumbnail[0], 'thumbnails');
+            if (req.files.routineImage) course.routineImage = await processUploadedFile(req.files.routineImage[0], 'routines');
         }
         
         // Handle tags, highlights & benefits
@@ -2462,7 +2464,8 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
     await connectDB();
     if (req.session.user.role === 'superadmin') return res.status(403).send('সুপার অ্যাডমিন কন্টেন্ট যোগ করতে পারবেন না।');
     const { title, subject, classLevel, chapter, description, accessType, course } = req.body;
-    const fileUrl = req.file ? `/uploads/notes/${req.file.filename}` : null;
+    const { processUploadedFile } = require('../services/cloudinaryService');
+    const fileUrl = req.file ? await processUploadedFile(req.file, 'notes') : null;
     const mongoose = require('mongoose');
     await new Note({
         title, subject, classLevel, chapter, description,
@@ -3025,8 +3028,8 @@ router.post('/add-question-bank', contentAdminProtect, (req, res, next) => {
 }, async (req, res) => {
     await connectDB();
     if (req.session.user.role === 'superadmin') return res.status(403).send('সুপার অ্যাডমিন কন্টেন্ট যোগ করতে পারবেন না।');
-    const { year, board, subject, classLevel, accessType } = req.body;
-    const fileUrl = req.file ? `/uploads/questions/${req.file.filename}` : null;
+    const { processUploadedFile } = require('../services/cloudinaryService');
+    const fileUrl = req.file ? await processUploadedFile(req.file, 'questions') : null;
     await new QuestionBank({ year, board, subject, classLevel, accessType: accessType || 'Free', fileUrl, addedBy: req.session.user._id, status: 'approved' }).save();
     res.redirect('/superadmin/question-bank');
 });
@@ -3442,13 +3445,8 @@ router.post('/profile/upload-avatar', superAdminProtect, (req, res, next) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
 
-        let filePath = req.file.path;
-        // Normalize path for web access
-        if (filePath.includes('public')) {
-            filePath = filePath.split('public')[1].replace(/\\/g, '/');
-        } else {
-            filePath = `/uploads/${req.file.filename}`;
-        }
+        const { processUploadedFile } = require('../services/cloudinaryService');
+        const filePath = await processUploadedFile(req.file, 'avatars');
 
         const user = await User.findByIdAndUpdate(req.session.userId,
             { profilePicture: filePath, profileImage: filePath },

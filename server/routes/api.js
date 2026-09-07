@@ -1213,7 +1213,8 @@ router.post('/library/upload-note', protect, (req, res) => {
                 formattedSize = `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
             }
 
-            const fileUrl = `/uploads/user-notes/${req.file.filename}`;
+            const { processUploadedFile } = require('../services/cloudinaryService');
+            const fileUrl = await processUploadedFile(req.file, 'user-notes');
             const StudentNote = require('../models/StudentNote');
 
             const newNote = await StudentNote.create({
