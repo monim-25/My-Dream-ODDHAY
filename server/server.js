@@ -149,19 +149,17 @@ app.use(async (req, res, next) => {
         } catch (e) {}
     }
 
-    // Role Enforcement: Only process.env.SUPER_ADMIN_EMAIL can be superadmin
+    // Role Enforcement: ONLY monimmdmonim41@gmail.com can be superadmin
     if (req.session && req.session.user) {
-        const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
+        const superEmail = (process.env.SUPER_ADMIN_EMAIL || 'monimmdmonim41@gmail.com').toLowerCase().trim();
         const userEmail = (req.session.user.email || '').toLowerCase().trim();
-        if (superEmail) {
-            if (userEmail === superEmail) {
-                req.session.user.role = 'superadmin';
-                if (res.locals.user) res.locals.user.role = 'superadmin';
-            } else if (req.session.user.role === 'superadmin') {
-                // Without the email no one else is superadmin!
-                req.session.user.role = 'admin';
-                if (res.locals.user) res.locals.user.role = 'admin';
-            }
+        if (userEmail === superEmail) {
+            req.session.user.role = 'superadmin';
+            if (res.locals.user) res.locals.user.role = 'superadmin';
+        } else if (req.session.user.role === 'superadmin') {
+            // Without this exact email no one else can be superadmin!
+            req.session.user.role = 'admin';
+            if (res.locals.user) res.locals.user.role = 'admin';
         }
     }
 

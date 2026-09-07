@@ -35,16 +35,14 @@ const protect = (req, res, next) => {
     }
 };
 
-// Strict Super Admin verification helper
+// Strict Super Admin verification helper: ONLY monimmdmonim41@gmail.com is superadmin
+const SUPER_ADMIN_EMAIL_DEFAULT = 'monimmdmonim41@gmail.com';
+
 const isSuperAdmin = (user) => {
-    if (!user) return false;
-    const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
-    const userEmail = (user.email || '').toLowerCase().trim();
-    if (superEmail) {
-        // Without this exact email, NO ONE ELSE is superadmin!
-        return userEmail === superEmail;
-    }
-    return user.role === 'superadmin';
+    if (!user || !user.email) return false;
+    const superEmail = (process.env.SUPER_ADMIN_EMAIL || SUPER_ADMIN_EMAIL_DEFAULT).toLowerCase().trim();
+    const userEmail = user.email.toLowerCase().trim();
+    return userEmail === superEmail;
 };
 
 const adminProtect = (req, res, next) => {
