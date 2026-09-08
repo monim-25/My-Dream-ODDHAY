@@ -308,12 +308,7 @@ router.post('/register', authLimiter, async (req, res) => {
 
         delete req.session.tempQuiz;
         req.session.userId = newUser._id.toString();
-        req.session.user = {
-            _id: newUser._id.toString(),
-            name: newUser.name,
-            role: newUser.role,
-            classLevel: newUser.classLevel || ''
-        };
+        req.session.user = newUser.toObject();
         req.session.isFirstLogin = true;
 
         if (email) {

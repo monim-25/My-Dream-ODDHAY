@@ -138,7 +138,7 @@ app.use(async (req, res, next) => {
     const uid = req.session && (req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null));
     if (uid && mongoose.connection.readyState === 1) {
         try {
-            if (!res.locals.user) {
+            if (!res.locals.user || !res.locals.user.email) {
                 const User = require('./models/User');
                 const dbUser = await User.findById(uid).lean();
                 if (dbUser) {
@@ -159,10 +159,10 @@ app.use(async (req, res, next) => {
     if (req.session && req.session.user) {
         const superEmail = (process.env.SUPER_ADMIN_EMAIL || SUPER_ADMIN_EMAIL_DEFAULT).toLowerCase().trim();
         const userEmail = (req.session.user.email || '').toLowerCase().trim();
-        if (userEmail === superEmail) {
+        if (userEmail && userEmail === superEmail) {
             req.session.user.role = 'superadmin';
-        } else if (req.session.user.role === 'superadmin') {
-            // Without this exact email no one else can be superadmin!
+        } else if (userEmail && req.session.user.role === 'superadmin') {
+            // Only demote if email is known and does not match superadmin email
             req.session.user.role = 'admin';
         }
         // Always sync res.locals.user with the enforced session role
