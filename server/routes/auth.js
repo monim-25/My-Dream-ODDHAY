@@ -216,7 +216,8 @@ router.post('/login', authLimiter, async (req, res) => {
             if (user.passwordResetRequired) return res.redirect('/change-password');
             
             if (superEmail && userEmail === superEmail) return res.redirect('/superadmin');
-            if (user.role === 'admin' || user.role === 'superadmin') return res.redirect('/admin');
+            if (user.role === 'superadmin') return res.redirect('/superadmin');
+            if (user.role === 'admin') return res.redirect('/admin');
             if (user.role === 'content_manager' || user.role === 'support' || user.role === 'moderator') return res.redirect('/admin');
             if (user.role === 'teacher') return res.redirect('/teacher');
             if (user.role === 'parent') return res.redirect('/parent/dashboard');

@@ -39,10 +39,15 @@ const protect = (req, res, next) => {
 const SUPER_ADMIN_EMAIL_DEFAULT = 'monimmdmonim41@gmail.com';
 
 const isSuperAdmin = (user) => {
-    if (!user || !user.email) return false;
+    if (!user) return false;
     const superEmail = (process.env.SUPER_ADMIN_EMAIL || SUPER_ADMIN_EMAIL_DEFAULT).toLowerCase().trim();
-    const userEmail = user.email.toLowerCase().trim();
-    return userEmail === superEmail;
+    const userEmail = (user.email || '').toLowerCase().trim();
+    // Primary: email match is the strongest authority
+    if (superEmail && userEmail === superEmail) return true;
+    // Fallback: role is superadmin AND no SUPER_ADMIN_EMAIL env var override in effect
+    // (When SUPER_ADMIN_EMAIL is set, only that email gets superadmin — no one else)
+    if (!process.env.SUPER_ADMIN_EMAIL && user.role === 'superadmin') return true;
+    return false;
 };
 
 const adminProtect = (req, res, next) => {

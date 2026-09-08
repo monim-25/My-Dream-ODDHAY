@@ -157,11 +157,13 @@ app.use(async (req, res, next) => {
         const userEmail = (req.session.user.email || '').toLowerCase().trim();
         if (userEmail === superEmail) {
             req.session.user.role = 'superadmin';
-            if (res.locals.user) res.locals.user.role = 'superadmin';
         } else if (req.session.user.role === 'superadmin') {
             // Without this exact email no one else can be superadmin!
             req.session.user.role = 'admin';
-            if (res.locals.user) res.locals.user.role = 'admin';
+        }
+        // Always sync res.locals.user with the enforced session role
+        if (res.locals.user) {
+            res.locals.user.role = req.session.user.role;
         }
     }
 

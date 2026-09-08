@@ -345,8 +345,15 @@ router.get('/', adminProtect, async (req, res) => {
     try {
         await connectDB();
         const user = req.session.user;
-        const isMaster = user.email && user.email === process.env.SUPER_ADMIN_EMAIL;
+        const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
+        const userEmail = (user.email || '').toLowerCase().trim();
+        const isMaster = superEmail && userEmail === superEmail;
         const isSuperAdmin = user.role === 'superadmin' || isMaster;
+
+        // Superadmin should always use their own panel — never the admin panel
+        if (isSuperAdmin) {
+            return res.redirect('/superadmin');
+        }
 
         if (['admin', 'superadmin'].includes(user.role) || isMaster) {
             const startOfDay = new Date();
