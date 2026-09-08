@@ -348,10 +348,10 @@ router.get('/', superAdminProtect, async (req, res) => {
     try {
         await connectDB();
         const user = req.session.user;
-        const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
+        const superEmail = (process.env.SUPER_ADMIN_EMAIL || 'monimmdmonim41@gmail.com').toLowerCase().trim();
         const userEmail = (user && user.email ? user.email : '').toLowerCase().trim();
-        const isMaster = superEmail && userEmail === superEmail;
-        const isSuperAdmin = isMaster || (user && user.role === 'superadmin' && !superEmail);
+        const isMaster = userEmail === superEmail;
+        const isSuperAdmin = isMaster || (user && user.role === 'superadmin');
 
         if (!isSuperAdmin) {
             return res.redirect('/admin');

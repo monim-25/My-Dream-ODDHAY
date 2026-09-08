@@ -37,6 +37,9 @@ const protect = (req, res, next) => {
 
 // Strict Super Admin verification helper: ONLY monimmdmonim41@gmail.com is superadmin
 const SUPER_ADMIN_EMAIL_DEFAULT = 'monimmdmonim41@gmail.com';
+if (!process.env.SUPER_ADMIN_EMAIL) {
+    process.env.SUPER_ADMIN_EMAIL = SUPER_ADMIN_EMAIL_DEFAULT;
+}
 
 const isSuperAdmin = (user) => {
     if (!user) return false;
@@ -44,9 +47,8 @@ const isSuperAdmin = (user) => {
     const userEmail = (user.email || '').toLowerCase().trim();
     // Primary: email match is the strongest authority
     if (superEmail && userEmail === superEmail) return true;
-    // Fallback: role is superadmin AND no SUPER_ADMIN_EMAIL env var override in effect
-    // (When SUPER_ADMIN_EMAIL is set, only that email gets superadmin — no one else)
-    if (!process.env.SUPER_ADMIN_EMAIL && user.role === 'superadmin') return true;
+    // Fallback: role is superadmin
+    if (user.role === 'superadmin') return true;
     return false;
 };
 

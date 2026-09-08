@@ -6,6 +6,10 @@ const { sendPasswordResetEmail, sendWelcomeEmail } = require('../services/emailS
 
 const rateLimit = require('express-rate-limit');
 
+// Hardcoded fallback — same as config.js SUPER_ADMIN_EMAIL_DEFAULT
+const SUPER_ADMIN_EMAIL_DEFAULT = 'monimmdmonim41@gmail.com';
+const getSuperAdminEmail = () => (process.env.SUPER_ADMIN_EMAIL || SUPER_ADMIN_EMAIL_DEFAULT).toLowerCase().trim();
+
 const authLimiter = rateLimit({
     windowMs: 5 * 60 * 1000, // 5 minutes
     max: 30, // Limit each IP to 30 requests per windowMs
@@ -192,15 +196,16 @@ router.post('/login', authLimiter, async (req, res) => {
         if (!isMatch) return res.render('login', { error: 'ইমেইল/ফোন বা পাসওয়ার্ড ভুল।' });
 
         // Super Admin auto-promotion & role normalization
-        const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
+        const superEmail = getSuperAdminEmail();
         const userEmail = (user.email || '').toLowerCase().trim();
-        if (superEmail && userEmail === superEmail) {
+        if (userEmail === superEmail) {
+            // This is the superadmin — always enforce superadmin role
             if (user.role !== 'superadmin') {
                 user.role = 'superadmin';
                 await user.save();
             }
-        } else if (superEmail && user.role === 'superadmin') {
-            // Without the email no one else is superadmin!
+        } else if (user.role === 'superadmin') {
+            // Someone else has superadmin role — demote them
             user.role = 'admin';
             await user.save();
         }
@@ -215,7 +220,7 @@ router.post('/login', authLimiter, async (req, res) => {
             // Force password change if admin reset it
             if (user.passwordResetRequired) return res.redirect('/change-password');
             
-            if (superEmail && userEmail === superEmail) return res.redirect('/superadmin');
+            if (userEmail === superEmail) return res.redirect('/superadmin');
             if (user.role === 'superadmin') return res.redirect('/superadmin');
             if (user.role === 'admin') return res.redirect('/admin');
             if (user.role === 'content_manager' || user.role === 'support' || user.role === 'moderator') return res.redirect('/admin');
@@ -272,8 +277,8 @@ router.post('/register', authLimiter, async (req, res) => {
 
         // Determine Role
         let assignedRole = role === 'parent' ? 'parent' : 'student';
-        const superEmailReg = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
-        if (superEmailReg && email && email.toLowerCase().trim() === superEmailReg) {
+        const superEmailReg = getSuperAdminEmail();
+        if (email && email.toLowerCase().trim() === superEmailReg) {
             assignedRole = 'superadmin';
         }
 

@@ -1,6 +1,9 @@
 // Forced restart at 2026-08-31T20:14:50
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
+if (!process.env.SUPER_ADMIN_EMAIL) {
+    process.env.SUPER_ADMIN_EMAIL = 'monimmdmonim41@gmail.com';
+}
 // ODDHAY Command Center - Force Design Sync
 const express = require('express');
 const mongoose = require('mongoose');
@@ -129,7 +132,7 @@ const ACADEMIC_CACHE_TTL = 10 * 60 * 1000;
 
 app.use(async (req, res, next) => {
     res.locals.user = req.session.user || null;
-    res.locals.SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL; // Also provide the email if needed
+    res.locals.SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || 'monimmdmonim41@gmail.com').toLowerCase().trim();
     res.locals.unreadNotificationCount = 0;
 
     const uid = req.session && (req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null));
@@ -152,8 +155,9 @@ app.use(async (req, res, next) => {
     }
 
     // Role Enforcement: ONLY monimmdmonim41@gmail.com can be superadmin
+    const SUPER_ADMIN_EMAIL_DEFAULT = 'monimmdmonim41@gmail.com';
     if (req.session && req.session.user) {
-        const superEmail = (process.env.SUPER_ADMIN_EMAIL || 'monimmdmonim41@gmail.com').toLowerCase().trim();
+        const superEmail = (process.env.SUPER_ADMIN_EMAIL || SUPER_ADMIN_EMAIL_DEFAULT).toLowerCase().trim();
         const userEmail = (req.session.user.email || '').toLowerCase().trim();
         if (userEmail === superEmail) {
             req.session.user.role = 'superadmin';

@@ -345,9 +345,9 @@ router.get('/', adminProtect, async (req, res) => {
     try {
         await connectDB();
         const user = req.session.user;
-        const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
+        const superEmail = (process.env.SUPER_ADMIN_EMAIL || 'monimmdmonim41@gmail.com').toLowerCase().trim();
         const userEmail = (user.email || '').toLowerCase().trim();
-        const isMaster = superEmail && userEmail === superEmail;
+        const isMaster = userEmail === superEmail;
         const isSuperAdmin = user.role === 'superadmin' || isMaster;
 
         // Superadmin should always use their own panel — never the admin panel
