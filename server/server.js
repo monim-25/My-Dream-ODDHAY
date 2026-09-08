@@ -54,7 +54,11 @@ const connectDB = async () => {
     return cached.conn;
 };
 
-// ---- SESSION ----
+// ---- TRUST PROXY & SESSION ----
+if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+    app.set('trust proxy', 1);
+}
+
 const sessionStore = MongoStore.create({ mongoUrl: MONGODB_URI, ttl: 14 * 24 * 60 * 60, autoRemove: 'native', touchAfter: 24 * 3600 });
 sessionStore.on('error', (err) => console.warn('⚠️ MongoStore error:', err.message));
 
@@ -65,8 +69,6 @@ app.use(session({
     store: sessionStore,
     cookie: { maxAge: 1000 * 60 * 60 * 24 * 7, secure: process.env.NODE_ENV === 'production', sameSite: 'lax' }
 }));
-
-if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 
 // ---- MULTER (file uploads) ----
 const storage = multer.diskStorage({

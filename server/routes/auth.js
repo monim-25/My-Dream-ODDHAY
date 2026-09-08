@@ -47,28 +47,30 @@ function normalizeIdentifier(rawId) {
     return { email: null, phone };
 }
 
-// GET Login/Register pages
-router.get('/login', (req, res) => res.render('login', { error: null }));
-router.get('/register', async (req, res) => {
+async function getAcademicClasses() {
+    const defaultClasses = [
+        { name: 'Class 6' }, { name: 'Class 7' }, { name: 'Class 8' },
+        { name: 'Class 9' }, { name: 'Class 10' }, { name: 'Class 11' },
+        { name: 'Class 12' }, { name: 'Admission' }, { name: 'Skill Development' }
+    ];
     try {
         const AcademicClass = require('../models/AcademicClass');
-        let classes = [];
-        try {
-            await connectDB();
-            classes = await AcademicClass.find().sort({ order: 1 }).lean();
-        } catch (e) {
-            console.warn('Could not fetch classes for register page:', e.message);
-        }
-        const defaultClasses = [
-            { name: 'Class 6' }, { name: 'Class 7' }, { name: 'Class 8' },
-            { name: 'Class 9' }, { name: 'Class 10' }, { name: 'Class 11' },
-            { name: 'Class 12' }, { name: 'Admission' }, { name: 'Skill Development' }
-        ];
-        const academicClasses = (classes && classes.length > 0) ? classes : defaultClasses;
-        res.render('register', { academicClasses });
-    } catch (err) {
-        res.render('register', { academicClasses: [] });
+        await connectDB();
+        const classes = await AcademicClass.find().sort({ order: 1 }).lean();
+        return (classes && classes.length > 0) ? classes : defaultClasses;
+    } catch (e) {
+        return defaultClasses;
     }
+}
+
+// GET Login/Register pages
+router.get('/login', async (req, res) => {
+    const academicClasses = await getAcademicClasses();
+    res.render('login', { academicClasses, activeTab: 'login', error: null });
+});
+router.get('/register', async (req, res) => {
+    const academicClasses = await getAcademicClasses();
+    res.render('register', { academicClasses, activeTab: 'register' });
 });
 router.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 router.get('/forgot-password', (req, res) => res.render('forgot-password', { message: null, error: null }));
