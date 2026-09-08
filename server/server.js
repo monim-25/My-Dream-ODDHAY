@@ -182,7 +182,7 @@ app.use(async (req, res, next) => {
 
             // Maintenance Mode Logic
             if (settings && settings.isMaintenanceMode && req.path !== '/maintenance') {
-                const bypassPaths = ['/login', '/logout', '/api/auth/login', '/superadmin'];
+                const bypassPaths = ['/login', '/register', '/logout', '/api/auth/login', '/superadmin'];
                 const isSuperAdmin = req.session.user && req.session.user.role === 'superadmin';
                 const isBypassPath = bypassPaths.some(p => req.path.startsWith(p));
 

@@ -8,8 +8,16 @@ const rateLimit = require('express-rate-limit');
 
 const authLimiter = rateLimit({
     windowMs: 5 * 60 * 1000, // 5 minutes
-    max: 10, // Limit each IP to 10 requests per windowMs
-    message: 'অনেকবার চেষ্টা করেছেন, দয়া করে ৫ মিনিট পর আবার চেষ্টা করুন।'
+    max: 30, // Limit each IP to 30 requests per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: (req, res) => {
+        const msg = 'অনেকবার চেষ্টা করেছেন, দয়া করে ৫ মিনিট পর আবার চেষ্টা করুন।';
+        if (req.headers.accept && req.headers.accept.includes('application/json')) {
+            return res.status(429).json({ error: msg });
+        }
+        res.status(429).render('login', { error: msg });
+    }
 });
 
 const forgotLimiter = rateLimit({
@@ -40,12 +48,9 @@ function normalizeIdentifier(rawId) {
 }
 
 // GET Login/Register pages
-router.get('/login', (req, res) => res.render('login'));
+router.get('/login', (req, res) => res.render('login', { error: null }));
 router.get('/register', async (req, res) => {
     try {
-        if (req.session && req.session.user) {
-            return res.redirect('/dashboard');
-        }
         const AcademicClass = require('../models/AcademicClass');
         let classes = [];
         try {
@@ -174,15 +179,15 @@ router.post('/login', authLimiter, async (req, res) => {
         await connectDB();
         const rawIdentifier = (req.body.email || '').trim();
         const password = req.body.password;
-        if (!rawIdentifier || !password) return res.status(400).send('ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।');
+        if (!rawIdentifier || !password) return res.render('login', { error: 'ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।' });
 
         const { email, phone } = normalizeIdentifier(rawIdentifier);
         const query = email ? { email } : { phone };
         const user = await User.findOne(query);
-        if (!user) return res.status(401).send('ইমেইল/ফোন বা পাসওয়ার্ড ভুল।');
+        if (!user) return res.render('login', { error: 'ইমেইল/ফোন বা পাসওয়ার্ড ভুল।' });
 
         const isMatch = await user.comparePassword(password);
-        if (!isMatch) return res.status(401).send('ইমেইল/ফোন বা পাসওয়ার্ড ভুল।');
+        if (!isMatch) return res.render('login', { error: 'ইমেইল/ফোন বা পাসওয়ার্ড ভুল।' });
 
         // Super Admin auto-promotion & role normalization
         const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
@@ -198,12 +203,13 @@ router.post('/login', authLimiter, async (req, res) => {
             await user.save();
         }
 
+        delete req.session.tempQuiz;
         req.session.user = user.toObject();
         req.session.userId = user._id.toString();
         req.session.isFirstLogin = true;
 
         req.session.save((err) => {
-            if (err) return res.status(500).send(`Session Error: ${err.message}`);
+            if (err) return res.render('login', { error: `Session Error: ${err.message}` });
             // Force password change if admin reset it
             if (user.passwordResetRequired) return res.redirect('/change-password');
             
@@ -216,7 +222,7 @@ router.post('/login', authLimiter, async (req, res) => {
         });
     } catch (err) {
         console.error('Login Error:', err);
-        res.status(500).send(`Login Failed: ${err.message}`);
+        res.render('login', { error: `লগইন ব্যর্থ হয়েছে: ${err.message}` });
     }
 });
 
@@ -292,6 +298,7 @@ router.post('/register', authLimiter, async (req, res) => {
         else if (newUser.role === 'superadmin') redirectUrl = '/superadmin';
         else if (newUser.role === 'admin' || newUser.role === 'content_manager' || newUser.role === 'support' || newUser.role === 'moderator') redirectUrl = '/admin';
 
+        delete req.session.tempQuiz;
         req.session.userId = newUser._id.toString();
         req.session.user = {
             _id: newUser._id.toString(),
@@ -299,6 +306,7 @@ router.post('/register', authLimiter, async (req, res) => {
             role: newUser.role,
             classLevel: newUser.classLevel || ''
         };
+        req.session.isFirstLogin = true;
 
         if (email) {
             sendWelcomeEmail(email, newUser.name).catch(e => console.error('Failed to send welcome email:', e));
