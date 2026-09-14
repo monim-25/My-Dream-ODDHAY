@@ -12,7 +12,7 @@ const multer = require('multer');
 const fs = require('fs');
 const session = require('express-session');
 const MongoStore = require('connect-mongo').default || require('connect-mongo').MongoStore || require('connect-mongo');
-const { isSuperAdmin, superAdminProtect } = require('./config');
+const { isSuperAdmin, superAdminProtect, adminProtect } = require('./config');
 
 const app = express();
 const http = require('http').createServer(app);
@@ -66,7 +66,7 @@ const sessionStore = MongoStore.create({ mongoUrl: MONGODB_URI, ttl: 14 * 24 * 6
 sessionStore.on('error', (err) => console.warn('⚠️ MongoStore error:', err.message));
 
 app.use(session({
-    secret: 'oddhay_secret_key',
+    secret: process.env.SESSION_SECRET || 'oddhay_secret_key_prod_2026_secured',
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
@@ -329,7 +329,7 @@ teacherRouter.upload = upload;
 app.use('/', require('./routes/auth'));
 app.use('/', mainRouter);
 app.use('/superadmin', superAdminProtect, superadminRouter);
-app.use('/admin', adminRouter);
+app.use('/admin', adminProtect, adminRouter);
 app.use('/teacher', teacherRouter);
 app.use('/payment', require('./routes/payment'));
 app.use('/my-payments', (req, res) => res.redirect('/payment/history'));

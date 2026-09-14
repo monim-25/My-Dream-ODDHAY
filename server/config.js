@@ -64,15 +64,81 @@ const adminProtect = (req, res, next) => {
     const role = user.role;
     const isSuper = isSuperAdmin(user);
 
-    if (isSuper || ['admin', 'teacher', 'content_manager', 'support', 'moderator'].includes(role)) {
+    // Administrative staff only (teachers have their own /teacher panel)
+    if (isSuper || ['admin', 'content_manager', 'support', 'moderator'].includes(role)) {
         return next();
     }
 
     console.warn(`Admin Access Denied: User=${user.email}, Role=${role}`);
     if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
-        return res.status(403).json({ success: false, error: 'Access Denied: Staff only.' });
+        return res.status(403).json({ success: false, error: 'Access Denied: Administrative staff only.' });
     }
-    res.status(403).send('Access Denied: Staff only.');
+    if (role === 'teacher') return res.redirect('/teacher');
+    if (role === 'parent') return res.redirect('/parent/dashboard');
+    res.redirect('/dashboard');
+};
+
+// Strict Admin Only (Admin & Superadmin only - excludes support/moderator/content_manager)
+const adminOnlyProtect = (req, res, next) => {
+    if (!req.session || !req.session.user) {
+        if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        return res.redirect('/login');
+    }
+
+    const user = req.session.user;
+    if (isSuperAdmin(user) || user.role === 'admin') {
+        return next();
+    }
+
+    console.warn(`[SECURITY] AdminOnly Access Denied: User=${user.email}, Role=${user.role}`);
+    if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+        return res.status(403).json({ success: false, error: 'Access Denied: Admin authority required.' });
+    }
+    res.status(403).send('Access Denied: Administrator authority required.');
+};
+
+// Strict Financial Protection: Only Super Admin and Admin can view payments, refunds, revenue
+const financeProtect = (req, res, next) => {
+    if (!req.session || !req.session.user) {
+        if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        return res.redirect('/login');
+    }
+
+    const user = req.session.user;
+    if (isSuperAdmin(user) || user.role === 'admin') {
+        return next();
+    }
+
+    console.warn(`[SECURITY] Financial Access Denied: User=${user.email}, Role=${user.role}`);
+    if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+        return res.status(403).json({ success: false, error: 'Access Denied: Financial records are restricted.' });
+    }
+    res.status(403).send('Access Denied: Financial records are restricted.');
+};
+
+// Strict User Management Protection: Only Super Admin and Admin can view/edit/delete users or reset passwords
+const userManagementProtect = (req, res, next) => {
+    if (!req.session || !req.session.user) {
+        if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        return res.redirect('/login');
+    }
+
+    const user = req.session.user;
+    if (isSuperAdmin(user) || user.role === 'admin') {
+        return next();
+    }
+
+    console.warn(`[SECURITY] User Management Denied: User=${user.email}, Role=${user.role}`);
+    if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+        return res.status(403).json({ success: false, error: 'Access Denied: User management is restricted.' });
+    }
+    res.status(403).send('Access Denied: User management is restricted.');
 };
 
 const superAdminProtect = (req, res, next) => {
@@ -108,19 +174,52 @@ const superAdminProtect = (req, res, next) => {
 };
 
 const teacherProtect = (req, res, next) => {
-    if (req.session.user && req.session.user.role === 'teacher') next();
-    else res.status(403).send('শুধুমাত্র শিক্ষকরা এই পেজটি অ্যাক্সেস করতে পারবেন।');
+    if (!req.session || !req.session.user) {
+        if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+        return res.redirect('/login');
+    }
+    const user = req.session.user;
+    if (user.role === 'teacher' || isSuperAdmin(user) || user.role === 'admin') {
+        return next();
+    }
+    if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+        return res.status(403).json({ success: false, error: 'Access Denied: Teachers only.' });
+    }
+    res.status(403).send('শুধুমাত্র শিক্ষকরা এই পেজটি অ্যাক্সেস করতে পারবেন।');
 };
 
 // Content management: roles allowed to ADD/EDIT/DELETE content
 const contentAdminProtect = (req, res, next) => {
-    if (req.session.user && ['admin', 'superadmin', 'teacher'].includes(req.session.user.role)) next();
-    else res.status(403).json({ error: 'শুধুমাত্র অ্যাডমিন, শিক্ষক এবং সুপার অ্যাডমিন কন্টেন্ট যোগ/সম্পাদনা করতে পারবেন।' });
+    if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const user = req.session.user;
+    if (['admin', 'superadmin', 'teacher', 'content_manager'].includes(user.role) || isSuperAdmin(user)) {
+        return next();
+    }
+    res.status(403).json({ error: 'শুধুমাত্র অ্যাডমিন, কন্টেন্ট ম্যানেজার এবং শিক্ষক কন্টেন্ট যোগ/সম্পাদনা করতে পারবেন।' });
 };
 
 const parentProtect = (req, res, next) => {
-    if (req.session.user && req.session.user.role === 'parent') next();
-    else res.redirect('/login');
+    if (req.session && req.session.user && (req.session.user.role === 'parent' || req.session.user.role === 'guardian' || isSuperAdmin(req.session.user))) {
+        return next();
+    }
+    res.redirect('/login');
+};
+
+const studentProtect = (req, res, next) => {
+    if (!req.session || !req.session.user) {
+        return res.redirect('/login');
+    }
+    const user = req.session.user;
+    if (user.role === 'student' || isSuperAdmin(user) || user.role === 'admin') {
+        return next();
+    }
+    if (user.role === 'teacher') return res.redirect('/teacher');
+    if (user.role === 'parent') return res.redirect('/parent/dashboard');
+    return res.redirect('/login');
 };
 
 // ---- Models ----
@@ -148,4 +247,18 @@ const models = {
     Folder: require('./models/Folder'),
 };
 
-module.exports = { connectDB, isSuperAdmin, protect, adminProtect, superAdminProtect, contentAdminProtect, teacherProtect, parentProtect, ...models };
+module.exports = { 
+    connectDB, 
+    isSuperAdmin, 
+    protect, 
+    adminProtect, 
+    adminOnlyProtect, 
+    financeProtect, 
+    userManagementProtect, 
+    superAdminProtect, 
+    contentAdminProtect, 
+    teacherProtect, 
+    parentProtect, 
+    studentProtect, 
+    ...models 
+};

@@ -6,16 +6,44 @@
     <meta content="width=device-width, initial-scale=1.0" name="viewport" />
     <title>Checkout | Oddhay</title>
     <%- include('partials/head') %>
+    <style>
+        /* Universal scrollbar killer: absolute zero scrollbars while maintaining smooth touch/wheel scroll */
+        *::-webkit-scrollbar,
+        ::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            background: transparent !important;
+        }
+        *, html, body, main {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
+
+        @media (max-width: 1023px) {
+            .mobile-step-hidden {
+                display: none !important;
+            }
+        }
+        @media (min-width: 1024px) {
+            #stepPayment, #stepSummary {
+                display: block !important;
+            }
+            .desktop-step-hidden {
+                display: none !important;
+            }
+        }
+    </style>
 </head>
 
-<body class="bg-[#f8fafc] dark:bg-[#0b1120] text-slate-900 dark:text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+<body class="bg-[#f8fafc] dark:bg-[#0b1120] text-slate-900 dark:text-slate-100 h-[100dvh] w-full flex flex-col font-sans antialiased overflow-hidden no-scrollbar">
     <%- include('partials/student-header', { pageTitle: 'Checkout', activePage: 'courses', backUrl: '/course-details/' + course._id }) %>
 
     <div class="flex-1 flex overflow-hidden w-full relative">
         <%- include('partials/student-sidebar', { activePage: 'courses' }) %>
 
-        <!-- Main Content Centered & Positioned higher up -->
-        <main class="flex-1 overflow-y-auto px-3 sm:px-4 pt-2 sm:pt-3.5 pb-20 sm:pb-8 no-scrollbar flex justify-center items-start">
+        <!-- Main Content Responsive Viewport with Safe Bottom Clearance for Mobile Nav -->
+        <main class="flex-1 overflow-y-auto px-3 sm:px-6 lg:px-8 pt-3 pb-24 sm:pb-28 lg:py-6 no-scrollbar flex justify-center items-start">
             <%
                 function resolveImg(p) {
                     if (!p) return '';
@@ -53,142 +81,171 @@
                 const defaultMethodName = availableMethods[0].name;
             %>
 
-            <!-- Centered, compact container -->
-            <div class="w-full max-w-md mx-auto space-y-3">
+            <!-- Responsive Container: 1-col on mobile, 2-col on large screens -->
+            <div class="w-full max-w-md lg:max-w-4xl xl:max-w-5xl mx-auto">
                 
                 <!-- Error Alert if any -->
                 <% if (locals.error) { %>
-                    <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 flex items-center gap-2 text-rose-700 dark:text-rose-300 text-xs">
+                    <div class="p-3 mb-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 flex items-center gap-2 text-rose-700 dark:text-rose-300 text-xs">
                         <span class="material-symbols-rounded text-base shrink-0 leading-none flex items-center justify-center">error</span>
                         <p class="font-medium"><%= error %></p>
                     </div>
                 <% } %>
 
-                <!-- STEP 1: Summery First -->
-                <div id="stepSummery" class="space-y-3">
-                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs p-4 sm:p-5 space-y-3.5">
-                        <div class="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
-                            <h2 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                                <span class="material-symbols-rounded text-emerald-500 text-base leading-none shrink-0 flex items-center justify-center">shopping_bag</span>
-                                <span>Summery</span>
-                            </h2>
-                            <span class="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40">
-                                Get Premium Access
-                            </span>
-                        </div>
-
-                        <!-- Course Preview Card with Verified Image Loading -->
-                        <div class="space-y-2">
-                            <div class="h-36 sm:h-40 w-full rounded-xl overflow-hidden relative border border-slate-100 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                                <img src="<%= thumbnailSrc || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600' %>" 
-                                     class="w-full h-full object-cover" 
-                                     alt="<%= course.title %>"
-                                     onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600';">
-                            </div>
-
-                            <div class="pb-2">
-                                <h3 class="text-sm font-bold text-slate-900 dark:text-white leading-snug">
-                                    <%= course.title %>
-                                </h3>
-                            </div>
-                        </div>
-
-                        <!-- Price Breakdown -->
-                        <div class="pt-4 sm:pt-4.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
-                            <div class="flex justify-between items-center text-xs text-slate-600 dark:text-slate-400">
-                                <span>Course Fee</span>
-                                <span class="font-medium text-slate-800 dark:text-slate-200" id="displayOriginalPrice">৳<%= originalPrice.toLocaleString() %></span>
-                            </div>
-
-                            <div id="discountRow" class="flex justify-between items-center text-xs text-emerald-600 dark:text-emerald-400 <%= initialDiscount > 0 ? '' : 'hidden' %>">
-                                <span id="discountLabel">Special Discount</span>
-                                <span class="font-medium" id="displayDiscountAmount">-৳<%= initialDiscount.toLocaleString() %></span>
-                            </div>
-
-                            <div id="couponDiscountRow" class="justify-between items-center text-xs text-emerald-600 dark:text-emerald-400 hidden">
-                                <span>Coupon Discount</span>
-                                <span class="font-medium" id="displayCouponDiscount">-৳0</span>
-                            </div>
-
-                            <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                                <span class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Total Amount</span>
-                                <span class="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400" id="displayFinalPrice">৳<%= initialFinalPrice.toLocaleString() %></span>
-                            </div>
-                        </div>
-
-                        <!-- Coupon Code Section -->
-                        <div class="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
-                            <label for="couponInput" class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                                Coupon Code (Optional)
-                            </label>
-                            <div class="flex gap-2">
-                                <input type="text" id="couponInput" placeholder="Enter coupon code"
-                                    class="flex-1 h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-mono">
-                                <button type="button" onclick="applyCoupon()" id="couponApplyBtn"
-                                    class="h-9 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-400 text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shrink-0">
-                                    Apply
-                                </button>
-                            </div>
-                            <p id="couponFeedback" class="text-[10.5px] font-medium hidden"></p>
-                        </div>
-
-                        <!-- Proceed Button -->
-                        <div class="pt-1">
-                            <button type="button" onclick="goToPaymentStep()" id="proceedBtn"
-                                class="group w-full h-11 sm:h-11.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-600/25 hover:shadow-lg hover:shadow-emerald-500/35 transition-all duration-200 active:scale-[0.99] cursor-pointer">
-                                <span>Proceed</span>
-                                <span class="material-symbols-rounded text-base leading-none shrink-0 group-hover:translate-x-1 transition-transform">arrow_forward</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- STEP 2: Payment Method (Shown upon clicking Proceed) -->
-                <div id="stepPayment" class="space-y-3 hidden">
-                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs p-4 sm:p-5 space-y-3.5">
-                        
-                        <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                            <div class="flex items-center gap-1.5">
-                                <button type="button" onclick="goToSummeryStep()" class="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center justify-center" title="Back to Summery">
-                                    <span class="material-symbols-rounded text-base leading-none shrink-0">arrow_back</span>
-                                </button>
-                                <h2 class="text-sm font-bold text-slate-900 dark:text-white">
-                                    Payment Method
-                                </h2>
-                            </div>
-                            <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400" id="step2TotalAmount">৳<%= initialFinalPrice.toLocaleString() %></span>
-                        </div>
-
-                        <!-- Superadmin-configured Payment Methods List -->
-                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="methodsContainer">
-                            <% availableMethods.forEach((m, idx) => { %>
-                                <div onclick="selectPaymentMethod('<%= m.id %>', '<%= m.name %>')" id="methodCard_<%= m.id %>"
-                                    class="method-option-card p-2.5 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between gap-1.5 <%= idx === 0 ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-xs' : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-600' %>">
-                                    <div class="flex items-center gap-2 min-w-0">
-                                        <div class="size-7 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs" style="color: <%= m.color %>; background-color: <%= m.color %>18;">
-                                            <span class="material-symbols-rounded text-base leading-none shrink-0 flex items-center justify-center">account_balance_wallet</span>
-                                        </div>
-                                        <div class="min-w-0">
-                                            <span class="text-xs font-bold text-slate-900 dark:text-white leading-none block truncate"><%= m.name %></span>
-                                        </div>
+                <!-- Responsive Grid: On large screens both columns show side-by-side -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
+                    
+                    <!-- LEFT COLUMN ON DESKTOP: Payment Methods & Direct Action -->
+                    <div id="stepPayment" class="space-y-3 mobile-step-hidden lg:col-span-7 lg:order-1">
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs p-4 sm:p-5 space-y-4">
+                            
+                            <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                                <div class="flex items-center gap-2">
+                                    <!-- Mobile-only back button to summary -->
+                                    <button type="button" id="backToSummaryBtn" onclick="goToSummaryStep()" class="desktop-step-hidden p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center justify-center" title="Back to Summary">
+                                        <span class="material-symbols-rounded text-base leading-none shrink-0">arrow_back</span>
+                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <span class="size-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                                            <span class="material-symbols-rounded text-base">payments</span>
+                                        </span>
+                                        <h2 class="text-sm font-bold text-slate-900 dark:text-white">
+                                            Payment Method
+                                        </h2>
                                     </div>
-                                    <span id="checkIcon_<%= m.id %>" class="material-symbols-rounded text-emerald-500 text-sm leading-none shrink-0 <%= idx === 0 ? '' : 'hidden' %>">check_circle</span>
                                 </div>
-                            <% }) %>
-                        </div>
+                                <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400" id="step2TotalAmount">৳<%= initialFinalPrice.toLocaleString() %></span>
+                            </div>
 
-                        <!-- Direct Gateway Pay Button -->
-                        <div class="pt-2">
-                            <button type="button" onclick="startDirectGateway()" id="startGatewayBtn"
-                                class="group w-full h-11 sm:h-11.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-600/25 hover:shadow-lg hover:shadow-emerald-500/35 transition-all duration-200 active:scale-[0.99] cursor-pointer">
-                                <span class="material-symbols-rounded text-base leading-none shrink-0 flex items-center justify-center">lock</span>
-                                <span id="gatewayBtnText">Pay with <%= defaultMethodName %> • ৳<%= initialFinalPrice.toLocaleString() %></span>
-                                <span class="material-symbols-rounded text-base leading-none shrink-0 flex items-center justify-center group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
-                            </button>
-                        </div>
+                            <!-- Payment Options Subtitle -->
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                Choose your preferred mobile wallet to complete your secure payment.
+                            </p>
 
-                        <input type="hidden" id="inputAppliedCoupon" value="">
+                            <!-- Superadmin-configured Payment Methods List -->
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5" id="methodsContainer">
+                                <% availableMethods.forEach((m, idx) => { %>
+                                    <div onclick="selectPaymentMethod('<%= m.id %>', '<%= m.name %>')" id="methodCard_<%= m.id %>"
+                                        class="method-option-card p-3 rounded-xl border-2 transition-all cursor-pointer flex items-center justify-between gap-2 <%= idx === 0 ? 'border-emerald-500 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-xs' : 'border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 hover:border-slate-300 dark:hover:border-slate-600' %>">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <div class="size-8 rounded-lg flex items-center justify-center shrink-0 font-bold text-xs" style="color: <%= m.color %>; background-color: <%= m.color %>18;">
+                                                <span class="material-symbols-rounded text-base leading-none shrink-0 flex items-center justify-center">account_balance_wallet</span>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <span class="text-xs font-bold text-slate-900 dark:text-white leading-none block truncate"><%= m.name %></span>
+                                                <span class="text-[10px] text-slate-400 font-medium block mt-0.5">Instant Pay</span>
+                                            </div>
+                                        </div>
+                                        <span id="checkIcon_<%= m.id %>" class="material-symbols-rounded text-emerald-500 text-sm leading-none shrink-0 <%= idx === 0 ? '' : 'hidden' %>">check_circle</span>
+                                    </div>
+                                <% }) %>
+                            </div>
+
+                            <!-- Security Guarantee Callout -->
+                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80 flex items-center gap-2.5 text-slate-600 dark:text-slate-300 text-xs">
+                                <span class="material-symbols-rounded text-emerald-500 text-lg shrink-0">verified_user</span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="font-bold text-[11px] text-slate-800 dark:text-slate-200">100% Secure & Encrypted</p>
+                                    <p class="text-[10px] text-slate-400 mt-0.5">Automated tokenized payment gateway with instant course activation.</p>
+                                </div>
+                            </div>
+
+                            <!-- Direct Gateway Pay Button -->
+                            <div class="pt-1">
+                                <button type="button" onclick="startDirectGateway()" id="startGatewayBtn"
+                                    class="group w-full h-11 sm:h-12 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-600/25 hover:shadow-lg hover:shadow-emerald-500/35 transition-all duration-200 active:scale-[0.99] cursor-pointer">
+                                    <span class="material-symbols-rounded text-base leading-none shrink-0 flex items-center justify-center">lock</span>
+                                    <span id="gatewayBtnText">Pay with <%= defaultMethodName %> • ৳<%= initialFinalPrice.toLocaleString() %></span>
+                                    <span class="material-symbols-rounded text-base leading-none shrink-0 flex items-center justify-center group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                </button>
+                            </div>
+
+                            <input type="hidden" id="inputAppliedCoupon" value="">
+                        </div>
                     </div>
+
+                    <!-- RIGHT COLUMN ON DESKTOP: Order Summary & Course Preview -->
+                    <div id="stepSummary" class="space-y-3 w-full lg:col-span-5 lg:order-2">
+                        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] shadow-xs p-4 sm:p-5 space-y-3.5 sticky top-3">
+                            <div class="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+                                <h2 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-emerald-500 text-base leading-none shrink-0 flex items-center justify-center">shopping_bag</span>
+                                    <span>Order Summary</span>
+                                </h2>
+                                <span class="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40">
+                                    Get Premium Access
+                                </span>
+                            </div>
+
+                            <!-- Course Preview Card with Verified Image Loading -->
+                            <div class="space-y-2.5">
+                                <div class="h-36 sm:h-40 w-full rounded-xl overflow-hidden relative border border-slate-100 dark:border-slate-800 bg-slate-100 dark:bg-slate-800 flex items-center justify-center shadow-xs">
+                                    <img src="<%= thumbnailSrc || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600' %>" 
+                                         class="w-full h-full object-cover" 
+                                         alt="<%= course.title %>"
+                                         onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=600';">
+                                </div>
+
+                                <div>
+                                    <span class="text-[10.5px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider block mb-1">
+                                        <%= categoryList %>
+                                    </span>
+                                    <h3 class="text-sm font-bold text-slate-900 dark:text-white leading-snug">
+                                        <%= course.title %>
+                                    </h3>
+                                </div>
+                            </div>
+
+                            <!-- Price Breakdown -->
+                            <div class="pt-3.5 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                                <div class="flex justify-between items-center text-xs text-slate-600 dark:text-slate-400">
+                                    <span>Course Fee</span>
+                                    <span class="font-medium text-slate-800 dark:text-slate-200" id="displayOriginalPrice">৳<%= originalPrice.toLocaleString() %></span>
+                                </div>
+
+                                <div id="discountRow" class="flex justify-between items-center text-xs text-emerald-600 dark:text-emerald-400 <%= initialDiscount > 0 ? '' : 'hidden' %>">
+                                    <span id="discountLabel">Special Discount</span>
+                                    <span class="font-medium" id="displayDiscountAmount">-৳<%= initialDiscount.toLocaleString() %></span>
+                                </div>
+
+                                <div id="couponDiscountRow" class="justify-between items-center text-xs text-emerald-600 dark:text-emerald-400 hidden">
+                                    <span>Coupon Discount</span>
+                                    <span class="font-medium" id="displayCouponDiscount">-৳0</span>
+                                </div>
+
+                                <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                                    <span class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Total Amount</span>
+                                    <span class="text-lg sm:text-xl font-black text-emerald-600 dark:text-emerald-400" id="displayFinalPrice">৳<%= initialFinalPrice.toLocaleString() %></span>
+                                </div>
+                            </div>
+
+                            <!-- Coupon Code Section -->
+                            <div class="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1">
+                                <label for="couponInput" class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                    Coupon Code (Optional)
+                                </label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="couponInput" placeholder="Enter coupon code"
+                                        class="flex-1 h-9 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-xs font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-mono">
+                                    <button type="button" onclick="applyCoupon()" id="couponApplyBtn"
+                                        class="h-9 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-400 text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer shrink-0">
+                                        Apply
+                                    </button>
+                                </div>
+                                <p id="couponFeedback" class="text-[10.5px] font-medium hidden"></p>
+                            </div>
+
+                            <!-- Proceed Button (Visible on mobile/tablet screens to jump to payment step, hidden on desktop where payment card is already visible) -->
+                            <div class="pt-1 desktop-step-hidden">
+                                <button type="button" onclick="goToPaymentStep()" id="proceedBtn"
+                                    class="group w-full h-11 sm:h-11.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-600/25 hover:shadow-lg hover:shadow-emerald-500/35 transition-all duration-200 active:scale-[0.99] cursor-pointer">
+                                    <span>Proceed to Payment</span>
+                                    <span class="material-symbols-rounded text-base leading-none shrink-0 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
             </div>
@@ -199,12 +256,13 @@
     <%- include('partials/payment-gateway-modal') %>
 
     <script>
-        let currentStep = 'summery';
+        let currentStep = 'summary';
 
         // Header back arrow controller for Checkout
         window.onBeforeHeaderNavBack = function(proceed) {
-            if (typeof currentStep !== 'undefined' && currentStep === 'payment') {
-                goToSummeryStep();
+            // If on mobile and in payment step, go back to summary
+            if (window.innerWidth < 1024 && typeof currentStep !== 'undefined' && currentStep === 'payment') {
+                goToSummaryStep();
                 return true;
             }
             return false;
@@ -217,20 +275,25 @@
         let selectedMethodName = '<%= defaultMethodName %>';
 
         function goToPaymentStep() {
-            currentStep = 'payment';
-            document.getElementById('stepSummery').classList.add('hidden');
-            const stepPayment = document.getElementById('stepPayment');
-            stepPayment.classList.remove('hidden');
-            document.getElementById('step2TotalAmount').innerText = `৳${currentFinalPrice.toLocaleString()}`;
-            document.getElementById('gatewayBtnText').innerText = `Pay with ${selectedMethodName} • ৳${currentFinalPrice.toLocaleString()}`;
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (window.innerWidth < 1024) {
+                currentStep = 'payment';
+                document.getElementById('stepSummary').classList.add('mobile-step-hidden');
+                document.getElementById('stepPayment').classList.remove('mobile-step-hidden');
+                document.getElementById('step2TotalAmount').innerText = `৳${currentFinalPrice.toLocaleString()}`;
+                document.getElementById('gatewayBtnText').innerText = `Pay with ${selectedMethodName} • ৳${currentFinalPrice.toLocaleString()}`;
+                const mainViewport = document.querySelector('main');
+                if (mainViewport) mainViewport.scrollTo({ top: 0, behavior: 'smooth' });
+            }
         }
 
-        function goToSummeryStep() {
-            currentStep = 'summery';
-            document.getElementById('stepPayment').classList.add('hidden');
-            document.getElementById('stepSummery').classList.remove('hidden');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+        function goToSummaryStep() {
+            if (window.innerWidth < 1024) {
+                currentStep = 'summary';
+                document.getElementById('stepPayment').classList.add('mobile-step-hidden');
+                document.getElementById('stepSummary').classList.remove('mobile-step-hidden');
+                const mainViewport = document.querySelector('main');
+                if (mainViewport) mainViewport.scrollTo({ top: 0, behavior: 'smooth' });
+            }
         }
 
         function selectPaymentMethod(methodId, methodName) {

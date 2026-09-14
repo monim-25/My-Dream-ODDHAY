@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
 const os = require('os');
-const { connectDB, protect, adminProtect, superAdminProtect, contentAdminProtect, User, Course, Quiz, Note, QuestionBank, QA, Notification, Payment, SystemLog, VideoAsset } = require('../config');
+const { connectDB, protect, adminProtect, adminOnlyProtect, financeProtect, userManagementProtect, superAdminProtect, contentAdminProtect, User, Course, Quiz, Note, QuestionBank, QA, Notification, Payment, SystemLog, VideoAsset } = require('../config');
+const { processUploadedFile, processUploadedFiles } = require('../services/cloudinaryService');
 const Question = require('../models/Question');
 const { sendPaymentApprovalEmail, sendStaffInviteEmail, sendPasswordResetNotificationEmail } = require('../services/emailService');
 
@@ -35,6 +36,9 @@ router.param('id', validateObjectId);
 router.param('cid', validateObjectId);
 router.param('chid', validateObjectId);
 router.param('qid', validateObjectId);
+
+// Enforce admin protection for all routes in this router
+router.use(adminProtect);
 
 // Admin main dashboard
 // Quizzes
@@ -712,8 +716,8 @@ router.post('/add-course', adminProtect, (req, res, next) => {
         const { title, subject, category, classLevel, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, chapters, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
 
         // Handle images
-        const thumbnail = req.files && req.files.thumbnail ? `/uploads/thumbnails/${req.files.thumbnail[0].filename}` : null;
-        const routineImage = req.files && req.files.routineImage ? `/uploads/routines/${req.files.routineImage[0].filename}` : null;
+        const thumbnail = req.files && req.files.thumbnail ? await processUploadedFile(req.files.thumbnail[0], 'thumbnails') : null;
+        const routineImage = req.files && req.files.routineImage ? await processUploadedFile(req.files.routineImage[0], 'routines') : null;
 
         // Handle tags, highlights & benefits
         const tagsArray = tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [];
@@ -797,8 +801,8 @@ router.post('/edit-course/:id', adminProtect, (req, res, next) => {
 
         // Handle images
         if (req.files) {
-            if (req.files.thumbnail) course.thumbnail = `/uploads/thumbnails/${req.files.thumbnail[0].filename}`;
-            if (req.files.routineImage) course.routineImage = `/uploads/routines/${req.files.routineImage[0].filename}`;
+            if (req.files.thumbnail) course.thumbnail = await processUploadedFile(req.files.thumbnail[0], 'thumbnails');
+            if (req.files.routineImage) course.routineImage = await processUploadedFile(req.files.routineImage[0], 'routines');
         }
         
         // Handle tags, highlights & benefits
@@ -1055,7 +1059,7 @@ router.get('/stats/live', adminProtect, async (req, res) => {
     }
 });
 // System Activity Logs
-router.get('/logs', adminProtect, async (req, res) => {
+router.get('/logs', adminOnlyProtect, async (req, res) => {
     try {
         await connectDB();
 
@@ -2556,7 +2560,7 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
     await connectDB();
     if (req.session.user.role === 'superadmin') return res.status(403).send('সুপার অ্যাডমিন কন্টেন্ট যোগ করতে পারবেন না।');
     const { title, subject, classLevel, chapter, description, accessType, course } = req.body;
-    const fileUrl = req.file ? `/uploads/notes/${req.file.filename}` : null;
+    const fileUrl = req.file ? await processUploadedFile(req.file, 'notes') : null;
     const mongoose = require('mongoose');
     await new Note({
         title, subject, classLevel, chapter, description,
@@ -2933,7 +2937,7 @@ router.post('/edit-question-bank/:id', adminProtect, (req, res, next) => {
         const updateData = { board, year, subject, classLevel, accessType };
         
         if (req.file) {
-            updateData.fileUrl = `/uploads/questions/${req.file.filename}`;
+            updateData.fileUrl = await processUploadedFile(req.file, 'questions');
         }
 
         await QuestionBank.findByIdAndUpdate(req.params.id, updateData);
@@ -2992,7 +2996,7 @@ router.post('/add-question-bank', contentAdminProtect, (req, res, next) => {
     await connectDB();
     if (req.session.user.role === 'superadmin') return res.status(403).send('সুপার অ্যাডমিন কন্টেন্ট যোগ করতে পারবেন না।');
     const { year, board, subject, classLevel, accessType } = req.body;
-    const fileUrl = req.file ? `/uploads/questions/${req.file.filename}` : null;
+    const fileUrl = req.file ? await processUploadedFile(req.file, 'questions') : null;
     await new QuestionBank({ year, board, subject, classLevel, accessType: accessType || 'Free', fileUrl, addedBy: req.session.user._id, status: 'approved' }).save();
     res.redirect('/admin/question-bank');
 });
@@ -3078,7 +3082,7 @@ router.post('/add-question-full', contentAdminProtect, (req, res, next) => {
 
         // Create a bank ONLY if mode is 'archive' and we have the metadata
         if (finalMode === 'archive' && !targetBankId && finalSubject && finalClass) {
-            const fileUrl = req.file ? `/uploads/questions/${req.file.filename}` : null;
+            const fileUrl = req.file ? await processUploadedFile(req.file, 'questions') : null;
             const newBank = await new QuestionBank({
                 board: finalBoard || 'Board',
                 year: finalYear || new Date().getFullYear().toString(),
@@ -3555,13 +3559,7 @@ router.post('/profile/upload-avatar', adminProtect, (req, res, next) => {
     try {
         if (!req.file) return res.status(400).json({ success: false, error: 'No file uploaded' });
 
-        let filePath = req.file.path;
-        // Normalize path for web access
-        if (filePath.includes('public')) {
-            filePath = filePath.split('public')[1].replace(/\\/g, '/');
-        } else {
-            filePath = `/uploads/${req.file.filename}`;
-        }
+        let filePath = await processUploadedFile(req.file, 'avatars');
 
         const user = await User.findByIdAndUpdate(req.session.userId || req.session.user._id,
             { profilePicture: filePath, profileImage: filePath },
@@ -3598,7 +3596,7 @@ router.post('/system-reset', superAdminProtect, async (req, res) => {
 // --- PAYMENT MANAGEMENT ---
 
 // Payment History - GET
-router.get('/payments', adminProtect, async (req, res) => {
+router.get('/payments', financeProtect, async (req, res) => {
     try {
         await connectDB();
         const { q, status, method, dateFilter, page = 1 } = req.query;
@@ -3776,7 +3774,7 @@ router.get('/payments', adminProtect, async (req, res) => {
 });
 
 // GET /payments/:id/details
-router.get('/payments/:id/details', adminProtect, async (req, res) => {
+router.get('/payments/:id/details', financeProtect, async (req, res) => {
     try {
         const id = req.params.id.trim();
 
@@ -3817,7 +3815,7 @@ router.get('/payments/:id/details', adminProtect, async (req, res) => {
 });
 
 // POST /payments/:id/refund
-router.post('/payments/:id/refund', adminProtect, async (req, res) => {
+router.post('/payments/:id/refund', financeProtect, async (req, res) => {
     try {
         await connectDB();
         const { type, amount, reason } = req.body;
@@ -3840,7 +3838,7 @@ router.post('/payments/:id/refund', adminProtect, async (req, res) => {
 });
 
 // POST /payments/bulk-action
-router.post('/payments/bulk-action', adminProtect, async (req, res) => {
+router.post('/payments/bulk-action', financeProtect, async (req, res) => {
     try {
         await connectDB();
         const { action, paymentIds } = req.body;
@@ -3871,7 +3869,7 @@ router.post('/payments/bulk-action', adminProtect, async (req, res) => {
 // --- STAFF ACCOUNT CREATION ---
 
 // GET /create-role
-router.get('/create-role', adminProtect, async (req, res) => {
+router.get('/create-role', adminOnlyProtect, async (req, res) => {
     res.render('admin/create-role', { 
         user: req.session.user, 
         error: req.query.error || null, 
@@ -3881,7 +3879,7 @@ router.get('/create-role', adminProtect, async (req, res) => {
 });
 
 // POST /create-role
-router.post('/create-role', adminProtect, async (req, res) => {
+router.post('/create-role', adminOnlyProtect, async (req, res) => {
     try {
         await connectDB();
         const { name, email, phone, role, password, status, forcePasswordChange, sendInviteEmail, classes, subjects } = req.body;
@@ -3975,7 +3973,7 @@ router.post('/create-role', adminProtect, async (req, res) => {
 // --- USER DATABASE MANAGEMENT ---
 
 // User Database - GET
-router.get('/users', adminProtect, async (req, res) => {
+router.get('/users', userManagementProtect, async (req, res) => {
     try {
         await connectDB();
         const { q, role, status, activity, page = 1 } = req.query;
@@ -4094,7 +4092,7 @@ router.get('/users', adminProtect, async (req, res) => {
 });
 
 // POST /users/:id/role
-router.post('/users/:id/role', adminProtect, async (req, res) => {
+router.post('/users/:id/role', userManagementProtect, async (req, res) => {
     try {
         await connectDB();
         const { role } = req.body;
@@ -4126,7 +4124,7 @@ router.post('/users/:id/role', adminProtect, async (req, res) => {
 });
 
 // POST /users/:id/status
-router.post('/users/:id/status', adminProtect, async (req, res) => {
+router.post('/users/:id/status', userManagementProtect, async (req, res) => {
     try {
         await connectDB();
         const { status } = req.body;
@@ -4139,7 +4137,7 @@ router.post('/users/:id/status', adminProtect, async (req, res) => {
 });
 
 // POST /users/:id/restrict
-router.post('/users/:id/restrict', adminProtect, async (req, res) => {
+router.post('/users/:id/restrict', userManagementProtect, async (req, res) => {
     try {
         await connectDB();
         const { duration, reason } = req.body; // duration in days
@@ -4160,7 +4158,7 @@ router.post('/users/:id/restrict', adminProtect, async (req, res) => {
 });
 
 // GET /users/:id/delete
-router.get('/users/:id/delete', adminProtect, async (req, res) => {
+router.get('/users/:id/delete', userManagementProtect, async (req, res) => {
     try {
         await connectDB();
         await User.findByIdAndDelete(req.params.id);
@@ -4172,7 +4170,7 @@ router.get('/users/:id/delete', adminProtect, async (req, res) => {
 });
 
 // POST /users/:id/password
-router.post('/users/:id/password', adminProtect, async (req, res) => {
+router.post('/users/:id/password', userManagementProtect, async (req, res) => {
     try {
         await connectDB();
         const newPassword = Math.random().toString(36).slice(-8);
@@ -4191,7 +4189,7 @@ router.post('/users/:id/password', adminProtect, async (req, res) => {
 });
 
 // POST /users/:id/update - Unified update route for role, status, and password
-router.post('/users/:id/update', adminProtect, async (req, res) => {
+router.post('/users/:id/update', userManagementProtect, async (req, res) => {
     try {
         await connectDB();
         const { role, status, action } = req.body;
@@ -4247,7 +4245,7 @@ router.post('/users/:id/update', adminProtect, async (req, res) => {
 });
 
 // POST /users/bulk - Alternative bulk action route to match frontend
-router.post('/users/bulk', adminProtect, async (req, res) => {
+router.post('/users/bulk', userManagementProtect, async (req, res) => {
     try {
         await connectDB();
         const { action, ids } = req.body; // Frontend sends 'ids' and 'action'
@@ -4271,7 +4269,7 @@ router.post('/users/bulk', adminProtect, async (req, res) => {
 });
 
 // POST /users/bulk-action
-router.post('/users/bulk-action', adminProtect, async (req, res) => {
+router.post('/users/bulk-action', userManagementProtect, async (req, res) => {
     try {
         await connectDB();
         const { action, userIds } = req.body;
@@ -4417,8 +4415,7 @@ router.post('/add-class', adminProtect, (req, res, next) => {
 
         // Handle uploaded file
         if (req.file) {
-            // Convert absolute path to relative public path for the web
-            videoPath = '/uploads/videos/' + req.file.filename;
+            videoPath = await processUploadedFile(req.file, 'videos');
         }
 
         // Auto-fill instructor if missing from UI

@@ -3,6 +3,7 @@ const router = express.Router();
 const path = require('path');
 const mongoose = require('mongoose');
 const { connectDB, teacherProtect, Course, Quiz, Note, Folder, QuestionBank, QA, User, Question, SystemLog } = require('../config');
+const { processUploadedFile, processUploadedFiles } = require('../services/cloudinaryService');
 
 // Helper to log system activity
 const logActivity = async (req, action, actionDetails, entityType, entityId = null) => {
@@ -1088,7 +1089,7 @@ router.post('/course/:id/course-routine', teacherProtect, (req, res, next) => {
 
         // Handle images
         if (req.files && req.files.routineImage) {
-            course.routineImage = `/uploads/routines/${req.files.routineImage[0].filename}`;
+            course.routineImage = await processUploadedFile(req.files.routineImage[0], 'routines');
         }
         
         // Update allowed fields
@@ -2865,7 +2866,7 @@ router.post('/add-question-bank', teacherProtect, (req, res, next) => {
     try {
         await connectDB();
         const { title, topic, board, year, subject, classLevel, accessType, price, course } = req.body;
-        const fileUrl = req.file ? `/uploads/questions/${req.file.filename}` : null;
+        const fileUrl = req.file ? await processUploadedFile(req.file, 'questions') : null;
         
         let classLevelArray = classLevel;
         if (typeof classLevel === 'string') {
@@ -2981,7 +2982,7 @@ router.post('/edit-question-bank/:id', teacherProtect, (req, res, next) => {
         };
 
         if (req.file) {
-            updateData.fileUrl = `/uploads/questions/${req.file.filename}`;
+            updateData.fileUrl = await processUploadedFile(req.file, 'questions');
         }
 
         await QuestionBank.findByIdAndUpdate(req.params.id, updateData);
@@ -3269,7 +3270,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             const boardYear = [globalBoard, globalYear].filter(Boolean).join(' ');
             const autoTitle = body.title || `${globalSubject} - ${boardYear || 'Board Exam'}`.trim();
 
-            const fileUrl = req.file ? `/uploads/questions/${req.file.filename}` : null;
+            const fileUrl = req.file ? await processUploadedFile(req.file, 'questions') : null;
             const newBank = await new QuestionBank({
                 title: autoTitle,
                 topic: globalTopic || '',

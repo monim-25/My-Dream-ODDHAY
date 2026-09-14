@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
-const { connectDB, protect, adminProtect, User, Course, Payment, Coupon, Note, Setting } = require('../config');
+const { connectDB, protect, adminProtect, financeProtect, User, Course, Payment, Coupon, Note, Setting } = require('../config');
 const { sendPaymentApprovalEmail } = require('../services/emailService');
 const { notifyUser } = require('../utils/notify');
 
@@ -285,7 +285,7 @@ router.get('/history', protect, async (req, res) => {
 });
 
 // Admin: Payment management page
-router.get('/admin', protect, adminProtect, async (req, res) => {
+router.get('/admin', financeProtect, async (req, res) => {
     try {
         await connectDB();
         const filter = req.query.status || 'all';
@@ -341,7 +341,7 @@ router.get('/admin', protect, adminProtect, async (req, res) => {
 });
 
 // Admin: Approve or reject a payment
-router.post('/:id/review', protect, adminProtect, async (req, res) => {
+router.post('/:id/review', financeProtect, async (req, res) => {
     try {
         await connectDB();
         const { action, adminNote } = req.body;

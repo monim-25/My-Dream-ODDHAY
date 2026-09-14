@@ -7,7 +7,7 @@
     <title>Student Dashboard | ODDHAY</title>
 </head>
 
-<body class="bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-screen flex flex-col transition-colors duration-300 overflow-hidden">
+<body class="bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-full flex flex-col transition-colors duration-300 overflow-hidden">
     <%- include('partials/student-header') %>
 
     <div class="flex-1 flex overflow-hidden w-full relative">
@@ -15,60 +15,193 @@
         
         <main class="flex-1 w-full overflow-y-auto p-0 m-0 space-y-0 no-scrollbar bg-[#FFFFFF] dark:bg-[#0b1120] relative">
             
-            <!-- Mobile Sidebar Overlay & Drawer for Dashboard -->
-            <div id="mobileSidebarBackdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-300 lg:hidden"></div>
-            <div id="mobileSidebarDrawer" class="fixed inset-y-0 left-0 w-[280px] bg-white dark:bg-[#0f172a] z-50 -translate-x-full transition-transform duration-300 ease-out shadow-2xl lg:hidden flex flex-col">
-                <div class="flex items-center justify-between p-4 border-b border-slate-100 dark:border-slate-800">
-                    <div class="flex items-center gap-2">
-                        <span class="font-black text-base dark:text-white">ODDHAY</span>
-                    </div>
-                    <button onclick="toggleMobileSidebar()" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg">
-                        <span class="material-symbols-rounded text-xl">close</span>
-                    </button>
-                </div>
-                <div class="flex-1 overflow-y-auto p-3">
-                    <%- include('partials/student-sidebar', { activePage: 'dashboard' }) %>
-                </div>
-            </div>
-
-            <!-- Unified AI Study Assistant & Quick Actions Container (Subtle Balanced Dark Slate Tone) -->
-            <div class="w-full bg-gradient-to-r from-[#131C2E] via-[#1A2638] to-[#152033] border-b border-indigo-500/25 text-white shadow-xl flex flex-col group relative">
+            <!-- Unified AI Study Assistant & Quick Actions Container (Matching Actual Page Background) -->
+            <div class="w-full bg-[#FFFFFF] dark:bg-[#0b1120] border-b border-slate-200/80 dark:border-slate-800/80 text-slate-800 dark:text-slate-100 flex flex-col group relative transition-colors duration-300">
                 
                 <!-- TOP PART: AI Study Assistant Section -->
                 <div class="w-full pt-3 sm:pt-3.5 pb-2 sm:pb-2.5 px-3.5 sm:px-4.5 lg:px-5 relative overflow-hidden flex flex-col items-start justify-between">
-                    <!-- Subtle Ambient Light Bubbles & Rays -->
-                    <div class="absolute -top-20 -left-20 size-64 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none"></div>
-                    <div class="absolute -bottom-20 -right-20 size-64 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none"></div>
-                    <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/[0.04] via-transparent to-cyan-500/[0.04] pointer-events-none"></div>
 
-                    <!-- TOP-RIGHT CORNER: Deep Bluish Compact Quick Access Icon Buttons -->
-                    <div class="absolute top-2.5 right-3.5 sm:top-3 sm:right-5 z-30 hidden sm:flex items-center gap-1.5 sm:gap-2">
+                    <%
+                        // 100% Accurate Real User Activity Calculations
+                        const realUser = locals.user || {};
+                        const pStats = locals.progressStats || null;
+
+                        let realLevel, realStreak, realXP, realMarks, realAvgScore, realRightMCQ, realWrongMCQ, realSolvedQuestions, realCompletedLessons, realBookmarks;
+
+                        if (pStats) {
+                            realLevel = pStats.level !== undefined ? pStats.level : (locals.level || 1);
+                            realStreak = pStats.streak !== undefined ? pStats.streak : 0;
+                            realXP = pStats.totalXP !== undefined ? pStats.totalXP : 0;
+                            realMarks = pStats.gainedMarks !== undefined ? pStats.gainedMarks : 0;
+                            realAvgScore = pStats.avgScore !== undefined ? pStats.avgScore : 0;
+                            realRightMCQ = pStats.rightMCQ !== undefined ? pStats.rightMCQ : 0;
+                            realWrongMCQ = pStats.wrongMCQ !== undefined ? pStats.wrongMCQ : 0;
+                            realSolvedQuestions = pStats.solvedQuestions !== undefined ? pStats.solvedQuestions : 0;
+                            realCompletedLessons = pStats.completedLessons !== undefined ? pStats.completedLessons : 0;
+                            realBookmarks = pStats.bookmarks !== undefined ? pStats.bookmarks : (pStats.savedResources !== undefined ? pStats.savedResources : 0);
+                        } else {
+                            const quizResultsList = realUser.quizResults || [];
+                            const bankAttemptsList = locals.questionBankAttempts || realUser.questionBankAttempts || [];
+
+                            let calcRightMCQ = 0;
+                            let calcWrongMCQ = 0;
+                            let calcMarks = 0;
+                            let calcSolved = 0;
+                            let sumPctScores = 0;
+                            let totalAttemptsCount = 0;
+
+                            quizResultsList.forEach(q => {
+                                const qScore = q.score || 0;
+                                const qTotal = q.total || 0;
+                                const qWrong = Math.max(0, qTotal - qScore);
+                                calcRightMCQ += qScore;
+                                calcWrongMCQ += qWrong;
+                                calcMarks += qScore;
+                                calcSolved += qTotal;
+                                if (qTotal > 0) {
+                                    sumPctScores += (qScore / qTotal) * 100;
+                                    totalAttemptsCount++;
+                                }
+                            });
+
+                            bankAttemptsList.forEach(a => {
+                                const bRight = a.mcqCorrectCount || a.mcqScore || 0;
+                                const bWrong = a.wrongMcqCount || 0;
+                                calcRightMCQ += bRight;
+                                calcWrongMCQ += bWrong;
+                                calcMarks += (a.mcqScore || 0);
+                                if (a.writtenStatus === 'reviewed' && a.teacherReview && typeof a.teacherReview.totalWrittenScore === 'number') {
+                                    calcMarks += a.teacherReview.totalWrittenScore;
+                                }
+
+                                let aSolved = 0;
+                                (a.userAnswers || []).forEach(ua => {
+                                    if ((ua.questionType || 'MCQ') === 'MCQ') {
+                                        if (ua.selectedOptionIndex !== undefined && ua.selectedOptionIndex !== null && ua.selectedOptionIndex >= 0) aSolved++;
+                                    } else {
+                                        if ((ua.writtenAnswer && String(ua.writtenAnswer).trim() !== '') || ua.writtenImage || (Array.isArray(ua.writtenImages) && ua.writtenImages.length > 0)) aSolved++;
+                                    }
+                                });
+                                if (aSolved === 0 && (bRight + bWrong > 0)) aSolved = bRight + bWrong;
+                                calcSolved += aSolved;
+
+                                const maxTot = (a.maxMcqScore || a.mcqTotalQuestions || (bRight + bWrong)) + (a.writtenStatus === 'reviewed' && a.teacherReview?.maxWrittenScore ? a.teacherReview.maxWrittenScore : 0);
+                                const earned = (a.mcqScore || 0) + (a.writtenStatus === 'reviewed' && a.teacherReview?.totalWrittenScore ? a.teacherReview.totalWrittenScore : 0);
+                                if (maxTot > 0) {
+                                    sumPctScores += Math.max(0, Math.min(100, (earned / maxTot) * 100));
+                                    totalAttemptsCount++;
+                                }
+                            });
+
+                            realLevel = locals.level || realUser.level || 1;
+                            realStreak = realUser.streakCount !== undefined ? realUser.streakCount : (realUser.streak || 0);
+                            realXP = realUser.totalXP !== undefined ? realUser.totalXP : (realUser.points || 0);
+                            realRightMCQ = calcRightMCQ;
+                            realWrongMCQ = calcWrongMCQ;
+                            realMarks = calcMarks % 1 === 0 ? calcMarks : Number(calcMarks.toFixed(1));
+                            realSolvedQuestions = calcSolved;
+                            realCompletedLessons = (realUser.completedLessons && realUser.completedLessons.length) || 0;
+                            const userBookmarksList = (realUser.savedBookmarks || []).filter(b => 
+                                b.itemType === 'note' || b.itemType === 'book' || 
+                                (b.link && (b.link.includes('note') || b.link.includes('library') || b.link.includes('.pdf') || b.link.includes('book'))) ||
+                                (!b.itemType && (!b.link || !b.link.includes('question-bank')))
+                            );
+                            realBookmarks = userBookmarksList.length;
+                            realAvgScore = totalAttemptsCount > 0 ? Math.round(sumPctScores / totalAttemptsCount) : (calcRightMCQ + calcWrongMCQ > 0 ? Math.round((calcRightMCQ / (calcRightMCQ + calcWrongMCQ)) * 100) : 0);
+                        }
+                    %>
+
+                    <!-- TOP-RIGHT CORNER: Desktop Quick Access Icons (Desktop Only >= lg) -->
+                    <div class="absolute top-2.5 right-3.5 sm:top-3 sm:right-5 z-30 hidden lg:flex items-center gap-1.5 sm:gap-2">
                         <!-- 1. My Courses Icon -->
-                        <a href="/my-courses" class="size-7.5 sm:size-8 rounded-lg border border-sky-400/30 hover:border-sky-400 bg-sky-950/70 hover:bg-sky-500 text-sky-200 hover:text-slate-950 transition-colors flex items-center justify-center p-0 shrink-0 shadow-xs group" title="My Courses">
+                        <a href="/my-courses" class="size-7.5 sm:size-8 rounded-lg border border-sky-200/80 dark:border-sky-400/30 hover:border-sky-400 bg-sky-50 dark:bg-sky-950/70 hover:bg-sky-500 text-sky-700 dark:text-sky-200 hover:text-white dark:hover:text-slate-950 transition-colors flex items-center justify-center p-0 shrink-0 shadow-xs group" title="My Courses">
                             <span class="material-symbols-rounded text-base sm:text-lg leading-none flex items-center justify-center text-center p-0 m-0">auto_stories</span>
                         </a>
 
                         <!-- 2. Notes Icon -->
-                        <a href="/notes" class="size-7.5 sm:size-8 rounded-lg border border-sky-400/30 hover:border-sky-400 bg-sky-950/70 hover:bg-sky-500 text-sky-200 hover:text-slate-950 transition-colors flex items-center justify-center p-0 shrink-0 shadow-xs group" title="Lecture Notes">
+                        <a href="/notes" class="size-7.5 sm:size-8 rounded-lg border border-sky-200/80 dark:border-sky-400/30 hover:border-sky-400 bg-sky-50 dark:bg-sky-950/70 hover:bg-sky-500 text-sky-700 dark:text-sky-200 hover:text-white dark:hover:text-slate-950 transition-colors flex items-center justify-center p-0 shrink-0 shadow-xs group" title="Lecture Notes">
                             <span class="material-symbols-rounded text-base sm:text-lg leading-none flex items-center justify-center text-center p-0 m-0">sticky_note_2</span>
                         </a>
 
                         <!-- 3. Exams Icon -->
-                        <a href="/exams" class="size-7.5 sm:size-8 rounded-lg border border-sky-400/30 hover:border-sky-400 bg-sky-950/70 hover:bg-sky-500 text-sky-200 hover:text-slate-950 transition-colors flex items-center justify-center p-0 shrink-0 shadow-xs group" title="Exams & Quizzes">
+                        <a href="/exams" class="size-7.5 sm:size-8 rounded-lg border border-sky-200/80 dark:border-sky-400/30 hover:border-sky-400 bg-sky-50 dark:bg-sky-950/70 hover:bg-sky-500 text-sky-700 dark:text-sky-200 hover:text-white dark:hover:text-slate-950 transition-colors flex items-center justify-center p-0 shrink-0 shadow-xs group" title="Exams & Quizzes">
                             <span class="material-symbols-rounded text-base sm:text-lg leading-none flex items-center justify-center text-center p-0 m-0">edit_note</span>
                         </a>
 
                         <!-- 4. Question Bank Icon -->
-                        <a href="/question-bank" class="size-7.5 sm:size-8 rounded-lg border border-sky-400/30 hover:border-sky-400 bg-sky-950/70 hover:bg-sky-500 text-sky-200 hover:text-slate-950 transition-colors flex items-center justify-center p-0 shrink-0 shadow-xs group" title="Question Bank">
+                        <a href="/question-bank" class="size-7.5 sm:size-8 rounded-lg border border-sky-200/80 dark:border-sky-400/30 hover:border-sky-400 bg-sky-50 dark:bg-sky-950/70 hover:bg-sky-500 text-sky-700 dark:text-sky-200 hover:text-white dark:hover:text-slate-950 transition-colors flex items-center justify-center p-0 shrink-0 shadow-xs group" title="Question Bank">
                             <span class="material-symbols-rounded text-base sm:text-lg leading-none flex items-center justify-center text-center p-0 m-0">live_help</span>
                         </a>
                     </div>
 
-                    <!-- Content: Left AI Assistant Info + Right Notice & Updates Section -->
-                    <div class="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-center w-full mb-1 ml-0">
+                    <!-- MOBILE ONLY 1ST LINE: Compact Student Streak, Total XP, and Gained Marks at Right Side (< lg) -->
+                    <div class="flex lg:hidden items-center justify-end w-full px-3 sm:px-4.5 pt-2 pb-0.5 mb-2.5 sm:mb-3 select-none relative z-30 font-['Plus_Jakarta_Sans',sans-serif]">
+                        <div class="flex items-center gap-1.5 sm:gap-2 ml-auto">
+                            <!-- 1. Streak -->
+                            <div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-[11px] sm:text-xs shadow-2xs" title="Streak">
+                                <span class="material-symbols-rounded text-sm sm:text-base leading-none">local_fire_department</span>
+                                <span class="leading-none"><%= realStreak %>d</span>
+                            </div>
+
+                            <!-- 2. Total XP -->
+                            <div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-500/10 dark:bg-cyan-500/15 border border-cyan-500/20 text-cyan-600 dark:text-cyan-400 font-bold text-[11px] sm:text-xs shadow-2xs" title="Total XP">
+                                <span class="material-symbols-rounded text-sm sm:text-base leading-none">bolt</span>
+                                <span class="leading-none"><%= realXP %></span>
+                            </div>
+
+                            <!-- 3. Total Gained Marks -->
+                            <div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-500/10 dark:bg-purple-500/15 border border-purple-500/20 text-purple-600 dark:text-purple-400 font-bold text-[11px] sm:text-xs shadow-2xs" title="Total Marks">
+                                <span class="material-symbols-rounded text-sm sm:text-base leading-none">military_tech</span>
+                                <span class="leading-none"><%= realMarks %></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- QUICK ACTIONS MOBILE ROW (Visible on mobile/tablet < lg; Oddhay AI + 3 Quick Actions in One Clean Line) -->
+                    <div class="w-full pt-2 pb-2.5 relative z-20 border-t border-b border-slate-200/80 dark:border-white/10 lg:hidden">
+                        <div class="grid grid-cols-4 gap-1.5 sm:gap-2.5 w-full">
+                            
+                            <!-- 1. ODDHAY AI -->
+                            <a href="/student" class="flex flex-col items-center justify-center py-1 px-0.5 gap-1 group/btn w-full cursor-pointer select-none">
+                                <div class="size-11 sm:size-12 rounded-xl bg-gradient-to-br from-indigo-500 via-sky-500 to-cyan-500 text-white shadow-md shadow-sky-500/25 group-hover/btn:scale-105 transition-transform flex items-center justify-center shrink-0">
+                                    <span class="material-symbols-rounded text-[22px] sm:text-2xl leading-none">memory</span>
+                                </div>
+                                <span class="text-[10.5px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 text-center leading-tight truncate max-w-full">Oddhay AI</span>
+                            </a>
+
+                            <!-- 2. COURSES -->
+                            <a href="/courses" class="flex flex-col items-center justify-center py-1 px-0.5 gap-1 group/btn w-full cursor-pointer select-none">
+                                <div class="size-11 sm:size-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/20 group-hover/btn:scale-105 transition-transform flex items-center justify-center shrink-0">
+                                    <span class="material-symbols-rounded text-[22px] sm:text-2xl leading-none">auto_stories</span>
+                                </div>
+                                <span class="text-[10.5px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 text-center leading-tight truncate max-w-full">Courses</span>
+                            </a>
+
+                            <!-- 3. EXAMS -->
+                            <a href="/exams" class="flex flex-col items-center justify-center py-1 px-0.5 gap-1 group/btn w-full cursor-pointer select-none">
+                                <div class="size-11 sm:size-12 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-md shadow-rose-500/20 group-hover/btn:scale-105 transition-transform flex items-center justify-center shrink-0">
+                                    <span class="material-symbols-rounded text-[22px] sm:text-2xl leading-none">edit_note</span>
+                                </div>
+                                <span class="text-[10.5px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 text-center leading-tight truncate max-w-full">Exams</span>
+                            </a>
+
+                            <!-- 4. QUESTION BANK -->
+                            <a href="/question-bank" class="flex flex-col items-center justify-center py-1 px-0.5 gap-1 group/btn w-full cursor-pointer select-none">
+                                <div class="size-11 sm:size-12 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20 group-hover/btn:scale-105 transition-transform flex items-center justify-center shrink-0">
+                                    <span class="material-symbols-rounded text-[22px] sm:text-2xl leading-none">archive</span>
+                                </div>
+                                <span class="text-[10.5px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 text-center leading-tight truncate max-w-full">Question Bank</span>
+                            </a>
+
+                        </div>
+                    </div>
+
+                    <!-- Content: Left AI Assistant Info + Right Notice & Updates Section (Desktop Only >= lg) -->
+                    <div class="relative z-10 hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-center w-full mb-1 ml-0">
                         <!-- LEFT COLUMN: Animated Floating AI Icon + AI Features List + CTA Button -->
-                        <div class="lg:col-span-7 flex flex-col items-start gap-3 sm:gap-3.5 w-full">
-                            <div class="flex flex-col items-start gap-1.5">
+                        <div class="lg:col-span-7 flex flex-col items-start gap-1.5 sm:gap-2 lg:gap-3.5 w-full">
+                            <!-- Large Screen Only: Animated Floating AI Core Visual (Kept intact for lg screens) -->
+                            <div class="hidden lg:flex flex-col items-start gap-1.5">
                                 <!-- Animated Floating AI Core Visual (Moved a bit to the right side & bottom) -->
                                 <div class="ai-animated-orb relative size-24 sm:size-28 lg:size-32 flex items-center justify-center shrink-0 ml-5 sm:ml-7 lg:ml-9 mt-2 sm:mt-2.5">
                                     <!-- Outer Pulsing Glow -->
@@ -123,283 +256,258 @@
                                 </div>
                             </div>
 
-                            <!-- AI Feature Bullet Points List (Shifted Rightwards with Subtle Darkish Tones) -->
-                            <div class="flex flex-col gap-2 mt-0 mb-1 ml-4 sm:ml-6 lg:ml-8 font-['Plus_Jakarta_Sans',sans-serif]">
-                                <div class="flex items-center gap-2 text-xs sm:text-[13px] text-slate-400 font-medium">
-                                    <span class="material-symbols-rounded text-sm text-cyan-500/70 leading-none shrink-0">check_circle</span>
+                            <!-- AI Feature Bullet Points List (Desktop Only, hidden on small screen) -->
+                            <div class="hidden lg:flex flex-col gap-2 mt-0 mb-1 ml-8 font-['Plus_Jakarta_Sans',sans-serif]">
+                                <div class="flex items-center gap-2 text-[13px] text-slate-600 dark:text-slate-400 font-medium">
+                                    <span class="material-symbols-rounded text-sm text-cyan-600 dark:text-cyan-400 leading-none shrink-0">check_circle</span>
                                     <span>Unlimited Problem Solving</span>
                                 </div>
-                                <div class="flex items-center gap-2 text-xs sm:text-[13px] text-slate-400 font-medium">
-                                    <span class="material-symbols-rounded text-sm text-cyan-500/70 leading-none shrink-0">check_circle</span>
+                                <div class="flex items-center gap-2 text-[13px] text-slate-600 dark:text-slate-400 font-medium">
+                                    <span class="material-symbols-rounded text-sm text-cyan-600 dark:text-cyan-400 leading-none shrink-0">check_circle</span>
                                     <span>Snap Photo & Ask Doubts</span>
                                 </div>
-                                <div class="flex items-center gap-2 text-xs sm:text-[13px] text-slate-400 font-medium">
-                                    <span class="material-symbols-rounded text-sm text-cyan-500/70 leading-none shrink-0">check_circle</span>
+                                <div class="flex items-center gap-2 text-[13px] text-slate-600 dark:text-slate-400 font-medium">
+                                    <span class="material-symbols-rounded text-sm text-cyan-600 dark:text-cyan-400 leading-none shrink-0">check_circle</span>
                                     <span>Step-by-Step Instant Solutions</span>
                                 </div>
-                                <div class="flex items-center gap-2 text-xs sm:text-[13px] text-slate-400 font-medium">
-                                    <span class="material-symbols-rounded text-sm text-cyan-500/70 leading-none shrink-0">check_circle</span>
+                                <div class="flex items-center gap-2 text-[13px] text-slate-600 dark:text-slate-400 font-medium">
+                                    <span class="material-symbols-rounded text-sm text-cyan-600 dark:text-cyan-400 leading-none shrink-0">check_circle</span>
                                     <span>24/7 Personal AI Tutor</span>
                                 </div>
                             </div>
 
-                            <!-- CTA Button (Aligned Oddhay AI Button: Medium Dark Blue Font-Normal Text, Optical Alignment) -->
-                            <div class="ml-4 sm:ml-6 lg:ml-8 py-1.5 sm:py-2">
-                                <a href="/student" aria-label="Oddhay AI" class="inline-flex items-center justify-center gap-2 px-5 py-2 bg-sky-100/90 hover:bg-sky-50 text-sky-950 text-xs sm:text-sm font-normal rounded-xl border border-sky-200/80 shadow-xs transition-all duration-300 transform hover:scale-[1.02] active:scale-95 select-none group/btn leading-none">
+                            <!-- Desktop CTA Button (Pill Style, Kept Intact for lg Screens) -->
+                            <div class="hidden lg:flex ml-2.5 sm:ml-5 lg:ml-8 pt-0.5 pb-1 sm:py-1.5 lg:py-2">
+                                <a href="/student" aria-label="Oddhay AI" class="inline-flex items-center justify-center gap-2 px-4 sm:px-5 py-1.5 sm:py-2 bg-sky-50 dark:bg-sky-950/70 hover:bg-sky-100 dark:hover:bg-sky-900/80 text-sky-900 dark:text-sky-200 text-xs sm:text-sm font-semibold rounded-xl border border-sky-200 dark:border-sky-500/30 shadow-xs transition-all duration-300 transform hover:scale-[1.02] active:scale-95 select-none group/btn leading-none">
                                     <!-- AI Microchip Icon -->
-                                    <span class="material-symbols-rounded text-base sm:text-lg text-sky-900 shrink-0 flex items-center justify-center leading-none p-0 m-0 -mt-0.5 transition-transform group-hover/btn:scale-110">memory</span>
+                                    <span class="material-symbols-rounded text-base sm:text-lg text-sky-700 dark:text-sky-300 shrink-0 flex items-center justify-center leading-none p-0 m-0 -mt-0.5 transition-transform group-hover/btn:scale-110">memory</span>
                                     
                                     <!-- Button Label (Medium Dark Blue, Font Normal, Perfectly Centered) -->
-                                    <span class="font-normal text-sky-950 leading-none flex items-center p-0 m-0">Oddhay AI</span>
+                                    <span class="leading-none flex items-center p-0 m-0">Oddhay AI</span>
                                 </a>
                             </div>
                         </div>
 
-                        <!-- RIGHT COLUMN: Student Progress Section (Always Visible) -->
-                        <div class="lg:col-span-5 w-full flex flex-col justify-center gap-2.5 lg:-translate-x-12 lg:translate-y-1 my-1 relative z-20">
-                            <%
-                                // 100% Accurate Real User Activity Calculations
-                                const realUser = locals.user || {};
-                                const pStats = locals.progressStats || null;
+                        <!-- RIGHT COLUMN: Student Progress Section (Desktop Only >= lg; hidden on small screens) -->
+                        <div class="hidden lg:flex lg:col-span-5 w-full flex-col justify-center gap-2.5 lg:-translate-x-12 lg:translate-y-1 my-1 relative z-20">
+                            <!-- Header Title & Level Badge -->
+                            <div class="flex items-center justify-between pb-1 border-b border-slate-200/80 dark:border-white/10">
+                                <div class="flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-base text-cyan-600 dark:text-cyan-300 leading-none shrink-0">trending_up</span>
+                                    <h2 class="font-extrabold text-xs sm:text-sm text-slate-800 dark:text-slate-200 tracking-wide font-['Plus_Jakarta_Sans',sans-serif]">Your Progress</h2>
+                                </div>
+                                <span class="text-[11px] font-bold text-amber-600 dark:text-amber-300 flex items-center gap-1 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 dark:border-amber-400/30 px-2.5 py-0.5 rounded-full">
+                                    <span class="material-symbols-rounded text-sm text-amber-600 dark:text-amber-300 leading-none">workspace_premium</span>
+                                    <span>Level <%= realLevel %></span>
+                                </span>
+                            </div>
 
-                                let realLevel, realStreak, realXP, realMarks, realAvgScore, realRightMCQ, realWrongMCQ, realSolvedQuestions, realCompletedLessons, realBookmarks;
-
-                                if (pStats) {
-                                    realLevel = pStats.level !== undefined ? pStats.level : (locals.level || 1);
-                                    realStreak = pStats.streak !== undefined ? pStats.streak : 0;
-                                    realXP = pStats.totalXP !== undefined ? pStats.totalXP : 0;
-                                    realMarks = pStats.gainedMarks !== undefined ? pStats.gainedMarks : 0;
-                                    realAvgScore = pStats.avgScore !== undefined ? pStats.avgScore : 0;
-                                    realRightMCQ = pStats.rightMCQ !== undefined ? pStats.rightMCQ : 0;
-                                    realWrongMCQ = pStats.wrongMCQ !== undefined ? pStats.wrongMCQ : 0;
-                                    realSolvedQuestions = pStats.solvedQuestions !== undefined ? pStats.solvedQuestions : 0;
-                                    realCompletedLessons = pStats.completedLessons !== undefined ? pStats.completedLessons : 0;
-                                    realBookmarks = pStats.bookmarks !== undefined ? pStats.bookmarks : (pStats.savedResources !== undefined ? pStats.savedResources : 0);
-                                } else {
-                                    const quizResultsList = realUser.quizResults || [];
-                                    const bankAttemptsList = locals.questionBankAttempts || realUser.questionBankAttempts || [];
-
-                                    let calcRightMCQ = 0;
-                                    let calcWrongMCQ = 0;
-                                    let calcMarks = 0;
-                                    let calcSolved = 0;
-                                    let sumPctScores = 0;
-                                    let totalAttemptsCount = 0;
-
-                                    quizResultsList.forEach(q => {
-                                        const qScore = q.score || 0;
-                                        const qTotal = q.total || 0;
-                                        const qWrong = Math.max(0, qTotal - qScore);
-                                        calcRightMCQ += qScore;
-                                        calcWrongMCQ += qWrong;
-                                        calcMarks += qScore;
-                                        calcSolved += qTotal;
-                                        if (qTotal > 0) {
-                                            sumPctScores += (qScore / qTotal) * 100;
-                                            totalAttemptsCount++;
-                                        }
-                                    });
-
-                                    bankAttemptsList.forEach(a => {
-                                        const bRight = a.mcqCorrectCount || a.mcqScore || 0;
-                                        const bWrong = a.wrongMcqCount || 0;
-                                        calcRightMCQ += bRight;
-                                        calcWrongMCQ += bWrong;
-                                        calcMarks += (a.mcqScore || 0);
-                                        if (a.writtenStatus === 'reviewed' && a.teacherReview && typeof a.teacherReview.totalWrittenScore === 'number') {
-                                            calcMarks += a.teacherReview.totalWrittenScore;
-                                        }
-
-                                        let aSolved = 0;
-                                        (a.userAnswers || []).forEach(ua => {
-                                            if ((ua.questionType || 'MCQ') === 'MCQ') {
-                                                if (ua.selectedOptionIndex !== undefined && ua.selectedOptionIndex !== null && ua.selectedOptionIndex >= 0) aSolved++;
-                                            } else {
-                                                if ((ua.writtenAnswer && String(ua.writtenAnswer).trim() !== '') || ua.writtenImage || (Array.isArray(ua.writtenImages) && ua.writtenImages.length > 0)) aSolved++;
-                                            }
-                                        });
-                                        if (aSolved === 0 && (bRight + bWrong > 0)) aSolved = bRight + bWrong;
-                                        calcSolved += aSolved;
-
-                                        const maxTot = (a.maxMcqScore || a.mcqTotalQuestions || (bRight + bWrong)) + (a.writtenStatus === 'reviewed' && a.teacherReview?.maxWrittenScore ? a.teacherReview.maxWrittenScore : 0);
-                                        const earned = (a.mcqScore || 0) + (a.writtenStatus === 'reviewed' && a.teacherReview?.totalWrittenScore ? a.teacherReview.totalWrittenScore : 0);
-                                        if (maxTot > 0) {
-                                            sumPctScores += Math.max(0, Math.min(100, (earned / maxTot) * 100));
-                                            totalAttemptsCount++;
-                                        }
-                                    });
-
-                                    realLevel = locals.level || realUser.level || 1;
-                                    realStreak = realUser.streakCount !== undefined ? realUser.streakCount : (realUser.streak || 0);
-                                    realXP = realUser.totalXP !== undefined ? realUser.totalXP : (realUser.points || 0);
-                                    realRightMCQ = calcRightMCQ;
-                                    realWrongMCQ = calcWrongMCQ;
-                                    realMarks = calcMarks % 1 === 0 ? calcMarks : Number(calcMarks.toFixed(1));
-                                    realSolvedQuestions = calcSolved;
-                                    realCompletedLessons = (realUser.completedLessons && realUser.completedLessons.length) || 0;
-                                    const userBookmarksList = (realUser.savedBookmarks || []).filter(b => 
-                                        b.itemType === 'note' || b.itemType === 'book' || 
-                                        (b.link && (b.link.includes('note') || b.link.includes('library') || b.link.includes('.pdf') || b.link.includes('book'))) ||
-                                        (!b.itemType && (!b.link || !b.link.includes('question-bank')))
-                                    );
-                                    realBookmarks = userBookmarksList.length;
-                                    realAvgScore = totalAttemptsCount > 0 ? Math.round(sumPctScores / totalAttemptsCount) : (calcRightMCQ + calcWrongMCQ > 0 ? Math.round((calcRightMCQ / (calcRightMCQ + calcWrongMCQ)) * 100) : 0);
-                                }
-                            %>
-
-                                <!-- Header Title & Level Badge -->
-                                <div class="flex items-center justify-between pb-1 border-b border-white/10">
-                                    <div class="flex items-center gap-1.5">
-                                        <span class="material-symbols-rounded text-base text-cyan-300 leading-none shrink-0">trending_up</span>
-                                        <h2 class="font-extrabold text-xs sm:text-sm text-slate-200 tracking-wide font-['Plus_Jakarta_Sans',sans-serif]">Your Progress</h2>
+                            <!-- Metrics Grid (9 Real User Metrics, Directly on Section Backdrop) -->
+                            <div class="grid grid-cols-3 sm:grid-cols-3 gap-2 font-['Plus_Jakarta_Sans',sans-serif]">
+                                <!-- 1. Streak -->
+                                <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                    <div class="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                                        <span class="material-symbols-rounded text-base leading-none">local_fire_department</span>
+                                        <span class="text-xs sm:text-sm font-extrabold"><%= realStreak %>d</span>
                                     </div>
-                                    <span class="text-[11px] font-bold text-amber-300 flex items-center gap-1 bg-amber-500/15 border border-amber-400/30 px-2.5 py-0.5 rounded-full">
-                                        <span class="material-symbols-rounded text-sm text-amber-300 leading-none">workspace_premium</span>
-                                        <span>Level <%= realLevel %></span>
-                                    </span>
+                                    <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Streak</span>
                                 </div>
 
-                                <!-- Metrics Grid (9 Real User Metrics, Directly on Section Backdrop) -->
-                                <div class="grid grid-cols-3 sm:grid-cols-3 gap-2 font-['Plus_Jakarta_Sans',sans-serif]">
-                                    <!-- 1. Streak -->
-                                    <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
-                                        <div class="flex items-center gap-1 text-amber-400">
-                                            <span class="material-symbols-rounded text-base leading-none">local_fire_department</span>
-                                            <span class="text-xs sm:text-sm font-extrabold"><%= realStreak %>d</span>
-                                        </div>
-                                        <span class="text-[10px] text-slate-300 font-medium">Streak</span>
+                                <!-- 2. Total XP -->
+                                <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                    <div class="flex items-center gap-1 text-cyan-600 dark:text-cyan-300">
+                                        <span class="material-symbols-rounded text-base leading-none">bolt</span>
+                                        <span class="text-xs sm:text-sm font-extrabold"><%= realXP %></span>
                                     </div>
+                                    <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Total XP</span>
+                                </div>
 
-                                    <!-- 2. Total XP -->
-                                    <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
-                                        <div class="flex items-center gap-1 text-cyan-300">
-                                            <span class="material-symbols-rounded text-base leading-none">bolt</span>
-                                            <span class="text-xs sm:text-sm font-extrabold"><%= realXP %></span>
-                                        </div>
-                                        <span class="text-[10px] text-slate-300 font-medium">Total XP</span>
+                                <!-- 3. Gained Mark -->
+                                <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                    <div class="flex items-center gap-1 text-purple-600 dark:text-purple-300">
+                                        <span class="material-symbols-rounded text-base leading-none">military_tech</span>
+                                        <span class="text-xs sm:text-sm font-extrabold"><%= realMarks %></span>
                                     </div>
+                                    <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Gained Mark</span>
+                                </div>
 
-                                    <!-- 3. Gained Mark -->
-                                    <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
-                                        <div class="flex items-center gap-1 text-purple-300">
-                                            <span class="material-symbols-rounded text-base leading-none">military_tech</span>
-                                            <span class="text-xs sm:text-sm font-extrabold"><%= realMarks %></span>
-                                        </div>
-                                        <span class="text-[10px] text-slate-300 font-medium">Gained Mark</span>
+                                <!-- 4. Avg Score -->
+                                <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                    <div class="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+                                        <span class="material-symbols-rounded text-base leading-none">analytics</span>
+                                        <span class="text-xs sm:text-sm font-extrabold"><%= realAvgScore %>%</span>
                                     </div>
+                                    <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Avg Score</span>
+                                </div>
 
-                                    <!-- 4. Avg Score -->
-                                    <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
-                                        <div class="flex items-center gap-1 text-yellow-400">
-                                            <span class="material-symbols-rounded text-base leading-none">analytics</span>
-                                            <span class="text-xs sm:text-sm font-extrabold"><%= realAvgScore %>%</span>
-                                        </div>
-                                        <span class="text-[10px] text-slate-300 font-medium">Avg Score</span>
+                                <!-- 5. Right MCQ -->
+                                <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                    <div class="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                        <span class="material-symbols-rounded text-base leading-none">check_circle</span>
+                                        <span class="text-xs sm:text-sm font-extrabold"><%= realRightMCQ %></span>
                                     </div>
+                                    <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Right MCQ</span>
+                                </div>
 
-                                    <!-- 5. Right MCQ -->
-                                    <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
-                                        <div class="flex items-center gap-1 text-emerald-400">
-                                            <span class="material-symbols-rounded text-base leading-none">check_circle</span>
-                                            <span class="text-xs sm:text-sm font-extrabold"><%= realRightMCQ %></span>
-                                        </div>
-                                        <span class="text-[10px] text-slate-300 font-medium">Right MCQ</span>
+                                <!-- 6. Wrong MCQ -->
+                                <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                    <div class="flex items-center gap-1 text-rose-600 dark:text-rose-400">
+                                        <span class="material-symbols-rounded text-base leading-none">cancel</span>
+                                        <span class="text-xs sm:text-sm font-extrabold"><%= realWrongMCQ %></span>
                                     </div>
+                                    <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Wrong MCQ</span>
+                                </div>
 
-                                    <!-- 6. Wrong MCQ -->
-                                    <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
-                                        <div class="flex items-center gap-1 text-rose-400">
-                                            <span class="material-symbols-rounded text-base leading-none">cancel</span>
-                                            <span class="text-xs sm:text-sm font-extrabold"><%= realWrongMCQ %></span>
-                                        </div>
-                                        <span class="text-[10px] text-slate-300 font-medium">Wrong MCQ</span>
+                                <!-- 7. Question Solved -->
+                                <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                    <div class="flex items-center gap-1 text-indigo-600 dark:text-indigo-300">
+                                        <span class="material-symbols-rounded text-base leading-none">psychology</span>
+                                        <span class="text-xs sm:text-sm font-extrabold"><%= realSolvedQuestions %></span>
                                     </div>
+                                    <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium truncate max-w-full">Question Solved</span>
+                                </div>
 
-                                    <!-- 7. Question Solved -->
-                                    <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
-                                        <div class="flex items-center gap-1 text-indigo-300">
-                                            <span class="material-symbols-rounded text-base leading-none">psychology</span>
-                                            <span class="text-xs sm:text-sm font-extrabold"><%= realSolvedQuestions %></span>
-                                        </div>
-                                        <span class="text-[10px] text-slate-300 font-medium truncate max-w-full">Question Solved</span>
+                                <!-- 8. Lesson Completed -->
+                                <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                    <div class="flex items-center gap-1 text-teal-600 dark:text-teal-300">
+                                        <span class="material-symbols-rounded text-base leading-none">task_alt</span>
+                                        <span class="text-xs sm:text-sm font-extrabold"><%= realCompletedLessons %></span>
                                     </div>
+                                    <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium truncate max-w-full">Lesson Completed</span>
+                                </div>
 
-                                    <!-- 8. Lesson Completed -->
-                                    <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
-                                        <div class="flex items-center gap-1 text-teal-300">
-                                            <span class="material-symbols-rounded text-base leading-none">task_alt</span>
-                                            <span class="text-xs sm:text-sm font-extrabold"><%= realCompletedLessons %></span>
-                                        </div>
-                                        <span class="text-[10px] text-slate-300 font-medium truncate max-w-full">Lesson Completed</span>
+                                <!-- 9. Bookmarks -->
+                                <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                    <div class="flex items-center gap-1 text-sky-600 dark:text-sky-300">
+                                        <span class="material-symbols-rounded text-base leading-none">bookmark</span>
+                                        <span class="text-xs sm:text-sm font-extrabold"><%= realBookmarks %></span>
                                     </div>
-
-                                    <!-- 9. Bookmarks -->
-                                    <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
-                                        <div class="flex items-center gap-1 text-sky-300">
-                                            <span class="material-symbols-rounded text-base leading-none">bookmark</span>
-                                            <span class="text-xs sm:text-sm font-extrabold"><%= realBookmarks %></span>
-                                        </div>
-                                        <span class="text-[10px] text-slate-300 font-medium truncate max-w-full">Bookmarks</span>
-                                    </div>
+                                    <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium truncate max-w-full">Bookmarks</span>
                                 </div>
                             </div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 1ST SECTION INTEGRATED QUICK ACTIONS MOBILE APP ICONS ROW (Hidden on big screens, visible on mobile/tablet) -->
-                <div class="w-full pt-1.5 pb-2.5 px-3.5 sm:px-4.5 lg:px-5 relative z-20 mt-0.5 border-t border-white/10 lg:hidden">
-                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-1 sm:gap-1.5 w-full">
-                        
-                        <!-- 1. VIDEO CLASS -->
-                        <a href="/courses" class="flex flex-col items-center justify-center py-1 px-0.5 gap-1 group/btn w-full cursor-pointer select-none">
-                            <div class="size-10 sm:size-11 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md shadow-blue-500/20 group-hover/btn:scale-105 transition-transform flex items-center justify-center shrink-0">
-                                <span class="material-symbols-rounded text-xl leading-none">auto_stories</span>
+                <!-- Mobile Progress Modal / Popup (Small Screen Only) -->
+                <div id="mobileProgressModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 backdrop-blur-xs p-3.5 sm:p-4 transition-all duration-200 select-none" onclick="if(event.target === this) toggleMobileProgressModal(false)">
+                    <div class="w-full max-w-md bg-white dark:bg-[#131C2E] border border-slate-200 dark:border-indigo-500/30 rounded-2xl shadow-2xl p-4 sm:p-5 text-slate-800 dark:text-white animate-in fade-in zoom-in-95 duration-150 relative">
+                        <!-- Header -->
+                        <div class="flex items-center justify-between pb-2.5 border-b border-slate-200 dark:border-white/10 mb-3.5">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-rounded text-base text-cyan-600 dark:text-cyan-300 leading-none shrink-0">trending_up</span>
+                                <h3 class="font-extrabold text-xs sm:text-sm text-slate-800 dark:text-slate-200 tracking-wide font-['Plus_Jakarta_Sans',sans-serif]">Your Progress</h3>
+                                <span class="text-[11px] font-bold text-amber-600 dark:text-amber-300 flex items-center gap-1 bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/25 dark:border-amber-400/30 px-2.5 py-0.5 rounded-full ml-1">
+                                    <span class="material-symbols-rounded text-xs text-amber-600 dark:text-amber-300 leading-none">workspace_premium</span>
+                                    <span>Level <%= realLevel %></span>
+                                </span>
                             </div>
-                            <span class="text-[10px] sm:text-[11px] font-bold text-slate-200 text-center leading-tight">Video Class</span>
-                        </a>
+                            <button type="button" onclick="toggleMobileProgressModal(false)" class="size-7 rounded-lg bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 active:scale-95 text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer" title="Close">
+                                <span class="material-symbols-rounded text-base leading-none">close</span>
+                            </button>
+                        </div>
 
-                        <!-- 2. EXAMS -->
-                        <a href="/exams" class="flex flex-col items-center justify-center py-1 px-0.5 gap-1 group/btn w-full cursor-pointer select-none">
-                            <div class="size-10 sm:size-11 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-md shadow-rose-500/20 group-hover/btn:scale-105 transition-transform flex items-center justify-center shrink-0">
-                                <span class="material-symbols-rounded text-xl leading-none">edit_note</span>
+                        <!-- Metrics Grid (9 Real User Metrics) -->
+                        <div class="grid grid-cols-3 gap-2 font-['Plus_Jakarta_Sans',sans-serif]">
+                            <!-- 1. Streak -->
+                            <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                <div class="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                                    <span class="material-symbols-rounded text-base leading-none">local_fire_department</span>
+                                    <span class="text-xs sm:text-sm font-extrabold"><%= realStreak %>d</span>
+                                </div>
+                                <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Streak</span>
                             </div>
-                            <span class="text-[10px] sm:text-[11px] font-bold text-slate-200 text-center leading-tight">Exams</span>
-                        </a>
 
-                        <!-- 3. NOTES -->
-                        <a href="/notes" class="flex flex-col items-center justify-center py-1 px-0.5 gap-1 group/btn w-full cursor-pointer select-none">
-                            <div class="size-10 sm:size-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md shadow-amber-500/20 group-hover/btn:scale-105 transition-transform flex items-center justify-center shrink-0">
-                                <span class="material-symbols-rounded text-xl leading-none">description</span>
+                            <!-- 2. Total XP -->
+                            <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                <div class="flex items-center gap-1 text-cyan-600 dark:text-cyan-300">
+                                    <span class="material-symbols-rounded text-base leading-none">bolt</span>
+                                    <span class="text-xs sm:text-sm font-extrabold"><%= realXP %></span>
+                                </div>
+                                <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Total XP</span>
                             </div>
-                            <span class="text-[10px] sm:text-[11px] font-bold text-slate-200 text-center leading-tight">Notes</span>
-                        </a>
 
-                        <!-- 4. Q&A FORUM -->
-                        <a href="/qa-forum" class="flex flex-col items-center justify-center py-1 px-0.5 gap-1 group/btn w-full cursor-pointer select-none">
-                            <div class="size-10 sm:size-11 rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 text-white shadow-md shadow-purple-500/20 group-hover/btn:scale-105 transition-transform flex items-center justify-center shrink-0">
-                                <span class="material-symbols-rounded text-xl leading-none">forum</span>
+                            <!-- 3. Gained Mark -->
+                            <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                <div class="flex items-center gap-1 text-purple-600 dark:text-purple-300">
+                                    <span class="material-symbols-rounded text-base leading-none">military_tech</span>
+                                    <span class="text-xs sm:text-sm font-extrabold"><%= realMarks %></span>
+                                </div>
+                                <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Gained Mark</span>
                             </div>
-                            <span class="text-[10px] sm:text-[11px] font-bold text-slate-200 text-center leading-tight">Q&A Forum</span>
-                        </a>
 
-                        <!-- 5. LIBRARY -->
-                        <a href="/library" class="flex flex-col items-center justify-center py-1 px-0.5 gap-1 group/btn w-full cursor-pointer select-none">
-                            <div class="size-10 sm:size-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-md shadow-emerald-500/20 group-hover/btn:scale-105 transition-transform flex items-center justify-center shrink-0">
-                                <span class="material-symbols-rounded text-xl leading-none">local_library</span>
+                            <!-- 4. Avg Score -->
+                            <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                <div class="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+                                    <span class="material-symbols-rounded text-base leading-none">analytics</span>
+                                    <span class="text-xs sm:text-sm font-extrabold"><%= realAvgScore %>%</span>
+                                </div>
+                                <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Avg Score</span>
                             </div>
-                            <span class="text-[10px] sm:text-[11px] font-bold text-slate-200 text-center leading-tight">Library</span>
-                        </a>
 
-                        <!-- 6. QUESTION BANK -->
-                        <a href="/question-bank" class="flex flex-col items-center justify-center py-1 px-0.5 gap-1 group/btn w-full cursor-pointer select-none">
-                            <div class="size-10 sm:size-11 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20 group-hover/btn:scale-105 transition-transform flex items-center justify-center shrink-0">
-                                <span class="material-symbols-rounded text-xl leading-none">archive</span>
+                            <!-- 5. Right MCQ -->
+                            <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                <div class="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                    <span class="material-symbols-rounded text-base leading-none">check_circle</span>
+                                    <span class="text-xs sm:text-sm font-extrabold"><%= realRightMCQ %></span>
+                                </div>
+                                <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Right MCQ</span>
                             </div>
-                            <span class="text-[10px] sm:text-[11px] font-bold text-slate-200 text-center leading-tight">Question Bank</span>
-                        </a>
 
+                            <!-- 6. Wrong MCQ -->
+                            <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                <div class="flex items-center gap-1 text-rose-600 dark:text-rose-400">
+                                    <span class="material-symbols-rounded text-base leading-none">cancel</span>
+                                    <span class="text-xs sm:text-sm font-extrabold"><%= realWrongMCQ %></span>
+                                </div>
+                                <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium">Wrong MCQ</span>
+                            </div>
+
+                            <!-- 7. Question Solved -->
+                            <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                <div class="flex items-center gap-1 text-indigo-600 dark:text-indigo-300">
+                                    <span class="material-symbols-rounded text-base leading-none">psychology</span>
+                                    <span class="text-xs sm:text-sm font-extrabold"><%= realSolvedQuestions %></span>
+                                </div>
+                                <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium truncate max-w-full">Question Solved</span>
+                            </div>
+
+                            <!-- 8. Lesson Completed -->
+                            <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                <div class="flex items-center gap-1 text-teal-600 dark:text-teal-300">
+                                    <span class="material-symbols-rounded text-base leading-none">task_alt</span>
+                                    <span class="text-xs sm:text-sm font-extrabold"><%= realCompletedLessons %></span>
+                                </div>
+                                <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium truncate max-w-full">Lesson Completed</span>
+                            </div>
+
+                            <!-- 9. Bookmarks -->
+                            <div class="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 backdrop-blur-xs">
+                                <div class="flex items-center gap-1 text-sky-600 dark:text-sky-300">
+                                    <span class="material-symbols-rounded text-base leading-none">bookmark</span>
+                                    <span class="text-xs sm:text-sm font-extrabold"><%= realBookmarks %></span>
+                                </div>
+                                <span class="text-[10px] text-slate-600 dark:text-slate-300 font-medium truncate max-w-full">Bookmarks</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
+                <script>
+                    function toggleMobileProgressModal(show) {
+                        const modal = document.getElementById('mobileProgressModal');
+                        if (!modal) return;
+                        if (show) {
+                            modal.classList.remove('hidden');
+                            modal.classList.add('flex');
+                        } else {
+                            modal.classList.add('hidden');
+                            modal.classList.remove('flex');
+                        }
+                    }
+                    document.addEventListener('keydown', function(e) {
+                        if (e.key === 'Escape') toggleMobileProgressModal(false);
+                    });
+                </script>
             </div>
             <style>
                 .ai-animated-orb { animation: aiFloat 4s ease-in-out infinite; }
@@ -415,24 +523,18 @@
                 @keyframes aiPulseCore { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.12); opacity: 1; filter: drop-shadow(0 0 10px #38BDF8); } }
             </style>
 
-            <!-- Physical Distinct Gap Divider between 1st Section and Lower Content Grid -->
-            <div class="w-full h-3.5 sm:h-5 bg-[#FFFFFF] dark:bg-[#0b1120]"></div>
-
-            <!-- Main Dashboard Content Container (Attached to Borders & Divided by Thin Lines) -->
-            <div class="w-full p-0 m-0 pb-6 border-b border-slate-300 dark:border-slate-800">
+            <!-- Main Dashboard Content Container with Clean Widget Cards & Balanced Gap -->
+            <div class="w-full px-3.5 sm:px-5 lg:px-6 pt-4 sm:pt-5 pb-6">
                 <!-- Two-column layout: Left content + Right panel -->
-                <div class="grid grid-cols-1 lg:grid-cols-5 gap-3.5 sm:gap-4 w-full">
+                <div class="flex flex-col lg:grid lg:grid-cols-5 gap-4 sm:gap-5 w-full">
 
                 <!-- LEFT COLUMN: Keep Learning -> Daily Goals -> Weekly Activity -> Leaderboard -->
-                <div class="lg:col-span-3 flex flex-col gap-3.5 sm:gap-4 lg:pr-3.5 lg:border-r border-slate-200/80 dark:border-slate-800/80">
+                <div class="contents lg:flex lg:flex-col lg:col-span-3 lg:gap-4 sm:lg:gap-5">
 
-                    <!-- Thin Section Divider Line (Attached Flush to Section) -->
-                    <div class="w-full border-b border-slate-200/80 dark:border-slate-800/80 my-0"></div>
-
-                    <!-- 1. Keep Learning / Continue Watching Section (#DEFFF1 Background, Square Type) -->
-                    <div class="w-full bg-[#DEFFF1] dark:bg-[#0c261e] text-slate-800 dark:text-slate-200 rounded-none border-0 shadow-none overflow-hidden my-0 relative group">
+                    <!-- 1. Keep Learning / Continue Watching Section -->
+                    <div class="order-1 lg:order-1 w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden relative group">
                         <!-- Section Header (Enlarged Header & Top Aligned) -->
-                        <div class="relative z-10 flex items-center justify-between px-4 sm:px-6 pt-3 pb-0.5 border-b border-slate-900/10">
+                        <div class="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-200/80 dark:border-slate-800/80">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-rounded text-rose-500 text-xl sm:text-2xl shrink-0 flex items-center justify-center -mt-0.5">play_circle</span>
                                 <h2 class="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-tight antialiased">Keep Learning</h2>
@@ -522,10 +624,11 @@
                                             <span class="truncate leading-none text-slate-800 dark:text-slate-200 font-bold"><%= lastLesson.course.title %></span>
                                         </p>
 
-                                        <!-- Resume Lesson Button (Gray 500 Clean Text) -->
+                                        <!-- Resume Button -->
                                         <a href="/course-details/<%= lastLesson.course._id %>?lesson=<%= lastLesson.lessonId %>&time=<%= lastLesson.lastPosition || 0 %>&from=dashboard"
-                                           class="mt-2 inline-flex items-center justify-center bg-teal-800 hover:bg-teal-900 text-white font-extrabold text-xs sm:text-sm rounded-xl px-5 py-2.5 transition-all shrink-0 w-fit shadow-md hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer antialiased">
-                                            Resume Lesson
+                                           class="mt-2 inline-flex items-center justify-center gap-1.5 bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white font-bold text-xs sm:text-sm rounded-xl px-5 py-2.5 transition-all duration-200 shrink-0 w-fit shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer antialiased">
+                                            <span class="material-symbols-rounded text-base sm:text-lg leading-none">play_arrow</span>
+                                            <span>Resume</span>
                                         </a>
                                     </div>
                                 </div>
@@ -541,15 +644,16 @@
                                         </p>
                                     </div>
                                     <a href="/courses"
-                                       class="inline-flex items-center justify-center bg-teal-800 hover:bg-teal-900 text-white font-bold text-xs sm:text-sm rounded-xl px-4 py-2 transition-all shrink-0 shadow-sm hover:shadow">
-                                        Explore Courses
+                                       class="inline-flex items-center justify-center gap-1.5 bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white font-bold text-xs sm:text-sm rounded-xl px-4 py-2 sm:px-5 sm:py-2.5 transition-all duration-200 shrink-0 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer antialiased">
+                                        <span class="material-symbols-rounded text-base sm:text-lg leading-none">auto_stories</span>
+                                        <span>Courses</span>
                                     </a>
                                 </div>
                             <% } else { %>
                                 <!-- Empty state -->
                                 <div class="flex items-center justify-between gap-4 w-full p-5 sm:p-6">
                                     <div class="flex items-center gap-3.5">
-                                        <div class="size-11 shrink-0 rounded-xl bg-teal-800/20 border border-teal-700/30 flex items-center justify-center text-teal-900 shadow-sm">
+                                        <div class="size-11 shrink-0 rounded-xl bg-teal-800/20 dark:bg-teal-500/20 border border-teal-700/30 dark:border-teal-500/30 flex items-center justify-center text-teal-900 dark:text-teal-300 shadow-sm">
                                             <span class="material-symbols-rounded text-2xl leading-none flex items-center justify-center">auto_stories</span>
                                         </div>
                                         <div class="flex flex-col justify-center min-w-0">
@@ -557,20 +661,19 @@
                                             <p class="text-xs text-slate-600 dark:text-slate-300 font-medium mt-0.5">Pick a course today and start learning!</p>
                                         </div>
                                     </div>
-                                    <a href="/courses" class="inline-flex items-center justify-center bg-teal-800 hover:bg-teal-900 text-white font-extrabold text-xs sm:text-sm rounded-xl px-4.5 py-2.5 transition-all shrink-0 shadow-md">
-                                        Browse Courses
+                                    <a href="/courses" 
+                                       class="inline-flex items-center justify-center gap-1.5 bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white font-bold text-xs sm:text-sm rounded-xl px-4 py-2 sm:px-5 sm:py-2.5 transition-all duration-200 shrink-0 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer antialiased">
+                                        <span class="material-symbols-rounded text-base sm:text-lg leading-none">auto_stories</span>
+                                        <span>Courses</span>
                                     </a>
                                 </div>
                             <% } %>
                         </div>
                     </div>
 
-                    <!-- Thin Section Divider Line (Attached Flush to Section) -->
-                    <div class="w-full border-b border-slate-200/80 dark:border-slate-800/80 my-0"></div>
-
-                    <!-- 2. Daily Goals & Unlimited Activity Widget (#DEFFF1 Color Theme, Square Type) -->
-                    <div class="w-full bg-[#DEFFF1] dark:bg-[#0c261e] text-slate-800 dark:text-slate-200 rounded-none border-0 overflow-hidden flex flex-col my-0 transition-all">
-                        <div class="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-900/10">
+                    <!-- 2. Daily Goals & Unlimited Activity Widget -->
+                    <div class="order-2 lg:order-2 w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col transition-all">
+                        <div class="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-200/80 dark:border-slate-800/80">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-rounded text-teal-800 text-lg shrink-0 flex items-center justify-center -mt-0.5">task_alt</span>
                                 <h2 class="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-tight antialiased">Daily Goals</h2>
@@ -628,22 +731,19 @@
                         </div>
                     </div>
 
-                    <!-- Thin Section Divider Line (Attached Flush to Section) -->
-                    <div class="w-full border-b border-slate-200/80 dark:border-slate-800/80 my-0"></div>
-
-                    <!-- 3. Weekly XP Activity Chart (Luxury Midnight Indigo Background, Square Type) -->
-                    <div class="w-full bg-gradient-to-br from-[#0F172A] via-[#161E36] to-[#0D1527] border-0 rounded-none shadow-none overflow-hidden flex flex-col my-0 transition-all relative">
-                        <div class="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-white/10">
+                    <!-- 3. Weekly XP Activity Chart (Matching Actual Page Background as Others) -->
+                    <div class="order-5 lg:order-3 w-full bg-[#FFFFFF] dark:bg-[#0b1120] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col transition-all relative">
+                        <div class="flex items-center justify-between px-5 sm:px-6 py-3.5 border-b border-slate-200/80 dark:border-slate-800/80">
                             <div class="flex items-center gap-2.5">
-                                <div class="size-8 rounded-xl bg-indigo-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                                <div class="size-8 rounded-xl bg-indigo-500/15 dark:bg-indigo-500/25 flex items-center justify-center text-indigo-600 dark:text-rose-400 shrink-0">
                                     <span class="material-symbols-rounded text-lg leading-none">show_chart</span>
                                 </div>
                                 <div>
-                                    <h2 class="font-semibold text-sm sm:text-base text-white leading-tight antialiased">Weekly Activity</h2>
-                                    <p class="text-[11px] text-indigo-200/80 font-medium">Momentum & XP Progress</p>
+                                    <h2 class="font-semibold text-sm sm:text-base text-slate-800 dark:text-slate-200 leading-tight antialiased">Weekly Activity</h2>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Momentum & XP Progress</p>
                                 </div>
                             </div>
-                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-white/10 text-indigo-200 border border-white/10">
+                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-indigo-200 border border-slate-200 dark:border-white/10">
                                 7 Days XP
                             </span>
                         </div>
@@ -689,7 +789,7 @@
                                     <defs>
                                         <!-- Line Glow Filter -->
                                         <filter id="lineGlow" x="-20%" y="-20%" width="140%" height="140%">
-                                            <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#8B5CF6" flood-opacity="0.45" />
+                                            <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#8B5CF6" flood-opacity="0.3" />
                                         </filter>
 
                                         <!-- Continuous Line Gradient: Coral Pink -> Purple -> Bright Light Blue -->
@@ -701,9 +801,9 @@
 
                                         <!-- Soft Semi-Transparent Gradient Area Fill -->
                                         <linearGradient id="chartAreaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                            <stop offset="0%" stop-color="#F43F5E" stop-opacity="0.32" />
-                                            <stop offset="50%" stop-color="#8B5CF6" stop-opacity="0.28" />
-                                            <stop offset="100%" stop-color="#38BDF8" stop-opacity="0.32" />
+                                            <stop offset="0%" stop-color="#F43F5E" stop-opacity="0.2" />
+                                            <stop offset="50%" stop-color="#8B5CF6" stop-opacity="0.18" />
+                                            <stop offset="100%" stop-color="#38BDF8" stop-opacity="0.2" />
                                         </linearGradient>
                                         
                                         <!-- Vertical Fade for Area Fill -->
@@ -722,7 +822,7 @@
                                         const gy = padT + innerH - (pct / 100) * innerH;
                                     %>
                                         <line x1="<%= padL %>" y1="<%= gy %>" x2="<%= W - padR %>" y2="<%= gy %>"
-                                              stroke="#ffffff" stroke-opacity="0.08" stroke-width="1" stroke-dasharray="4,4"/>
+                                              stroke="#94a3b8" stroke-opacity="0.2" stroke-width="1" stroke-dasharray="4,4"/>
                                     <% }) %>
 
                                     <!-- Soft Semi-Transparent Gradient Area Fill -->
@@ -740,7 +840,7 @@
                                             <rect x="<%= p.x - (innerW / 12) %>" y="0" width="<%= innerW / 6 %>" height="200" fill="transparent" class="point-hover-strip" />
                                             
                                             <!-- Dotted Vertical Guide Line -->
-                                            <line x1="<%= p.x %>" y1="<%= p.y %>" x2="<%= p.x %>" y2="<%= padT + innerH %>" stroke="#ffffff" stroke-opacity="0.25" opacity="0" class="guide-line transition-opacity" stroke-dasharray="2,2"/>
+                                            <line x1="<%= p.x %>" y1="<%= p.y %>" x2="<%= p.x %>" y2="<%= padT + innerH %>" stroke="#94a3b8" stroke-opacity="0.4" opacity="0" class="guide-line transition-opacity" stroke-dasharray="2,2"/>
                                             
                                             <!-- Data Node: White Center + Border matching line gradient at point -->
                                             <circle cx="<%= p.x %>" cy="<%= p.y %>" r="6" fill="#FFFFFF" stroke="<%= pColor %>" stroke-width="3.5" class="point-dot transition-all duration-200 drop-shadow-md" />
@@ -758,7 +858,7 @@
                                     <!-- X-Axis Day Labels -->
                                     <% pts.forEach((p, i) => { %>
                                         <text x="<%= p.x %>" y="<%= H - 8 %>" text-anchor="middle"
-                                              font-size="11" font-weight="700" fill="#cbd5e1" font-family="sans-serif">
+                                              font-size="11" font-weight="700" class="fill-slate-500 dark:fill-slate-400" font-family="sans-serif">
                                             <%= p.label %>
                                         </text>
                                     <% }) %>
@@ -772,12 +872,9 @@
                         .weekly-point-group:hover .point-dot { r: 8 !important; stroke-width: 4 !important; filter: brightness(1.2); }
                     </style>
 
-                    <!-- Thin Section Divider Line (Attached Flush to Section) -->
-                    <div class="w-full border-b border-slate-200/80 dark:border-slate-800/80 my-0"></div>
-
-                    <!-- 4. Leaderboard (#DEFFF1 Background, Square Type) -->
-                    <div class="w-full bg-[#DEFFF1] dark:bg-[#0c261e] border-0 rounded-none shadow-none overflow-hidden flex flex-col my-0 transition-all">
-                        <div class="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-[#b2edd3]/60 dark:border-emerald-900/40">
+                    <!-- 4. Leaderboard -->
+                    <div class="order-6 lg:order-4 w-full bg-[#FFFFFF] dark:bg-[#0b1120] rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col transition-all">
+                        <div class="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-200/80 dark:border-slate-800/80">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-rounded text-[#F43F5E] text-lg shrink-0 flex items-center justify-center -mt-0.5">military_tech</span>
                                 <h2 class="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-tight antialiased">Leaderboard</h2>
@@ -785,12 +882,12 @@
                             <span class="text-[11px] font-bold text-slate-600 dark:text-slate-300"><%= (locals.leaderboard && leaderboard[0]) ? (leaderboard[0].classLevel || user.classLevel || '') : '' %> · XP Rankings</span>
                         </div>
                         <div class="p-3.5 sm:p-4 flex-1 flex flex-col gap-2.5">
-                            <div class="rounded-xl overflow-hidden w-full divide-y divide-emerald-600/15 dark:divide-slate-800/60">
+                            <div class="rounded-xl overflow-hidden w-full divide-y divide-slate-200/60 dark:divide-slate-800/60">
                                 <% if (locals.leaderboard && leaderboard.length > 0) { %>
                                     <% leaderboard.slice(0, 10).forEach((entry, index) => { 
                                         const isMe = user && entry._id && entry._id.toString() === user._id.toString();
                                     %>
-                                        <div class="flex items-center gap-2.5 px-3 py-2 hover:bg-white/60 dark:hover:bg-slate-800/40 transition-colors w-full <%= isMe ? 'bg-white dark:bg-emerald-900/30' : '' %>">
+                                        <div class="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors w-full <%= isMe ? 'bg-slate-100/70 dark:bg-emerald-900/30' : '' %>">
                                             <div class="size-5.5 rounded-full flex items-center justify-center font-bold text-xs shrink-0 <%= index === 0 ? 'bg-amber-100 text-amber-600 border border-amber-300' : index === 1 ? 'bg-slate-200 text-slate-600' : index === 2 ? 'bg-orange-100 text-orange-600' : 'bg-white/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300' %>">
                                                 <%= index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1 %>
                                             </div>
@@ -819,7 +916,7 @@
                                     </div>
                                 <% } %>
                             </div>
-                            <a href="/leaderboard" class="w-full py-2 px-4 text-center text-xs font-bold text-[#F43F5E] hover:text-rose-600 bg-white/80 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl border border-[#b2edd3] dark:border-slate-700 transition-all flex items-center justify-center gap-1.5 shadow-xs group">
+                            <a href="/leaderboard" class="w-full py-2 px-4 text-center text-xs font-bold text-[#F43F5E] hover:text-rose-600 bg-white/80 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-all flex items-center justify-center gap-1.5 shadow-xs group">
                                 <span>See Full Leaderboard</span>
                                 <span class="material-symbols-rounded text-lg leading-none shrink-0 flex items-center justify-center -mt-0.5 transition-transform group-hover:translate-y-0.5">expand_more</span>
                             </a>
@@ -829,14 +926,11 @@
                 </div><!-- /LEFT COLUMN -->
 
                 <!-- RIGHT COLUMN: Weak Area Radar & Bookmarks -->
-                <div class="lg:col-span-2 flex flex-col gap-3.5 sm:gap-4">
+                <div class="contents lg:flex lg:flex-col lg:col-span-2 lg:gap-4 sm:lg:gap-5">
 
-                    <!-- Thin Section Divider Line (Attached Flush to Section) -->
-                    <div class="w-full border-b border-slate-200/80 dark:border-slate-800/80 my-0"></div>
-
-                    <!-- 1. Weak Area Radar & Smart Revision Reminder Widget (#DEFFF1 Color Theme, Square Type) -->
-                    <div class="w-full bg-[#DEFFF1] dark:bg-[#0c261e] text-slate-800 dark:text-slate-200 rounded-none border-0 overflow-hidden flex flex-col my-0 transition-all shadow-none">
-                        <div class="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-900/10">
+                    <!-- 1. Weak Area Radar & Smart Revision Reminder Widget -->
+                    <div class="order-4 lg:order-1 w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col transition-all">
+                        <div class="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-200/80 dark:border-slate-800/80">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-rounded text-rose-600 text-lg shrink-0 flex items-center justify-center select-none leading-none font-normal">radar</span>
                                 <h2 class="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-tight antialiased">Weak Area Radar</h2>
@@ -969,12 +1063,9 @@
                         </div>
                     </div>
 
-                    <!-- Thin Section Divider Line (Attached Flush to Section) -->
-                    <div class="w-full border-b border-slate-200/80 dark:border-slate-800/80 my-0"></div>
-
-                    <!-- 2. Bookmarks Widget (#DEFFF1 Color Theme, Square Type) -->
-                    <div class="w-full bg-[#DEFFF1] dark:bg-[#0c261e] text-slate-800 dark:text-slate-200 rounded-none border-0 overflow-hidden flex flex-col my-0 transition-all">
-                        <div class="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-900/10 dark:border-slate-800/40">
+                    <!-- 2. Bookmarks Widget -->
+                    <div class="order-3 lg:order-2 w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col transition-all">
+                        <div class="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-200/80 dark:border-slate-800/80">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-rounded text-teal-800 dark:text-teal-400 text-lg shrink-0 flex items-center justify-center -mt-0.5">bookmark</span>
                                 <h2 class="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-tight antialiased">Bookmarks</h2>
@@ -1035,6 +1126,7 @@
                 </div><!-- /RIGHT COLUMN -->
 
             </div><!-- /Two-column grid -->
+            <div class="h-20 sm:h-24 lg:h-6 w-full shrink-0"></div><!-- Safe bottom spacing for mobile bottom nav -->
             </div><!-- /Main Dashboard Content Container -->
 
 

@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { connectDB, protect, parentProtect, adminProtect, User, Course, Quiz, Book, Note, QuestionBank, QA, Notification, RoutineTask, Question, Message, VideoAsset, Setting } = require('../config');
+const { processUploadedFile, processUploadedFiles } = require('../services/cloudinaryService');
 
 // ---- Dashboard ----
 router.get('/dashboard', protect, async (req, res) => {
@@ -5347,7 +5348,8 @@ const uploadVideo = multer({ storage: videoStorage });
 router.post('/api/live/upload-recording', protect, uploadVideo.single('video'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No video file provided' });
-        res.json({ success: true, videoPath: '/uploads/videos/' + req.file.filename });
+        const videoPath = await processUploadedFile(req.file, 'videos');
+        res.json({ success: true, videoPath });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to upload video' });
