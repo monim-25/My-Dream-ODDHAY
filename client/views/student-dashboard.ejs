@@ -134,28 +134,149 @@
                         </a>
                     </div>
 
-                    <!-- MOBILE ONLY 1ST LINE: Compact Student Streak, Total XP, and Gained Marks at Right Side (< lg) -->
-                    <div class="flex lg:hidden items-center justify-end w-full px-3 sm:px-4.5 pt-2 pb-0.5 mb-2.5 sm:mb-3 select-none relative z-30 font-['Plus_Jakarta_Sans',sans-serif]">
-                        <div class="flex items-center gap-1.5 sm:gap-2 ml-auto">
-                            <!-- 1. Streak -->
-                            <div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-[11px] sm:text-xs shadow-2xs" title="Streak">
-                                <span class="material-symbols-rounded text-sm sm:text-base leading-none">local_fire_department</span>
-                                <span class="leading-none"><%= realStreak %>d</span>
-                            </div>
 
-                            <!-- 2. Total XP -->
-                            <div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-500/10 dark:bg-cyan-500/15 border border-cyan-500/20 text-cyan-600 dark:text-cyan-400 font-bold text-[11px] sm:text-xs shadow-2xs" title="Total XP">
-                                <span class="material-symbols-rounded text-sm sm:text-base leading-none">bolt</span>
-                                <span class="leading-none"><%= realXP %></span>
-                            </div>
+                    <!-- UNENROLLED COURSES & FEATURED PACKAGES MOBILE CAROUSEL (< lg only) -->
+                    <%
+                        const mobileUnenrolledList = (locals.unenrolledCourses && unenrolledCourses.length > 0)
+                            ? unenrolledCourses
+                            : ((locals.promotedCourses && promotedCourses.length > 0) ? promotedCourses : (locals.recommendations || []));
 
-                            <!-- 3. Total Gained Marks -->
-                            <div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-500/10 dark:bg-purple-500/15 border border-purple-500/20 text-purple-600 dark:text-purple-400 font-bold text-[11px] sm:text-xs shadow-2xs" title="Total Marks">
-                                <span class="material-symbols-rounded text-sm sm:text-base leading-none">military_tech</span>
-                                <span class="leading-none"><%= realMarks %></span>
+                        function getMobileCourseImg(imgPath) {
+                            if (!imgPath || typeof imgPath !== 'string' || imgPath.trim() === '') return '';
+                            if (imgPath.startsWith('http')) return imgPath;
+                            let normalized = imgPath.replace(/\\/g, '/');
+                            if (!normalized.startsWith('/')) normalized = '/' + normalized;
+                            return normalized;
+                        }
+                    %>
+
+                    <% if (mobileUnenrolledList && mobileUnenrolledList.length > 0) { %>
+                    <div class="w-full mb-3 relative z-20 lg:hidden font-['Plus_Jakarta_Sans',sans-serif]">
+                        <!-- Header with title & View All link in English (No blinking icon, No featured badge) -->
+                        <div class="flex items-center justify-between w-full mb-2 px-1">
+                            <div class="flex items-center gap-1.5">
+                                <div class="size-6 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                                    <span class="material-symbols-rounded text-base leading-none">auto_stories</span>
+                                </div>
+                                <span class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 tracking-tight">Courses & Packages</span>
                             </div>
+                            <a href="/courses" class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-0.5 group transition-colors">
+                                <span>View All</span>
+                                <span class="material-symbols-rounded text-sm transition-transform group-hover:translate-x-0.5">chevron_right</span>
+                            </a>
                         </div>
+
+                        <!-- Swipeable Cards Track Centered with snap-center -->
+                        <div id="unenrolledCarouselTrack" class="flex items-stretch gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar pb-1.5 w-full px-[6vw] sm:px-[calc((100%-310px)/2)]">
+                            <% mobileUnenrolledList.forEach((c, cIdx) => { 
+                                const cImg = getMobileCourseImg(c.thumbnail);
+                                const isFree = c.accessType === 'free' || c.accessType === 'Free';
+                                const subName = (Array.isArray(c.subject) && c.subject.length > 0) ? c.subject[0] : (c.subject || 'Academic');
+                                const instructorName = c.instructor?.name || 'Oddhay Specialist';
+                                const hasDiscount = !isFree && c.discountPrice && c.discountPrice > 0 && c.price && c.price > c.discountPrice;
+                                const displayPrice = isFree ? 'Free' : (c.discountPrice > 0 ? '৳' + c.discountPrice : (c.price > 0 ? '৳' + c.price : 'Free'));
+
+                                // Accurately determine if this item is a Course or a Package
+                                let itemType = 'Course';
+                                const titleLower = (c.title || '').toLowerCase();
+                                const catStr = Array.isArray(c.category) ? c.category.join(' ').toLowerCase() : (c.category || '').toLowerCase();
+                                const tagStr = Array.isArray(c.tags) ? c.tags.join(' ').toLowerCase() : (c.tags || '').toLowerCase();
+                                if (c.isPackage || /package|bundle|প্যাকেজ|বান্ডেল/.test(titleLower) || /package|bundle|প্যাকেজ|বান্ডেল/.test(catStr) || /package|bundle/.test(tagStr)) {
+                                    itemType = 'Package';
+                                } else {
+                                    itemType = 'Course';
+                                }
+                            %>
+                            <%
+                                const isCardActive = cIdx === 0;
+                            %>
+                            <div class="carousel-course-card snap-center shrink-0 w-[86vw] max-w-[310px] min-w-[260px] rounded-2xl bg-white dark:bg-[#131d31] border border-slate-200/90 dark:border-slate-800/90 transition-all duration-500 ease-out flex flex-col overflow-hidden group cursor-pointer <%= isCardActive ? 'opacity-100 scale-100 shadow-md ring-1 ring-indigo-500/25 dark:ring-indigo-400/20' : 'opacity-40 dark:opacity-35 scale-[0.92] brightness-75 shadow-none' %>" data-card-idx="<%= cIdx %>">
+                                <!-- Card Thumbnail Container -->
+                                <div class="w-full h-28 sm:h-32 relative overflow-hidden bg-slate-100 dark:bg-slate-800 shrink-0">
+                                    <% if (cImg) { %>
+                                        <img src="<%= cImg %>" alt="<%= c.title %>" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <% } %>
+                                    <div class="w-full h-full <%= cImg ? 'hidden' : 'flex' %> items-center justify-center bg-gradient-to-br from-indigo-500/20 via-sky-500/15 to-purple-500/20">
+                                        <span class="material-symbols-rounded text-3xl text-indigo-500/60 dark:text-indigo-400/60">school</span>
+                                    </div>
+                                    
+                                    <!-- Gradient Overlay -->
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none"></div>
+
+                                    <!-- Top Badges -->
+                                    <div class="absolute top-2 left-2 right-2 flex items-center justify-between z-10 pointer-events-none">
+                                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-900/70 text-white backdrop-blur-md border border-white/10 truncate max-w-[130px]">
+                                            <%= subName %>
+                                        </span>
+                                        <% if (isFree) { %>
+                                            <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500 text-white shadow-xs">
+                                                Free <%= itemType %>
+                                            </span>
+                                        <% } else if (hasDiscount) { %>
+                                            <span class="px-1.5 py-0.5 rounded-lg text-[10px] font-bold bg-rose-500 text-white shadow-xs flex items-center gap-0.5">
+                                                <span class="material-symbols-rounded text-xs leading-none">local_offer</span>
+                                                <span>Save ৳<%= c.price - c.discountPrice %></span>
+                                            </span>
+                                        <% } else { %>
+                                            <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-600 text-white shadow-xs">
+                                                <%= itemType %>
+                                            </span>
+                                        <% } %>
+                                    </div>
+                                </div>
+
+                                <!-- Card Content -->
+                                <div class="p-2.5 sm:p-3 flex-1 flex flex-col justify-between gap-2">
+                                    <div>
+                                        <h4 class="text-xs sm:text-[13px] font-bold text-slate-800 dark:text-slate-100 line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                            <%= c.title %>
+                                        </h4>
+                                        <div class="flex items-center gap-1.5 mt-1 text-[10.5px] text-slate-500 dark:text-slate-400">
+                                            <span class="material-symbols-rounded text-xs text-indigo-500 leading-none">person</span>
+                                            <span class="truncate max-w-[120px]"><%= instructorName %></span>
+                                            <span class="text-slate-300 dark:text-slate-600">•</span>
+                                            <span class="px-1.5 py-0.2 rounded-md text-[9.5px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"><%= itemType %></span>
+                                            <% if (c.totalRecordedClasses || c.totalLiveClasses) { %>
+                                                <span class="text-slate-300 dark:text-slate-600">•</span>
+                                                <span class="material-symbols-rounded text-xs text-sky-500 leading-none">play_circle</span>
+                                                <span><%= (c.totalRecordedClasses || 0) + (c.totalLiveClasses || 0) %> Lessons</span>
+                                            <% } %>
+                                        </div>
+                                    </div>
+
+                                    <!-- Price & CTA Button Row -->
+                                    <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80">
+                                        <div class="flex items-baseline gap-1">
+                                            <span class="text-xs sm:text-sm font-black <%= isFree ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white' %>">
+                                                <%= displayPrice %>
+                                            </span>
+                                            <% if (hasDiscount) { %>
+                                                <span class="text-[10px] font-medium text-slate-400 line-through">
+                                                    ৳<%= c.price %>
+                                                </span>
+                                            <% } %>
+                                        </div>
+
+                                        <a href="/course-details/<%= c._id %>" class="px-2.5 py-1 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-xs active:scale-95 transition-all shrink-0">
+                                            <span><%= isFree ? 'Enroll Free' : 'View Details' %></span>
+                                            <span class="material-symbols-rounded text-xs leading-none">arrow_forward</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <% }) %>
+                        </div>
+
+                        <!-- Mini Dot Indicators for Mobile Carousel -->
+                        <% if (mobileUnenrolledList.length > 1) { %>
+                        <div class="flex items-center justify-center gap-1 mt-1.5" id="unenrolledCarouselDots">
+                            <% mobileUnenrolledList.forEach((_, dIdx) => { %>
+                                <button type="button" class="unenrolled-dot h-1.5 rounded-full transition-all duration-300 cursor-pointer <%= dIdx === 0 ? 'bg-indigo-600 w-3.5' : 'bg-slate-300 dark:bg-slate-700 w-1.5' %>" data-dot-idx="<%= dIdx %>" title="Slide <%= dIdx + 1 %>"></button>
+                            <% }) %>
+                        </div>
+                        <% } %>
                     </div>
+                    <% } %>
 
                     <!-- QUICK ACTIONS MOBILE ROW (Visible on mobile/tablet < lg; Oddhay AI + 3 Quick Actions in One Clean Line) -->
                     <div class="w-full pt-2 pb-2.5 relative z-20 border-t border-b border-slate-200/80 dark:border-white/10 lg:hidden">
@@ -195,6 +316,99 @@
 
                         </div>
                     </div>
+
+                    <!-- PRIORITY NOTICE / UPCOMING EVENT (Mobile Only < lg) -->
+                    <% if (locals.upcomingEvent) { 
+                        const mNoticeType = upcomingEvent.type || 'none';
+                        let mNoticeBadgeText = 'Notice & Updates';
+                        let mNoticeIcon = 'notifications';
+                        let mNoticeIconBg = 'bg-sky-500/15 dark:bg-sky-500/20';
+                        let mNoticeIconColor = 'text-sky-600 dark:text-sky-400';
+                        let mNoticeBadgeStyle = 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/20';
+                        let mNoticeBtnStyle = 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-sky-500/20';
+                        let mNoticeBorder = 'border-slate-200/90 dark:border-slate-800/90';
+
+                        if (mNoticeType === 'live') {
+                            mNoticeBadgeText = 'Live Class Alert';
+                            mNoticeIcon = 'sensors';
+                            mNoticeIconBg = 'bg-rose-500/15 dark:bg-rose-500/20';
+                            mNoticeIconColor = 'text-rose-600 dark:text-rose-400';
+                            mNoticeBadgeStyle = 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25';
+                            mNoticeBtnStyle = 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-rose-500/25';
+                            mNoticeBorder = 'border-rose-200/80 dark:border-rose-900/40';
+                        } else if (mNoticeType === 'exam' || mNoticeType === 'quiz') {
+                            mNoticeBadgeText = 'Exam Alert';
+                            mNoticeIcon = 'edit_note';
+                            mNoticeIconBg = 'bg-amber-500/15 dark:bg-amber-500/20';
+                            mNoticeIconColor = 'text-amber-600 dark:text-amber-400';
+                            mNoticeBadgeStyle = 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25';
+                            mNoticeBtnStyle = 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-amber-500/25';
+                            mNoticeBorder = 'border-amber-200/80 dark:border-amber-900/40';
+                        } else if (mNoticeType === 'high_notice' || mNoticeType === 'notice') {
+                            mNoticeBadgeText = 'Important Notice';
+                            mNoticeIcon = 'campaign';
+                            mNoticeIconBg = 'bg-indigo-500/15 dark:bg-indigo-500/20';
+                            mNoticeIconColor = 'text-indigo-600 dark:text-indigo-300';
+                            mNoticeBadgeStyle = 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/25';
+                            mNoticeBtnStyle = 'bg-gradient-to-r from-indigo-600 to-sky-600 text-white shadow-indigo-500/25';
+                            mNoticeBorder = 'border-indigo-200/80 dark:border-indigo-900/40';
+                        } else if (mNoticeType === 'upcoming') {
+                            mNoticeBadgeText = 'Routine Task';
+                            mNoticeIcon = 'task_alt';
+                            mNoticeIconBg = 'bg-emerald-500/15 dark:bg-emerald-500/20';
+                            mNoticeIconColor = 'text-emerald-600 dark:text-emerald-400';
+                            mNoticeBadgeStyle = 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25';
+                            mNoticeBtnStyle = 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-500/25';
+                            mNoticeBorder = 'border-emerald-200/80 dark:border-emerald-900/40';
+                        }
+                    %>
+                    <div class="w-full mt-2 mb-1 px-1 relative z-20 lg:hidden font-['Plus_Jakarta_Sans',sans-serif]">
+                        <div class="w-full rounded-2xl bg-white dark:bg-[#131d31] border <%= mNoticeBorder %> shadow-xs p-3.5 flex flex-col justify-between gap-2.5 relative overflow-hidden">
+                            <!-- Background subtle ambient glow -->
+                            <div class="absolute -right-8 -bottom-8 size-28 bg-indigo-500/5 dark:bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+                            <!-- Header: Priority Related Icon + Badge + Course / Time -->
+                            <div class="flex items-center justify-between gap-2 relative z-10">
+                                <div class="flex items-center gap-1.5 min-w-0">
+                                    <div class="size-6 rounded-lg <%= mNoticeIconBg %> flex items-center justify-center shrink-0">
+                                        <span class="material-symbols-rounded text-sm leading-none <%= mNoticeIconColor %>"><%= mNoticeIcon %></span>
+                                    </div>
+                                    <span class="px-2 py-0.5 rounded-lg text-[10.5px] font-bold border <%= mNoticeBadgeStyle %> shrink-0">
+                                        <%= mNoticeBadgeText %>
+                                    </span>
+                                    <% if (upcomingEvent.courseTitle) { %>
+                                        <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate max-w-[130px]">• <%= upcomingEvent.courseTitle %></span>
+                                    <% } %>
+                                </div>
+                                <% if (upcomingEvent.time) { %>
+                                    <span class="text-[10.5px] font-semibold text-slate-500 dark:text-slate-400 shrink-0 flex items-center gap-0.5">
+                                        <span class="material-symbols-rounded text-xs leading-none">schedule</span>
+                                        <span><%= upcomingEvent.time %></span>
+                                    </span>
+                                <% } %>
+                            </div>
+
+                            <!-- Notice Content -->
+                            <div class="relative z-10">
+                                <h3 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-snug"><%= upcomingEvent.title %></h3>
+                                <% if (upcomingEvent.message || upcomingEvent.subtitle) { %>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 mt-1 leading-relaxed"><%= upcomingEvent.message || upcomingEvent.subtitle %></p>
+                                <% } %>
+                            </div>
+
+                            <!-- CTA Button / Footer -->
+                            <% if (upcomingEvent.link) { %>
+                            <div class="flex items-center justify-end pt-1.5 border-t border-slate-100 dark:border-slate-800/80 relative z-10">
+                                <a href="<%= upcomingEvent.link %>" onclick="attendNotice('<%= upcomingEvent.id %>')" class="px-3.5 py-1.5 rounded-xl <%= mNoticeBtnStyle %> text-xs font-bold flex items-center gap-1 shadow-xs active:scale-95 transition-all">
+                                    <span><%= upcomingEvent.buttonText || 'View Details' %></span>
+                                    <span class="material-symbols-rounded text-xs leading-none">arrow_forward</span>
+                                </a>
+                            </div>
+                            <% } %>
+                        </div>
+                    </div>
+                    <% } %>
+
 
                     <!-- Content: Left AI Assistant Info + Right Notice & Updates Section (Desktop Only >= lg) -->
                     <div class="relative z-10 hidden lg:grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-center w-full mb-1 ml-0">
@@ -288,7 +502,89 @@
                             </div>
                         </div>
 
-                        <!-- RIGHT COLUMN: Student Progress Section (Desktop Only >= lg; hidden on small screens) -->
+                        <!-- RIGHT COLUMN: Notice & Updates Section (or Student Progress Fallback) (Desktop Only >= lg) -->
+                        <% if (locals.upcomingEvent) { 
+                            const dNoticeType = upcomingEvent.type || 'none';
+                            let dNoticeBadgeText = 'Notice & Updates';
+                            let dNoticeIcon = 'notifications';
+                            let dNoticeIconBg = 'bg-sky-500/15 dark:bg-sky-500/20';
+                            let dNoticeIconColor = 'text-sky-600 dark:text-sky-400';
+                            let dNoticeBadgeStyle = 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/25';
+                            let dNoticeBtnStyle = 'bg-gradient-to-r from-sky-600 to-blue-600 text-white shadow-sky-500/25';
+
+                            if (dNoticeType === 'live') {
+                                dNoticeBadgeText = 'Live Class Alert';
+                                dNoticeIcon = 'sensors';
+                                dNoticeIconBg = 'bg-rose-500/15 dark:bg-rose-500/20';
+                                dNoticeIconColor = 'text-rose-600 dark:text-rose-400';
+                                dNoticeBadgeStyle = 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30';
+                                dNoticeBtnStyle = 'bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-rose-500/30';
+                            } else if (dNoticeType === 'exam' || dNoticeType === 'quiz') {
+                                dNoticeBadgeText = 'Exam Alert';
+                                dNoticeIcon = 'edit_note';
+                                dNoticeIconBg = 'bg-amber-500/15 dark:bg-amber-500/20';
+                                dNoticeIconColor = 'text-amber-600 dark:text-amber-400';
+                                dNoticeBadgeStyle = 'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30';
+                                dNoticeBtnStyle = 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-amber-500/30';
+                            } else if (dNoticeType === 'high_notice' || dNoticeType === 'notice') {
+                                dNoticeBadgeText = 'Important Notice';
+                                dNoticeIcon = 'campaign';
+                                dNoticeIconBg = 'bg-indigo-500/15 dark:bg-indigo-500/20';
+                                dNoticeIconColor = 'text-indigo-600 dark:text-indigo-300';
+                                dNoticeBadgeStyle = 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border-indigo-500/30';
+                                dNoticeBtnStyle = 'bg-gradient-to-r from-indigo-600 to-sky-600 text-white shadow-indigo-500/30';
+                            } else if (dNoticeType === 'upcoming') {
+                                dNoticeBadgeText = 'Routine Task';
+                                dNoticeIcon = 'task_alt';
+                                dNoticeIconBg = 'bg-emerald-500/15 dark:bg-emerald-500/20';
+                                dNoticeIconColor = 'text-emerald-600 dark:text-emerald-400';
+                                dNoticeBadgeStyle = 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30';
+                                dNoticeBtnStyle = 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-emerald-500/30';
+                            }
+                        %>
+                        <div class="hidden lg:flex lg:col-span-5 w-full justify-end pr-0 lg:pr-4 relative z-20 font-['Plus_Jakarta_Sans',sans-serif]">
+                            <div class="w-full max-w-md rounded-2xl bg-white dark:bg-[#131d31] border border-slate-200/90 dark:border-slate-800/90 shadow-md p-4 sm:p-5 flex flex-col justify-between gap-3 relative overflow-hidden min-h-[170px]">
+                                <div class="absolute -right-8 -bottom-8 size-32 bg-indigo-500/5 dark:bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+
+                                <div class="flex items-center justify-between gap-2 relative z-10 border-b border-slate-100 dark:border-slate-800/80 pb-2.5">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <div class="size-7 rounded-lg <%= dNoticeIconBg %> flex items-center justify-center shrink-0">
+                                            <span class="material-symbols-rounded text-base leading-none <%= dNoticeIconColor %>"><%= dNoticeIcon %></span>
+                                        </div>
+                                        <span class="px-2.5 py-0.5 rounded-lg text-xs font-bold border <%= dNoticeBadgeStyle %> shrink-0">
+                                            <%= dNoticeBadgeText %>
+                                        </span>
+                                        <% if (upcomingEvent.courseTitle) { %>
+                                            <span class="text-xs font-medium text-slate-500 dark:text-slate-400 truncate max-w-[160px]">• <%= upcomingEvent.courseTitle %></span>
+                                        <% } %>
+                                    </div>
+                                    <% if (upcomingEvent.time) { %>
+                                        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 shrink-0 flex items-center gap-1">
+                                            <span class="material-symbols-rounded text-sm leading-none">schedule</span>
+                                            <span><%= upcomingEvent.time %></span>
+                                        </span>
+                                    <% } %>
+                                </div>
+
+                                <div class="relative z-10 my-auto">
+                                    <h3 class="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100 line-clamp-2 leading-snug"><%= upcomingEvent.title %></h3>
+                                    <% if (upcomingEvent.message || upcomingEvent.subtitle) { %>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mt-1.5 leading-relaxed"><%= upcomingEvent.message || upcomingEvent.subtitle %></p>
+                                    <% } %>
+                                </div>
+
+                                <% if (upcomingEvent.link) { %>
+                                <div class="flex items-center justify-end pt-2 border-t border-slate-100 dark:border-slate-800/80 relative z-10">
+                                    <a href="<%= upcomingEvent.link %>" onclick="attendNotice('<%= upcomingEvent.id %>')" class="px-4 py-2 rounded-xl <%= dNoticeBtnStyle %> text-xs font-bold flex items-center gap-1.5 shadow-sm hover:opacity-95 active:scale-95 transition-all">
+                                        <span><%= upcomingEvent.buttonText || 'View Notice' %></span>
+                                        <span class="material-symbols-rounded text-sm leading-none">arrow_forward</span>
+                                    </a>
+                                </div>
+                                <% } %>
+                            </div>
+                        </div>
+                        <% } else { %>
+                        <!-- RIGHT COLUMN: Student Progress Section (Desktop Only >= lg; fallback when no upcoming notice) -->
                         <div class="hidden lg:flex lg:col-span-5 w-full flex-col justify-center gap-2.5 lg:-translate-x-12 lg:translate-y-1 my-1 relative z-20">
                             <!-- Header Title & Level Badge -->
                             <div class="flex items-center justify-between pb-1 border-b border-slate-200/80 dark:border-white/10">
@@ -386,6 +682,7 @@
                                 </div>
                             </div>
                         </div>
+                        <% } %>
                     </div>
                 </div>
 
@@ -531,149 +828,115 @@
                 <!-- LEFT COLUMN: Keep Learning -> Daily Goals -> Weekly Activity -> Leaderboard -->
                 <div class="contents lg:flex lg:flex-col lg:col-span-3 lg:gap-4 sm:lg:gap-5">
 
-                    <!-- 1. Keep Learning / Continue Watching Section -->
-                    <div class="order-1 lg:order-1 w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden relative group">
-                        <!-- Section Header (Enlarged Header & Top Aligned) -->
-                        <div class="relative z-10 flex items-center justify-between px-4 sm:px-6 py-3 border-b border-slate-200/80 dark:border-slate-800/80">
-                            <div class="flex items-center gap-2">
-                                <span class="material-symbols-rounded text-rose-500 text-xl sm:text-2xl shrink-0 flex items-center justify-center -mt-0.5">play_circle</span>
-                                <h2 class="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-tight antialiased">Keep Learning</h2>
+                    <% 
+                        const lastLesson = (locals.user && user.lastWatchedLesson && user.lastWatchedLesson.course) ? user.lastWatchedLesson : null;
+                        const dur = Number(lastLesson && lastLesson.duration) || 0;
+                        const pos = Number(lastLesson && lastLesson.lastPosition) || 0;
+                        
+                        // Proper full completion detection:
+                        // 1. Watched >= 92% or (for long videos >= 5 mins) remaining <= 25 seconds
+                        const isProgressFull = Boolean(dur > 0 && pos > 0 && ((pos / dur >= 0.92) || (dur >= 300 && dur - pos <= 25)));
+                        // 2. Actively in progress: has watched some seconds (> 0) but not reached near completion threshold
+                        const isActivelyInProgress = Boolean(pos > 0 && !isProgressFull && (pos < 60 || (dur > 0 && pos / dur < 0.92)));
+                        // 3. Fully completed IF AND ONLY IF it is NOT actively in progress AND (isProgressFull OR explicitly marked complete)
+                        const isWatchedFull = Boolean(!isActivelyInProgress && (isProgressFull || (lastLesson && lastLesson.isCompleted === true)));
+                        let activeLessonThumb = (lastLesson && (lastLesson.thumbnail || (lastLesson.course && lastLesson.course.thumbnail))) || '';
+                        if (activeLessonThumb && !activeLessonThumb.startsWith('http') && !activeLessonThumb.startsWith('/')) {
+                            activeLessonThumb = '/' + activeLessonThumb;
+                        }
+                    %>
+
+
+                    <!-- 1. SMART SUGGESTED EXAM (Standalone Spotlight Card, Positioned FIRST) -->
+                    <% if (locals.suggestedExam) { %>
+                    <div class="order-1 lg:order-1 w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col p-3.5 sm:p-4 transition-all gap-2.5 relative group">
+                        <!-- Top Row: Simple Free Icon + 2-3 Word Hook + Points / Duration -->
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="size-8 sm:size-9 rounded-xl <%= suggestedExam.type === 'live' ? 'bg-rose-500/15 border border-rose-500/30 text-rose-600' : (suggestedExam.type === 'popular' ? 'bg-amber-500/15 border border-amber-500/30 text-amber-600' : 'bg-teal-700/15 border border-teal-700/30 text-teal-800 dark:text-teal-300') %> flex items-center justify-center shrink-0">
+                                    <% if (suggestedExam.type === 'live') { %>
+                                        <i class="fa-solid fa-circle-dot text-sm sm:text-base animate-pulse"></i>
+                                    <% } else if (suggestedExam.type === 'popular') { %>
+                                        <i class="fa-solid fa-fire text-sm sm:text-base"></i>
+                                    <% } else { %>
+                                        <i class="fa-solid fa-clipboard-check text-sm sm:text-base"></i>
+                                    <% } %>
+                                </div>
+                                <div class="flex items-center gap-1.5 text-xs sm:text-[13px] font-bold <%= suggestedExam.type === 'live' ? 'text-rose-500' : (suggestedExam.type === 'popular' ? 'text-amber-500' : 'text-teal-700 dark:text-teal-400') %>">
+                                    <% if (suggestedExam.type === 'live') { %>
+                                        <span>লাইভ এক্সাম</span>
+                                    <% } else if (suggestedExam.type === 'popular') { %>
+                                        <span>জনপ্রিয় টেস্ট</span>
+                                    <% } else { %>
+                                        <span>কুইজ চ্যালেঞ্জ</span>
+                                    <% } %>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <% if (suggestedExam.duration) { %>
+                                    <span class="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">⏱️ <%= suggestedExam.duration %>m</span>
+                                    <span class="text-slate-300 dark:text-slate-700">·</span>
+                                <% } %>
+                                <span class="px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-bold text-amber-800 dark:text-amber-300 bg-amber-500/20 border border-amber-600/30 flex items-center gap-1">
+                                    <i class="fa-solid fa-bolt text-[10px]"></i> +50 XP
+                                </span>
                             </div>
                         </div>
 
-                        <!-- Content Area (Comfortable Gap below Header) -->
-                        <div class="relative z-10 w-full">
-                            <% 
-                                const lastLesson = (locals.user && user.lastWatchedLesson && user.lastWatchedLesson.course) ? user.lastWatchedLesson : null;
-                                const dur = Number(lastLesson && lastLesson.duration) || 0;
-                                const pos = Number(lastLesson && lastLesson.lastPosition) || 0;
-                                
-                                // Proper full completion detection:
-                                // 1. Watched >= 92% or (for long videos >= 5 mins) remaining <= 25 seconds
-                                const isProgressFull = Boolean(dur > 0 && pos > 0 && ((pos / dur >= 0.92) || (dur >= 300 && dur - pos <= 25)));
-                                // 2. Actively in progress: has watched some seconds (> 0) but not reached near completion threshold
-                                const isActivelyInProgress = Boolean(pos > 0 && !isProgressFull && (pos < 60 || (dur > 0 && pos / dur < 0.92)));
-                                // 3. Fully completed IF AND ONLY IF it is NOT actively in progress AND (isProgressFull OR explicitly marked complete)
-                                const isWatchedFull = Boolean(!isActivelyInProgress && (isProgressFull || (lastLesson && lastLesson.isCompleted === true)));
-                            %>
-                            <% if (lastLesson && !isWatchedFull) { %>
-                                <% 
-                                    const titleWords = (lastLesson.lessonTitle || '').split(' ');
-                                    const formattedTitle = titleWords.length > 4 ? titleWords.slice(0, 4).join(' ') + '...' : lastLesson.lessonTitle;
-                                    const rawDesc = lastLesson.description || 'Watch and learn key topics step by step';
-                                    const descWords = rawDesc.split(' ');
-                                    const formattedDesc = descWords.length > 10 ? descWords.slice(0, 10).join(' ') + '...' : rawDesc;
-                                %>
-                                <div class="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-6 w-full px-4 sm:px-6 lg:px-7 pt-3 sm:pt-4 lg:pt-4.5 pb-4 sm:pb-7 lg:pb-8">
-                                    <!-- LEFT SIDE: Thumbnail Frame (Clickable) -->
-                                     <a href="/course-details/<%= lastLesson.course._id %>?lesson=<%= lastLesson.lessonId %>&time=<%= lastLesson.lastPosition || 0 %>&from=dashboard" 
-                                        class="group relative block w-full sm:w-72 lg:w-80 aspect-video shrink-0 bg-slate-900 rounded-xl overflow-hidden border border-slate-300 dark:border-teal-700/50 shadow-md cursor-pointer">
-                                         <% 
-                                             let activeThumbnail = lastLesson.thumbnail || (lastLesson.course && lastLesson.course.thumbnail) || '';
-                                             if (activeThumbnail && !activeThumbnail.startsWith('http') && !activeThumbnail.startsWith('/')) {
-                                                 activeThumbnail = '/' + activeThumbnail;
-                                             }
-                                         %>
-                                         <% if (activeThumbnail) { %>
-                                             <img src="<%= activeThumbnail %>" 
-                                                  class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                                                  alt="<%= lastLesson.lessonTitle %>"
-                                                  onerror="if (!this.dataset.triedThumb && !this.src.includes('/thumbnails/')) { this.dataset.triedThumb = '1'; this.src = this.src.replace('/uploads/', '/uploads/thumbnails/'); } else { this.style.display='none'; const fb = this.nextElementSibling; if (fb) fb.style.display='flex'; }">
-                                             <div class="w-full h-full items-center justify-center bg-teal-950" style="display:none;">
-                                                 <span class="material-symbols-rounded text-4xl text-teal-300 leading-none">play_circle</span>
-                                             </div>
-                                         <% } else { %>
-                                             <div class="w-full h-full flex items-center justify-center bg-teal-950">
-                                                 <span class="material-symbols-rounded text-4xl text-teal-300 leading-none">play_circle</span>
-                                             </div>
-                                         <% } %>
-                                         <!-- Play Overlay Icon -->
-                                         <div class="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                                             <div class="size-11 rounded-full bg-teal-600/90 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                                 <span class="material-symbols-rounded text-2xl leading-none">play_arrow</span>
-                                             </div>
-                                         </div>
-                                     </a>
+                        <!-- Title & Subject Row (Full width, clear and prominent) -->
+                        <div class="min-w-0 pt-0.5">
+                            <a href="<%= suggestedExam.url %>" class="block text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 truncate hover:text-teal-700 dark:hover:text-teal-300 transition-colors" title="<%= suggestedExam.title %>">
+                                <%= suggestedExam.title %>
+                            </a>
+                            <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate font-medium mt-0.5">
+                                <%= suggestedExam.subject %><% if (suggestedExam.examTakers && suggestedExam.examTakers >= 30) { %> · <%= suggestedExam.examTakers %> জন পরীক্ষা দিয়েছে<% } %>
+                            </p>
+                        </div>
 
-                                    <!-- RIGHT SIDE: Text Details & Resume Lesson Button -->
-                                    <div class="flex-1 flex flex-col justify-start min-w-0 gap-2 sm:gap-2.5">
-                                        <h3 class="text-base sm:text-lg font-black text-slate-900 dark:text-slate-100 leading-snug tracking-tight truncate antialiased" title="<%= lastLesson.lessonTitle %>"><%= formattedTitle %></h3>
-                                        
-                                        <!-- Short Description -->
-                                        <p class="text-xs sm:text-sm text-slate-700 dark:text-slate-300 font-semibold line-clamp-2 leading-relaxed antialiased"><%= formattedDesc %></p>
-                                        
-                                        <!-- Stats with Sharp Text -->
-                                        <div class="flex items-center gap-4 text-xs font-black text-slate-800 dark:text-slate-200 pt-0.5 antialiased">
-                                            <span class="inline-flex items-center gap-1.5 leading-none" title="Views">
-                                                <span class="material-symbols-rounded text-sm text-teal-700 dark:text-cyan-300 leading-none shrink-0 inline-flex items-center justify-center">visibility</span>
-                                                <span class="leading-none text-slate-800 dark:text-slate-200 font-bold"><%= lastLesson.views || '1.2k' %></span>
-                                            </span>
-                                            <span class="inline-flex items-center gap-1.5 leading-none" title="Likes">
-                                                <span class="material-symbols-rounded text-sm text-rose-500 leading-none shrink-0 inline-flex items-center justify-center">thumb_up</span>
-                                                <span class="leading-none text-slate-800 dark:text-slate-200 font-bold"><%= lastLesson.likes || '245' %></span>
-                                            </span>
-                                            <span class="inline-flex items-center gap-1.5 leading-none" title="Comments">
-                                                <span class="material-symbols-rounded text-sm text-emerald-600 dark:text-emerald-300 leading-none shrink-0 inline-flex items-center justify-center">chat_bubble</span>
-                                                <span class="leading-none text-slate-800 dark:text-slate-200 font-bold"><%= lastLesson.commentsCount || '18' %></span>
-                                            </span>
-                                        </div>
-
-                                        <!-- Course Name -->
-                                        <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate inline-flex items-center gap-1.5 pt-0.5 leading-none antialiased">
-                                            <span class="material-symbols-rounded text-amber-600 text-sm leading-none shrink-0 inline-flex items-center justify-center">auto_stories</span>
-                                            <span class="truncate leading-none text-slate-800 dark:text-slate-200 font-bold"><%= lastLesson.course.title %></span>
-                                        </p>
-
-                                        <!-- Resume Button -->
-                                        <a href="/course-details/<%= lastLesson.course._id %>?lesson=<%= lastLesson.lessonId %>&time=<%= lastLesson.lastPosition || 0 %>&from=dashboard"
-                                           class="mt-2 inline-flex items-center justify-center gap-1.5 bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white font-bold text-xs sm:text-sm rounded-xl px-5 py-2.5 transition-all duration-200 shrink-0 w-fit shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer antialiased">
-                                            <span class="material-symbols-rounded text-base sm:text-lg leading-none">play_arrow</span>
-                                            <span>Resume</span>
-                                        </a>
-                                    </div>
-                                </div>
-                            <% } else if (lastLesson && isWatchedFull) { %>
-                                <!-- Fully Watched State: Short prompt to explore courses -->
-                                <div class="flex items-center justify-between gap-4 w-full p-4 sm:p-5">
-                                    <div class="flex items-center gap-3 min-w-0">
-                                        <div class="size-10 shrink-0 rounded-xl bg-teal-800/15 dark:bg-teal-400/15 border border-teal-700/25 dark:border-teal-400/25 flex items-center justify-center text-teal-800 dark:text-teal-300">
-                                            <span class="material-symbols-rounded text-xl leading-none">auto_stories</span>
-                                        </div>
-                                        <p class="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 antialiased truncate">
-                                            Ready for your next lesson? Explore courses to continue learning.
-                                        </p>
-                                    </div>
-                                    <a href="/courses"
-                                       class="inline-flex items-center justify-center gap-1.5 bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white font-bold text-xs sm:text-sm rounded-xl px-4 py-2 sm:px-5 sm:py-2.5 transition-all duration-200 shrink-0 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer antialiased">
-                                        <span class="material-symbols-rounded text-base sm:text-lg leading-none">auto_stories</span>
-                                        <span>Courses</span>
-                                    </a>
-                                </div>
-                            <% } else { %>
-                                <!-- Empty state -->
-                                <div class="flex items-center justify-between gap-4 w-full p-5 sm:p-6">
-                                    <div class="flex items-center gap-3.5">
-                                        <div class="size-11 shrink-0 rounded-xl bg-teal-800/20 dark:bg-teal-500/20 border border-teal-700/30 dark:border-teal-500/30 flex items-center justify-center text-teal-900 dark:text-teal-300 shadow-sm">
-                                            <span class="material-symbols-rounded text-2xl leading-none flex items-center justify-center">auto_stories</span>
-                                        </div>
-                                        <div class="flex flex-col justify-center min-w-0">
-                                            <h3 class="text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight">No active lessons</h3>
-                                            <p class="text-xs text-slate-600 dark:text-slate-300 font-medium mt-0.5">Pick a course today and start learning!</p>
-                                        </div>
-                                    </div>
-                                    <a href="/courses" 
-                                       class="inline-flex items-center justify-center gap-1.5 bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white font-bold text-xs sm:text-sm rounded-xl px-4 py-2 sm:px-5 sm:py-2.5 transition-all duration-200 shrink-0 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 cursor-pointer antialiased">
-                                        <span class="material-symbols-rounded text-base sm:text-lg leading-none">auto_stories</span>
-                                        <span>Courses</span>
-                                    </a>
-                                </div>
-                            <% } %>
+                        <!-- Live Glassmorphism Action: Shorter Button at the Left with Live Blowing Effect -->
+                        <div class="pt-1.5 flex items-center justify-start">
+                            <a href="<%= suggestedExam.url %>" 
+                               class="inline-flex items-center justify-center gap-2 py-1.5 sm:py-2 px-4 sm:px-5 rounded-xl backdrop-blur-md font-bold text-xs sm:text-sm transition-all duration-300 active:scale-95 <%= suggestedExam.type === 'live' ? 'bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-600 dark:text-rose-400 live-blowing-rose' : 'bg-teal-600/15 hover:bg-teal-600/25 border border-teal-500/40 text-teal-800 dark:text-teal-200 live-blowing-teal' %>">
+                                <i class="fa-solid fa-play text-[10px] <%= suggestedExam.type === 'live' ? 'text-rose-500' : 'text-teal-600 dark:text-teal-300' %>"></i>
+                                <span><%= suggestedExam.type === 'live' ? 'Join' : 'Start' %></span>
+                            </a>
                         </div>
                     </div>
+                    <style>
+                    @keyframes liveBlowTeal {
+                        0%, 100% {
+                            box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.4), 0 0 8px rgba(20, 184, 166, 0.2);
+                            transform: scale(1);
+                        }
+                        50% {
+                            box-shadow: 0 0 0 5px rgba(20, 184, 166, 0), 0 0 16px rgba(20, 184, 166, 0.45);
+                            transform: scale(1.02);
+                        }
+                    }
+                    @keyframes liveBlowRose {
+                        0%, 100% {
+                            box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.45), 0 0 10px rgba(244, 63, 94, 0.25);
+                            transform: scale(1);
+                        }
+                        50% {
+                            box-shadow: 0 0 0 6px rgba(244, 63, 94, 0), 0 0 18px rgba(244, 63, 94, 0.5);
+                            transform: scale(1.02);
+                        }
+                    }
+                    .live-blowing-teal {
+                        animation: liveBlowTeal 2.4s infinite ease-in-out;
+                    }
+                    .live-blowing-rose {
+                        animation: liveBlowRose 1.8s infinite ease-in-out;
+                    }
+                    </style>
+                    <% } %>
 
                     <!-- 2. Daily Goals & Unlimited Activity Widget -->
                     <div class="order-2 lg:order-2 w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col transition-all">
-                        <div class="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-200/80 dark:border-slate-800/80">
+                        <!-- Desktop Only Header: On small screen, icon, text, and gained XP are hidden per user request -->
+                        <div class="hidden lg:flex items-center justify-between px-4 sm:px-5 py-3 border-b border-slate-200/80 dark:border-slate-800/80">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-rounded text-teal-800 text-lg shrink-0 flex items-center justify-center -mt-0.5">task_alt</span>
                                 <h2 class="font-semibold text-sm sm:text-base text-slate-700 dark:text-slate-300 leading-tight antialiased">Daily Goals</h2>
@@ -684,37 +947,97 @@
                         </div>
 
                         <div class="p-3.5 sm:p-4 space-y-3">
-                            <!-- Unlimited Activities List -->
+                            <!-- Activities List -->
                             <div class="space-y-2 pt-0.5">
-                                <% 
-                                    const activitiesList = [
-                                        { type: 'video', id: 'activity-count-video', title: 'ভিডিও লেসন ওয়াচ ট্র্যাকার', countText: `আজকে দেখা হয়েছে: ${locals.todayVideosCount || 0}টি ভিডিও`, xpText: '+30 XP প্রতি ভিডিও', icon: 'smart_display', actionUrl: '/courses', actionText: 'Watch Videos' },
-                                        { type: 'quiz', id: 'activity-count-quiz', title: 'কুইজ ও মডেল টেস্ট ট্র্যাকার', countText: `আজকে দেওয়া হয়েছে: ${locals.todayQuizzesCount || 0}টি পরীক্ষা`, xpText: '+50 XP প্রতি কুইজ', icon: 'quiz', actionUrl: '/exams', actionText: 'Take Quizzes' },
-                                        { type: 'note', id: 'activity-count-note', title: 'লেকচার নোটস ও প্রশ্ন ট্র্যাকার', countText: `আজকে পড়া হয়েছে: ${locals.todayNotesCount || 0}টি নোট/প্রশ্ন`, xpText: '+20 XP প্রতি নোট', icon: 'description', actionUrl: '/notes', actionText: 'Read Notes' }
-                                    ];
-                                    activitiesList.forEach(item => { 
-                                %>
+
+                                <!-- 1. VIDEO ITEM: Shows uncompleted video directly; explore videos if none -->
+                                <% if (lastLesson && !isWatchedFull) { %>
+                                    <!-- Unified Uncompleted Video to Resume across all screen sizes -->
+                                    <div class="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 transition-all gap-2.5 group">
+                                        <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                            <a href="/course-details/<%= lastLesson.course._id %>?lesson=<%= lastLesson.lessonId %>&time=<%= lastLesson.lastPosition || 0 %>&from=dashboard" 
+                                               class="relative size-10 sm:size-11 rounded-lg overflow-hidden shrink-0 bg-slate-900 border border-slate-300 dark:border-slate-700 flex items-center justify-center">
+                                                <% if (activeLessonThumb) { %>
+                                                    <img src="<%= activeLessonThumb %>" class="w-full h-full object-cover" alt="<%= lastLesson.lessonTitle %>" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                                    <div class="w-full h-full items-center justify-center bg-teal-950" style="display:none;">
+                                                        <span class="material-symbols-rounded text-base text-teal-300">play_circle</span>
+                                                    </div>
+                                                <% } else { %>
+                                                    <div class="w-full h-full flex items-center justify-center bg-teal-950">
+                                                        <span class="material-symbols-rounded text-base text-teal-300">play_circle</span>
+                                                    </div>
+                                                <% } %>
+                                                <div class="absolute inset-0 bg-black/25 flex items-center justify-center">
+                                                    <span class="material-symbols-rounded text-xs text-white">play_arrow</span>
+                                                </div>
+                                            </a>
+                                            <div class="min-w-0 flex-1">
+                                                <div class="flex items-center gap-1 text-[9.5px] font-bold text-rose-500">
+                                                    <span class="material-symbols-rounded text-xs leading-none">play_circle</span>
+                                                    <span>Continue Watching</span>
+                                                </div>
+                                                <h4 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate mt-0.5" title="<%= lastLesson.lessonTitle %>">
+                                                    <%= lastLesson.lessonTitle %>
+                                                </h4>
+                                                <p class="text-[9.5px] sm:text-[10px] text-slate-500 dark:text-slate-400 truncate font-medium">
+                                                    <%= lastLesson.course.title %> · <span class="text-slate-600 dark:text-slate-300 font-semibold" id="activity-count-video">আজকে দেখা হয়েছে: <%= locals.todayVideosCount || 0 %>টি</span> · <span class="text-amber-600 dark:text-amber-400 font-bold">+30 XP</span>
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex items-center justify-end gap-1.5 shrink-0">
+                                            <a href="/course-details/<%= lastLesson.course._id %>?lesson=<%= lastLesson.lessonId %>&time=<%= lastLesson.lastPosition || 0 %>&from=dashboard" 
+                                               class="flex items-center justify-center gap-1 px-3 sm:px-4 py-1.5 sm:py-2 bg-teal-800 hover:bg-teal-900 text-white text-xs sm:text-sm font-bold rounded-lg transition-colors min-w-[68px] shadow-xs active:scale-95">
+                                                <span class="material-symbols-rounded text-xs sm:text-sm leading-none">play_arrow</span>
+                                                <span>Resume</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                <% } else { %>
+                                    <!-- When NO uncompleted video: Explore videos recommendation -->
                                     <div class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 transition-all gap-2 group">
                                         <div class="flex items-center gap-2.5">
                                             <div class="size-7.5 rounded-lg bg-teal-700/15 border border-teal-700/30 flex items-center justify-center text-teal-900 dark:text-teal-300 shrink-0">
-                                                <span class="material-symbols-rounded text-base flex items-center justify-center -mt-0.5"><%= item.icon %></span>
+                                                <span class="material-symbols-rounded text-base flex items-center justify-center -mt-0.5">smart_display</span>
                                             </div>
                                             <div>
-                                                <h3 class="text-xs font-semibold text-slate-700 dark:text-slate-300 antialiased"><%= item.title %></h3>
-                                                <p id="<%= item.id %>" class="text-[9px] sm:text-[10px] text-slate-600 dark:text-slate-400 font-medium"><%= item.countText %></p>
+                                                <h3 class="text-xs font-semibold text-slate-700 dark:text-slate-300 antialiased">ভিডিও লেসন ওয়াচ ট্র্যাকার</h3>
+                                                <p id="activity-count-video" class="text-[9px] sm:text-[10px] text-slate-600 dark:text-slate-400 font-medium">আজকে দেখা হয়েছে: <%= locals.todayVideosCount || 0 %>টি ভিডিও</p>
                                             </div>
                                         </div>
 
                                         <div class="flex items-center justify-end gap-1.5 shrink-0">
                                             <span class="hidden sm:flex px-2 py-0.5 rounded-md text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-500/20 border border-amber-600/30 items-center gap-0.5">
-                                                <span class="material-symbols-rounded text-xs">bolt</span> <%= item.xpText %>
+                                                <span class="material-symbols-rounded text-xs">bolt</span> +30 XP প্রতি ভিডিও
                                             </span>
-                                            <a href="<%= item.actionUrl %>" class="flex items-center justify-center gap-1 px-3 py-1.5 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-lg transition-colors min-w-[60px] sm:min-w-[84px]">
-                                                <span><%= item.actionText %></span>
+                                            <a href="/courses" class="flex items-center justify-center gap-1 px-3 py-1.5 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-lg transition-colors min-w-[60px] sm:min-w-[84px]">
+                                                <span>Explore Videos</span>
                                             </a>
                                         </div>
                                     </div>
-                                <% }); %>
+                                <% } %>
+
+                                <!-- 2. LECTURE NOTES & BOOKMARKS TRACKER -->
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/60 transition-all gap-2 group">
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="size-7.5 rounded-lg bg-teal-700/15 border border-teal-700/30 flex items-center justify-center text-teal-900 dark:text-teal-300 shrink-0">
+                                            <span class="material-symbols-rounded text-base flex items-center justify-center -mt-0.5">description</span>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-xs font-semibold text-slate-700 dark:text-slate-300 antialiased">লেকচার নোটস ও প্রশ্ন ট্র্যাকার</h3>
+                                            <p id="activity-count-note" class="text-[9px] sm:text-[10px] text-slate-600 dark:text-slate-400 font-medium">আজকে পড়া হয়েছে: <%= locals.todayNotesCount || 0 %>টি নোট/প্রশ্ন</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center justify-end gap-1.5 shrink-0">
+                                        <span class="hidden sm:flex px-2 py-0.5 rounded-md text-[10px] font-bold text-amber-800 dark:text-amber-300 bg-amber-500/20 border border-amber-600/30 items-center gap-0.5">
+                                            <span class="material-symbols-rounded text-xs">bolt</span> +20 XP প্রতি নোট
+                                        </span>
+                                        <a href="/notes" class="flex items-center justify-center gap-1 px-3 py-1.5 bg-teal-800 hover:bg-teal-900 text-white text-xs font-bold rounded-lg transition-colors min-w-[60px] sm:min-w-[84px]">
+                                            <span>Read Notes</span>
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Footer Motivation -->
@@ -1182,11 +1505,15 @@
                         
                         const v = document.getElementById('activity-count-video');
                         if (v) v.innerText = `আজকে দেখা হয়েছে: ${data.todayVideosCount}টি ভিডিও`;
+                        const vMobile = document.getElementById('activity-count-video-mobile');
+                        if (vMobile) vMobile.innerText = `আজকে দেখা হয়েছে: ${data.todayVideosCount}টি`;
                         const vPill = document.getElementById('today-videos-count-text');
                         if (vPill) vPill.innerText = `${data.todayVideosCount} Class`;
                         
                         const q = document.getElementById('activity-count-quiz');
                         if (q) q.innerText = `আজকে দেওয়া হয়েছে: ${data.todayQuizzesCount}টি পরীক্ষা`;
+                        const qMobile = document.getElementById('activity-count-quiz-mobile');
+                        if (qMobile) qMobile.innerText = `আজকে দেওয়া হয়েছে: ${data.todayQuizzesCount}টি`;
                         const qPill = document.getElementById('today-quizzes-count-text');
                         if (qPill) qPill.innerText = `${data.todayQuizzesCount} Solved`;
                         
@@ -1527,7 +1854,138 @@
             }
         }
 
-        document.addEventListener('DOMContentLoaded', refreshDailyStats);
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshDailyStats();
+
+            // Mobile Unenrolled Course Carousel Controller (Center Snap & Auto-Scroll)
+            const track = document.getElementById('unenrolledCarouselTrack');
+            if (track) {
+                const cards = track.querySelectorAll('.carousel-course-card');
+                const dots = document.querySelectorAll('.unenrolled-dot');
+                let currentIndex = 0;
+                let autoTimer = null;
+                let isInteracting = false;
+
+                function getClosestIndex() {
+                    const trackCenter = track.scrollLeft + track.offsetWidth / 2;
+                    let closest = 0;
+                    let minDiff = Infinity;
+                    cards.forEach((card, idx) => {
+                        const cardCenter = card.offsetLeft + card.offsetWidth / 2;
+                        const diff = Math.abs(trackCenter - cardCenter);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            closest = idx;
+                        }
+                    });
+                    return closest;
+                }
+
+                function updateCardStates(activeIdx) {
+                    cards.forEach((card, idx) => {
+                        if (idx === activeIdx) {
+                            card.classList.remove('opacity-40', 'dark:opacity-35', 'scale-[0.92]', 'brightness-75', 'shadow-none');
+                            card.classList.add('opacity-100', 'scale-100', 'shadow-md', 'ring-1', 'ring-indigo-500/25', 'dark:ring-indigo-400/20');
+                        } else {
+                            card.classList.remove('opacity-100', 'scale-100', 'shadow-md', 'ring-1', 'ring-indigo-500/25', 'dark:ring-indigo-400/20');
+                            card.classList.add('opacity-40', 'dark:opacity-35', 'scale-[0.92]', 'brightness-75', 'shadow-none');
+                        }
+                    });
+                }
+
+                function updateDots(activeIdx) {
+                    dots.forEach((dot, idx) => {
+                        if (idx === activeIdx) {
+                            dot.classList.add('bg-indigo-600', 'w-3.5');
+                            dot.classList.remove('bg-slate-300', 'dark:bg-slate-700', 'w-1.5');
+                        } else {
+                            dot.classList.remove('bg-indigo-600', 'w-3.5');
+                            dot.classList.add('bg-slate-300', 'dark:bg-slate-700', 'w-1.5');
+                        }
+                    });
+                }
+
+                function scrollToCard(index) {
+                    if (!cards[index]) return;
+                    const card = cards[index];
+                    const targetScroll = card.offsetLeft - (track.offsetWidth - card.offsetWidth) / 2;
+                    track.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' });
+                    currentIndex = index;
+                    updateDots(index);
+                    updateCardStates(index);
+                }
+
+                function startAutoPlay() {
+                    stopAutoPlay();
+                    if (cards.length <= 1) return;
+                    autoTimer = setInterval(() => {
+                        if (isInteracting) return;
+                        currentIndex = (getClosestIndex() + 1) % cards.length;
+                        scrollToCard(currentIndex);
+                    }, 4500);
+                }
+
+                function stopAutoPlay() {
+                    if (autoTimer) {
+                        clearInterval(autoTimer);
+                        autoTimer = null;
+                    }
+                }
+
+                // Scroll detection to sync dots & shadow states
+                track.addEventListener('scroll', () => {
+                    const closest = getClosestIndex();
+                    currentIndex = closest;
+                    updateDots(closest);
+                    updateCardStates(closest);
+                }, { passive: true });
+
+                // Touch & Pointer interaction pause
+                track.addEventListener('touchstart', () => {
+                    isInteracting = true;
+                    stopAutoPlay();
+                }, { passive: true });
+
+                track.addEventListener('touchend', () => {
+                    isInteracting = false;
+                    setTimeout(startAutoPlay, 5000);
+                }, { passive: true });
+
+                // Tap on a non-presenting (shadowish) card to bring it to center
+                cards.forEach((card, idx) => {
+                    card.addEventListener('click', (e) => {
+                        if (idx !== currentIndex) {
+                            // If tapping an inactive card, center it smoothly
+                            const clickedLink = e.target.closest('a');
+                            if (!clickedLink) {
+                                e.preventDefault();
+                                stopAutoPlay();
+                                scrollToCard(idx);
+                                setTimeout(startAutoPlay, 5000);
+                            }
+                        }
+                    });
+                });
+
+                // Dot click navigation
+                dots.forEach(dot => {
+                    dot.addEventListener('click', () => {
+                        const targetIdx = parseInt(dot.getAttribute('data-dot-idx'), 10);
+                        if (!isNaN(targetIdx)) {
+                            stopAutoPlay();
+                            scrollToCard(targetIdx);
+                            setTimeout(startAutoPlay, 6000);
+                        }
+                    });
+                });
+
+                // Initialize states & start autoplay on mobile
+                updateCardStates(0);
+                if (window.innerWidth < 1024) {
+                    startAutoPlay();
+                }
+            }
+        });
     </script>
 </body>
 </html>

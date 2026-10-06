@@ -794,14 +794,63 @@ router.get('/daily-stats', protect, async (req, res) => {
     try {
         await connectDB();
         const User = require('../models/User');
-        const user = await User.findById(req.session.userId).lean();
+        const QuestionBankAttempt = require('../models/QuestionBankAttempt');
+        const user = await User.findById(req.session.userId);
         if (!user) return res.status(404).json({ success: false });
 
         const todayStr = new Date().toISOString().split('T')[0];
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const endOfToday = new Date();
+        endOfToday.setHours(23, 59, 59, 999);
+
+        // Real Quizzes & Question Bank Attempts
+        const todayQuizzesList = (user.quizResults || []).filter(q => q.date && new Date(q.date) >= startOfToday && new Date(q.date) <= endOfToday);
+        let todayBankAttemptsList = [];
+        try {
+            todayBankAttemptsList = await QuestionBankAttempt.find({
+                user: user._id,
+                $or: [
+                    { submittedAt: { $gte: startOfToday, $lte: endOfToday } },
+                    { createdAt: { $gte: startOfToday, $lte: endOfToday } }
+                ]
+            }).lean();
+        } catch (e) {}
+        const realQuizzesCount = todayQuizzesList.length + todayBankAttemptsList.length;
+
+        // Real Notes/Bookmarks saved/viewed
+        const todayBookmarksList = (user.savedBookmarks || []).filter(b => b.savedAt && new Date(b.savedAt) >= startOfToday && new Date(b.savedAt) <= endOfToday);
+        const realNotesCount = todayBookmarksList.length;
+
+        // Real Videos Watched
         let dailyGoals = user.dailyGoals || {};
+        const hasWatchedToday = (user.lastWatchedLesson && user.lastWatchedLesson.watchedAt && new Date(user.lastWatchedLesson.watchedAt) >= startOfToday) ? 1 : 0;
+        const watchedLessonsCount = (dailyGoals && Array.isArray(dailyGoals.todayWatchedLessons)) ? dailyGoals.todayWatchedLessons.length : 0;
+        const realVideosCount = Math.max(hasWatchedToday, watchedLessonsCount);
+
         if (dailyGoals.date !== todayStr) {
-            dailyGoals = { date: todayStr, videosCount: 0, quizzesCount: 0, notesCount: 0, savedNotesCount: 0, activeMinutes: 0, todayXpEarned: 0 };
+            dailyGoals = {
+                date: todayStr,
+                videosCount: realVideosCount,
+                quizzesCount: realQuizzesCount,
+                notesCount: realNotesCount,
+                savedNotesCount: realNotesCount,
+                activeMinutes: 0,
+                todayXpEarned: 0,
+                todayWatchedLessons: (hasWatchedToday && user.lastWatchedLesson?.lessonId) ? [user.lastWatchedLesson.lessonId] : []
+            };
+        } else {
+            dailyGoals.quizzesCount = Math.max(dailyGoals.quizzesCount || 0, realQuizzesCount);
+            dailyGoals.notesCount = Math.max(dailyGoals.notesCount || 0, realNotesCount);
+            dailyGoals.videosCount = Math.max(dailyGoals.videosCount || 0, realVideosCount);
         }
+
+        const calculatedTodayXP = ((dailyGoals.videosCount || 0) * 30) + ((dailyGoals.quizzesCount || 0) * 50) + ((dailyGoals.notesCount || 0) * 20) + (dailyGoals.activeMinutes || 0);
+        dailyGoals.todayXpEarned = Math.max(dailyGoals.todayXpEarned || 0, calculatedTodayXP);
+
+        user.dailyGoals = dailyGoals;
+        user.markModified('dailyGoals');
+        await user.save();
 
         res.json({
             success: true,

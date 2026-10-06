@@ -126,7 +126,30 @@ router.get('/dashboard', protect, async (req, res) => {
             nextWeek.setDate(nextWeek.getDate() + 7);
 
             const results = await Promise.all([
-                Course.find({ classLevel: dbUser.classLevel, _id: { $nin: (dbUser.enrolledCourses || []).map(e => e.course?._id) } }).limit(3).lean().catch(() => []),
+                (async () => {
+                    const enrolledCourseIds = (dbUser.enrolledCourses || []).map(e => {
+                        if (!e) return null;
+                        if (e.course && e.course._id) return e.course._id;
+                        if (e.course) return e.course;
+                        if (e._id) return e._id;
+                        return null;
+                    }).filter(Boolean);
+
+                    const query = { _id: { $nin: enrolledCourseIds } };
+                    if (dbUser.classLevel) {
+                        query.$or = [
+                            { classLevel: dbUser.classLevel },
+                            { featuredForClasses: dbUser.classLevel },
+                            { classLevel: { $size: 0 } },
+                            { classLevel: { $exists: false } }
+                        ];
+                    }
+                    return Course.find(query)
+                        .sort({ featuredForClasses: -1, createdAt: -1 })
+                        .limit(8)
+                        .populate('instructor', 'name')
+                        .lean();
+                })().catch(() => []),
                 (async () => {
                     const pRequests = (dbUser.parentRequests || []).filter(r => r.status === 'pending');
                     if (!pRequests.length) return [];
@@ -213,20 +236,64 @@ router.get('/dashboard', protect, async (req, res) => {
             // Priority 4: Smart Recommendation (Next Step)
             // Priority 5: Standard Upcoming Tasks
 
+            // Extract enrolled course IDs and attended notices early
+            let enrolledCourseIds = [];
+            if (dbUser.enrolledCourses && dbUser.enrolledCourses.length > 0) {
+                dbUser.enrolledCourses.forEach(ec => {
+                    if (!ec) return;
+                    if (ec.course) {
+                        enrolledCourseIds.push(ec.course._id ? ec.course._id.toString() : ec.course.toString());
+                    } else if (ec._id) {
+                        enrolledCourseIds.push(ec._id.toString());
+                    } else if (typeof ec === 'string') {
+                        enrolledCourseIds.push(ec);
+                    }
+                });
+            }
+            const attended = dbUser.attendedNotices || [];
+
             let activeExamNotice = null;
             let activeLiveNotice = null;
             let highPriorityNotice = null;
 
-            // 1. Check real active exam from priorityAlert or DB/curriculumNodes
-            if (data.priorityAlert && (data.priorityAlert.type === 'exam' || data.priorityAlert.type === 'quiz')) {
+            // 1. Check real active exam from platform (Quiz model)
+            const Quiz = require('../models/Quiz');
+            const nowTime = new Date();
+            const startOfToday = new Date(nowTime.getFullYear(), nowTime.getMonth(), nowTime.getDate());
+            const endOfToday = new Date(nowTime.getFullYear(), nowTime.getMonth(), nowTime.getDate(), 23, 59, 59, 999);
+            const sixtyHoursAgo = new Date(Date.now() - (60 * 60 * 60 * 1000));
+
+            // Quizzes student attended in last 60 hours
+            const attendedQuizIdsIn60h = (dbUser.quizResults || [])
+                .filter(r => r && r.quiz && new Date(r.date) >= sixtyHoursAgo)
+                .map(r => r.quiz.toString());
+
+            const activeQuiz = await Quiz.findOne({
+                $and: [
+                    {
+                        $or: [
+                            { course: { $in: enrolledCourseIds } },
+                            { classLevel: dbUser.classLevel }
+                        ]
+                    },
+                    {
+                        $or: [
+                            { scheduledAt: { $lte: nowTime }, expiresAt: { $gte: nowTime } },
+                            { createdAt: { $gte: startOfToday, $lte: endOfToday } }
+                        ]
+                    }
+                ]
+            }).populate('course', 'title').sort({ createdAt: -1 }).lean();
+
+            if (activeQuiz && !attended.includes('quiz_' + activeQuiz._id) && !attendedQuizIdsIn60h.includes(activeQuiz._id.toString())) {
                 activeExamNotice = {
-                    id: 'exam_' + (data.priorityAlert._id || 'active'),
-                    title: data.priorityAlert.title,
-                    courseTitle: data.priorityAlert.courseTitle || 'পরীক্ষা',
-                    subtitle: 'পরীক্ষা চলছে',
-                    time: data.priorityAlert.time || 'আজ রাত ১০টা পর্যন্ত',
+                    id: 'quiz_' + activeQuiz._id,
+                    title: activeQuiz.title,
+                    courseTitle: activeQuiz.course?.title || activeQuiz.subject || null,
+                    subtitle: null,
+                    time: activeQuiz.expiresAt ? `আজ রাত ${new Date(activeQuiz.expiresAt).toLocaleTimeString('bn-BD', { hour: 'numeric', minute: 'numeric' })} পর্যন্ত` : (activeQuiz.duration ? `${activeQuiz.duration} মিনিট` : null),
                     type: 'exam',
-                    link: data.priorityAlert.link || '/exams',
+                    link: '/exams',
                     buttonText: 'Join Exam'
                 };
             }
@@ -249,10 +316,15 @@ router.get('/dashboard', protect, async (req, res) => {
                         targetMs = d.getTime();
                     }
                 } else if (scheduledDate) {
-                    targetMs = new Date(scheduledDate).getTime();
+                    const d = new Date(scheduledDate);
+                    const sDay = new Date();
+                    sDay.setHours(0, 0, 0, 0);
+                    const eDay = new Date();
+                    eDay.setHours(23, 59, 59, 999);
+                    return d >= sDay && d <= eDay;
                 }
 
-                if (!targetMs || isNaN(targetMs)) return true;
+                if (!targetMs || isNaN(targetMs)) return false;
                 // 5 minutes before (-5 min) to 10 minutes after (+10 min) starting time
                 return (nowMs >= targetMs - (5 * 60 * 1000)) && (nowMs <= targetMs + (10 * 60 * 1000));
             };
@@ -273,20 +345,6 @@ router.get('/dashboard', protect, async (req, res) => {
             };
 
             // 2. Check real active live class across student's enrolled / accessible courses (curriculumNodes + chapters.liveClasses)
-            let enrolledCourseIds = [];
-            if (dbUser.enrolledCourses && dbUser.enrolledCourses.length > 0) {
-                dbUser.enrolledCourses.forEach(ec => {
-                    if (!ec) return;
-                    if (ec.course) {
-                        enrolledCourseIds.push(ec.course._id ? ec.course._id.toString() : ec.course.toString());
-                    } else if (ec._id) {
-                        enrolledCourseIds.push(ec._id.toString());
-                    } else if (typeof ec === 'string') {
-                        enrolledCourseIds.push(ec);
-                    }
-                });
-            }
-
             const candidateQuery = (enrolledCourseIds.length > 0)
                 ? (dbUser.classLevel ? { $or: [{ _id: { $in: enrolledCourseIds } }, { classLevel: dbUser.classLevel }] } : { _id: { $in: enrolledCourseIds } })
                 : (dbUser.classLevel ? { classLevel: dbUser.classLevel } : {});
@@ -401,16 +459,23 @@ router.get('/dashboard', protect, async (req, res) => {
                             buttonText: 'Join Live'
                         };
                     } else if ((unreadNotif.type === 'exam' || unreadNotif.type === 'quiz') && !activeExamNotice) {
-                        activeExamNotice = {
-                            id: 'notif_' + unreadNotif._id,
-                            title: unreadNotif.title || unreadNotif.message || 'পরীক্ষা চলছে',
-                            courseTitle: 'পরীক্ষা',
-                            subtitle: 'পরীক্ষা চলছে',
-                            time: 'আজ রাত ১০টা পর্যন্ত',
-                            type: 'exam',
-                            link: unreadNotif.link || '/exams',
-                            buttonText: 'Join Exam'
-                        };
+                        let targetQuizId = null;
+                        if (unreadNotif.link) {
+                            const m = unreadNotif.link.match(/\/quiz\/([a-f\d]{24})/i) || unreadNotif.link.match(/\/question-bank\/solve\/([a-f\d]{24})/i);
+                            if (m) targetQuizId = m[1];
+                        }
+                        if (!targetQuizId || !attendedQuizIdsIn60h.includes(targetQuizId)) {
+                            activeExamNotice = {
+                                id: 'notif_' + unreadNotif._id,
+                                title: unreadNotif.title || unreadNotif.message,
+                                courseTitle: null,
+                                subtitle: null,
+                                time: formatTimeAgo(unreadNotif.createdAt),
+                                type: 'exam',
+                                link: unreadNotif.link || '/exams',
+                                buttonText: 'Join Exam'
+                            };
+                        }
                     }
                 }
             }
@@ -428,29 +493,39 @@ router.get('/dashboard', protect, async (req, res) => {
                 };
             }
 
-            // 3. Check for course Announcement (Teacher Panel), NotificationLog (Broadcast), or Notification
+            // 3. Check for course Announcement (Teacher Panel) or High-Priority Admin Broadcast
             const Announcement = require('../models/Announcement');
             const NotificationLog = require('../models/NotificationLog');
-            const attended = dbUser.attendedNotices || [];
 
-            // Query teacher Announcements for student's enrolled courses
-            const courseAnnouncements = await Announcement.find({ courseId: { $in: enrolledCourseIds } })
+            // Query teacher Announcements for student's enrolled courses (ONLY priority: 'high')
+            const courseAnnouncements = await Announcement.find({ 
+                courseId: { $in: enrolledCourseIds },
+                priority: 'high'
+            })
                 .populate('courseId', 'title')
                 .sort({ createdAt: -1 })
                 .limit(5)
                 .lean();
 
             const logNoticeQuery = {
-                $or: [
-                    { user: dbUser._id },
-                    { courseId: { $in: enrolledCourseIds } },
-                    { target: { $in: ['all', 'student', 'class'] } },
-                    { classLevel: dbUser.classLevel }
+                $and: [
+                    {
+                        $or: [
+                            { user: dbUser._id },
+                            { courseId: { $in: enrolledCourseIds } },
+                            { target: { $in: ['all', 'student', 'class'] } },
+                            { classLevel: dbUser.classLevel }
+                        ]
+                    },
+                    {
+                        // EXCLUDE payments, normal logs, achievements, etc.
+                        type: { $in: ['announcement', 'system', 'custom'] },
+                        priority: { $in: ['high', 'urgent'] }
+                    }
                 ]
             };
 
             const latestLogNotices = await NotificationLog.find(logNoticeQuery).sort({ createdAt: -1 }).limit(5).lean();
-            const latestCourseNotif = await Notification.findOne({ user: dbUser._id }).sort({ createdAt: -1 }).lean();
 
             // Find candidate notices from each source that have not been attended
             const candidateNotices = [];
@@ -460,7 +535,7 @@ router.get('/dashboard', protect, async (req, res) => {
                     candidateNotices.push({
                         id: 'ann_' + ann._id,
                         title: ann.title,
-                        courseTitle: ann.courseId ? ann.courseId.title : null,
+                        courseTitle: ann.courseId ? ann.courseId.title : 'Announcement',
                         message: ann.content,
                         subtitle: ann.content,
                         time: formatTimeAgo(ann.createdAt),
@@ -468,7 +543,7 @@ router.get('/dashboard', protect, async (req, res) => {
                         type: 'high_notice',
                         link: `/notice-details/${ann._id}?type=ann`,
                         buttonText: 'View Notice',
-                        isHighPriority: ann.priority === 'high'
+                        isHighPriority: true
                     });
                 }
             }
@@ -486,51 +561,43 @@ router.get('/dashboard', protect, async (req, res) => {
                         type: 'high_notice',
                         link: `/notice-details/${logItem._id}?type=log`,
                         buttonText: 'View Notice',
-                        isHighPriority: logItem.priority === 'high' || logItem.priority === 'urgent'
+                        isHighPriority: true
                     });
                 }
             }
 
-            if (latestCourseNotif && !attended.includes('notice_' + latestCourseNotif._id)) {
+            // Also check Notification model for strictly high-priority unread announcements
+            const urgentNotif = await Notification.findOne({
+                user: dbUser._id,
+                type: 'announcement',
+                isRead: false
+            }).sort({ createdAt: -1 }).lean();
+
+            if (urgentNotif && !attended.includes('notice_' + urgentNotif._id)) {
                 candidateNotices.push({
-                    id: 'notice_' + latestCourseNotif._id,
-                    title: latestCourseNotif.title,
+                    id: 'notice_' + urgentNotif._id,
+                    title: urgentNotif.title,
                     courseTitle: 'Announcement',
-                    message: latestCourseNotif.message,
-                    subtitle: latestCourseNotif.message,
-                    time: formatTimeAgo(latestCourseNotif.createdAt),
-                    createdAt: latestCourseNotif.createdAt,
+                    message: urgentNotif.message,
+                    subtitle: urgentNotif.message,
+                    time: formatTimeAgo(urgentNotif.createdAt),
+                    createdAt: urgentNotif.createdAt,
                     type: 'high_notice',
-                    link: `/notice-details/${latestCourseNotif._id}?type=notif`,
+                    link: urgentNotif.link || `/notice-details/${urgentNotif._id}?type=notif`,
                     buttonText: 'View Notice',
                     isHighPriority: true
                 });
             }
 
-            // Sort candidate notices: High Priority items first, then by newest createdAt
-            candidateNotices.sort((a, b) => {
-                if (a.isHighPriority && !b.isHighPriority) return -1;
-                if (!a.isHighPriority && b.isHighPriority) return 1;
-                return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-            });
+            // Sort candidate notices by newest createdAt
+            candidateNotices.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
             if (candidateNotices.length > 0) {
                 highPriorityNotice = candidateNotices[0];
-            } else if (globalNotice) {
-                highPriorityNotice = {
-                    id: 'notice_' + (globalNotice._id || 'global_notice'),
-                    title: globalNotice.title || globalNotice.message || 'সিস্টেম নোটিশ',
-                    subtitle: globalNotice.message || 'গুরুত্বপূর্ণ ঘোষণা',
-                    time: formatTimeAgo(globalNotice.createdAt),
-                    type: 'high_notice',
-                    link: globalNotice.link || '/courses',
-                    buttonText: 'View Notice'
-                };
             }
 
-            // 4. Check for Today's and Upcoming Routine Tasks
+            // 4. Check for Today's Routine Tasks (Within active 5m-before to 10m-after schedule window)
             let todayTaskNotice = null;
-            let upcomingTaskNotice = null;
 
             const pendingToday = (data.todayTasks || []).find(t => 
                 !t.isCompleted && 
@@ -541,29 +608,11 @@ router.get('/dashboard', protect, async (req, res) => {
                 todayTaskNotice = {
                     id: 'task_' + pendingToday._id,
                     title: pendingToday.title,
-                    courseTitle: 'Today\'s Routine',
-                    subtitle: 'আজকের নির্ধারিত অ্যাসাইনমেন্ট ও পড়াশোনা',
-                    time: pendingToday.time ? `${pendingToday.time} (আজ)` : 'আজকের টাস্ক',
-                    type: 'upcoming',
-                    link: '/routine',
-                    buttonText: 'View Routine'
-                };
-            }
-
-            const pendingUpcoming = (data.upcomingTasks || []).find(t => 
-                !t.isCompleted && 
-                !attended.includes('task_' + t._id) &&
-                isWithinScheduleWindow(t.date, t.time)
-            );
-            if (pendingUpcoming) {
-                upcomingTaskNotice = {
-                    id: 'task_' + pendingUpcoming._id,
-                    title: pendingUpcoming.title,
-                    courseTitle: 'Upcoming Task',
-                    subtitle: 'আসন্ন রুটিন অ্যাসাইনমেন্ট',
-                    time: new Date(pendingUpcoming.date).toLocaleDateString('bn-BD', { day: 'numeric', month: 'short' }) + " " + (pendingUpcoming.time || ''),
-                    type: 'upcoming',
-                    link: '/routine',
+                    courseTitle: null,
+                    subtitle: null,
+                    time: pendingToday.time || null,
+                    type: pendingToday.type === 'exam' ? 'exam' : (pendingToday.type === 'class' ? 'live' : 'upcoming'),
+                    link: pendingToday.link || '/routine',
                     buttonText: 'View Routine'
                 };
             }
@@ -577,8 +626,6 @@ router.get('/dashboard', protect, async (req, res) => {
                 res.locals.upcomingEvent = todayTaskNotice;
             } else if (highPriorityNotice && !attended.includes(highPriorityNotice.id)) {
                 res.locals.upcomingEvent = highPriorityNotice;
-            } else if (upcomingTaskNotice && !attended.includes(upcomingTaskNotice.id)) {
-                res.locals.upcomingEvent = upcomingTaskNotice;
             } else {
                 res.locals.upcomingEvent = null;
             }
@@ -834,19 +881,50 @@ router.get('/dashboard', protect, async (req, res) => {
                 };
             }).sort((a, b) => b.progress - a.progress);
 
-            // --- Daily Goals & Activity System ---
+            // --- Daily Goals & Activity System (100% Real Activity Synchronized) ---
+            // 1. Real Today Quizzes & Question Bank Attempts
+            const todayQuizzesList = (dbUser.quizResults || []).filter(q => q.date && new Date(q.date) >= startOfToday && new Date(q.date) <= endOfToday);
+            const todayBankAttemptsList = (allBankAttempts || []).filter(a => {
+                const aDate = a.submittedAt || a.createdAt;
+                return aDate && new Date(aDate) >= startOfToday && new Date(aDate) <= endOfToday;
+            });
+            const realQuizzesCount = todayQuizzesList.length + todayBankAttemptsList.length;
+
+            // 2. Real Today Notes/Bookmarks saved/viewed
+            const todayBookmarksList = (dbUser.savedBookmarks || []).filter(b => b.savedAt && new Date(b.savedAt) >= startOfToday && new Date(b.savedAt) <= endOfToday);
+            const realNotesCount = todayBookmarksList.length;
+
+            // 3. Real Today Videos Watched
             let userDailyGoals = dbUser.dailyGoals || {};
+            const hasWatchedToday = (dbUser.lastWatchedLesson && dbUser.lastWatchedLesson.watchedAt && new Date(dbUser.lastWatchedLesson.watchedAt) >= startOfToday) ? 1 : 0;
+            const watchedLessonsCount = (userDailyGoals && Array.isArray(userDailyGoals.todayWatchedLessons)) ? userDailyGoals.todayWatchedLessons.length : 0;
+            const realVideosCount = Math.max(hasWatchedToday, watchedLessonsCount);
+
             if (userDailyGoals.date !== todayStr) {
                 userDailyGoals = {
                     date: todayStr,
-                    videosCount: 0,
-                    quizzesCount: 0,
-                    notesCount: 0,
-                    todayXpEarned: 0
+                    videosCount: realVideosCount,
+                    quizzesCount: realQuizzesCount,
+                    notesCount: realNotesCount,
+                    savedNotesCount: realNotesCount,
+                    activeMinutes: 0,
+                    todayXpEarned: 0,
+                    todayWatchedLessons: (hasWatchedToday && dbUser.lastWatchedLesson?.lessonId) ? [dbUser.lastWatchedLesson.lessonId] : []
                 };
-                dbUser.dailyGoals = userDailyGoals;
-                await dbUser.save();
+            } else {
+                userDailyGoals.quizzesCount = Math.max(userDailyGoals.quizzesCount || 0, realQuizzesCount);
+                userDailyGoals.notesCount = Math.max(userDailyGoals.notesCount || 0, realNotesCount);
+                userDailyGoals.videosCount = Math.max(userDailyGoals.videosCount || 0, realVideosCount);
             }
+
+            // Real Today XP accurately calculated from real user actions:
+            // 30 XP per video watched, 50 XP per quiz/exam taken, 20 XP per note/resource + active minutes
+            const calculatedTodayXP = ((userDailyGoals.videosCount || 0) * 30) + ((userDailyGoals.quizzesCount || 0) * 50) + ((userDailyGoals.notesCount || 0) * 20) + (userDailyGoals.activeMinutes || 0);
+            userDailyGoals.todayXpEarned = Math.max(userDailyGoals.todayXpEarned || 0, calculatedTodayXP);
+
+            dbUser.dailyGoals = userDailyGoals;
+            dbUser.markModified('dailyGoals');
+            await dbUser.save();
 
             const todayVideosCount = userDailyGoals.videosCount || 0;
             const todayQuizzesCount = userDailyGoals.quizzesCount || 0;
@@ -863,6 +941,155 @@ router.get('/dashboard', protect, async (req, res) => {
                 console.error('Error loading weak areas for dashboard:', e);
             }
 
+            // Smart Exam & Model Test Suggestion System (Anti-Clash + 60-Hour Attendance Filter)
+            let suggestedExam = null;
+            try {
+                const now = new Date();
+                const QuizModel = require('../models/Quiz');
+                const BankModel = require('../models/QuestionBank');
+                const QuestionBankAttemptModel = require('../models/QuestionBankAttempt');
+
+                // Get all question banks attempted by this student in the last 60 hours
+                const recentBankAttempts = await QuestionBankAttemptModel.find({
+                    user: dbUser._id,
+                    submittedAt: { $gte: sixtyHoursAgo }
+                }).select('bank').lean();
+                const attendedBankIdsIn60h = recentBankAttempts.map(a => a.bank.toString());
+
+                // 1. Check for Active Live Exam (Global) - exclude quizzes attended in last 60 hours
+                const liveExam = await QuizModel.findOne({
+                    scheduledAt: { $lte: now },
+                    expiresAt: { $gte: now },
+                    _id: { $nin: attendedQuizIdsIn60h }
+                }).select('_id title subject classLevel duration questions accessType').lean();
+
+                // Anti-clash check: Do not duplicate if top upcomingEvent banner already shows this exam
+                const isLiveInUpcoming = liveExam && res.locals.upcomingEvent && (
+                    (res.locals.upcomingEvent.link && res.locals.upcomingEvent.link.includes(String(liveExam._id))) ||
+                    (res.locals.upcomingEvent.id && res.locals.upcomingEvent.id.includes(String(liveExam._id))) ||
+                    (res.locals.upcomingEvent.type === 'exam' && res.locals.upcomingEvent.title === liveExam.title)
+                );
+
+                if (liveExam && !isLiveInUpcoming) {
+                    suggestedExam = {
+                        id: liveExam._id,
+                        title: liveExam.title,
+                        subject: liveExam.subject || 'মডেল টেস্ট',
+                        type: 'live',
+                        badgeText: 'Live Exam',
+                        url: `/quiz/${liveExam._id}`,
+                        duration: liveExam.duration || 10,
+                        questionCount: liveExam.questions ? liveExam.questions.length : 0,
+                        examTakers: 0
+                    };
+                }
+
+                // 2. If no Live Exam, suggest top #1 Popular Model Test - exclude banks attended in last 60 hours
+                if (!suggestedExam) {
+                    const popularFilter = { 
+                        status: 'approved', 
+                        isCustom: { $ne: true },
+                        _id: { $nin: attendedBankIdsIn60h }
+                    };
+                    if (dbUser.classLevel) {
+                        popularFilter.classLevel = { $in: [dbUser.classLevel, 'All'] };
+                    }
+                    let popularBank = await BankModel.findOne(popularFilter)
+                        .sort({ examTakers: -1, views: -1, createdAt: -1 })
+                        .select('_id title subject classLevel duration examTakers views board year')
+                        .lean();
+
+                    if (!popularBank) {
+                        popularBank = await BankModel.findOne({ 
+                            status: 'approved', 
+                            isCustom: { $ne: true },
+                            _id: { $nin: attendedBankIdsIn60h }
+                        })
+                        .sort({ examTakers: -1, views: -1, createdAt: -1 })
+                        .select('_id title subject classLevel duration examTakers views board year')
+                        .lean();
+                    }
+
+                    if (popularBank) {
+                        let bankTitle = (popularBank.title && popularBank.title.trim()) ? popularBank.title.trim() : '';
+                        if (!bankTitle) {
+                            if (popularBank.board && popularBank.year) {
+                                bankTitle = `${popularBank.subject} (${popularBank.board} ${popularBank.year})`;
+                            } else {
+                                bankTitle = `${popularBank.subject || 'মডেল'} টেস্ট`;
+                            }
+                        }
+                        const takers = popularBank.examTakers || 0;
+                        suggestedExam = {
+                            id: popularBank._id,
+                            title: bankTitle,
+                            subject: popularBank.subject || 'মডেল টেস্ট',
+                            type: 'popular',
+                            badgeText: 'জনপ্রিয় টেস্ট',
+                            url: `/question-bank/solve/${popularBank._id}`,
+                            duration: popularBank.duration || 30,
+                            examTakers: takers >= 30 ? takers : 0
+                        };
+                    }
+                }
+
+                // 3. Fallback: Random Model Test / Question Bank - exclude banks attended in last 60 hours
+                if (!suggestedExam) {
+                    const randomFilter = { 
+                        status: 'approved', 
+                        isCustom: { $ne: true },
+                        _id: { $nin: attendedBankIdsIn60h }
+                    };
+                    const totalApproved = await BankModel.countDocuments(randomFilter);
+                    if (totalApproved > 0) {
+                        const randomSkip = Math.floor(Math.random() * totalApproved);
+                        const randomBank = await BankModel.findOne(randomFilter)
+                            .skip(randomSkip)
+                            .select('_id title subject classLevel duration board year examTakers')
+                            .lean();
+                        if (randomBank) {
+                            let rTitle = (randomBank.title && randomBank.title.trim()) ? randomBank.title.trim() : '';
+                            if (!rTitle) {
+                                rTitle = (randomBank.board && randomBank.year) ? `${randomBank.subject} (${randomBank.board} ${randomBank.year})` : `${randomBank.subject || 'মডেল'} টেস্ট`;
+                            }
+                            const rTakers = randomBank.examTakers || 0;
+                            suggestedExam = {
+                                id: randomBank._id,
+                                title: rTitle,
+                                subject: randomBank.subject || 'মডেল টেস্ট',
+                                type: 'random',
+                                badgeText: 'প্র্যাকটিস টেস্ট',
+                                url: `/question-bank/solve/${randomBank._id}`,
+                                duration: randomBank.duration || 30,
+                                examTakers: rTakers >= 30 ? rTakers : 0
+                            };
+                        }
+                    }
+                }
+
+                // 4. Ultimate Fallback: Any Quiz in DB - exclude quizzes attended in last 60 hours
+                if (!suggestedExam) {
+                    const fallbackQuiz = await QuizModel.findOne({
+                        _id: { $nin: attendedQuizIdsIn60h }
+                    }).select('_id title subject duration questions').lean();
+                    if (fallbackQuiz) {
+                        suggestedExam = {
+                            id: fallbackQuiz._id,
+                            title: fallbackQuiz.title || 'কুইজ অনুশীলন',
+                            subject: fallbackQuiz.subject || 'কুইজ',
+                            type: 'random',
+                            badgeText: 'প্র্যাকটিস টেস্ট',
+                            url: `/quiz/${fallbackQuiz._id}`,
+                            duration: fallbackQuiz.duration || 10,
+                            questionCount: fallbackQuiz.questions ? fallbackQuiz.questions.length : 0,
+                            examTakers: 0
+                        };
+                    }
+                }
+            } catch (e) {
+                console.error('Error fetching suggested exam for dashboard:', e);
+            }
+
             res.render('student-dashboard', {
                 user: dbUser,
                 upcomingEvent: res.locals.upcomingEvent,
@@ -872,6 +1099,7 @@ router.get('/dashboard', protect, async (req, res) => {
                 isFirstLogin,
                 ...data,
                 promotedCourses: data.recommendations,
+                unenrolledCourses: data.recommendations,
                 leaderboard: data.leaderboard,
                 chartLabels,
                 chartData,
@@ -885,11 +1113,12 @@ router.get('/dashboard', protect, async (req, res) => {
                 savedBookmarks,
                 weakAreas,
                 progressStats,
+                suggestedExam,
                 questionBankAttempts: allBankAttempts
             });
         } catch (err) {
             console.error('Data loading error:', err);
-            res.render('student-dashboard', { user: dbUser, upcomingEvent: res.locals.upcomingEvent, isFirstLogin: false, chartLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], chartData: [0, 0, 0, 0, 0, 0, 0], weakAreas: { hasData: false, weakTopics: [], moderateTopics: [], strongTopics: [] }, ...data });
+            res.render('student-dashboard', { user: dbUser, upcomingEvent: res.locals.upcomingEvent, isFirstLogin: false, chartLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], chartData: [0, 0, 0, 0, 0, 0, 0], weakAreas: { hasData: false, weakTopics: [], moderateTopics: [], strongTopics: [] }, suggestedExam: null, ...data });
         }
     } catch (err) {
         console.error('Dashboard Error:', err);

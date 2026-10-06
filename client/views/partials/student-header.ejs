@@ -336,6 +336,15 @@
             try { if (window.OddhayTheme) window.OddhayTheme.syncButtons(); } catch(e) {}
         </script>
 
+        <!-- Student Profile Icon (A bit small, beside notification & dark/light) -->
+        <a href="/profile" class="size-7 sm:size-[30px] rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 flex items-center justify-center ring-1 ring-slate-200/90 dark:ring-slate-700/90 hover:ring-primary/60 dark:hover:ring-sky-400/60 transition-all shrink-0 active:scale-95 group select-none ml-0.5 shadow-2xs" title="My Profile">
+            <% if (locals.user && user.profilePicture) { %>
+                <img src="<%= user.profilePicture %>" alt="<%= user.name || 'Profile' %>" class="size-full object-cover group-hover:scale-105 transition-transform" />
+            <% } else { %>
+                <span class="material-symbols-rounded text-[17px] sm:text-[18px] text-slate-600 dark:text-slate-300 group-hover:text-primary transition-colors" style="font-variation-settings: 'FILL' 1, 'wght' 600;">person</span>
+            <% } %>
+        </a>
+
         <!-- Admin / Super Admin Panel Quick Access -->
         <% if (locals.isSuperAdmin || (locals.user && (user.role === 'admin' || user.role === 'teacher'))) { %>
         <% 
@@ -366,49 +375,126 @@
 
 <!-- Mobile Sidebar Overlay & Drawer -->
 <div id="mobileSidebarBackdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-300 lg:hidden"></div>
-<div id="mobileSidebarDrawer" class="fixed inset-y-0 left-0 w-[280px] bg-white dark:bg-[#0f172a] z-50 -translate-x-full transition-transform duration-300 ease-out shadow-2xl lg:hidden flex flex-col">
-    <div class="flex items-center justify-between px-3.5 py-3 border-b border-slate-200/80 dark:border-slate-800/80">
-        <!-- Student Profile Widget in Mobile Drawer -->
-        <a href="/profile" class="flex items-center gap-2.5 min-w-0 flex-1 hover:opacity-90 transition-all group select-none" title="My Profile">
-            <!-- Profile Avatar -->
-            <div class="size-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 overflow-hidden ring-1 ring-slate-200/80 dark:ring-slate-700/80 shadow-2xs group-hover:scale-105 transition-transform">
-                <% if (locals.user && user.profilePicture) { %>
-                    <img src="<%= user.profilePicture %>" alt="<%= user.name || 'Profile' %>" class="size-full object-cover" />
-                <% } else { %>
-                    <span class="material-symbols-rounded text-xl text-slate-600 dark:text-slate-300">person</span>
-                <% } %>
-            </div>
-            <!-- Name, Class & Level -->
-            <div class="min-w-0 flex-1 flex flex-col justify-center leading-tight">
-                <span class="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate group-hover:text-primary transition-colors">
-                    <%= (locals.user && user.name) ? user.name : 'Student' %>
-                </span>
-                <div class="flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                    <span class="text-indigo-600 dark:text-indigo-400 font-semibold truncate">
-                        <% if (locals.isSuperAdmin) { %>
-                            Super Admin
-                        <% } else if (locals.user && (user.role === 'admin' || user.role === 'superadmin')) { %>
-                            Admin
-                        <% } else if (locals.user && user.role === 'teacher') { %>
-                            Teacher
-                        <% } else if (locals.user && user.role === 'parent') { %>
-                            Parent
+<div id="mobileSidebarDrawer" class="fixed inset-y-0 left-0 w-[285px] sm:w-[310px] bg-white dark:bg-[#0f172a] z-50 -translate-x-full transition-transform duration-300 ease-out shadow-2xl lg:hidden flex flex-col">
+    <%
+        const hUser = locals.user || {};
+        const hStats = locals.progressStats || null;
+        let hStreak = 0;
+        let hMarks = 0;
+        let hXP = 0;
+        let hLevel = 1;
+
+        if (hStats) {
+            hStreak = hStats.streak !== undefined ? hStats.streak : 0;
+            hMarks = hStats.gainedMarks !== undefined ? hStats.gainedMarks : 0;
+            hXP = hStats.totalXP !== undefined ? hStats.totalXP : 0;
+            hLevel = hStats.level !== undefined ? hStats.level : (locals.level || 1);
+        } else {
+            hStreak = hUser.streakCount !== undefined ? hUser.streakCount : (hUser.streak || 0);
+            hXP = hUser.totalXP !== undefined ? hUser.totalXP : (hUser.points || 0);
+            hLevel = locals.level || hUser.level || 1;
+            
+            let calcMarks = 0;
+            (hUser.quizResults || []).forEach(function(q) {
+                calcMarks += (q.score || 0);
+            });
+
+            const bankList = locals.questionBankAttempts || hUser.questionBankAttempts || [];
+            bankList.forEach(function(a) {
+                calcMarks += (a.mcqScore || 0);
+                if (a.writtenStatus === 'reviewed' && a.teacherReview && typeof a.teacherReview.totalWrittenScore === 'number') {
+                    calcMarks += a.teacherReview.totalWrittenScore;
+                }
+            });
+            hMarks = calcMarks % 1 === 0 ? calcMarks : Number(calcMarks.toFixed(1));
+        }
+    %>
+    <!-- Expanded Profile Section in Mobile Drawer -->
+    <div class="p-4 sm:p-4.5 border-b border-slate-200/80 dark:border-slate-800/80 bg-gradient-to-b from-slate-50/90 via-white to-white dark:from-slate-800/40 dark:via-[#0f172a] dark:to-[#0f172a]">
+        <!-- Top row: Avatar + Name & Class + Close Button -->
+        <div class="flex items-start justify-between gap-3">
+            <a href="/profile" class="flex items-center gap-3.5 min-w-0 flex-1 group select-none py-0.5" title="My Profile">
+                <!-- Profile Avatar (larger, taking a bit more place to the bottom) -->
+                <div class="relative size-14 rounded-2xl bg-gradient-to-br from-indigo-500/15 via-primary/15 to-purple-500/15 dark:from-indigo-500/25 dark:to-purple-500/25 p-0.5 ring-2 ring-indigo-500/25 dark:ring-indigo-400/35 shrink-0 shadow-xs group-hover:scale-105 transition-transform">
+                    <div class="size-full rounded-[14px] bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+                        <% if (locals.user && user.profilePicture) { %>
+                            <img src="<%= user.profilePicture %>" alt="<%= user.name || 'Profile' %>" class="size-full object-cover" />
                         <% } else { %>
-                            <%= (locals.user && user.classLevel) ? user.classLevel : 'Class 9' %>
+                            <span class="material-symbols-rounded text-3xl text-slate-600 dark:text-slate-300">person</span>
                         <% } %>
-                    </span>
-                    <span class="text-slate-300 dark:text-slate-700 select-none">•</span>
-                    <span class="inline-flex items-center gap-0.5 font-bold text-amber-600 dark:text-amber-400">
-                        <span class="material-symbols-rounded text-[12px] leading-none">military_tech</span>
-                        <span>Lvl <%= (locals.progressStats && locals.progressStats.level !== undefined) ? locals.progressStats.level : ((locals.user && locals.user.level !== undefined) ? locals.user.level : (locals.level || 1)) %></span>
-                    </span>
+                    </div>
+                    <!-- Status dot -->
+                    <span class="absolute -bottom-0.5 -right-0.5 size-3.5 bg-emerald-500 border-2 border-white dark:border-[#0f172a] rounded-full"></span>
                 </div>
+
+                <!-- Name, Class & Role -->
+                <div class="min-w-0 flex-1 flex flex-col justify-center">
+                    <h4 class="text-[15px] font-extrabold text-slate-800 dark:text-slate-100 truncate group-hover:text-primary transition-colors leading-snug">
+                        <%= (locals.user && user.name) ? user.name : 'Student' %>
+                    </h4>
+                    <div class="flex items-center flex-wrap gap-1 text-xs font-medium text-slate-500 dark:text-slate-400 truncate mt-1">
+                        <% if (locals.isSuperAdmin) { %>
+                            <span class="text-rose-600 dark:text-rose-400 font-bold">Super Admin</span>
+                        <% } else if (locals.user && (user.role === 'admin' || user.role === 'superadmin')) { %>
+                            <span class="text-amber-600 dark:text-amber-400 font-bold">Admin</span>
+                        <% } else if (locals.user && user.role === 'teacher') { %>
+                            <span class="text-emerald-600 dark:text-emerald-400 font-bold">Teacher</span>
+                        <% } else if (locals.user && user.role === 'parent') { %>
+                            <span class="text-sky-600 dark:text-sky-400 font-bold">Parent</span>
+                        <% } else { %>
+                            <span class="text-indigo-600 dark:text-indigo-400 font-bold"><%= (locals.user && user.classLevel) ? user.classLevel : 'Class 9' %></span>
+                            <% if (locals.user && user.group) { %>
+                                <span class="text-slate-400 dark:text-slate-500 font-normal"> • <%= user.group %></span>
+                            <% } %>
+                        <% } %>
+                    </div>
+                </div>
+            </a>
+
+            <!-- Close Drawer Button -->
+            <button onclick="toggleMobileSidebar()" class="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 -mr-1" title="Close Menu">
+                <span class="material-symbols-rounded text-xl leading-none">close</span>
+            </button>
+        </div>
+
+        <!-- 4-Stat Metric Grid: Streak, Marks, XP, Level (comfortably spaced below name & icon) -->
+        <a href="/profile" class="grid grid-cols-4 gap-1.5 mt-4 pt-3.5 border-t border-slate-200/70 dark:border-slate-800/80 block hover:opacity-95 transition-opacity" title="View Full Stats">
+            <!-- 1. Streak -->
+            <div class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/15 dark:border-amber-500/20">
+                <div class="flex items-center gap-0.5 text-amber-600 dark:text-amber-400">
+                    <span class="material-symbols-rounded text-[13px] leading-none">local_fire_department</span>
+                    <span class="text-[11px] font-black leading-none"><%= hStreak %>d</span>
+                </div>
+                <span class="text-[9px] font-semibold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">Streak</span>
+            </div>
+
+            <!-- 2. Gained Marks -->
+            <div class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 dark:border-emerald-500/20">
+                <div class="flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+                    <span class="material-symbols-rounded text-[13px] leading-none">military_tech</span>
+                    <span class="text-[11px] font-black leading-none truncate max-w-[48px]"><%= hMarks %></span>
+                </div>
+                <span class="text-[9px] font-semibold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">Marks</span>
+            </div>
+
+            <!-- 3. Total XP -->
+            <div class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl bg-indigo-500/5 dark:bg-indigo-500/10 border border-indigo-500/15 dark:border-indigo-500/20">
+                <div class="flex items-center gap-0.5 text-indigo-600 dark:text-indigo-400">
+                    <span class="material-symbols-rounded text-[13px] leading-none">bolt</span>
+                    <span class="text-[11px] font-black leading-none truncate max-w-[48px]"><%= hXP >= 1000 ? (hXP/1000).toFixed(1) + 'k' : hXP %></span>
+                </div>
+                <span class="text-[9px] font-semibold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">XP</span>
+            </div>
+
+            <!-- 4. Level -->
+            <div class="flex flex-col items-center justify-center py-1.5 px-1 rounded-xl bg-purple-500/5 dark:bg-purple-500/10 border border-purple-500/15 dark:border-purple-500/20">
+                <div class="flex items-center gap-0.5 text-purple-600 dark:text-purple-400">
+                    <span class="material-symbols-rounded text-[13px] leading-none">stars</span>
+                    <span class="text-[11px] font-black leading-none">Lvl <%= hLevel %></span>
+                </div>
+                <span class="text-[9px] font-semibold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">Level</span>
             </div>
         </a>
-        <!-- Close Drawer Button -->
-        <button onclick="toggleMobileSidebar()" class="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0 ml-1" title="Close Menu">
-            <span class="material-symbols-rounded text-xl leading-none">close</span>
-        </button>
     </div>
     <div class="flex-1 overflow-hidden">
         <%- include('student-sidebar', { activePage: locals.activePage, isMobileDrawer: true }) %>
