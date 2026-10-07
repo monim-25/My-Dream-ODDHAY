@@ -1118,6 +1118,69 @@ router.get('/dashboard', protect, async (req, res) => {
                 console.error('Error fetching suggested exam for dashboard:', e);
             }
 
+            // 5. Smart Daily Revision Flashcards (Curated 3-5 quick recall questions)
+            let dailyFlashcards = [];
+            try {
+                const Question = require('../models/Question');
+                const userClassRaw = (dbUser.classLevel || '').trim();
+                const numericClass = userClassRaw.replace(/[^0-9]/g, '');
+
+                const classConditions = [];
+                if (userClassRaw) {
+                    classConditions.push({ classLevel: userClassRaw });
+                    classConditions.push({ classLevel: new RegExp(`^${userClassRaw}$`, 'i') });
+                }
+                if (numericClass) {
+                    classConditions.push({ classLevel: numericClass });
+                    classConditions.push({ classLevel: `Class ${numericClass}` });
+                }
+
+                // Priority A: Questions from student's identified weak areas
+                let weakTopicNames = [];
+                if (weakAreas && Array.isArray(weakAreas.weakTopics) && weakAreas.weakTopics.length > 0) {
+                    weakTopicNames = weakAreas.weakTopics.map(w => (w.topic || w.name || '').trim()).filter(Boolean);
+                }
+
+                if (weakTopicNames.length > 0) {
+                    const weakRegexes = weakTopicNames.map(t => new RegExp(t, 'i'));
+                    const weakQuestions = await Question.find({
+                        ...(classConditions.length > 0 ? { $or: classConditions } : {}),
+                        $or: [
+                            { topic: { $in: weakRegexes } },
+                            { subject: { $in: weakRegexes } }
+                        ]
+                    }).limit(3).lean();
+                    if (weakQuestions && weakQuestions.length > 0) {
+                        dailyFlashcards.push(...weakQuestions.map(q => ({ ...q, isWeakTopic: true })));
+                    }
+                }
+
+                // Priority B: Questions matching student's class
+                if (dailyFlashcards.length < 3) {
+                    const excludeIds = dailyFlashcards.map(q => q._id);
+                    const classQuestions = await Question.find({
+                        _id: { $nin: excludeIds },
+                        ...(classConditions.length > 0 ? { $or: classConditions } : {})
+                    }).limit(3 - dailyFlashcards.length).lean();
+                    if (classQuestions && classQuestions.length > 0) {
+                        dailyFlashcards.push(...classQuestions);
+                    }
+                }
+
+                // Priority C: General fallback pool
+                if (dailyFlashcards.length < 3) {
+                    const excludeIds = dailyFlashcards.map(q => q._id);
+                    const fallbackQuestions = await Question.find({
+                        _id: { $nin: excludeIds }
+                    }).limit(3 - dailyFlashcards.length).lean();
+                    if (fallbackQuestions && fallbackQuestions.length > 0) {
+                        dailyFlashcards.push(...fallbackQuestions);
+                    }
+                }
+            } catch (fcErr) {
+                console.error('Error fetching daily flashcards:', fcErr);
+            }
+
             res.render('student-dashboard', {
                 user: dbUser,
                 upcomingEvent: res.locals.upcomingEvent,
@@ -1140,13 +1203,14 @@ router.get('/dashboard', protect, async (req, res) => {
                 todayXpEarned,
                 savedBookmarks,
                 weakAreas,
+                dailyFlashcards,
                 progressStats,
                 suggestedExam,
                 questionBankAttempts: allBankAttempts
             });
         } catch (err) {
             console.error('Data loading error:', err);
-            res.render('student-dashboard', { user: dbUser, upcomingEvent: res.locals.upcomingEvent, isFirstLogin: false, chartLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], chartData: [0, 0, 0, 0, 0, 0, 0], weakAreas: { hasData: false, weakTopics: [], moderateTopics: [], strongTopics: [] }, suggestedExam: null, ...data });
+            res.render('student-dashboard', { user: dbUser, upcomingEvent: res.locals.upcomingEvent, isFirstLogin: false, chartLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], chartData: [0, 0, 0, 0, 0, 0, 0], weakAreas: { hasData: false, weakTopics: [], moderateTopics: [], strongTopics: [] }, dailyFlashcards: [], suggestedExam: null, ...data });
         }
     } catch (err) {
         console.error('Dashboard Error:', err);
@@ -4544,6 +4608,35 @@ router.post('/api/remove-bookmark', protect, async (req, res) => {
         res.json({ success: true, bookmarks: user.savedBookmarks });
     } catch (err) {
         console.error(err);
+        res.status(500).json({ success: false });
+    }
+});
+
+// ---- Complete Daily Flashcards API (Awards +15 XP) ----
+router.post('/api/complete-daily-flashcards', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const user = await User.findById(req.session.userId);
+        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        if (!user.dailyGoals || user.dailyGoals.date !== todayStr) {
+            user.dailyGoals = { date: todayStr, videosCount: 0, quizzesCount: 0, notesCount: 0, savedNotesCount: 0, activeMinutes: 0, todayXpEarned: 0, todayWatchedLessons: [], flashcardsCompleted: false };
+        }
+
+        let xpAdded = 0;
+        if (!user.dailyGoals.flashcardsCompleted) {
+            user.dailyGoals.flashcardsCompleted = true;
+            user.dailyGoals.todayXpEarned = (user.dailyGoals.todayXpEarned || 0) + 15;
+            user.totalXP = (user.totalXP || 0) + 15;
+            xpAdded = 15;
+            user.markModified('dailyGoals');
+            await user.save();
+        }
+
+        res.json({ success: true, xpEarned: xpAdded, totalXP: user.totalXP });
+    } catch (err) {
+        console.error('Error completing flashcards:', err);
         res.status(500).json({ success: false });
     }
 });

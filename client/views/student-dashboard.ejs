@@ -674,6 +674,10 @@
                 @keyframes aiSpinCW { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                 @keyframes aiSpinCCW { 0% { transform: rotate(360deg); } 100% { transform: rotate(-360deg); } }
                 @keyframes aiPulseCore { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.12); opacity: 1; filter: drop-shadow(0 0 10px #38BDF8); } }
+                .perspective-1000 { perspective: 1000px; -webkit-perspective: 1000px; }
+                .transform-style-3d { transform-style: preserve-3d; -webkit-transform-style: preserve-3d; }
+                .backface-hidden { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+                .rotate-y-180 { transform: rotateY(180deg); }
             </style>
 
             <!-- Main Dashboard Content Container with Clean Widget Cards & Balanced Gap -->
@@ -1067,31 +1071,239 @@
                             </div>
                         </div>
 
-                        <!-- 2. BOOKMARKS WIDGET (Perfected Design) -->
+                        <!-- 2. SMART REVISION HUB & BOOKMARKS WIDGET -->
                         <div class="w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col justify-between transition-all">
-                            <div class="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-slate-200/80 dark:border-slate-800/80">
-                                <div class="flex items-center gap-2.5">
-                                    <div class="size-8 sm:size-9 rounded-xl bg-teal-500/15 border border-teal-500/30 text-teal-700 dark:text-teal-300 flex items-center justify-center shrink-0">
-                                        <i class="fa-solid fa-bookmark text-sm sm:text-base"></i>
-                                    </div>
-                                    <div>
-                                        <h3 class="font-bold text-sm sm:text-base text-slate-900 dark:text-slate-100 leading-tight antialiased">
-                                            Bookmarks
-                                        </h3>
-                                        <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">সংরক্ষিত নোট ও বই</p>
-                                    </div>
+                            <!-- Header with Modern Segmented Tabs -->
+                            <div class="flex flex-wrap items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 border-b border-slate-200/80 dark:border-slate-800/80 gap-2 bg-slate-50/60 dark:bg-slate-900/40">
+                                <!-- Segmented Tab Buttons -->
+                                <div class="flex items-center p-0.5 sm:p-1 bg-slate-200/70 dark:bg-slate-800/80 rounded-xl gap-1 text-xs font-bold" role="tablist">
+                                    <button type="button" id="tabBtnFlashcards" onclick="switchRevTab('flashcards')" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 bg-white dark:bg-slate-700 text-teal-800 dark:text-teal-200 shadow-2xs" role="tab" aria-selected="true">
+                                        <i class="fa-solid fa-bolt text-amber-500 text-xs"></i>
+                                        <span>ফ্ল্যাশ কার্ড</span>
+                                        <span id="tabFcCount" class="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300"><%= (locals.dailyFlashcards || []).length %></span>
+                                    </button>
+                                    <button type="button" id="tabBtnBookmarks" onclick="switchRevTab('bookmarks')" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200" role="tab" aria-selected="false">
+                                        <i class="fa-regular fa-bookmark text-xs"></i>
+                                        <span>বুকমার্কস</span>
+                                        <span id="tabBmCount" class="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300"><%= (locals.savedBookmarks || []).length %></span>
+                                    </button>
+                                    <button type="button" id="tabBtnNotes" onclick="switchRevTab('notes')" class="px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200" role="tab" aria-selected="false">
+                                        <i class="fa-regular fa-note-sticky text-xs"></i>
+                                        <span>কুইক নোট</span>
+                                    </button>
                                 </div>
-                                <span id="bookmarkCountBadge" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-teal-500/15 text-teal-800 dark:text-teal-300 border border-teal-500/25 flex items-center gap-1.5">
-                                    <i class="fa-regular fa-bookmark text-[10px]"></i> <%= (locals.savedBookmarks || []).length %> Items
-                                </span>
+
+                                <!-- Dynamic Right Header Badge -->
+                                <div id="revTabHeaderBadge">
+                                    <span class="text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/15 border border-amber-500/25 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
+                                        <i class="fa-solid fa-fire text-[10px] text-amber-500"></i>
+                                        <span>+15 XP রিভিশন</span>
+                                    </span>
+                                </div>
                             </div>
                             
-                            <div class="p-3.5 sm:p-4 flex-1 flex flex-col justify-between">
+                            <!-- TAB PANE 1: FLASHCARDS -->
+                            <div id="tabPaneFlashcards" class="p-3.5 sm:p-4 flex-1 flex flex-col justify-between">
+                                <% if (locals.dailyFlashcards && dailyFlashcards.length > 0) { %>
+                                    <div class="relative w-full">
+                                        <!-- Top Deck Status Bar -->
+                                        <div class="flex items-center justify-between gap-2 mb-2 px-0.5">
+                                            <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                                                <span>কার্ড</span>
+                                                <span id="fcActiveNumBadge" class="font-bold text-slate-900 dark:text-slate-100">1</span>
+                                                <span>/ <%= dailyFlashcards.length %></span>
+                                            </div>
+                                            <!-- Dots progress -->
+                                            <div class="flex items-center gap-1.5" id="fcProgressDots">
+                                                <% dailyFlashcards.forEach((_, fIdx) => { %>
+                                                    <span class="fc-dot size-2 rounded-full transition-all <%= fIdx === 0 ? 'bg-indigo-600 dark:bg-indigo-400 w-4' : 'bg-slate-300 dark:bg-slate-700' %>" data-dot-idx="<%= fIdx %>"></span>
+                                                <% }) %>
+                                            </div>
+                                        </div>
+
+                                        <!-- Deck Stack of Flip Cards -->
+                                        <div id="flashcardsDeckList" class="relative w-full">
+                                            <% dailyFlashcards.forEach((fc, fIdx) => { 
+                                                const optChars = ['A', 'B', 'C', 'D'];
+                                                const correctOptChar = (typeof fc.correctAnswerIndex === 'number' && fc.correctAnswerIndex >= 0 && fc.correctAnswerIndex < 4) ? optChars[fc.correctAnswerIndex] : '✓';
+                                                const correctOptText = (fc.options && typeof fc.correctAnswerIndex === 'number' && fc.options[fc.correctAnswerIndex]) ? fc.options[fc.correctAnswerIndex] : (fc.correctAnswer || 'সঠিক উত্তর সংরক্ষিত');
+                                            %>
+                                                <div id="fcCardWrap-<%= fIdx %>" class="fc-card-item <%= fIdx === 0 ? 'block' : 'hidden' %>">
+                                                    <!-- 3D Perspective Container -->
+                                                    <div class="perspective-1000 w-full">
+                                                        <div id="fcFlipper-<%= fIdx %>" class="relative w-full min-h-[260px] sm:min-h-[270px] transition-transform duration-500 transform-style-3d">
+                                                            <!-- FRONT FACE -->
+                                                            <div onclick="flipCard('<%= fIdx %>')" class="fc-front w-full h-full min-h-[260px] sm:min-h-[270px] backface-hidden flex flex-col justify-between p-3.5 sm:p-4 rounded-xl bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/40 dark:from-indigo-950/20 dark:via-[#131d31] dark:to-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-2xs cursor-pointer group">
+                                                                <div>
+                                                                    <!-- Card Top Badges -->
+                                                                    <div class="flex items-center justify-between gap-1.5 mb-2.5">
+                                                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                                                            <span class="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/25">
+                                                                                <%= fc.subject || 'সাধারণ' %>
+                                                                            </span>
+                                                                            <% if (fc.isWeakTopic) { %>
+                                                                                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/25">
+                                                                                    দুর্বল অধ্যায়
+                                                                                </span>
+                                                                            <% } %>
+                                                                            <% if (fc.board) { %>
+                                                                                <span class="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60">
+                                                                                    <%= fc.board %>
+                                                                                </span>
+                                                                            <% } %>
+                                                                        </div>
+                                                                        <span class="text-[10px] font-semibold text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex items-center gap-1 transition-colors">
+                                                                            <i class="fa-solid fa-hand-pointer text-[9px]"></i> ট্যাপ করুন
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <!-- Question Text -->
+                                                                    <h4 class="text-xs sm:text-[13px] font-bold text-slate-900 dark:text-slate-100 leading-snug mb-3">
+                                                                        <%= fc.questionText %>
+                                                                    </h4>
+
+                                                                    <!-- MCQ Options (if any) -->
+                                                                    <% if (fc.options && fc.options.length > 0) { %>
+                                                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mb-2">
+                                                                            <% fc.options.slice(0, 4).forEach((opt, oIdx) => { %>
+                                                                                <div class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-[11px] text-slate-700 dark:text-slate-300 font-medium">
+                                                                                    <span class="size-4.5 rounded bg-white dark:bg-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-600 text-indigo-600 dark:text-indigo-400 leading-none">
+                                                                                        <%= optChars[oIdx] %>
+                                                                                    </span>
+                                                                                    <span class="truncate leading-tight"><%= opt %></span>
+                                                                                </div>
+                                                                            <% }) %>
+                                                                        </div>
+                                                                    <% } %>
+                                                                </div>
+
+                                                                <!-- Flip CTA Button -->
+                                                                <div class="pt-2 mt-auto border-t border-slate-100 dark:border-slate-800">
+                                                                    <button type="button" class="w-full py-2 px-3 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center gap-2 border border-indigo-500/20 transition-all pointer-events-none">
+                                                                        <span>উত্তর দেখুন ও যাচাই করুন</span>
+                                                                        <i class="fa-solid fa-arrow-rotate-right text-[11px] group-hover:rotate-180 transition-transform duration-300"></i>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- BACK FACE (Answer & Explanation) -->
+                                                            <div class="fc-back absolute inset-0 w-full h-full backface-hidden rotate-y-180 flex flex-col justify-between p-3.5 sm:p-4 rounded-xl bg-gradient-to-br from-emerald-50/50 via-white to-teal-50/40 dark:from-emerald-950/25 dark:via-[#131d31] dark:to-slate-900 border border-emerald-500/30 dark:border-emerald-600/30 shadow-2xs">
+                                                                <div>
+                                                                    <!-- Back Top Row -->
+                                                                    <div class="flex items-center justify-between gap-1.5 mb-2.5">
+                                                                        <span class="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25 flex items-center gap-1">
+                                                                            <i class="fa-solid fa-circle-check text-[10px]"></i> সঠিক উত্তর
+                                                                        </span>
+                                                                        <span class="text-[10px] font-semibold text-slate-400">
+                                                                            <%= fc.subject || 'সাধারণ' %>
+                                                                        </span>
+                                                                    </div>
+
+                                                                    <!-- Answer Display Box -->
+                                                                    <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 dark:text-emerald-200 text-xs sm:text-sm font-black flex items-center gap-2 mb-2.5">
+                                                                        <span class="size-5.5 rounded-lg bg-emerald-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0 shadow-2xs leading-none">
+                                                                            <%= correctOptChar %>
+                                                                        </span>
+                                                                        <span class="line-clamp-2"><%= correctOptText %></span>
+                                                                    </div>
+
+                                                                    <!-- Explanation Box -->
+                                                                    <% if (fc.explanation && fc.explanation.trim() !== '') { %>
+                                                                        <div class="p-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60 text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed mb-2 max-h-[85px] overflow-y-auto custom-scrollbar">
+                                                                            <span class="font-bold text-indigo-600 dark:text-indigo-400 block mb-0.5">
+                                                                                <i class="fa-solid fa-lightbulb text-[10px]"></i> ব্যাখ্যা:
+                                                                            </span>
+                                                                            <p><%= fc.explanation %></p>
+                                                                        </div>
+                                                                    <% } else { %>
+                                                                        <div class="p-2 rounded-xl bg-slate-100/60 dark:bg-slate-800/40 border border-slate-200/40 dark:border-slate-700/40 text-[10.5px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-2">
+                                                                            <i class="fa-solid fa-lightbulb text-amber-500 text-xs shrink-0"></i>
+                                                                            <span>টিপস: পরীক্ষার জন্য মূল সূত্র ও সংজ্ঞাগুলো নিয়মিত রিভিশন করুন।</span>
+                                                                        </div>
+                                                                    <% } %>
+                                                                </div>
+
+                                                                <!-- Back Action Buttons -->
+                                                                <div class="flex items-center gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                                                                    <button type="button" onclick="flipCard('<%= fIdx %>')" class="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center justify-center gap-1.5 border border-slate-200/70 dark:border-slate-700/70">
+                                                                        <i class="fa-solid fa-rotate-left text-[10px]"></i>
+                                                                        <span>প্রশ্ন দেখুন</span>
+                                                                    </button>
+                                                                    <button type="button" onclick="markCardMastered('<%= fIdx %>', '<%= dailyFlashcards.length %>')" class="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors flex items-center justify-center gap-1.5">
+                                                                        <i class="fa-solid fa-check text-[10px]"></i>
+                                                                        <span>আয়ত্তে এসেছে</span>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Bottom Deck Navigation Controls -->
+                                                    <div class="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                                                        <button type="button" onclick="prevFlashcard('<%= fIdx %>', '<%= dailyFlashcards.length %>')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1 transition-colors" <%= fIdx === 0 ? 'disabled' : '' %>>
+                                                            <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                                                            <span>পূর্ববর্তী</span>
+                                                        </button>
+                                                        <a href="/question-bank" class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                                                            আরো প্রশ্নব্যাংক অনুশীলন →
+                                                        </a>
+                                                        <button type="button" onclick="nextFlashcard('<%= fIdx %>', '<%= dailyFlashcards.length %>')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1 transition-colors">
+                                                            <span><%= fIdx === dailyFlashcards.length - 1 ? 'সমাপ্ত করুন' : 'পরবর্তী' %></span>
+                                                            <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            <% }) %>
+
+                                            <!-- Deck Completion View -->
+                                            <div id="fcCompletionCard" class="hidden text-center py-6 px-3 flex flex-col items-center justify-center gap-2.5">
+                                                <div class="size-13 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-xs text-xl">
+                                                    🎉
+                                                </div>
+                                                <div>
+                                                    <h4 class="text-sm font-bold text-slate-800 dark:text-slate-100">আজকের ফ্ল্যাশ কার্ড সম্পন্ন!</h4>
+                                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">সবগুলো রিভিশন সফলভাবে সম্পন্ন হয়েছে। প্রতিদিন রিভিশন বজায় রাখুন।</p>
+                                                </div>
+                                                <div id="fcXpRewardBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold">
+                                                    <i class="fa-solid fa-bolt text-amber-500"></i>
+                                                    <span>+15 XP রিভিশন বোনাস অর্জিত</span>
+                                                </div>
+                                                <div class="flex items-center gap-2 mt-1">
+                                                    <button type="button" onclick="restartFlashcards('<%= dailyFlashcards.length %>')" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1 border border-slate-200/80 dark:border-slate-700/80">
+                                                        <i class="fa-solid fa-rotate-right text-[10px]"></i>
+                                                        <span>আবার শুরু করুন</span>
+                                                    </button>
+                                                    <a href="/question-bank" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-colors flex items-center gap-1">
+                                                        <span>প্রশ্নব্যাংক</span>
+                                                        <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <% } else { %>
+                                    <div class="text-center py-8 my-auto flex flex-col items-center justify-center">
+                                        <div class="size-12 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-2.5">
+                                            <i class="fa-solid fa-bolt text-lg"></i>
+                                        </div>
+                                        <p class="text-xs sm:text-sm text-slate-700 dark:text-slate-300 font-bold">আজকের জন্য কোনো ফ্ল্যাশ কার্ড প্রস্তুত নেই</p>
+                                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">প্রশ্নব্যাংক থেকে প্রশ্ন অনুশীলন শুরু করুন</p>
+                                        <a href="/question-bank" class="mt-3.5 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 transition-colors">
+                                            <i class="fa-solid fa-compass text-[10px]"></i>
+                                            <span>প্রশ্নব্যাংক অন্বেষণ করুন</span>
+                                        </a>
+                                    </div>
+                                <% } %>
+                            </div>
+
+                            <!-- TAB PANE 2: BOOKMARKS (Saved Items) -->
+                            <div id="tabPaneBookmarks" class="p-3.5 sm:p-4 flex-1 flex flex-col justify-between hidden">
                                 <div class="space-y-2.5" id="bookmarkListContainer">
                                     <% if (locals.savedBookmarks && savedBookmarks.length > 0) { %>
                                         <% savedBookmarks.forEach(bm => { 
                                             const isNote = bm.itemType === 'note' || (bm.link && (bm.link.includes('note') || bm.link.includes('/note-viewer/')));
                                             const isBook = bm.itemType === 'book' || (bm.link && (bm.link.includes('library') || bm.link.includes('.pdf') || bm.link.includes('book')));
+                                            const isQuestion = bm.itemType === 'question' || (bm.link && bm.link.includes('question'));
                                             const linkStr = (bm.link || '').toLowerCase();
                                             const isDirectDoc = linkStr.endsWith('.pdf') || linkStr.endsWith('.jpg') || linkStr.endsWith('.jpeg') || linkStr.endsWith('.png');
                                         %>
@@ -1101,11 +1313,13 @@
                                                 <% } else { %>
                                                     <a href="<%= bm.link %>" class="flex items-center gap-2.5 min-w-0 flex-1">
                                                 <% } %>
-                                                    <div class="size-7 rounded-lg flex items-center justify-center shrink-0 <%= isNote ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : (isBook ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-teal-500/15 text-teal-600 dark:text-teal-400') %>">
-                                                        <i class="fa-solid <%= isNote ? 'fa-file-lines' : (isBook ? 'fa-book-open' : 'fa-bookmark') %> text-xs"></i>
+                                                    <div class="size-7 rounded-lg flex items-center justify-center shrink-0 <%= isQuestion ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400' : (isNote ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400' : (isBook ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-teal-500/15 text-teal-600 dark:text-teal-400')) %>">
+                                                        <i class="fa-solid <%= isQuestion ? 'fa-lightbulb' : (isNote ? 'fa-file-lines' : (isBook ? 'fa-book-open' : 'fa-bookmark')) %> text-xs"></i>
                                                     </div>
                                                     <span class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 truncate group-hover:text-teal-700 dark:group-hover:text-teal-300 transition-colors"><%= bm.title %></span>
-                                                    <% if (isNote) { %>
+                                                    <% if (isQuestion) { %>
+                                                        <span class="text-[9px] font-bold text-indigo-800 dark:text-indigo-300 bg-indigo-500/20 border border-indigo-500/30 px-1.5 py-0.5 rounded-md shrink-0 ml-auto mr-1">Question</span>
+                                                    <% } else if (isNote) { %>
                                                         <span class="text-[9px] font-bold text-amber-800 dark:text-amber-300 bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 rounded-md shrink-0 ml-auto mr-1">Note</span>
                                                     <% } else if (isBook) { %>
                                                         <span class="text-[9px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded-md shrink-0 ml-auto mr-1">Book</span>
@@ -1141,6 +1355,46 @@
                                             </div>
                                         </div>
                                     <% } %>
+                                </div>
+                            </div>
+
+                            <!-- TAB PANE 3: QUICK NOTES (Scratchpad) -->
+                            <div id="tabPaneNotes" class="p-3.5 sm:p-4 flex-1 flex flex-col justify-between hidden">
+                                <div class="flex flex-col gap-2.5">
+                                    <!-- Quick Formula Symbols Toolbar -->
+                                    <div class="flex items-center gap-1 overflow-x-auto pb-1 no-scrollbar text-xs">
+                                        <span class="text-[10.5px] font-semibold text-slate-400 shrink-0 mr-1">সূত্র প্রতীক:</span>
+                                        <button type="button" onclick="insertNoteSymbol('π')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 transition-colors shrink-0">π</button>
+                                        <button type="button" onclick="insertNoteSymbol('²')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 transition-colors shrink-0">x²</button>
+                                        <button type="button" onclick="insertNoteSymbol('³')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 transition-colors shrink-0">x³</button>
+                                        <button type="button" onclick="insertNoteSymbol('√')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 transition-colors shrink-0">√</button>
+                                        <button type="button" onclick="insertNoteSymbol('θ')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 transition-colors shrink-0">θ</button>
+                                        <button type="button" onclick="insertNoteSymbol('Δ')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 transition-colors shrink-0">Δ</button>
+                                        <button type="button" onclick="insertNoteSymbol('±')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 transition-colors shrink-0">±</button>
+                                        <button type="button" onclick="insertNoteSymbol('→')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 transition-colors shrink-0">→</button>
+                                        <button type="button" onclick="insertNoteSymbol('•')" class="px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 font-bold text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 transition-colors shrink-0">•</button>
+                                    </div>
+
+                                    <!-- Scratchpad Textarea -->
+                                    <textarea id="quickScratchpadText" oninput="handleScratchpadInput()" placeholder="জরুরি সূত্র বা আজকের রিভিশন পয়েন্ট লিখে রাখুন... (যেমন: v = u + at, PV = nRT, ত্রিকোণমিতিক সূত্র)" class="w-full h-36 sm:h-40 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/70 text-xs sm:text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none custom-scrollbar"></textarea>
+                                </div>
+
+                                <!-- Scratchpad Footer Actions -->
+                                <div class="flex items-center justify-between gap-2 pt-2.5 mt-2 border-t border-slate-100 dark:border-slate-800/80">
+                                    <span id="scratchSaveStatus" class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+                                        <i class="fa-solid fa-cloud-arrow-up text-[10px]"></i>
+                                        <span>অটো-সেভ সক্রিয়</span>
+                                    </span>
+                                    <div class="flex items-center gap-1.5">
+                                        <button type="button" onclick="clearQuickNote()" class="px-2.5 py-1 rounded-lg text-xs font-semibold text-rose-500 hover:bg-rose-500/10 transition-colors flex items-center gap-1">
+                                            <i class="fa-regular fa-trash-can text-[10px]"></i>
+                                            <span>মুছুন</span>
+                                        </button>
+                                        <button type="button" id="copyNoteBtn" onclick="copyQuickNote()" class="px-3 py-1 rounded-lg text-xs font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-500/25 border border-indigo-500/25 transition-colors flex items-center gap-1">
+                                            <i class="fa-regular fa-copy text-[10px]"></i>
+                                            <span>কপি করুন</span>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2117,6 +2371,253 @@
                     startAutoPlay();
                 }
             }
+        });
+
+        // ==========================================
+        // SMART REVISION HUB (FLASHCARDS, BOOKMARKS, NOTES)
+        // ==========================================
+        function switchRevTab(tabName) {
+            const btnFc = document.getElementById('tabBtnFlashcards');
+            const btnBm = document.getElementById('tabBtnBookmarks');
+            const btnNotes = document.getElementById('tabBtnNotes');
+
+            const paneFc = document.getElementById('tabPaneFlashcards');
+            const paneBm = document.getElementById('tabPaneBookmarks');
+            const paneNotes = document.getElementById('tabPaneNotes');
+
+            const badgeContainer = document.getElementById('revTabHeaderBadge');
+
+            const activeBtnClass = 'px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 bg-white dark:bg-slate-700 text-teal-800 dark:text-teal-200 shadow-2xs font-bold';
+            const inactiveBtnClass = 'px-2.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 font-bold';
+
+            if (tabName === 'flashcards') {
+                if (btnFc) btnFc.className = activeBtnClass;
+                if (btnBm) btnBm.className = inactiveBtnClass;
+                if (btnNotes) btnNotes.className = inactiveBtnClass;
+
+                if (paneFc) paneFc.classList.remove('hidden');
+                if (paneBm) paneBm.classList.add('hidden');
+                if (paneNotes) paneNotes.classList.add('hidden');
+
+                if (badgeContainer) {
+                    badgeContainer.innerHTML = `
+                        <span class="text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-500/15 border border-amber-500/25 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
+                            <i class="fa-solid fa-fire text-[10px] text-amber-500"></i>
+                            <span>+15 XP রিভিশন</span>
+                        </span>
+                    `;
+                }
+            } else if (tabName === 'bookmarks') {
+                if (btnFc) btnFc.className = inactiveBtnClass;
+                if (btnBm) btnBm.className = activeBtnClass;
+                if (btnNotes) btnNotes.className = inactiveBtnClass;
+
+                if (paneFc) paneFc.classList.add('hidden');
+                if (paneBm) paneBm.classList.remove('hidden');
+                if (paneNotes) paneNotes.classList.add('hidden');
+
+                if (badgeContainer) {
+                    const bmCount = document.querySelectorAll('#bookmarkListContainer > div[id^="bm-item-"]').length;
+                    badgeContainer.innerHTML = `
+                        <span class="text-[11px] font-bold text-teal-700 dark:text-teal-300 bg-teal-500/15 border border-teal-500/25 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
+                            <i class="fa-regular fa-bookmark text-[10px]"></i>
+                            <span>${bmCount} আইটেম সেভড</span>
+                        </span>
+                    `;
+                }
+            } else if (tabName === 'notes') {
+                if (btnFc) btnFc.className = inactiveBtnClass;
+                if (btnBm) btnBm.className = inactiveBtnClass;
+                if (btnNotes) btnNotes.className = activeBtnClass;
+
+                if (paneFc) paneFc.classList.add('hidden');
+                if (paneBm) paneBm.classList.add('hidden');
+                if (paneNotes) paneNotes.classList.remove('hidden');
+
+                if (badgeContainer) {
+                    badgeContainer.innerHTML = `
+                        <span id="scratchSaveStatus" class="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg inline-flex items-center gap-1">
+                            <i class="fa-solid fa-cloud-arrow-up text-[10px]"></i>
+                            <span>অটো-সেভ সক্রিয়</span>
+                        </span>
+                    `;
+                }
+                loadQuickNote();
+            }
+
+            try {
+                sessionStorage.setItem('oddhay_dash_rev_tab', tabName);
+            } catch (e) {}
+        }
+
+        // 3D Flip Card Toggle
+        function flipCard(cardIdx) {
+            const flipper = document.getElementById('fcFlipper-' + cardIdx);
+            if (flipper) {
+                flipper.classList.toggle('rotate-y-180');
+            }
+        }
+
+        // Navigate to Next Flashcard
+        function nextFlashcard(currentIdx, totalCount) {
+            const flipper = document.getElementById('fcFlipper-' + currentIdx);
+            if (flipper) flipper.classList.remove('rotate-y-180');
+
+            const nextIdx = parseInt(currentIdx, 10) + 1;
+            const total = parseInt(totalCount, 10);
+
+            if (nextIdx >= total) {
+                // Completed all cards in the deck
+                finishFlashcards();
+                return;
+            }
+
+            showFlashcardAt(nextIdx, total);
+        }
+
+        // Navigate to Previous Flashcard
+        function prevFlashcard(currentIdx, totalCount) {
+            const flipper = document.getElementById('fcFlipper-' + currentIdx);
+            if (flipper) flipper.classList.remove('rotate-y-180');
+
+            const prevIdx = parseInt(currentIdx, 10) - 1;
+            if (prevIdx < 0) return;
+
+            showFlashcardAt(prevIdx, totalCount);
+        }
+
+        function showFlashcardAt(targetIdx, totalCount) {
+            document.querySelectorAll('.fc-card-item').forEach(el => el.classList.add('hidden'));
+            const targetEl = document.getElementById('fcCardWrap-' + targetIdx);
+            if (targetEl) targetEl.classList.remove('hidden');
+
+            const numBadge = document.getElementById('fcActiveNumBadge');
+            if (numBadge) numBadge.innerText = (targetIdx + 1);
+
+            document.querySelectorAll('#fcProgressDots .fc-dot').forEach((dot, dIdx) => {
+                if (dIdx === targetIdx) {
+                    dot.className = 'fc-dot size-2 rounded-full transition-all bg-indigo-600 dark:bg-indigo-400 w-4';
+                } else {
+                    dot.className = 'fc-dot size-2 rounded-full transition-all bg-slate-300 dark:bg-slate-700';
+                }
+            });
+        }
+
+        // Mark a Card as Mastered
+        function markCardMastered(cardIdx, totalCount) {
+            nextFlashcard(cardIdx, totalCount);
+        }
+
+        // Complete Deck & Award XP
+        function finishFlashcards() {
+            document.querySelectorAll('.fc-card-item').forEach(el => el.classList.add('hidden'));
+            const compView = document.getElementById('fcCompletionCard');
+            if (compView) compView.classList.remove('hidden');
+
+            // Trigger Confetti
+            if (typeof confetti === 'function') {
+                confetti({ particleCount: 75, spread: 60, origin: { y: 0.6 } });
+            } else {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js';
+                script.onload = () => {
+                    if (typeof confetti === 'function') confetti({ particleCount: 75, spread: 60, origin: { y: 0.6 } });
+                };
+                document.body.appendChild(script);
+            }
+
+            // Award +15 XP API call
+            fetch('/api/complete-daily-flashcards', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            }).then(r => r.json()).then(data => {
+                if (data.success && data.xpEarned > 0) {
+                    refreshDailyStats();
+                }
+            }).catch(e => console.error(e));
+        }
+
+        // Restart Flashcards Deck
+        function restartFlashcards(totalCount) {
+            const compView = document.getElementById('fcCompletionCard');
+            if (compView) compView.classList.add('hidden');
+            for (let i = 0; i < totalCount; i++) {
+                const flipper = document.getElementById('fcFlipper-' + i);
+                if (flipper) flipper.classList.remove('rotate-y-180');
+            }
+            showFlashcardAt(0, totalCount);
+        }
+
+        // Quick Scratchpad Functions
+        let scratchpadDebounceTimer = null;
+        function loadQuickNote() {
+            const txt = document.getElementById('quickScratchpadText');
+            if (txt && !txt.value) {
+                const saved = localStorage.getItem('oddhay_dash_scratchpad') || '';
+                txt.value = saved;
+            }
+        }
+
+        function handleScratchpadInput() {
+            const txt = document.getElementById('quickScratchpadText');
+            const status = document.getElementById('scratchSaveStatus');
+            if (status) {
+                status.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px]"></i><span>সেভ হচ্ছে...</span>';
+            }
+            if (scratchpadDebounceTimer) clearTimeout(scratchpadDebounceTimer);
+            scratchpadDebounceTimer = setTimeout(() => {
+                if (txt) {
+                    localStorage.setItem('oddhay_dash_scratchpad', txt.value);
+                }
+                if (status) {
+                    status.innerHTML = '<i class="fa-solid fa-cloud-arrow-up text-[10px]"></i><span>অটো-সেভ সক্রিয়</span>';
+                }
+            }, 350);
+        }
+
+        function insertNoteSymbol(sym) {
+            const txt = document.getElementById('quickScratchpadText');
+            if (!txt) return;
+            const start = txt.selectionStart || txt.value.length;
+            const end = txt.selectionEnd || txt.value.length;
+            txt.value = txt.value.substring(0, start) + sym + txt.value.substring(end);
+            txt.selectionStart = txt.selectionEnd = start + sym.length;
+            txt.focus();
+            handleScratchpadInput();
+        }
+
+        function copyQuickNote() {
+            const txt = document.getElementById('quickScratchpadText');
+            const btn = document.getElementById('copyNoteBtn');
+            if (!txt || !txt.value.trim()) return;
+            navigator.clipboard.writeText(txt.value).then(() => {
+                if (btn) {
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = '<i class="fa-solid fa-check text-[10px]"></i><span>কপি হয়েছে!</span>';
+                    setTimeout(() => { btn.innerHTML = orig; }, 1800);
+                }
+            }).catch(e => console.error(e));
+        }
+
+        function clearQuickNote() {
+            const txt = document.getElementById('quickScratchpadText');
+            if (!txt || !txt.value.trim()) return;
+            if (confirm('আপনি কি নিশ্চিত যে সম্পূর্ণ নোট মুছে ফেলতে চান?')) {
+                txt.value = '';
+                localStorage.removeItem('oddhay_dash_scratchpad');
+                handleScratchpadInput();
+            }
+        }
+
+        // Restore active tab on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadQuickNote();
+            try {
+                const savedTab = sessionStorage.getItem('oddhay_dash_rev_tab');
+                if (savedTab && ['flashcards', 'bookmarks', 'notes'].includes(savedTab)) {
+                    switchRevTab(savedTab);
+                }
+            } catch (e) {}
         });
     </script>
 </body>

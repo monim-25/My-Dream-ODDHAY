@@ -56,7 +56,8 @@ const userSchema = new mongoose.Schema({
         savedNotesCount: { type: Number, default: 0 },
         activeMinutes: { type: Number, default: 0 },
         todayXpEarned: { type: Number, default: 0 },
-        todayWatchedLessons: [{ type: String }]
+        todayWatchedLessons: [{ type: String }],
+        flashcardsCompleted: { type: Boolean, default: false }
     },
     savedBookmarks: [{
         itemType: { type: String, default: 'resource' },
