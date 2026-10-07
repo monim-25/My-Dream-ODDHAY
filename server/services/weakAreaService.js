@@ -15,7 +15,13 @@ async function getUserWeakAreas(userId, options = {}) {
 
         const limitAttempts = options.limitAttempts || 30;
 
-        // 1. Fetch recent attempts with answers populated
+        // 1. Fetch user data (enrolled courses, reminded topics, quiz results)
+        const user = await User.findById(userId)
+            .select('enrolledCourses remindedWeakTopics quizResults')
+            .populate('quizResults.quiz', 'title subject classLevel questions')
+            .lean();
+
+        // 2. Fetch recent question bank attempts with answers populated
         const attempts = await QuestionBankAttempt.find({ user: userId })
             .sort({ submittedAt: -1 })
             .limit(limitAttempts)
@@ -26,7 +32,10 @@ async function getUserWeakAreas(userId, options = {}) {
             .populate('bank', 'title subject topic course')
             .lean();
 
-        if (!attempts || attempts.length === 0) {
+        const hasAttempts = attempts && attempts.length > 0;
+        const hasQuizResults = user?.quizResults && user.quizResults.length > 0;
+
+        if (!hasAttempts && !hasQuizResults) {
             return {
                 hasData: false,
                 weakTopics: [],
@@ -38,7 +47,7 @@ async function getUserWeakAreas(userId, options = {}) {
             };
         }
 
-        // 2. Aggregate by unique question (taking student's latest attempt for each question)
+        // 3. Aggregate by unique question or topic
         const seenQuestions = new Set();
         const topicMap = new Map();
         let totalMistakes = 0;
@@ -46,79 +55,136 @@ async function getUserWeakAreas(userId, options = {}) {
         let totalQuestionsAnalyzed = 0;
         let totalCorrectAnswers = 0;
 
-        for (const attempt of attempts) {
-            const defaultSubject = attempt.bank?.subject || 'সাধারণ বিষয়';
-            const defaultTopic = attempt.bank?.topic || attempt.bank?.title || 'অধ্যায়ভিত্তিক প্রস্তুতি';
+        if (hasAttempts) {
+            for (const attempt of attempts) {
+                const defaultSubject = attempt.bank?.subject || 'সাধারণ বিষয়';
+                const defaultTopic = attempt.bank?.topic || attempt.bank?.title || 'অধ্যায়ভিত্তিক প্রস্তুতি';
 
-            for (const ans of (attempt.userAnswers || [])) {
-                const q = ans.questionId;
-                let qId = null;
-                if (q && q._id) qId = q._id.toString();
-                else if (ans.questionId) qId = ans.questionId.toString();
-                else if (ans._id) qId = ans._id.toString();
+                const answers = attempt.userAnswers || [];
+                if (answers.length > 0) {
+                    for (const ans of answers) {
+                        const q = ans.questionId;
+                        let qId = null;
+                        if (q && q._id) qId = q._id.toString();
+                        else if (ans.questionId) qId = ans.questionId.toString();
+                        else if (ans._id) qId = ans._id.toString();
 
-                // If this question has already been evaluated from a more recent attempt, skip older retakes!
-                if (qId && seenQuestions.has(qId)) {
-                    continue;
+                        if (qId && seenQuestions.has(qId)) {
+                            continue;
+                        }
+                        if (qId) seenQuestions.add(qId);
+
+                        totalQuestionsAnalyzed++;
+                        const isCorrect = Boolean(ans.isCorrect);
+                        const isSkipped = !isCorrect && (ans.selectedOptionIndex === -1 || ans.selectedOptionIndex === undefined) && !ans.writtenAnswer;
+                        const isWrong = !isCorrect && !isSkipped;
+
+                        if (isCorrect) totalCorrectAnswers++;
+                        else if (isWrong) totalMistakes++;
+                        else totalSkipped++;
+
+                        const subject = (q && q.subject) ? q.subject.trim() : defaultSubject;
+                        let topic = (q && q.topic) ? q.topic.trim() : defaultTopic;
+                        if (!topic) topic = defaultSubject + ' - সাধারণ আলোচনা';
+
+                        const key = `${subject}:::${topic}`;
+                        if (!topicMap.has(key)) {
+                            topicMap.set(key, {
+                                subject,
+                                topic,
+                                total: 0,
+                                correct: 0,
+                                wrong: 0,
+                                skipped: 0,
+                                marksObtained: 0,
+                                maxMarks: 0,
+                                bankIds: new Set()
+                            });
+                        }
+
+                        const entry = topicMap.get(key);
+                        entry.total++;
+                        if (isCorrect) {
+                            entry.correct++;
+                        } else if (isWrong) {
+                            entry.wrong++;
+                        } else {
+                            entry.skipped++;
+                        }
+
+                        const qMax = (typeof ans.maxMarks === 'number' && ans.maxMarks > 0) ? ans.maxMarks : 1;
+                        const qEarned = (typeof ans.marksObtained === 'number' && !isNaN(ans.marksObtained))
+                            ? Math.max(0, ans.marksObtained)
+                            : (isCorrect ? qMax : 0);
+
+                        entry.marksObtained += qEarned;
+                        entry.maxMarks += qMax;
+
+                        if (attempt.bank?._id) entry.bankIds.add(attempt.bank._id.toString());
+                    }
+                } else if (attempt.bank) {
+                    // Fallback for attempt without populated userAnswers array
+                    const key = `${defaultSubject}:::${defaultTopic}`;
+                    if (!topicMap.has(key)) {
+                        const total = attempt.totalBankQuestions || attempt.mcqTotalQuestions || 1;
+                        const correct = attempt.mcqCorrectCount || 0;
+                        const wrong = attempt.wrongMcqCount || Math.max(0, total - correct);
+                        totalQuestionsAnalyzed += total;
+                        totalCorrectAnswers += correct;
+                        totalMistakes += wrong;
+
+                        topicMap.set(key, {
+                            subject: defaultSubject,
+                            topic: defaultTopic,
+                            total,
+                            correct,
+                            wrong,
+                            skipped: 0,
+                            marksObtained: attempt.mcqScore || 0,
+                            maxMarks: attempt.maxMcqScore || total,
+                            bankIds: new Set(attempt.bank._id ? [attempt.bank._id.toString()] : [])
+                        });
+                    }
                 }
-                if (qId) seenQuestions.add(qId);
-
-                totalQuestionsAnalyzed++;
-                const isCorrect = Boolean(ans.isCorrect);
-                const isSkipped = !isCorrect && (ans.selectedOptionIndex === -1 || ans.selectedOptionIndex === undefined) && !ans.writtenAnswer;
-                const isWrong = !isCorrect && !isSkipped;
-
-                if (isCorrect) totalCorrectAnswers++;
-                else if (isWrong) totalMistakes++;
-                else totalSkipped++;
-
-                const subject = (q && q.subject) ? q.subject.trim() : defaultSubject;
-                let topic = (q && q.topic) ? q.topic.trim() : defaultTopic;
-                if (!topic) topic = defaultSubject + ' - সাধারণ আলোচনা';
-
-                const key = `${subject}:::${topic}`;
-                if (!topicMap.has(key)) {
-                    topicMap.set(key, {
-                        subject,
-                        topic,
-                        total: 0,
-                        correct: 0,
-                        wrong: 0,
-                        skipped: 0,
-                        marksObtained: 0,
-                        maxMarks: 0,
-                        bankIds: new Set()
-                    });
-                }
-
-                const entry = topicMap.get(key);
-                entry.total++;
-                if (isCorrect) {
-                    entry.correct++;
-                } else if (isWrong) {
-                    entry.wrong++;
-                } else {
-                    entry.skipped++;
-                }
-
-                const qMax = (typeof ans.maxMarks === 'number' && ans.maxMarks > 0) ? ans.maxMarks : 1;
-                const qEarned = (typeof ans.marksObtained === 'number' && !isNaN(ans.marksObtained))
-                    ? Math.max(0, ans.marksObtained)
-                    : (isCorrect ? qMax : 0);
-
-                entry.marksObtained += qEarned;
-                entry.maxMarks += qMax;
-
-                if (attempt.bank?._id) entry.bankIds.add(attempt.bank._id.toString());
             }
         }
 
-        // 3. Process into ranked topics
+        // Also incorporate Quizzes from user.quizResults
+        if (hasQuizResults) {
+            for (const qr of user.quizResults) {
+                if (!qr.quiz) continue;
+                const qSubject = qr.quiz.subject || 'সাধারণ বিষয়';
+                const qTopic = qr.quiz.title || 'কুইজ প্রস্তুতি';
+                const key = `${qSubject}:::${qTopic}`;
+
+                if (!topicMap.has(key)) {
+                    const total = qr.total || (qr.quiz.questions?.length || 1);
+                    const correct = qr.score || 0;
+                    const wrong = Math.max(0, total - correct);
+                    totalQuestionsAnalyzed += total;
+                    totalCorrectAnswers += correct;
+                    totalMistakes += wrong;
+
+                    topicMap.set(key, {
+                        subject: qSubject,
+                        topic: qTopic,
+                        total,
+                        correct,
+                        wrong,
+                        skipped: 0,
+                        marksObtained: correct,
+                        maxMarks: total,
+                        bankIds: new Set()
+                    });
+                }
+            }
+        }
+
+        // Process into ranked topics
         const topics = [];
         for (const [_, entry] of topicMap.entries()) {
             const earned = Math.max(0, entry.marksObtained);
             const totalM = Math.max(1, entry.maxMarks);
-            // Real progress strictly based on earned marks / total marks:
             const accuracy = earned <= 0 ? 0 : Math.min(100, Math.round((earned / totalM) * 100));
 
             let status = 'strong'; // >= 60%
@@ -137,13 +203,13 @@ async function getUserWeakAreas(userId, options = {}) {
                 skipped: entry.skipped,
                 marksObtained: parseFloat(earned.toFixed(1)),
                 maxMarks: parseFloat(totalM.toFixed(1)),
-                accuracy, // 0 if earned marks is 0
+                accuracy,
                 status,
                 bankIds: Array.from(entry.bankIds)
             });
         }
 
-        // Sort: Critical first (lowest accuracy, highest unmastered count), then Moderate, then Strong
+        // Sort: Critical first, then Moderate, then Strong
         topics.sort((a, b) => {
             if (a.status === 'critical' && b.status !== 'critical') return -1;
             if (b.status === 'critical' && a.status !== 'critical') return 1;
@@ -152,21 +218,21 @@ async function getUserWeakAreas(userId, options = {}) {
             return a.accuracy - b.accuracy || (b.wrong + b.skipped) - (a.wrong + a.skipped);
         });
 
-        // 4. Fetch user data (enrolled courses and reminded topics)
-        const user = await User.findById(userId).select('enrolledCourses remindedWeakTopics').lean();
+        // Mark reminded status without removing topics from the student's dashboard
         const remindedTopicsSet = new Set(
             (user?.remindedWeakTopics || []).map(r => (r.topic || '').trim().toLowerCase())
         );
 
-        // Filter out topics for which a reminder has already been scheduled/set
-        const activeTopics = topics.filter(t => !remindedTopicsSet.has(t.topic.trim().toLowerCase()));
+        for (const t of topics) {
+            t.isReminded = remindedTopicsSet.has(t.topic.trim().toLowerCase());
+        }
 
-        const weakTopics = activeTopics.filter(t => t.status === 'critical');
-        const moderateTopics = activeTopics.filter(t => t.status === 'moderate');
-        const strongTopics = activeTopics.filter(t => t.status === 'strong');
+        const weakTopics = topics.filter(t => t.status === 'critical');
+        const moderateTopics = topics.filter(t => t.status === 'moderate');
+        const strongTopics = topics.filter(t => t.status === 'strong');
 
-        // 5. Find matching revision lessons for active weak & moderate topics
-        const targetTopics = [...weakTopics, ...moderateTopics].slice(0, 6);
+        // Target topics for revision lessons: includes weak, moderate, and any active exam topics
+        const targetTopics = [...weakTopics, ...moderateTopics, ...strongTopics].slice(0, 6);
 
         if (targetTopics.length > 0) {
             const enrolledCourseIds = (user?.enrolledCourses || []).map(e => e.course).filter(Boolean);
