@@ -21,8 +21,16 @@ async function getUserWeakAreas(userId, options = {}) {
             .populate('quizResults.quiz', 'title subject classLevel questions')
             .lean();
 
-        // 2. Fetch recent question bank attempts with answers populated
-        const attempts = await QuestionBankAttempt.find({ user: userId })
+        const sevenDaysAgo = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
+
+        // 2. Fetch recent question bank attempts within last 7 days
+        const attempts = await QuestionBankAttempt.find({
+            user: userId,
+            $or: [
+                { submittedAt: { $gte: sevenDaysAgo } },
+                { createdAt: { $gte: sevenDaysAgo } }
+            ]
+        })
             .sort({ submittedAt: -1 })
             .limit(limitAttempts)
             .populate({
@@ -32,12 +40,17 @@ async function getUserWeakAreas(userId, options = {}) {
             .populate('bank', 'title subject topic course')
             .lean();
 
+        const recentQuizResults = (user?.quizResults || []).filter(qr => qr && qr.date && new Date(qr.date) >= sevenDaysAgo);
         const hasAttempts = attempts && attempts.length > 0;
-        const hasQuizResults = user?.quizResults && user.quizResults.length > 0;
+        const hasQuizResults = recentQuizResults.length > 0;
+
+        const fortyEightHoursAgo = new Date(Date.now() - (48 * 60 * 60 * 1000));
+        const handledActivities = (user?.remindedWeakTopics || []).filter(r => r && r.topic && r.remindedAt && new Date(r.remindedAt) >= fortyEightHoursAgo);
 
         if (!hasAttempts && !hasQuizResults) {
             return {
                 hasData: false,
+                hasHandledActivities: handledActivities.length > 0,
                 weakTopics: [],
                 moderateTopics: [],
                 strongTopics: [],
@@ -149,9 +162,9 @@ async function getUserWeakAreas(userId, options = {}) {
             }
         }
 
-        // Also incorporate Quizzes from user.quizResults
+        // Also incorporate Quizzes from recentQuizResults
         if (hasQuizResults) {
-            for (const qr of user.quizResults) {
+            for (const qr of recentQuizResults) {
                 if (!qr.quiz) continue;
                 const qSubject = qr.quiz.subject || 'সাধারণ বিষয়';
                 const qTopic = qr.quiz.title || 'কুইজ প্রস্তুতি';
@@ -174,7 +187,8 @@ async function getUserWeakAreas(userId, options = {}) {
                         skipped: 0,
                         marksObtained: correct,
                         maxMarks: total,
-                        bankIds: new Set()
+                        bankIds: new Set(),
+                        quizId: qr.quiz._id ? qr.quiz._id.toString() : (typeof qr.quiz === 'string' ? qr.quiz : null)
                     });
                 }
             }
@@ -205,7 +219,11 @@ async function getUserWeakAreas(userId, options = {}) {
                 maxMarks: parseFloat(totalM.toFixed(1)),
                 accuracy,
                 status,
-                bankIds: Array.from(entry.bankIds)
+                bankIds: Array.from(entry.bankIds),
+                quizId: entry.quizId || null,
+                retestLink: (entry.bankIds && entry.bankIds.size > 0)
+                    ? `/question-bank/solve/${Array.from(entry.bankIds)[0]}`
+                    : (entry.quizId ? `/quiz/${entry.quizId}` : `/exams`)
             });
         }
 
@@ -218,18 +236,21 @@ async function getUserWeakAreas(userId, options = {}) {
             return a.accuracy - b.accuracy || (b.wrong + b.skipped) - (a.wrong + a.skipped);
         });
 
-        // Mark reminded status without removing topics from the student's dashboard
-        const remindedTopicsSet = new Set(
-            (user?.remindedWeakTopics || []).map(r => (r.topic || '').trim().toLowerCase())
+        // Auto-remove topics where student performed activity (reminder, practice, test_again) within last 48 hours
+        const handledTopicsSet = new Set(
+            handledActivities.map(r => (r.topic || '').trim().toLowerCase())
         );
 
-        for (const t of topics) {
-            t.isReminded = remindedTopicsSet.has(t.topic.trim().toLowerCase());
+        // Active unhandled topics for radar
+        const activeTopics = topics.filter(t => !handledTopicsSet.has(t.topic.trim().toLowerCase()));
+
+        for (const t of activeTopics) {
+            t.isReminded = false;
         }
 
-        const weakTopics = topics.filter(t => t.status === 'critical');
-        const moderateTopics = topics.filter(t => t.status === 'moderate');
-        const strongTopics = topics.filter(t => t.status === 'strong');
+        const weakTopics = activeTopics.filter(t => t.status === 'critical');
+        const moderateTopics = activeTopics.filter(t => t.status === 'moderate');
+        const strongTopics = activeTopics.filter(t => t.status === 'strong');
 
         // Target topics for revision lessons: includes weak, moderate, and any active exam topics
         const targetTopics = [...weakTopics, ...moderateTopics, ...strongTopics].slice(0, 6);
@@ -308,10 +329,11 @@ async function getUserWeakAreas(userId, options = {}) {
 
         return {
             hasData: totalQuestionsAnalyzed > 0,
+            hasHandledActivities: handledActivities.length > 0,
             weakTopics,
             moderateTopics,
             strongTopics,
-            allTopicsCount: topics.length,
+            allTopicsCount: activeTopics.length,
             totalAnalyzed: totalQuestionsAnalyzed,
             totalMistakes,
             totalSkipped,

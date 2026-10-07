@@ -261,7 +261,7 @@ router.get('/dashboard', protect, async (req, res) => {
             const nowTime = new Date();
             const startOfToday = new Date(nowTime.getFullYear(), nowTime.getMonth(), nowTime.getDate());
             const endOfToday = new Date(nowTime.getFullYear(), nowTime.getMonth(), nowTime.getDate(), 23, 59, 59, 999);
-            const sixtyHoursAgo = new Date(Date.now() - (60 * 60 * 1000));
+            const sixtyHoursAgo = new Date(Date.now() - (60 * 60 * 60 * 1000));
 
             // Quizzes student attended in last 60 hours
             const attendedQuizIdsIn60h = (dbUser.quizResults || [])
@@ -949,7 +949,8 @@ router.get('/dashboard', protect, async (req, res) => {
                 const BankModel = require('../models/QuestionBank');
                 const QuestionBankAttemptModel = require('../models/QuestionBankAttempt');
 
-                const sixtyHoursAgo = new Date(Date.now() - (60 * 60 * 1000));
+                const sixtyHoursMs = 60 * 60 * 60 * 1000; // 60 hours in ms (216,000,000)
+                const sixtyHoursAgo = new Date(Date.now() - sixtyHoursMs);
 
                 // 1. Quizzes attended in last 60 hours
                 const attendedQuizIdsIn60h = (dbUser.quizResults || [])
@@ -957,22 +958,38 @@ router.get('/dashboard', protect, async (req, res) => {
                     .map(r => r.quiz.toString());
 
                 // 2. Question banks attempted in last 60 hours (both regular and personalized/quick-quiz)
+                const mongoose = require('mongoose');
+                const userQueryIds = [dbUser._id];
+                if (req.session.userId && String(req.session.userId) !== String(dbUser._id)) {
+                    userQueryIds.push(req.session.userId);
+                }
                 const recentBankAttempts = await QuestionBankAttemptModel.find({
-                    user: dbUser._id,
+                    user: { $in: userQueryIds },
                     $or: [
                         { submittedAt: { $gte: sixtyHoursAgo } },
-                        { createdAt: { $gte: sixtyHoursAgo } }
+                        { createdAt: { $gte: sixtyHoursAgo } },
+                        { _id: { $gte: mongoose.Types.ObjectId.createFromTime(Math.floor(sixtyHoursAgo.getTime() / 1000)) } }
                     ]
                 }).select('bank').lean();
                 const attendedBankIdsIn60h = recentBankAttempts
                     .filter(a => a && a.bank)
                     .map(a => a.bank.toString());
 
-                // Priority 1: Check for Active Live Exam (Global) - exclude quizzes attended in last 60 hours
+                // Combined exclusion set for all quizzes and question banks
+                const allAttendedExamsIn60h = [...new Set([
+                    ...attendedQuizIdsIn60h,
+                    ...attendedBankIdsIn60h
+                ])];
+                const validExcludedObjectIds = allAttendedExamsIn60h
+                    .filter(id => mongoose.Types.ObjectId.isValid(id))
+                    .map(id => new mongoose.Types.ObjectId(id));
+                const allExcluded = [...allAttendedExamsIn60h, ...validExcludedObjectIds];
+
+                // Priority 1: Check for Active Live Exam (Global) - exclude exams attended in last 60 hours
                 const liveExam = await QuizModel.findOne({
                     scheduledAt: { $lte: now },
                     expiresAt: { $gte: now },
-                    _id: { $nin: attendedQuizIdsIn60h }
+                    _id: { $nin: allExcluded }
                 }).select('_id title subject classLevel duration questions accessType').lean();
 
                 // Anti-clash check: Do not duplicate if top upcomingEvent banner already shows this exam
@@ -1001,14 +1018,14 @@ router.get('/dashboard', protect, async (req, res) => {
                     const candidateFilter = { 
                         status: 'approved', 
                         isCustom: { $ne: true },
-                        _id: { $nin: attendedBankIdsIn60h }
+                        _id: { $nin: allExcluded }
                     };
                     if (dbUser.classLevel) {
                         candidateFilter.classLevel = { $in: [dbUser.classLevel, 'All'] };
                     }
                     let candidateBanks = await BankModel.find(candidateFilter)
                         .sort({ examTakers: -1, views: -1, createdAt: -1 })
-                        .limit(10)
+                        .limit(12)
                         .select('_id title subject classLevel duration examTakers views board year')
                         .lean();
 
@@ -1016,17 +1033,24 @@ router.get('/dashboard', protect, async (req, res) => {
                         candidateBanks = await BankModel.find({ 
                             status: 'approved', 
                             isCustom: { $ne: true },
-                            _id: { $nin: attendedBankIdsIn60h }
+                            _id: { $nin: allExcluded }
                         })
                         .sort({ examTakers: -1, views: -1, createdAt: -1 })
-                        .limit(10)
+                        .limit(12)
                         .select('_id title subject classLevel duration examTakers views board year')
                         .lean();
                     }
 
                     if (candidateBanks && candidateBanks.length > 0) {
-                        // Dynamic Rotation: Pick from top candidates for fresh variety on visits
-                        const pickedBank = candidateBanks[Math.floor(Math.random() * candidateBanks.length)];
+                        // Dynamic Rotation: Rotate across pool and avoid immediate re-showing of the same test on page refreshes
+                        let pool = candidateBanks;
+                        if (req.session.lastSuggestedBankId && pool.length > 1) {
+                            const withoutLast = pool.filter(b => b._id.toString() !== req.session.lastSuggestedBankId.toString());
+                            if (withoutLast.length > 0) pool = withoutLast;
+                        }
+                        const pickedBank = pool[Math.floor(Math.random() * pool.length)];
+                        req.session.lastSuggestedBankId = pickedBank._id.toString();
+
                         let bankTitle = (pickedBank.title && pickedBank.title.trim()) ? pickedBank.title.trim() : '';
                         if (!bankTitle) {
                             if (pickedBank.board && pickedBank.year) {
@@ -1052,10 +1076,17 @@ router.get('/dashboard', protect, async (req, res) => {
                 // Priority 3: Fallback Quizzes (not attended in last 60 hours)
                 if (!suggestedExam) {
                     const candidateQuizzes = await QuizModel.find({
-                        _id: { $nin: attendedQuizIdsIn60h }
+                        _id: { $nin: allExcluded }
                     }).limit(10).select('_id title subject duration questions').lean();
                     if (candidateQuizzes && candidateQuizzes.length > 0) {
-                        const fallbackQuiz = candidateQuizzes[Math.floor(Math.random() * candidateQuizzes.length)];
+                        let pool = candidateQuizzes;
+                        if (req.session.lastSuggestedBankId && pool.length > 1) {
+                            const withoutLast = pool.filter(q => q._id.toString() !== req.session.lastSuggestedBankId.toString());
+                            if (withoutLast.length > 0) pool = withoutLast;
+                        }
+                        const fallbackQuiz = pool[Math.floor(Math.random() * pool.length)];
+                        req.session.lastSuggestedBankId = fallbackQuiz._id.toString();
+
                         suggestedExam = {
                             id: fallbackQuiz._id,
                             title: fallbackQuiz.title || 'কুইজ অনুশীলন',
@@ -1070,25 +1101,18 @@ router.get('/dashboard', protect, async (req, res) => {
                     }
                 }
 
-                // Priority 4: Ultimate Safety Fallback if literally everything was attended in last 60 hours
+                // Priority 4: All curated tests attended in last 60 hours -> Keep momentum alive with Question Bank / Custom Practice
                 if (!suggestedExam) {
-                    const anyBank = await BankModel.findOne({ status: 'approved', isCustom: { $ne: true } })
-                        .sort({ createdAt: -1 })
-                        .select('_id title subject classLevel duration board year examTakers')
-                        .lean();
-                    if (anyBank) {
-                        let bTitle = (anyBank.title && anyBank.title.trim()) ? anyBank.title.trim() : `${anyBank.subject || 'মডেল'} টেস্ট`;
-                        suggestedExam = {
-                            id: anyBank._id,
-                            title: bTitle,
-                            subject: anyBank.subject || 'মডেল টেস্ট',
-                            type: 'random',
-                            badgeText: 'রিভিশন টেস্ট',
-                            url: `/question-bank/solve/${anyBank._id}`,
-                            duration: anyBank.duration || 30,
-                            examTakers: anyBank.examTakers >= 30 ? anyBank.examTakers : 0
-                        };
-                    }
+                    suggestedExam = {
+                        id: 'practice_explore',
+                        title: 'প্রশ্নব্যাংক ও কাস্টম অনুশীলন',
+                        subject: 'বোর্ড প্রশ্ন ও অধ্যায়ভিত্তিক টেস্ট থেকে নিজেকে ঝালিয়ে নিন',
+                        type: 'practice',
+                        badgeText: 'সেলফ প্র্যাকটিস',
+                        url: '/question-bank',
+                        duration: 0,
+                        examTakers: 0
+                    };
                 }
             } catch (e) {
                 console.error('Error fetching suggested exam for dashboard:', e);

@@ -1193,6 +1193,31 @@ router.post('/student/set-revision-reminder', protect, async (req, res) => {
     }
 });
 
+router.post('/student/weak-area-activity', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const { topic, subject, actionType } = req.body;
+        if (!topic) return res.status(400).json({ success: false, error: 'Topic is required' });
+
+        const User = require('../models/User');
+        await User.findByIdAndUpdate(req.session.userId, {
+            $push: {
+                remindedWeakTopics: {
+                    topic: topic.trim(),
+                    subject: subject ? subject.trim() : '',
+                    remindedAt: new Date()
+                }
+            }
+        });
+
+        res.json({ success: true, message: 'Activity recorded successfully' });
+    } catch (err) {
+        console.error('Error recording weak area activity:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+
 // --- Student Personal Notes Upload (Library -> Your Notes) ---
 const studentNoteStorage = multer.diskStorage({
     destination: (req, file, cb) => {
