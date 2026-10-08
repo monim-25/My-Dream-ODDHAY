@@ -674,10 +674,23 @@
                 @keyframes aiSpinCW { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
                 @keyframes aiSpinCCW { 0% { transform: rotate(360deg); } 100% { transform: rotate(-360deg); } }
                 @keyframes aiPulseCore { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.12); opacity: 1; filter: drop-shadow(0 0 10px #38BDF8); } }
-                .perspective-1000 { perspective: 1000px; -webkit-perspective: 1000px; }
+                .perspective-1000, .perspective-1200 { perspective: 1200px; -webkit-perspective: 1200px; }
                 .transform-style-3d { transform-style: preserve-3d; -webkit-transform-style: preserve-3d; }
-                .backface-hidden { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-                .rotate-y-180 { transform: rotateY(180deg); }
+                .backface-hidden { 
+                    backface-visibility: hidden; 
+                    -webkit-backface-visibility: hidden; 
+                    transform: translate3d(0, 0, 1px);
+                    -webkit-transform: translate3d(0, 0, 1px);
+                }
+                .rotate-y-180 { 
+                    transform: rotateY(180deg) translate3d(0, 0, 1px) !important; 
+                    -webkit-transform: rotateY(180deg) translate3d(0, 0, 1px) !important; 
+                }
+                .fc-crisp {
+                    -webkit-font-smoothing: antialiased;
+                    -moz-osx-font-smoothing: grayscale;
+                    text-rendering: optimizeLegibility;
+                }
             </style>
 
             <!-- Main Dashboard Content Container with Clean Widget Cards & Balanced Gap -->
@@ -766,21 +779,17 @@
                     @keyframes liveBlowTeal {
                         0%, 100% {
                             box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.4), 0 0 8px rgba(20, 184, 166, 0.2);
-                            transform: scale(1);
                         }
                         50% {
                             box-shadow: 0 0 0 5px rgba(20, 184, 166, 0), 0 0 16px rgba(20, 184, 166, 0.45);
-                            transform: scale(1.02);
                         }
                     }
                     @keyframes liveBlowRose {
                         0%, 100% {
                             box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.45), 0 0 10px rgba(244, 63, 94, 0.25);
-                            transform: scale(1);
                         }
                         50% {
                             box-shadow: 0 0 0 6px rgba(244, 63, 94, 0), 0 0 18px rgba(244, 63, 94, 0.5);
-                            transform: scale(1.02);
                         }
                     }
                     .live-blowing-teal {
@@ -793,8 +802,10 @@
                     <% } %>
 
                     <!-- SMART REVISION FLASHCARDS (Standalone Spotlight Card - Placed Directly After Self Practice) -->
-                    <% if (locals.dailyFlashcards && dailyFlashcards.length > 0) { %>
-                    <div class="w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col p-3.5 sm:p-4 transition-all gap-2.5 relative group">
+                    <% if (locals.dailyFlashcards && dailyFlashcards.length > 0) { 
+                        const topicsList = (locals.flashcardTopics && flashcardTopics.length > 0) ? flashcardTopics : ['সকল বিষয়'];
+                    %>
+                    <div class="w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col p-3.5 sm:p-4 transition-all gap-2.5 relative group fc-crisp">
                         <!-- Top Row: Icon + Title + Status Badge -->
                         <div class="flex items-center justify-between gap-2">
                             <div class="flex items-center gap-2.5 min-w-0">
@@ -805,23 +816,38 @@
                                     <h3 class="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 antialiased leading-tight">
                                         স্মার্ট রিভিশন ফ্ল্যাশ কার্ড
                                     </h3>
-                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">আজকের দ্রুত রিভিশন ডেক</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">আজকের দ্রুত রিভিশন ডেক</p>
                                 </div>
                             </div>
 
                             <div class="flex items-center gap-1.5 shrink-0">
-                                <span class="px-2.5 py-0.5 rounded-md text-[10px] sm:text-xs font-bold text-amber-800 dark:text-amber-300 bg-amber-500/20 border border-amber-600/30 flex items-center gap-1">
-                                    <i class="fa-solid fa-fire text-[10px]"></i> +15 XP রিভিশন
+                                <span class="px-2.5 py-0.5 rounded-md text-xs font-bold text-amber-800 dark:text-amber-300 bg-amber-500/20 border border-amber-600/30 flex items-center gap-1">
+                                    <i class="fa-solid fa-fire text-[11px]"></i> +15 XP রিভিশন
                                 </span>
                             </div>
                         </div>
 
-                        <!-- Top Status & Dots Progress -->
+                        <!-- 1. Topic Filter Bar (Interactive Topic Selection) -->
+                        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 px-0.5 border-y border-slate-100 dark:border-slate-800/80">
+                            <span class="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0 mr-1 flex items-center gap-1">
+                                <i class="fa-solid fa-filter text-[11px] text-indigo-500"></i> টপিক:
+                            </span>
+                            <% topicsList.forEach((tp, tIdx) => { %>
+                                <button type="button" 
+                                        onclick="filterFlashcardsByTopic('<%= tp %>', this)" 
+                                        class="fc-topic-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 <%= tIdx === 0 ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/70 dark:border-slate-700/70' %>"
+                                        data-topic-name="<%= tp %>">
+                                    <%= tp %>
+                                </button>
+                            <% }) %>
+                        </div>
+
+                        <!-- Card Counter & Dots Progress -->
                         <div class="flex items-center justify-between gap-2 px-0.5 pt-0.5">
-                            <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
+                            <div class="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 font-semibold">
                                 <span>কার্ড</span>
                                 <span id="fcActiveNumBadge" class="font-bold text-slate-900 dark:text-slate-100">1</span>
-                                <span>/ <%= dailyFlashcards.length %></span>
+                                <span>/ <span id="fcTotalNumBadge"><%= dailyFlashcards.length %></span></span>
                             </div>
                             <div class="flex items-center gap-1.5" id="fcProgressDots">
                                 <% dailyFlashcards.forEach((_, fIdx) => { %>
@@ -837,49 +863,55 @@
                                 const correctOptChar = (typeof fc.correctAnswerIndex === 'number' && fc.correctAnswerIndex >= 0 && fc.correctAnswerIndex < 4) ? optChars[fc.correctAnswerIndex] : '✓';
                                 const correctOptText = (fc.options && typeof fc.correctAnswerIndex === 'number' && fc.options[fc.correctAnswerIndex]) ? fc.options[fc.correctAnswerIndex] : (fc.correctAnswer || 'সঠিক উত্তর সংরক্ষিত');
                             %>
-                                <div id="fcCardWrap-<%= fIdx %>" class="fc-card-item <%= fIdx === 0 ? 'block' : 'hidden' %>">
-                                    <!-- 3D Perspective Container -->
-                                    <div class="perspective-1000 w-full">
+                                <div id="fcCardWrap-<%= fIdx %>" 
+                                     class="fc-card-item <%= fIdx === 0 ? 'block' : 'hidden' %>"
+                                     data-card-idx="<%= fIdx %>"
+                                     data-subject="<%= (fc.subject || 'সাধারণ').trim() %>"
+                                     data-is-weak="<%= fc.isWeakTopic ? 'true' : 'false' %>">
+                                    
+                                    <!-- 3D Perspective Container (Crisp rendering) -->
+                                    <div class="perspective-1200 w-full">
                                         <div id="fcFlipper-<%= fIdx %>" class="relative w-full min-h-[250px] sm:min-h-[260px] transition-transform duration-500 transform-style-3d">
+                                            
                                             <!-- FRONT FACE -->
-                                            <div onclick="flipCard('<%= fIdx %>')" class="fc-front w-full h-full min-h-[250px] sm:min-h-[260px] backface-hidden flex flex-col justify-between p-3.5 sm:p-4 rounded-xl bg-gradient-to-br from-indigo-50/50 via-white to-sky-50/40 dark:from-indigo-950/20 dark:via-[#131d31] dark:to-slate-900 border border-slate-200/90 dark:border-slate-800/90 shadow-2xs cursor-pointer group">
+                                            <div onclick="flipCard('<%= fIdx %>')" class="fc-front w-full h-full min-h-[250px] sm:min-h-[260px] backface-hidden flex flex-col justify-between p-3.5 sm:p-4 rounded-xl bg-white dark:bg-[#111928] border border-slate-200 dark:border-slate-800 shadow-2xs cursor-pointer group hover:border-indigo-400/50 transition-colors">
                                                 <div>
                                                     <!-- Card Top Badges -->
                                                     <div class="flex items-center justify-between gap-1.5 mb-2.5">
                                                         <div class="flex items-center gap-1.5 flex-wrap">
-                                                            <span class="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 border border-indigo-500/25">
+                                                            <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                                                                 <%= fc.subject || 'সাধারণ' %>
                                                             </span>
                                                             <% if (fc.isWeakTopic) { %>
-                                                                <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/25">
-                                                                    দুর্বল অধ্যায়
+                                                                <span class="px-2 py-0.5 rounded-md text-xs font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                                                    দুর্বল অধ্যায়
                                                                 </span>
                                                             <% } %>
                                                             <% if (fc.board) { %>
-                                                                <span class="px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60">
+                                                                <span class="px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                                                     <%= fc.board %>
                                                                 </span>
                                                             <% } %>
                                                         </div>
-                                                        <span class="text-[10px] font-semibold text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex items-center gap-1 transition-colors">
-                                                            <i class="fa-solid fa-hand-pointer text-[9px]"></i> ট্যাপ করুন
+                                                        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex items-center gap-1 transition-colors">
+                                                            <i class="fa-solid fa-hand-pointer text-[10px]"></i> ট্যাপ করে উল্টান
                                                         </span>
                                                     </div>
 
-                                                    <!-- Question Text -->
-                                                    <h4 class="text-xs sm:text-[13px] font-bold text-slate-900 dark:text-slate-100 leading-snug mb-3">
+                                                    <!-- Question Text (Crisp font & strong contrast) -->
+                                                    <h4 class="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 leading-relaxed mb-3">
                                                         <%= fc.questionText %>
                                                     </h4>
 
-                                                    <!-- MCQ Options (if any) -->
+                                                    <!-- MCQ Options (Crisp typography) -->
                                                     <% if (fc.options && fc.options.length > 0) { %>
-                                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mb-2">
+                                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
                                                             <% fc.options.slice(0, 4).forEach((opt, oIdx) => { %>
-                                                                <div class="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-slate-100/70 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700/60 text-[11px] text-slate-700 dark:text-slate-300 font-medium">
-                                                                    <span class="size-4.5 rounded bg-white dark:bg-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-600 text-indigo-600 dark:text-indigo-400 leading-none">
+                                                                <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs sm:text-[13px] text-slate-800 dark:text-slate-200 font-medium">
+                                                                    <span class="size-5 rounded-md bg-white dark:bg-slate-700 font-bold text-xs flex items-center justify-center shrink-0 border border-slate-300 dark:border-slate-600 text-indigo-700 dark:text-indigo-300 leading-none">
                                                                         <%= optChars[oIdx] %>
                                                                     </span>
-                                                                    <span class="truncate leading-tight"><%= opt %></span>
+                                                                    <span class="truncate leading-normal"><%= opt %></span>
                                                                 </div>
                                                             <% }) %>
                                                         </div>
@@ -888,29 +920,29 @@
 
                                                 <!-- Flip CTA Button -->
                                                 <div class="pt-2 mt-auto border-t border-slate-100 dark:border-slate-800">
-                                                    <button type="button" class="w-full py-2 px-3 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 dark:bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center gap-2 border border-indigo-500/20 transition-all pointer-events-none">
+                                                    <button type="button" class="w-full py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 border border-indigo-200/80 dark:border-indigo-800/80 transition-all pointer-events-none">
                                                         <span>উত্তর দেখুন ও যাচাই করুন</span>
-                                                        <i class="fa-solid fa-arrow-rotate-right text-[11px] group-hover:rotate-180 transition-transform duration-300"></i>
+                                                        <i class="fa-solid fa-arrow-rotate-right text-xs group-hover:rotate-180 transition-transform duration-300"></i>
                                                     </button>
                                                 </div>
                                             </div>
 
                                             <!-- BACK FACE (Answer & Explanation) -->
-                                            <div class="fc-back absolute inset-0 w-full h-full backface-hidden rotate-y-180 flex flex-col justify-between p-3.5 sm:p-4 rounded-xl bg-gradient-to-br from-emerald-50/50 via-white to-teal-50/40 dark:from-emerald-950/25 dark:via-[#131d31] dark:to-slate-900 border border-emerald-500/30 dark:border-emerald-600/30 shadow-2xs">
+                                            <div class="fc-back absolute inset-0 w-full h-full backface-hidden rotate-y-180 flex flex-col justify-between p-3.5 sm:p-4 rounded-xl bg-white dark:bg-[#111928] border border-emerald-500/40 dark:border-emerald-600/40 shadow-2xs">
                                                 <div>
                                                     <!-- Back Top Row -->
                                                     <div class="flex items-center justify-between gap-1.5 mb-2.5">
-                                                        <span class="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-500/25 flex items-center gap-1">
-                                                            <i class="fa-solid fa-circle-check text-[10px]"></i> সঠিক উত্তর
+                                                        <span class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5">
+                                                            <i class="fa-solid fa-circle-check text-xs"></i> সঠিক উত্তর
                                                         </span>
-                                                        <span class="text-[10px] font-semibold text-slate-400">
+                                                        <span class="text-xs font-semibold text-slate-600 dark:text-slate-400">
                                                             <%= fc.subject || 'সাধারণ' %>
                                                         </span>
                                                     </div>
 
                                                     <!-- Answer Display Box -->
-                                                    <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 dark:text-emerald-200 text-xs sm:text-sm font-black flex items-center gap-2 mb-2.5">
-                                                        <span class="size-5.5 rounded-lg bg-emerald-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0 shadow-2xs leading-none">
+                                                    <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-950 dark:text-emerald-100 text-xs sm:text-sm font-bold flex items-center gap-2 mb-2.5">
+                                                        <span class="size-6 rounded-lg bg-emerald-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs leading-none">
                                                             <%= correctOptChar %>
                                                         </span>
                                                         <span class="line-clamp-2"><%= correctOptText %></span>
@@ -918,14 +950,14 @@
 
                                                     <!-- Explanation Box -->
                                                     <% if (fc.explanation && fc.explanation.trim() !== '') { %>
-                                                        <div class="p-2.5 rounded-xl bg-slate-100/80 dark:bg-slate-800/70 border border-slate-200/60 dark:border-slate-700/60 text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed mb-2 max-h-[85px] overflow-y-auto custom-scrollbar">
+                                                        <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 text-xs sm:text-[13px] text-slate-800 dark:text-slate-200 leading-relaxed mb-2 max-h-[90px] overflow-y-auto custom-scrollbar">
                                                             <span class="font-bold text-indigo-600 dark:text-indigo-400 block mb-0.5">
-                                                                <i class="fa-solid fa-lightbulb text-[10px]"></i> ব্যাখ্যা:
+                                                                <i class="fa-solid fa-lightbulb text-xs"></i> ব্যাখ্যা:
                                                             </span>
                                                             <p><%= fc.explanation %></p>
                                                         </div>
                                                     <% } else { %>
-                                                        <div class="p-2 rounded-xl bg-slate-100/60 dark:bg-slate-800/40 border border-slate-200/40 dark:border-slate-700/40 text-[10.5px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mb-2">
+                                                        <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1.5 mb-2">
                                                             <i class="fa-solid fa-lightbulb text-amber-500 text-xs shrink-0"></i>
                                                             <span>টিপস: পরীক্ষার জন্য মূল সূত্র ও সংজ্ঞাগুলো নিয়মিত রিভিশন করুন।</span>
                                                         </div>
@@ -933,13 +965,13 @@
                                                 </div>
 
                                                 <!-- Back Action Buttons -->
-                                                <div class="flex items-center gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
-                                                    <button type="button" onclick="flipCard('<%= fIdx %>')" class="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center justify-center gap-1.5 border border-slate-200/70 dark:border-slate-700/70">
-                                                        <i class="fa-solid fa-rotate-left text-[10px]"></i>
+                                                <div class="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                                                    <button type="button" onclick="flipCard('<%= fIdx %>')" class="flex-1 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 transition-colors flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-700">
+                                                        <i class="fa-solid fa-rotate-left text-xs"></i>
                                                         <span>প্রশ্ন দেখুন</span>
                                                     </button>
-                                                    <button type="button" onclick="markCardMastered('<%= fIdx %>', '<%= dailyFlashcards.length %>')" class="flex-1 py-1.5 px-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors flex items-center justify-center gap-1.5">
-                                                        <i class="fa-solid fa-check text-[10px]"></i>
+                                                    <button type="button" onclick="markCardMastered('<%= fIdx %>')" class="flex-1 py-2 px-3 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors flex items-center justify-center gap-1.5">
+                                                        <i class="fa-solid fa-check text-xs"></i>
                                                         <span>আয়ত্তে এসেছে</span>
                                                     </button>
                                                 </div>
@@ -949,36 +981,48 @@
 
                                     <!-- Bottom Deck Navigation Controls -->
                                     <div class="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                                        <button type="button" onclick="prevFlashcard('<%= fIdx %>', '<%= dailyFlashcards.length %>')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1 transition-colors" <%= fIdx === 0 ? 'disabled' : '' %>>
+                                        <button type="button" onclick="prevFlashcard('<%= fIdx %>')" class="fc-prev-btn px-3 py-1.5 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-30 disabled:pointer-events-none flex items-center gap-1 transition-colors" <%= fIdx === 0 ? 'disabled' : '' %>>
                                             <i class="fa-solid fa-chevron-left text-[10px]"></i>
                                             <span>পূর্ববর্তী</span>
                                         </button>
-                                        <a href="/question-bank" class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                                        <a href="/question-bank" class="text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
                                             আরো প্রশ্নব্যাংক অনুশীলন →
                                         </a>
-                                        <button type="button" onclick="nextFlashcard('<%= fIdx %>', '<%= dailyFlashcards.length %>')" class="px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1 transition-colors">
-                                            <span><%= fIdx === dailyFlashcards.length - 1 ? 'সমাপ্ত করুন' : 'পরবর্তী' %></span>
+                                        <button type="button" onclick="nextFlashcard('<%= fIdx %>')" class="fc-next-btn px-3 py-1.5 rounded-lg text-xs font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 flex items-center gap-1 transition-colors">
+                                            <span class="fc-next-label"><%= fIdx === dailyFlashcards.length - 1 ? 'সমাপ্ত করুন' : 'পরবর্তী' %></span>
                                             <i class="fa-solid fa-chevron-right text-[10px]"></i>
                                         </button>
                                     </div>
                                 </div>
                             <% }) %>
 
+                            <!-- Empty Filter State -->
+                            <div id="fcTopicEmptyCard" class="hidden text-center py-6 px-3 flex flex-col items-center justify-center gap-2">
+                                <div class="size-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center text-base">
+                                    <i class="fa-solid fa-book-open"></i>
+                                </div>
+                                <h4 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">এই টপিকে কোনো কার্ড নেই</h4>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">অন্য কোনো টপিক নির্বাচন করুন অথবা সব বিষয় দেখুন।</p>
+                                <button type="button" onclick="filterFlashcardsByTopic('সকল বিষয়', document.querySelector('.fc-topic-btn[data-topic-name=\'সকল বিষয়\']'))" class="mt-1 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white">
+                                    সকল বিষয় দেখুন
+                                </button>
+                            </div>
+
                             <!-- Deck Completion View -->
                             <div id="fcCompletionCard" class="hidden text-center py-6 px-3 flex flex-col items-center justify-center gap-2.5">
-                                <div class="size-13 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-xs text-xl">
+                                <div class="size-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-xs text-xl">
                                     🎉
                                 </div>
                                 <div>
-                                    <h4 class="text-sm font-bold text-slate-800 dark:text-slate-100">আজকের ফ্ল্যাশ কার্ড সম্পন্ন!</h4>
-                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">সবগুলো রিভিশন সফলভাবে সম্পন্ন হয়েছে। প্রতিদিন রিভিশন বজায় রাখুন।</p>
+                                    <h4 class="text-sm font-bold text-slate-900 dark:text-slate-100">ফ্ল্যাশ কার্ড রিভিশন সম্পন্ন!</h4>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">সবগুলো প্রশ্ন সফলভাবে রিভিশন সম্পন্ন হয়েছে। প্রতিদিন রিভিশন বজায় রাখুন।</p>
                                 </div>
                                 <div id="fcXpRewardBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold">
                                     <i class="fa-solid fa-bolt text-amber-500"></i>
                                     <span>+15 XP রিভিশন বোনাস অর্জিত</span>
                                 </div>
                                 <div class="flex items-center gap-2 mt-1">
-                                    <button type="button" onclick="restartFlashcards('<%= dailyFlashcards.length %>')" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1 border border-slate-200/80 dark:border-slate-700/80">
+                                    <button type="button" onclick="restartFlashcards()" class="px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1 border border-slate-200 dark:border-slate-700">
                                         <i class="fa-solid fa-rotate-right text-[10px]"></i>
                                         <span>আবার শুরু করুন</span>
                                     </button>
@@ -991,6 +1035,71 @@
                         </div>
                     </div>
                     <% } %>
+
+                    <!-- STANDALONE QUICK STUDY NOTES & SCRATCHPAD (Placed Directly Before Video Lesson Watch Tracker) -->
+                    <div class="w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col p-3.5 sm:p-4 transition-all gap-2.5 relative group fc-crisp">
+                        <!-- Top Row: Icon + Title + Auto-Save Status -->
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <div class="size-8 sm:size-9 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                                    <i class="fa-solid fa-pen-to-square text-sm sm:text-base"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 antialiased leading-tight">
+                                        স্টাডি কুইক নোট ও স্ক্র্যাচপ্যাড
+                                    </h3>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">পড়ার সময় গুরুত্বপূর্ণ সূত্র ও কুইক পয়েন্ট লিখে রাখুন</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <span id="scratchSaveStatus" class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg inline-flex items-center gap-1">
+                                    <i class="fa-solid fa-cloud-arrow-up text-[10px]"></i>
+                                    <span>অটো-সেভ সক্রিয়</span>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Math & Science One-Tap Symbol Toolbar -->
+                        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1 px-0.5 border-y border-slate-100 dark:border-slate-800/80">
+                            <span class="text-xs font-bold text-slate-600 dark:text-slate-300 shrink-0 mr-1 flex items-center gap-1">
+                                <i class="fa-solid fa-square-root-variable text-[11px] text-sky-500"></i> প্রতীক:
+                            </span>
+                            <% const symbols = ['√', 'π', 'θ', 'Δ', 'α', 'β', '±', '²', '³', '⇌', '→', '°', 'λ', '∞']; %>
+                            <% symbols.forEach(sym => { %>
+                                <button type="button" onclick="insertNoteSymbol('<%= sym %>')" class="px-2 py-0.5 rounded-md text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-sky-500/15 hover:text-sky-600 dark:hover:text-sky-400 text-slate-700 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60 transition-colors shrink-0">
+                                    <%= sym %>
+                                </button>
+                            <% }) %>
+                        </div>
+
+                        <!-- Quick Scratchpad Textarea -->
+                        <div class="relative w-full">
+                            <textarea id="quickScratchpadText" 
+                                      rows="3" 
+                                      oninput="handleScratchpadInput()"
+                                      placeholder="এখানে আপনার আজকের গুরুত্বপূর্ণ সূত্র, গণিতের নোট বা রিভিশন পয়েন্ট লিখে রাখুন... (ব্রাউজারে স্বয়ংক্রিয়ভাবে সংরক্ষিত থাকে)" 
+                                      class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500 transition-all resize-none leading-relaxed font-sans placeholder:text-slate-400 dark:placeholder:text-slate-500 custom-scrollbar"></textarea>
+                        </div>
+
+                        <!-- Bottom Actions Toolbar -->
+                        <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/80">
+                            <div class="text-[11px] text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
+                                <i class="fa-solid fa-shield-halved text-emerald-500 text-[10px]"></i>
+                                <span>ডাটা আপনার লোকাল ব্রাউজারে সুরক্ষিত</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <button type="button" id="copyNoteBtn" onclick="copyQuickNote()" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1 border border-slate-200/80 dark:border-slate-700/80">
+                                    <i class="fa-solid fa-copy text-[10px]"></i>
+                                    <span>কপি করুন</span>
+                                </button>
+                                <button type="button" onclick="clearQuickNote()" class="px-2 py-1 rounded-lg text-xs font-bold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors flex items-center gap-1">
+                                    <i class="fa-solid fa-trash-can text-[10px]"></i>
+                                    <span>মুছুন</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
                     <!-- 2. VIDEO LESSON WATCH TRACKER (Standalone, Matching Quick Quiz Aesthetics) -->
                     <div class="w-full bg-[#FFFFFF] dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 rounded-2xl border border-slate-200/80 dark:border-slate-800/80 shadow-2xs overflow-hidden flex flex-col p-3.5 sm:p-4 transition-all gap-2.5 relative group">
@@ -2403,6 +2512,112 @@
             } catch (e) {}
         }
 
+        // ------------------ SMART FLASHCARDS WITH TOPIC FILTER ------------------
+        let currentFilteredCardIndices = [];
+        let currentFilterStep = 0;
+        let activeFlashcardTopic = 'সকল বিষয়';
+
+        function initFlashcardsDeck() {
+            const allCards = document.querySelectorAll('.fc-card-item');
+            if (!allCards.length) return;
+            currentFilteredCardIndices = Array.from(allCards).map((_, i) => i);
+            currentFilterStep = 0;
+            updateFlashcardDeckView();
+        }
+
+        function filterFlashcardsByTopic(topicName, btnEl) {
+            activeFlashcardTopic = topicName;
+
+            // Highlight active button pill
+            document.querySelectorAll('.fc-topic-btn').forEach(btn => {
+                btn.className = 'fc-topic-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/70 dark:border-slate-700/70';
+            });
+            if (btnEl) {
+                btnEl.className = 'fc-topic-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 bg-indigo-600 text-white shadow-xs';
+            }
+
+            // Reset flippers of all cards
+            document.querySelectorAll('[id^="fcFlipper-"]').forEach(f => f.classList.remove('rotate-y-180'));
+
+            // Filter matching indices
+            const allCards = document.querySelectorAll('.fc-card-item');
+            const matching = [];
+            allCards.forEach((card, idx) => {
+                const subj = (card.getAttribute('data-subject') || '').trim();
+                const isWeak = card.getAttribute('data-is-weak') === 'true';
+                let match = false;
+                if (topicName === 'সকল বিষয়') {
+                    match = true;
+                } else if (topicName === 'দুর্বল অধ্যায়') {
+                    match = isWeak;
+                } else {
+                    match = (subj === topicName);
+                }
+                if (match) matching.push(idx);
+            });
+
+            currentFilteredCardIndices = matching;
+            currentFilterStep = 0;
+
+            const emptyView = document.getElementById('fcTopicEmptyCard');
+            const compView = document.getElementById('fcCompletionCard');
+            if (compView) compView.classList.add('hidden');
+
+            if (matching.length === 0) {
+                allCards.forEach(c => c.classList.add('hidden'));
+                if (emptyView) emptyView.classList.remove('hidden');
+                const badge = document.getElementById('fcActiveNumBadge');
+                if (badge) badge.innerText = '0';
+                const totalBadge = document.getElementById('fcTotalNumBadge');
+                if (totalBadge) totalBadge.innerText = '0';
+                const dots = document.getElementById('fcProgressDots');
+                if (dots) dots.innerHTML = '';
+            } else {
+                if (emptyView) emptyView.classList.add('hidden');
+                updateFlashcardDeckView();
+            }
+        }
+
+        function updateFlashcardDeckView() {
+            const allCards = document.querySelectorAll('.fc-card-item');
+            allCards.forEach(c => c.classList.add('hidden'));
+
+            if (!currentFilteredCardIndices.length) return;
+
+            const activeCardIdx = currentFilteredCardIndices[currentFilterStep];
+            const targetEl = document.getElementById('fcCardWrap-' + activeCardIdx);
+            if (targetEl) targetEl.classList.remove('hidden');
+
+            // Counter Badge
+            const badge = document.getElementById('fcActiveNumBadge');
+            if (badge) badge.innerText = (currentFilterStep + 1);
+            const totalBadge = document.getElementById('fcTotalNumBadge');
+            if (totalBadge) totalBadge.innerText = currentFilteredCardIndices.length;
+
+            // Update Previous and Next buttons on the active card
+            if (targetEl) {
+                const prevBtn = targetEl.querySelector('.fc-prev-btn');
+                if (prevBtn) {
+                    prevBtn.disabled = (currentFilterStep === 0);
+                }
+                const nextLabel = targetEl.querySelector('.fc-next-label');
+                if (nextLabel) {
+                    nextLabel.innerText = (currentFilterStep === currentFilteredCardIndices.length - 1) ? 'সমাপ্ত করুন' : 'পরবর্তী';
+                }
+            }
+
+            // Rebuild Progress Dots
+            const dotsContainer = document.getElementById('fcProgressDots');
+            if (dotsContainer) {
+                let dotsHtml = '';
+                currentFilteredCardIndices.forEach((_, stepIdx) => {
+                    const isActive = (stepIdx === currentFilterStep);
+                    dotsHtml += `<span class="fc-dot size-2 rounded-full transition-all ${isActive ? 'bg-indigo-600 dark:bg-indigo-400 w-4' : 'bg-slate-300 dark:bg-slate-700'}"></span>`;
+                });
+                dotsContainer.innerHTML = dotsHtml;
+            }
+        }
+
         // 3D Flip Card Toggle
         function flipCard(cardIdx) {
             const flipper = document.getElementById('fcFlipper-' + cardIdx);
@@ -2411,54 +2626,34 @@
             }
         }
 
-        // Navigate to Next Flashcard
-        function nextFlashcard(currentIdx, totalCount) {
+        // Navigate to Next Flashcard in the active filtered deck
+        function nextFlashcard(currentIdx) {
             const flipper = document.getElementById('fcFlipper-' + currentIdx);
             if (flipper) flipper.classList.remove('rotate-y-180');
 
-            const nextIdx = parseInt(currentIdx, 10) + 1;
-            const total = parseInt(totalCount, 10);
-
-            if (nextIdx >= total) {
-                // Completed all cards in the deck
+            if (currentFilterStep + 1 >= currentFilteredCardIndices.length) {
                 finishFlashcards();
                 return;
             }
 
-            showFlashcardAt(nextIdx, total);
+            currentFilterStep++;
+            updateFlashcardDeckView();
         }
 
-        // Navigate to Previous Flashcard
-        function prevFlashcard(currentIdx, totalCount) {
+        // Navigate to Previous Flashcard in the active filtered deck
+        function prevFlashcard(currentIdx) {
             const flipper = document.getElementById('fcFlipper-' + currentIdx);
             if (flipper) flipper.classList.remove('rotate-y-180');
 
-            const prevIdx = parseInt(currentIdx, 10) - 1;
-            if (prevIdx < 0) return;
-
-            showFlashcardAt(prevIdx, totalCount);
-        }
-
-        function showFlashcardAt(targetIdx, totalCount) {
-            document.querySelectorAll('.fc-card-item').forEach(el => el.classList.add('hidden'));
-            const targetEl = document.getElementById('fcCardWrap-' + targetIdx);
-            if (targetEl) targetEl.classList.remove('hidden');
-
-            const numBadge = document.getElementById('fcActiveNumBadge');
-            if (numBadge) numBadge.innerText = (targetIdx + 1);
-
-            document.querySelectorAll('#fcProgressDots .fc-dot').forEach((dot, dIdx) => {
-                if (dIdx === targetIdx) {
-                    dot.className = 'fc-dot size-2 rounded-full transition-all bg-indigo-600 dark:bg-indigo-400 w-4';
-                } else {
-                    dot.className = 'fc-dot size-2 rounded-full transition-all bg-slate-300 dark:bg-slate-700';
-                }
-            });
+            if (currentFilterStep > 0) {
+                currentFilterStep--;
+                updateFlashcardDeckView();
+            }
         }
 
         // Mark a Card as Mastered
-        function markCardMastered(cardIdx, totalCount) {
-            nextFlashcard(cardIdx, totalCount);
+        function markCardMastered(cardIdx) {
+            nextFlashcard(cardIdx);
         }
 
         // Complete Deck & Award XP
@@ -2491,14 +2686,12 @@
         }
 
         // Restart Flashcards Deck
-        function restartFlashcards(totalCount) {
+        function restartFlashcards() {
             const compView = document.getElementById('fcCompletionCard');
             if (compView) compView.classList.add('hidden');
-            for (let i = 0; i < totalCount; i++) {
-                const flipper = document.getElementById('fcFlipper-' + i);
-                if (flipper) flipper.classList.remove('rotate-y-180');
-            }
-            showFlashcardAt(0, totalCount);
+            document.querySelectorAll('[id^="fcFlipper-"]').forEach(f => f.classList.remove('rotate-y-180'));
+            currentFilterStep = 0;
+            updateFlashcardDeckView();
         }
 
         // Quick Scratchpad Functions
@@ -2562,8 +2755,9 @@
             }
         }
 
-        // Restore active tab on page load
+        // Restore active states on page load
         document.addEventListener('DOMContentLoaded', () => {
+            initFlashcardsDeck();
             loadQuickNote();
             try {
                 const savedTab = sessionStorage.getItem('oddhay_dash_rev_tab');

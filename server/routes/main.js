@@ -1149,34 +1149,44 @@ router.get('/dashboard', protect, async (req, res) => {
                             { topic: { $in: weakRegexes } },
                             { subject: { $in: weakRegexes } }
                         ]
-                    }).limit(3).lean();
+                    }).limit(4).lean();
                     if (weakQuestions && weakQuestions.length > 0) {
                         dailyFlashcards.push(...weakQuestions.map(q => ({ ...q, isWeakTopic: true })));
                     }
                 }
 
                 // Priority B: Questions matching student's class
-                if (dailyFlashcards.length < 3) {
+                if (dailyFlashcards.length < 8) {
                     const excludeIds = dailyFlashcards.map(q => q._id);
                     const classQuestions = await Question.find({
                         _id: { $nin: excludeIds },
                         ...(classConditions.length > 0 ? { $or: classConditions } : {})
-                    }).limit(3 - dailyFlashcards.length).lean();
+                    }).limit(8 - dailyFlashcards.length).lean();
                     if (classQuestions && classQuestions.length > 0) {
                         dailyFlashcards.push(...classQuestions);
                     }
                 }
 
                 // Priority C: General fallback pool
-                if (dailyFlashcards.length < 3) {
+                if (dailyFlashcards.length < 8) {
                     const excludeIds = dailyFlashcards.map(q => q._id);
                     const fallbackQuestions = await Question.find({
                         _id: { $nin: excludeIds }
-                    }).limit(3 - dailyFlashcards.length).lean();
+                    }).limit(8 - dailyFlashcards.length).lean();
                     if (fallbackQuestions && fallbackQuestions.length > 0) {
                         dailyFlashcards.push(...fallbackQuestions);
                     }
                 }
+
+                // Extract distinct topics and subjects for topic filtering
+                var flashcardTopics = ['সকল বিষয়'];
+                if (dailyFlashcards.some(q => q.isWeakTopic)) {
+                    flashcardTopics.push('দুর্বল অধ্যায়');
+                }
+                const distinctSubjects = [...new Set(dailyFlashcards.map(q => (q.subject || '').trim()).filter(Boolean))];
+                distinctSubjects.forEach(s => {
+                    if (!flashcardTopics.includes(s)) flashcardTopics.push(s);
+                });
             } catch (fcErr) {
                 console.error('Error fetching daily flashcards:', fcErr);
             }
@@ -1204,6 +1214,7 @@ router.get('/dashboard', protect, async (req, res) => {
                 savedBookmarks,
                 weakAreas,
                 dailyFlashcards,
+                flashcardTopics: flashcardTopics || ['সকল বিষয়'],
                 progressStats,
                 suggestedExam,
                 questionBankAttempts: allBankAttempts
