@@ -1396,4 +1396,83 @@ router.post('/library/save-quick-note', protect, async (req, res) => {
     }
 });
 
+router.post('/record-flashcard-answer', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const mongoose = require('mongoose');
+        const { questionId, subject, topic, isCorrect, selectedOptionIndex } = req.body;
+        const QuestionBank = require('../models/QuestionBank');
+        const QuestionBankAttempt = require('../models/QuestionBankAttempt');
+        const User = require('../models/User');
+
+        const safeSubject = (subject || 'General').trim();
+        const safeTopic = (topic || subject || 'Quick Practice').trim();
+        const isRight = Boolean(isCorrect);
+
+        // Find or create the dedicated Smart Revision / Quick MCQ QuestionBank
+        let quickBank = await QuestionBank.findOne({ 
+            isCustom: true, 
+            topic: safeTopic,
+            subject: safeSubject 
+        });
+
+        if (!quickBank) {
+            quickBank = await QuestionBank.create({
+                title: `${safeTopic} - কুইক এমসিকিউ`,
+                subject: safeSubject,
+                topic: safeTopic,
+                status: 'approved',
+                isCustom: true
+            });
+        }
+
+        // Record a QuestionBankAttempt so weakAreaService immediately aggregates it
+        const attempt = await QuestionBankAttempt.create({
+            user: req.session.userId,
+            bank: quickBank._id,
+            userAnswers: [{
+                questionId: (questionId && mongoose.Types.ObjectId.isValid(questionId)) ? questionId : undefined,
+                questionType: 'MCQ',
+                selectedOptionIndex: typeof selectedOptionIndex === 'number' ? selectedOptionIndex : -1,
+                isCorrect: isRight,
+                marksObtained: isRight ? 1 : 0,
+                maxMarks: 1
+            }],
+            mcqScore: isRight ? 1 : 0,
+            maxMcqScore: 1,
+            mcqTotalQuestions: 1,
+            mcqCorrectCount: isRight ? 1 : 0,
+            wrongMcqCount: isRight ? 0 : 1,
+            submittedAt: new Date()
+        });
+
+        // Update user daily goals/XP
+        const user = await User.findById(req.session.userId);
+        if (user) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            if (!user.dailyGoals || user.dailyGoals.date !== todayStr) {
+                user.dailyGoals = { date: todayStr, videosCount: 0, quizzesCount: 0, notesCount: 0, todayXpEarned: 0 };
+            }
+            user.dailyGoals.quizzesCount = (user.dailyGoals.quizzesCount || 0) + 1;
+            if (isRight) {
+                user.dailyGoals.todayXpEarned = (user.dailyGoals.todayXpEarned || 0) + 5;
+                user.totalXP = (user.totalXP || 0) + 5;
+            }
+            user.markModified('dailyGoals');
+            await user.save();
+        }
+
+        res.json({
+            success: true,
+            attemptId: attempt._id,
+            isCorrect: isRight,
+            recordedTopic: safeTopic,
+            recordedSubject: safeSubject
+        });
+    } catch (err) {
+        console.error('Error recording flashcard answer:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;

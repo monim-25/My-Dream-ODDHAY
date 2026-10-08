@@ -3,6 +3,7 @@ const QuestionBank = require('../models/QuestionBank');
 const Question = require('../models/Question');
 const Course = require('../models/Course');
 const User = require('../models/User');
+const Quiz = require('../models/Quiz');
 const pushNotificationService = require('./pushNotificationService');
 
 /**
@@ -21,17 +22,11 @@ async function getUserWeakAreas(userId, options = {}) {
             .populate('quizResults.quiz', 'title subject classLevel questions')
             .lean();
 
-        const sevenDaysAgo = new Date(Date.now() - (7 * 24 * 60 * 60 * 1000));
-
-        // 2. Fetch recent question bank attempts within last 7 days
+        // 2. Fetch recent question bank attempts (latest up to limitAttempts)
         const attempts = await QuestionBankAttempt.find({
-            user: userId,
-            $or: [
-                { submittedAt: { $gte: sevenDaysAgo } },
-                { createdAt: { $gte: sevenDaysAgo } }
-            ]
+            user: userId
         })
-            .sort({ submittedAt: -1 })
+            .sort({ submittedAt: -1, createdAt: -1 })
             .limit(limitAttempts)
             .populate({
                 path: 'userAnswers.questionId',
@@ -40,7 +35,11 @@ async function getUserWeakAreas(userId, options = {}) {
             .populate('bank', 'title subject topic course')
             .lean();
 
-        const recentQuizResults = (user?.quizResults || []).filter(qr => qr && qr.date && new Date(qr.date) >= sevenDaysAgo);
+        // Latest quiz results (sorted newest first, up to limitAttempts)
+        const userQuizzes = Array.isArray(user?.quizResults) ? user.quizResults : [];
+        const recentQuizResults = [...userQuizzes]
+            .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+            .slice(0, limitAttempts);
         const hasAttempts = attempts && attempts.length > 0;
         const hasQuizResults = recentQuizResults.length > 0;
 
@@ -100,7 +99,7 @@ async function getUserWeakAreas(userId, options = {}) {
                         let topic = (q && q.topic) ? q.topic.trim() : defaultTopic;
                         if (!topic) topic = defaultSubject + ' - সাধারণ আলোচনা';
 
-                        const key = `${subject}:::${topic}`;
+                        const key = topic.trim().toLowerCase();
                         if (!topicMap.has(key)) {
                             topicMap.set(key, {
                                 subject,
@@ -116,6 +115,9 @@ async function getUserWeakAreas(userId, options = {}) {
                         }
 
                         const entry = topicMap.get(key);
+                        if (subject && subject !== 'সাধারণ বিষয়' && entry.subject === 'সাধারণ বিষয়') {
+                            entry.subject = subject;
+                        }
                         entry.total++;
                         if (isCorrect) {
                             entry.correct++;
@@ -137,15 +139,15 @@ async function getUserWeakAreas(userId, options = {}) {
                     }
                 } else if (attempt.bank) {
                     // Fallback for attempt without populated userAnswers array
-                    const key = `${defaultSubject}:::${defaultTopic}`;
-                    if (!topicMap.has(key)) {
-                        const total = attempt.totalBankQuestions || attempt.mcqTotalQuestions || 1;
-                        const correct = attempt.mcqCorrectCount || 0;
-                        const wrong = attempt.wrongMcqCount || Math.max(0, total - correct);
-                        totalQuestionsAnalyzed += total;
-                        totalCorrectAnswers += correct;
-                        totalMistakes += wrong;
+                    const key = defaultTopic.trim().toLowerCase();
+                    const total = attempt.totalBankQuestions || attempt.mcqTotalQuestions || 1;
+                    const correct = attempt.mcqCorrectCount || 0;
+                    const wrong = attempt.wrongMcqCount || Math.max(0, total - correct);
+                    totalQuestionsAnalyzed += total;
+                    totalCorrectAnswers += correct;
+                    totalMistakes += wrong;
 
+                    if (!topicMap.has(key)) {
                         topicMap.set(key, {
                             subject: defaultSubject,
                             topic: defaultTopic,
@@ -157,6 +159,14 @@ async function getUserWeakAreas(userId, options = {}) {
                             maxMarks: attempt.maxMcqScore || total,
                             bankIds: new Set(attempt.bank._id ? [attempt.bank._id.toString()] : [])
                         });
+                    } else {
+                        const entry = topicMap.get(key);
+                        entry.total += total;
+                        entry.correct += correct;
+                        entry.wrong += wrong;
+                        entry.marksObtained += (attempt.mcqScore || 0);
+                        entry.maxMarks += (attempt.maxMcqScore || total);
+                        if (attempt.bank._id) entry.bankIds.add(attempt.bank._id.toString());
                     }
                 }
             }
@@ -168,16 +178,15 @@ async function getUserWeakAreas(userId, options = {}) {
                 if (!qr.quiz) continue;
                 const qSubject = qr.quiz.subject || 'সাধারণ বিষয়';
                 const qTopic = qr.quiz.title || 'কুইজ প্রস্তুতি';
-                const key = `${qSubject}:::${qTopic}`;
+                const key = qTopic.trim().toLowerCase();
+                const total = qr.total || (qr.quiz.questions?.length || 1);
+                const correct = qr.score || 0;
+                const wrong = Math.max(0, total - correct);
+                totalQuestionsAnalyzed += total;
+                totalCorrectAnswers += correct;
+                totalMistakes += wrong;
 
                 if (!topicMap.has(key)) {
-                    const total = qr.total || (qr.quiz.questions?.length || 1);
-                    const correct = qr.score || 0;
-                    const wrong = Math.max(0, total - correct);
-                    totalQuestionsAnalyzed += total;
-                    totalCorrectAnswers += correct;
-                    totalMistakes += wrong;
-
                     topicMap.set(key, {
                         subject: qSubject,
                         topic: qTopic,
@@ -190,6 +199,17 @@ async function getUserWeakAreas(userId, options = {}) {
                         bankIds: new Set(),
                         quizId: qr.quiz._id ? qr.quiz._id.toString() : (typeof qr.quiz === 'string' ? qr.quiz : null)
                     });
+                } else {
+                    const entry = topicMap.get(key);
+                    entry.total += total;
+                    entry.correct += correct;
+                    entry.wrong += wrong;
+                    entry.marksObtained += correct;
+                    entry.maxMarks += total;
+                    if (qr.quiz._id) entry.quizId = qr.quiz._id.toString();
+                    if (qSubject && qSubject !== 'সাধারণ বিষয়' && entry.subject === 'সাধারণ বিষয়') {
+                        entry.subject = qSubject;
+                    }
                 }
             }
         }
@@ -197,15 +217,19 @@ async function getUserWeakAreas(userId, options = {}) {
         // Process into ranked topics
         const topics = [];
         for (const [_, entry] of topicMap.entries()) {
+            if (entry.total <= 0) continue;
             const earned = Math.max(0, entry.marksObtained);
             const totalM = Math.max(1, entry.maxMarks);
             const accuracy = earned <= 0 ? 0 : Math.min(100, Math.round((earned / totalM) * 100));
 
-            let status = 'strong'; // >= 60%
-            if (accuracy < 40 || ((entry.wrong + entry.skipped) >= 2 && accuracy < 50)) {
-                status = 'critical'; // < 40%
-            } else if (accuracy < 60) {
-                status = 'moderate'; // 40% - 59%
+            // Only mark as critical or moderate if actual mistakes or skipped questions exist
+            let status = 'strong';
+            if (entry.wrong > 0 || entry.skipped > 0) {
+                if (accuracy < 50 || (entry.wrong >= 2 && accuracy < 60) || entry.wrong >= 3) {
+                    status = 'critical'; // Critical weak area
+                } else if (entry.wrong > 0 || accuracy < 75) {
+                    status = 'moderate'; // Needs practice / revision
+                }
             }
 
             topics.push({
@@ -236,21 +260,18 @@ async function getUserWeakAreas(userId, options = {}) {
             return a.accuracy - b.accuracy || (b.wrong + b.skipped) - (a.wrong + a.skipped);
         });
 
-        // Auto-remove topics where student performed activity (reminder, practice, test_again) within last 48 hours
+        // Mark topics where student performed reminder activity within last 48 hours
         const handledTopicsSet = new Set(
             handledActivities.map(r => (r.topic || '').trim().toLowerCase())
         );
 
-        // Active unhandled topics for radar
-        const activeTopics = topics.filter(t => !handledTopicsSet.has(t.topic.trim().toLowerCase()));
-
-        for (const t of activeTopics) {
-            t.isReminded = false;
+        for (const t of topics) {
+            t.isReminded = handledTopicsSet.has((t.topic || '').trim().toLowerCase());
         }
 
-        const weakTopics = activeTopics.filter(t => t.status === 'critical');
-        const moderateTopics = activeTopics.filter(t => t.status === 'moderate');
-        const strongTopics = activeTopics.filter(t => t.status === 'strong');
+        const weakTopics = topics.filter(t => t.status === 'critical' && t.wrong > 0);
+        const moderateTopics = topics.filter(t => (t.status === 'moderate' || t.wrong > 0) && t.status !== 'critical');
+        const strongTopics = topics.filter(t => t.wrong === 0);
 
         // Target topics for revision lessons: includes weak, moderate, and any active exam topics
         const targetTopics = [...weakTopics, ...moderateTopics, ...strongTopics].slice(0, 6);
@@ -329,11 +350,11 @@ async function getUserWeakAreas(userId, options = {}) {
 
         return {
             hasData: totalQuestionsAnalyzed > 0,
-            hasHandledActivities: handledActivities.length > 0,
+            hasHandledActivities: handledActivities.length > 0 && weakTopics.length === 0,
             weakTopics,
             moderateTopics,
             strongTopics,
-            allTopicsCount: activeTopics.length,
+            allTopicsCount: topics.length,
             totalAnalyzed: totalQuestionsAnalyzed,
             totalMistakes,
             totalSkipped,

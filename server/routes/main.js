@@ -1118,10 +1118,12 @@ router.get('/dashboard', protect, async (req, res) => {
                 console.error('Error fetching suggested exam for dashboard:', e);
             }
 
-            // 5. Smart Daily Revision Flashcards (Curated 3-5 quick recall questions)
+            // 5. Smart Daily Revision Flashcards (Curated quick recall questions)
             let dailyFlashcards = [];
+            let flashcardTopics = ['সকল বিষয়'];
             try {
                 const Question = require('../models/Question');
+                const AcademicClass = require('../models/AcademicClass');
                 const userClassRaw = (dbUser.classLevel || '').trim();
                 const numericClass = userClassRaw.replace(/[^0-9]/g, '');
 
@@ -1133,6 +1135,24 @@ router.get('/dashboard', protect, async (req, res) => {
                 if (numericClass) {
                     classConditions.push({ classLevel: numericClass });
                     classConditions.push({ classLevel: `Class ${numericClass}` });
+                }
+
+                // Superadmin assigned subjects for this class from AcademicClass
+                let assignedClassSubjects = [];
+                if (userClassRaw) {
+                    const matchedCls = await AcademicClass.findOne({
+                        $or: [
+                            { name: userClassRaw },
+                            { name: new RegExp(`^${userClassRaw}$`, 'i') },
+                            ...(numericClass ? [
+                                { name: `Class ${numericClass}` },
+                                { name: new RegExp(`Class\\s*${numericClass}`, 'i') }
+                            ] : [])
+                        ]
+                    }).lean();
+                    if (matchedCls && Array.isArray(matchedCls.subjects)) {
+                        assignedClassSubjects = matchedCls.subjects.map(s => (s || '').trim()).filter(Boolean);
+                    }
                 }
 
                 // Priority A: Questions from student's identified weak areas
@@ -1155,34 +1175,39 @@ router.get('/dashboard', protect, async (req, res) => {
                     }
                 }
 
-                // Priority B: Questions matching student's class
-                if (dailyFlashcards.length < 8) {
+                // Priority B: Questions matching student's class and assigned subjects
+                if (dailyFlashcards.length < 25) {
                     const excludeIds = dailyFlashcards.map(q => q._id);
                     const classQuestions = await Question.find({
                         _id: { $nin: excludeIds },
                         ...(classConditions.length > 0 ? { $or: classConditions } : {})
-                    }).limit(8 - dailyFlashcards.length).lean();
+                    }).limit(25 - dailyFlashcards.length).lean();
                     if (classQuestions && classQuestions.length > 0) {
                         dailyFlashcards.push(...classQuestions);
                     }
                 }
 
                 // Priority C: General fallback pool
-                if (dailyFlashcards.length < 8) {
+                if (dailyFlashcards.length < 10) {
                     const excludeIds = dailyFlashcards.map(q => q._id);
                     const fallbackQuestions = await Question.find({
                         _id: { $nin: excludeIds }
-                    }).limit(8 - dailyFlashcards.length).lean();
+                    }).limit(10 - dailyFlashcards.length).lean();
                     if (fallbackQuestions && fallbackQuestions.length > 0) {
                         dailyFlashcards.push(...fallbackQuestions);
                     }
                 }
 
                 // Extract distinct topics and subjects for topic filtering
-                var flashcardTopics = ['সকল বিষয়'];
+                flashcardTopics = ['সকল বিষয়'];
                 if (dailyFlashcards.some(q => q.isWeakTopic)) {
                     flashcardTopics.push('দুর্বল অধ্যায়');
                 }
+                // Add assigned class subjects from superadmin
+                assignedClassSubjects.forEach(s => {
+                    if (!flashcardTopics.includes(s)) flashcardTopics.push(s);
+                });
+                // Also include any other subjects present in questions
                 const distinctSubjects = [...new Set(dailyFlashcards.map(q => (q.subject || '').trim()).filter(Boolean))];
                 distinctSubjects.forEach(s => {
                     if (!flashcardTopics.includes(s)) flashcardTopics.push(s);
