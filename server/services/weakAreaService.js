@@ -62,6 +62,8 @@ async function getUserWeakAreas(userId, options = {}) {
         // 3. Aggregate by unique question or topic
         const seenQuestions = new Set();
         const topicMap = new Map();
+        const latestAttemptEvaluated = new Set();
+        const passedTopics = new Set();
         let totalMistakes = 0;
         let totalSkipped = 0;
         let totalQuestionsAnalyzed = 0;
@@ -74,6 +76,34 @@ async function getUserWeakAreas(userId, options = {}) {
 
                 const answers = attempt.userAnswers || [];
                 if (answers.length > 0) {
+                    // Track per-attempt stats for this topic (newest attempt evaluated first)
+                    const attemptTopicStats = new Map();
+                    for (const ans of answers) {
+                        const q = ans.questionId;
+                        let topic = (q && q.topic) ? q.topic.trim() : defaultTopic;
+                        if (!topic) topic = defaultSubject + ' - সাধারণ আলোচনা';
+                        const key = topic.trim().toLowerCase();
+                        if (!attemptTopicStats.has(key)) {
+                            attemptTopicStats.set(key, { correct: 0, wrong: 0, total: 0 });
+                        }
+                        const st = attemptTopicStats.get(key);
+                        st.total++;
+                        if (ans.isCorrect) st.correct++;
+                        else st.wrong++;
+                    }
+
+                    for (const [key, st] of attemptTopicStats.entries()) {
+                        if (!latestAttemptEvaluated.has(key)) {
+                            latestAttemptEvaluated.add(key);
+                            // If student's newest attempt has 0 wrong or >= 70% accuracy, they passed!
+                            if (st.wrong === 0 && st.correct > 0) {
+                                passedTopics.add(key);
+                            } else if (st.total > 0 && (st.correct / st.total) >= 0.70) {
+                                passedTopics.add(key);
+                            }
+                        }
+                    }
+
                     for (const ans of answers) {
                         const q = ans.questionId;
                         let qId = null;
@@ -147,6 +177,15 @@ async function getUserWeakAreas(userId, options = {}) {
                     totalCorrectAnswers += correct;
                     totalMistakes += wrong;
 
+                    if (!latestAttemptEvaluated.has(key)) {
+                        latestAttemptEvaluated.add(key);
+                        if (wrong === 0 && correct > 0) {
+                            passedTopics.add(key);
+                        } else if (total > 0 && (correct / total) >= 0.70) {
+                            passedTopics.add(key);
+                        }
+                    }
+
                     if (!topicMap.has(key)) {
                         topicMap.set(key, {
                             subject: defaultSubject,
@@ -186,6 +225,15 @@ async function getUserWeakAreas(userId, options = {}) {
                 totalCorrectAnswers += correct;
                 totalMistakes += wrong;
 
+                if (!latestAttemptEvaluated.has(key)) {
+                    latestAttemptEvaluated.add(key);
+                    if (wrong === 0 && correct > 0) {
+                        passedTopics.add(key);
+                    } else if (total > 0 && (correct / total) >= 0.70) {
+                        passedTopics.add(key);
+                    }
+                }
+
                 if (!topicMap.has(key)) {
                     topicMap.set(key, {
                         subject: qSubject,
@@ -216,15 +264,17 @@ async function getUserWeakAreas(userId, options = {}) {
 
         // Process into ranked topics
         const topics = [];
-        for (const [_, entry] of topicMap.entries()) {
+        for (const [key, entry] of topicMap.entries()) {
             if (entry.total <= 0) continue;
             const earned = Math.max(0, entry.marksObtained);
             const totalM = Math.max(1, entry.maxMarks);
             const accuracy = earned <= 0 ? 0 : Math.min(100, Math.round((earned / totalM) * 100));
 
-            // Only mark as critical or moderate if actual mistakes or skipped questions exist
+            const hasPassedLatest = passedTopics.has(key);
+
+            // Only mark as critical or moderate if actual mistakes exist AND not resolved in latest attempt
             let status = 'strong';
-            if (entry.wrong > 0 || entry.skipped > 0) {
+            if (!hasPassedLatest && (entry.wrong > 0 || entry.skipped > 0)) {
                 if (accuracy < 50 || (entry.wrong >= 2 && accuracy < 60) || entry.wrong >= 3) {
                     status = 'critical'; // Critical weak area
                 } else if (entry.wrong > 0 || accuracy < 75) {
@@ -243,6 +293,7 @@ async function getUserWeakAreas(userId, options = {}) {
                 maxMarks: parseFloat(totalM.toFixed(1)),
                 accuracy,
                 status,
+                hasPassedLatest,
                 bankIds: Array.from(entry.bankIds),
                 quizId: entry.quizId || null,
                 retestLink: (entry.bankIds && entry.bankIds.size > 0)
@@ -260,7 +311,7 @@ async function getUserWeakAreas(userId, options = {}) {
             return a.accuracy - b.accuracy || (b.wrong + b.skipped) - (a.wrong + a.skipped);
         });
 
-        // Mark topics where student performed reminder activity within last 48 hours
+        // Mark topics where student performed reminder or practice activity within handled window
         const handledTopicsSet = new Set(
             handledActivities.map(r => (r.topic || '').trim().toLowerCase())
         );
@@ -269,9 +320,10 @@ async function getUserWeakAreas(userId, options = {}) {
             t.isReminded = handledTopicsSet.has((t.topic || '').trim().toLowerCase());
         }
 
-        const weakTopics = topics.filter(t => t.status === 'critical' && t.wrong > 0);
-        const moderateTopics = topics.filter(t => (t.status === 'moderate' || t.wrong > 0) && t.status !== 'critical');
-        const strongTopics = topics.filter(t => t.wrong === 0);
+        // STRICT EXCLUSION: If reminder is set, practice was done, or student retried and passed: DO NOT APPEAR in weak topics!
+        const weakTopics = topics.filter(t => t.status === 'critical' && t.wrong > 0 && !t.isReminded && !t.hasPassedLatest);
+        const moderateTopics = topics.filter(t => (t.status === 'moderate' || t.wrong > 0) && t.status !== 'critical' && !t.isReminded && !t.hasPassedLatest);
+        const strongTopics = topics.filter(t => t.wrong === 0 || t.isReminded || t.hasPassedLatest);
 
         // Target topics for revision lessons: includes weak, moderate, and any active exam topics
         const targetTopics = [...weakTopics, ...moderateTopics, ...strongTopics].slice(0, 6);
@@ -350,7 +402,7 @@ async function getUserWeakAreas(userId, options = {}) {
 
         return {
             hasData: totalQuestionsAnalyzed > 0,
-            hasHandledActivities: handledActivities.length > 0 && weakTopics.length === 0,
+            hasHandledActivities: (handledActivities.length > 0 || passedTopics.size > 0) && weakTopics.length === 0 && moderateTopics.length === 0,
             weakTopics,
             moderateTopics,
             strongTopics,

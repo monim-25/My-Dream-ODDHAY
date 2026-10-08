@@ -1475,4 +1475,77 @@ router.post('/record-flashcard-answer', protect, async (req, res) => {
     }
 });
 
+// GET /api/student/fresh-flashcards — Fetch new unseen flashcard revision questions
+router.get('/student/fresh-flashcards', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const mongoose = require('mongoose');
+        const User = require('../models/User');
+        const Question = require('../models/Question');
+
+        const user = await User.findById(req.session.userId).lean();
+        const excludeParam = req.query.excludeIds || '';
+        const excludeIds = excludeParam
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => mongoose.Types.ObjectId.isValid(s))
+            .map(s => new mongoose.Types.ObjectId(s));
+
+        const userClassRaw = (user?.classLevel || '').trim();
+        const numericClass = userClassRaw.replace(/[^0-9]/g, '');
+
+        const classConditions = [];
+        if (userClassRaw) {
+            classConditions.push({ classLevel: userClassRaw });
+            classConditions.push({ classLevel: new RegExp(`^${userClassRaw}$`, 'i') });
+        }
+        if (numericClass) {
+            classConditions.push({ classLevel: numericClass });
+            classConditions.push({ classLevel: `Class ${numericClass}` });
+        }
+
+        let freshQuestions = [];
+
+        // 1. Fetch questions matching student's class, excluding already seen IDs
+        if (classConditions.length > 0) {
+            freshQuestions = await Question.aggregate([
+                {
+                    $match: {
+                        _id: { $nin: excludeIds },
+                        $or: classConditions,
+                        options: { $exists: true, $not: { $size: 0 } },
+                        questionText: { $exists: true, $ne: '' }
+                    }
+                },
+                { $sample: { size: 10 } }
+            ]);
+        }
+
+        // 2. Fallback pool if not enough class-specific questions
+        if (freshQuestions.length < 5) {
+            const currentExcludeIds = [...excludeIds, ...freshQuestions.map(q => q._id)];
+            const fallbackQuestions = await Question.aggregate([
+                {
+                    $match: {
+                        _id: { $nin: currentExcludeIds },
+                        options: { $exists: true, $not: { $size: 0 } },
+                        questionText: { $exists: true, $ne: '' }
+                    }
+                },
+                { $sample: { size: 10 - freshQuestions.length } }
+            ]);
+            freshQuestions.push(...fallbackQuestions);
+        }
+
+        res.json({
+            success: true,
+            questions: freshQuestions,
+            count: freshQuestions.length
+        });
+    } catch (err) {
+        console.error('Error fetching fresh flashcards:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 module.exports = router;
