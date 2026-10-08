@@ -23,7 +23,7 @@ const studentNoteSchema = new mongoose.Schema({
     },
     fileType: {
         type: String,
-        enum: ['pdf', 'image'],
+        enum: ['pdf', 'image', 'text'],
         required: true
     },
     originalFilename: {

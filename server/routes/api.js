@@ -1340,4 +1340,60 @@ router.delete('/library/delete-note/:id', protect, async (req, res) => {
     }
 });
 
+router.post('/library/save-quick-note', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const content = (req.body.content || '').trim();
+        if (!content) {
+            return res.status(400).json({ success: false, error: 'নোটের কোনো কন্টেন্ট নেই।' });
+        }
+        
+        let title = (req.body.title || '').trim();
+        if (!title) {
+            const firstLine = content.split('\n')[0].replace(/[#*`_]/g, '').trim();
+            title = firstLine.substring(0, 35) || 'কুইক স্টাডি নোট';
+        }
+
+        const subject = (req.body.subject || 'General').trim();
+        const timestamp = Date.now();
+        const filename = `quick_note_${req.session.userId}_${timestamp}.txt`;
+        
+        // Ensure destination directories exist
+        const clientDir = path.join(process.cwd(), 'client/public/uploads/user-notes');
+        const pubDir = path.join(process.cwd(), 'public/uploads/user-notes');
+        if (!fs.existsSync(clientDir)) fs.mkdirSync(clientDir, { recursive: true });
+        if (!fs.existsSync(pubDir)) fs.mkdirSync(pubDir, { recursive: true });
+
+        const clientPath = path.join(clientDir, filename);
+        const pubPath = path.join(pubDir, filename);
+
+        fs.writeFileSync(clientPath, content, 'utf8');
+        try { fs.writeFileSync(pubPath, content, 'utf8'); } catch (e) { }
+
+        const fileUrl = `/uploads/user-notes/${filename}`;
+        const bytes = Buffer.byteLength(content, 'utf8');
+        const formattedSize = bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+
+        const StudentNote = require('../models/StudentNote');
+        const newNote = await StudentNote.create({
+            user: req.session.userId,
+            title,
+            subject,
+            fileUrl,
+            fileType: 'text',
+            originalFilename: `${title}.txt`,
+            fileSize: formattedSize
+        });
+
+        res.json({
+            success: true,
+            message: 'নোট সফলভাবে আপনার লাইব্রেরিতে সেভ হয়েছে!',
+            note: newNote
+        });
+    } catch (err) {
+        console.error('Error saving quick note to library:', err);
+        res.status(500).json({ success: false, error: 'নোট সেভ করতে সমস্যা হয়েছে।' });
+    }
+});
+
 module.exports = router;
