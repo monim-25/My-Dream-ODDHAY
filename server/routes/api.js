@@ -183,15 +183,50 @@ router.get('/messages/thread/:targetUserId', protect, async (req, res) => {
     }
 });
 
-router.post('/messages/send', protect, async (req, res) => {
+// --- Multer setup for direct chat message attachments (images, audio, docs, videos) ---
+const chatAttachmentStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        let dest = '/tmp/uploads/messages/';
+        if (!process.env.VERCEL) {
+            try {
+                const localDest = path.join(process.cwd(), 'client/public/uploads/messages');
+                dest = localDest;
+            } catch (e) { /* ignore */ }
+        }
+        try { fs.mkdirSync(dest, { recursive: true }); cb(null, dest); }
+        catch (err) { cb(null, '/tmp/'); }
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const cleanName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_').substring(0, 30);
+        cb(null, `chat-${req.session && req.session.userId ? req.session.userId : 'user'}-${Date.now()}-${cleanName || 'file'}${ext}`);
+    }
+});
+
+const uploadChatAttachmentMulter = multer({
+    storage: chatAttachmentStorage,
+    limits: { fileSize: 35 * 1024 * 1024 } // 35MB max
+});
+
+router.post('/messages/send', protect, (req, res, next) => {
+    uploadChatAttachmentMulter.single('file')(req, res, (err) => {
+        if (err) {
+            console.error('Chat attachment upload error:', err);
+            return res.status(400).json({ success: false, error: err.message || 'File upload failed' });
+        }
+        next();
+    });
+}, async (req, res) => {
     try {
         await connectDB();
         const myId = req.session.userId;
-        const { targetUserId, text } = req.body;
+        const targetUserId = req.body.targetUserId;
+        const text = (req.body.text || '').trim();
+        const hasFile = Boolean(req.file);
         const mongoose = require('mongoose');
 
-        if (!text || !text.trim()) {
-            return res.status(400).json({ success: false, error: 'Message cannot be empty' });
+        if (!text && !hasFile) {
+            return res.status(400).json({ success: false, error: 'Please enter a message or attach a file.' });
         }
 
         if (!targetUserId || !mongoose.Types.ObjectId.isValid(targetUserId)) {
@@ -238,6 +273,51 @@ router.post('/messages/send', protect, async (req, res) => {
             return res.status(403).json({ success: false, error: 'Messaging restricted to students and teachers.' });
         }
 
+        let attachment = undefined;
+        if (req.file) {
+            const { processUploadedFile } = require('../services/cloudinaryService');
+            const fileUrl = await processUploadedFile(req.file, 'messages');
+
+            const mime = (req.file.mimetype || '').toLowerCase();
+            const originalName = req.file.originalname || 'attachment';
+            let fileType = 'other';
+            if (mime.startsWith('image/')) fileType = 'image';
+            else if (mime.startsWith('video/')) fileType = 'video';
+            else if (mime.startsWith('audio/') || mime.includes('webm') || mime.includes('ogg') || mime.includes('mp3') || mime.includes('wav')) fileType = 'audio';
+            else if (mime === 'application/pdf' || originalName.toLowerCase().endsWith('.pdf')) fileType = 'pdf';
+            else if (mime.includes('word') || mime.includes('document') || originalName.match(/\.(docx?|txt|xlsx?|pptx?)$/i)) fileType = 'document';
+
+            let duration = undefined;
+            if (req.body.duration && !isNaN(Number(req.body.duration))) {
+                duration = Math.round(Number(req.body.duration));
+            }
+
+            attachment = {
+                url: fileUrl,
+                fileType,
+                fileName: originalName,
+                fileSize: req.file.size,
+                duration
+            };
+        }
+
+        let replyTo = undefined;
+        if (req.body.replyTo) {
+            try {
+                const parsed = typeof req.body.replyTo === 'string' ? JSON.parse(req.body.replyTo) : req.body.replyTo;
+                if (parsed && (parsed.messageId || parsed.text || parsed.fileType)) {
+                    replyTo = {
+                        messageId: parsed.messageId && mongoose.Types.ObjectId.isValid(parsed.messageId) ? new mongoose.Types.ObjectId(parsed.messageId) : undefined,
+                        senderName: parsed.senderName || '',
+                        text: parsed.text || '',
+                        fileType: parsed.fileType || ''
+                    };
+                }
+            } catch (e) {
+                console.error('Error parsing replyTo in send message:', e);
+            }
+        }
+
         const roomKey = [myId.toString(), targetUserId.toString()].sort().join('_');
         const newMsg = await Message.create({
             sender: sender._id,
@@ -246,7 +326,9 @@ router.post('/messages/send', protect, async (req, res) => {
             userAvatar: sender.profilePicture || sender.profileImage || null,
             receiver: receiver._id,
             room: roomKey,
-            text: text.trim().substring(0, 1000),
+            text: text.substring(0, 2000),
+            attachment,
+            replyTo,
             isRead: false
         });
 
