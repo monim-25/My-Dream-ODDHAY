@@ -356,6 +356,67 @@ router.post('/messages/mark-read/:senderId', protect, async (req, res) => {
     }
 });
 
+// Toggle message like / love reaction
+router.post('/messages/toggle-like', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const myId = req.session.userId || req.session.user?._id;
+        const { messageId } = req.body;
+        const mongoose = require('mongoose');
+
+        if (!messageId || !mongoose.Types.ObjectId.isValid(messageId)) {
+            return res.status(400).json({ success: false, error: 'Invalid message ID' });
+        }
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            return res.status(404).json({ success: false, error: 'Message not found' });
+        }
+
+        if (!Array.isArray(message.likes)) {
+            message.likes = [];
+        }
+
+        const myIdStr = String(myId);
+        const existingIndex = message.likes.findIndex(id => String(id) === myIdStr);
+        let isLiked = false;
+
+        if (existingIndex > -1) {
+            message.likes.splice(existingIndex, 1);
+            isLiked = false;
+        } else {
+            message.likes.push(myId);
+            isLiked = true;
+        }
+
+        message.markModified('likes');
+        await message.save();
+
+        const io = req.app.get('io');
+        if (io) {
+            const updatePayload = {
+                messageId: message._id,
+                likesCount: message.likes.length,
+                likes: message.likes,
+                isLiked,
+                toggledBy: myId
+            };
+            if (message.receiver) io.to(`user_${message.receiver}`).emit('message:like_updated', updatePayload);
+            if (message.sender) io.to(`user_${message.sender}`).emit('message:like_updated', updatePayload);
+        }
+
+        return res.json({
+            success: true,
+            isLiked,
+            likesCount: message.likes.length,
+            likes: message.likes
+        });
+    } catch (err) {
+        console.error('Toggle message like error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // ---- Curriculum Node Views & Comments ----
 
 router.post('/course/:courseId/progress/:nodeId', protect, async (req, res) => {
