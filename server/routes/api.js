@@ -167,7 +167,8 @@ router.get('/messages/thread/:targetUserId', protect, async (req, res) => {
             $or: [
                 { sender: myId, receiver: targetId },
                 { sender: targetId, receiver: myId }
-            ]
+            ],
+            deletedFor: { $ne: myId }
         }).sort({ createdAt: 1 }).limit(100).lean();
 
         // Mark incoming messages as read
@@ -413,6 +414,148 @@ router.post('/messages/toggle-like', protect, async (req, res) => {
         });
     } catch (err) {
         console.error('Toggle message like error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Toggle pin message
+router.post('/messages/toggle-pin', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const myId = req.session.userId || req.session.user?._id;
+        const { messageId } = req.body;
+        const mongoose = require('mongoose');
+
+        if (!messageId || !mongoose.Types.ObjectId.isValid(messageId)) {
+            return res.status(400).json({ success: false, error: 'Invalid message ID' });
+        }
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            return res.status(404).json({ success: false, error: 'Message not found' });
+        }
+
+        // Toggle isPinned
+        const isPinned = !message.isPinned;
+        message.isPinned = isPinned;
+        message.pinnedAt = isPinned ? new Date() : null;
+        message.pinnedBy = isPinned ? myId : null;
+
+        message.markModified('isPinned');
+        message.markModified('pinnedAt');
+        message.markModified('pinnedBy');
+        await message.save();
+
+        const io = req.app.get('io');
+        if (io) {
+            const updatePayload = {
+                messageId: message._id,
+                isPinned: message.isPinned,
+                pinnedBy: myId
+            };
+            if (message.receiver) io.to(`user_${message.receiver}`).emit('message:pin_updated', updatePayload);
+            if (message.sender) io.to(`user_${message.sender}`).emit('message:pin_updated', updatePayload);
+        }
+
+        return res.json({
+            success: true,
+            isPinned: message.isPinned,
+            message
+        });
+    } catch (err) {
+        console.error('Toggle message pin error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Delete message (for me or for everyone)
+router.post('/messages/delete', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const myId = req.session.userId || req.session.user?._id;
+        const { messageId, type } = req.body;
+        const mongoose = require('mongoose');
+
+        if (!messageId || !mongoose.Types.ObjectId.isValid(messageId)) {
+            return res.status(400).json({ success: false, error: 'Invalid message ID' });
+        }
+
+        const message = await Message.findById(messageId);
+        if (!message) {
+            return res.status(404).json({ success: false, error: 'Message not found' });
+        }
+
+        if (type === 'for_everyone') {
+            const senderIdStr = String(message.sender);
+            const myIdStr = String(myId);
+            const userRole = req.session.user?.role;
+            if (senderIdStr !== myIdStr && userRole !== 'admin' && userRole !== 'superadmin' && userRole !== 'teacher') {
+                return res.status(403).json({ success: false, error: 'You can only delete your own messages for everyone' });
+            }
+            message.deletedForEveryone = true;
+            message.text = 'This message was deleted';
+            message.attachment = null;
+            message.markModified('deletedForEveryone');
+            await message.save();
+        } else {
+            // Delete for me
+            if (!Array.isArray(message.deletedFor)) message.deletedFor = [];
+            if (!message.deletedFor.some(id => String(id) === String(myId))) {
+                message.deletedFor.push(myId);
+                message.markModified('deletedFor');
+                await message.save();
+            }
+        }
+
+        const io = req.app.get('io');
+        if (io && type === 'for_everyone') {
+            const deletePayload = { messageId: message._id, deletedForEveryone: true };
+            if (message.receiver) io.to(`user_${message.receiver}`).emit('message:deleted', deletePayload);
+            if (message.sender) io.to(`user_${message.sender}`).emit('message:deleted', deletePayload);
+        }
+
+        return res.json({ success: true });
+    } catch (err) {
+        console.error('Delete message error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Toggle block user
+router.post('/messages/toggle-block', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const myId = req.session.userId || req.session.user?._id;
+        const { targetUserId } = req.body;
+        const mongoose = require('mongoose');
+        const User = require('../models/User');
+
+        if (!targetUserId || !mongoose.Types.ObjectId.isValid(targetUserId)) {
+            return res.status(400).json({ success: false, error: 'Invalid target user ID' });
+        }
+
+        const currentUser = await User.findById(myId);
+        if (!currentUser) return res.status(404).json({ success: false, error: 'User not found' });
+
+        if (!Array.isArray(currentUser.blockedUsers)) currentUser.blockedUsers = [];
+        const targetIdStr = String(targetUserId);
+        const idx = currentUser.blockedUsers.findIndex(id => String(id) === targetIdStr);
+        let isBlocked = false;
+
+        if (idx > -1) {
+            currentUser.blockedUsers.splice(idx, 1);
+            isBlocked = false;
+        } else {
+            currentUser.blockedUsers.push(targetUserId);
+            isBlocked = true;
+        }
+
+        currentUser.markModified('blockedUsers');
+        await currentUser.save();
+
+        return res.json({ success: true, isBlocked });
+    } catch (err) {
+        console.error('Toggle block error:', err);
         return res.status(500).json({ success: false, error: err.message });
     }
 });
