@@ -87,7 +87,7 @@
                                 <span class="material-symbols-rounded absolute left-3 text-slate-400 text-lg leading-none flex items-center justify-center pointer-events-none select-none">search</span>
                             </div>
                             <button type="button" 
-                                onclick="toggleSidebar()" 
+                                onclick="toggleMessagesSidebar()" 
                                 id="sidebar-toggle-search-btn" title="Hide Instructors" 
                                 class="hidden md:flex size-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 items-center justify-center shrink-0 transition-all cursor-pointer shadow-2xs select-none active:scale-95">
                                 <span class="material-symbols-rounded text-xl leading-none pointer-events-none">dock_to_left</span>
@@ -201,9 +201,9 @@
                                             <span class="material-symbols-rounded text-xl leading-none">arrow_back</span>
                                         </button>
 
-                                        <!-- Desktop Toggle Sidebar Button -->
+                                        <!-- Desktop Toggle Sidebar Button (Strictly hidden on small/mobile screens) -->
                                         <button type="button" 
-                                            onclick="toggleSidebar()" 
+                                            onclick="toggleMessagesSidebar()" 
                                             id="chat-sidebar-toggle-btn" 
                                             title="Show Instructors" 
                                             style="display: none;" 
@@ -470,9 +470,9 @@
                             <!-- Empty State Container -->
                             <div id="empty-chat-placeholder" class="flex-1 flex flex-col items-center justify-center p-8 text-center bg-[#fafafa] dark:bg-[#070d18] relative <%= locals.activeTeacher ? 'hidden' : '' %>">
                                 <button type="button" 
-                                    onclick="const s=document.getElementById('messages-sidebar'), b=document.getElementById('chat-sidebar-toggle-btn'), e=document.getElementById('empty-sidebar-toggle-btn'); if(s) s.style.removeProperty('display'); if(b) b.style.setProperty('display','none','important'); if(e) e.style.setProperty('display','none','important');" 
+                                    onclick="toggleMessagesSidebar(true)" 
                                     id="empty-sidebar-toggle-btn" title="Show Instructors" style="display: none;" 
-                                    class="absolute top-4 left-4 size-9 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 items-center justify-center transition-all cursor-pointer shadow-2xs select-none active:scale-95">
+                                    class="hidden md:flex absolute top-4 left-4 size-9 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 items-center justify-center transition-all cursor-pointer shadow-2xs select-none active:scale-95">
                                     <span class="material-symbols-rounded text-xl leading-none pointer-events-none">view_sidebar</span>
                                 </button>
                                 <div class="size-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-3 shadow-2xs">
@@ -635,6 +635,8 @@
                 const sidebar = document.getElementById('messages-sidebar');
                 const chatContainer = document.getElementById('main-chat-container');
                 const backBtn = document.getElementById('chat-back-to-list-btn');
+                const chatToggleBtn = document.getElementById('chat-sidebar-toggle-btn');
+                const emptyToggleBtn = document.getElementById('empty-sidebar-toggle-btn');
 
                 if (window.innerWidth < 768) {
                     if (sidebar) {
@@ -651,6 +653,13 @@
                         backBtn.classList.remove('hidden');
                         backBtn.style.setProperty('display', 'flex', 'important');
                     }
+                    // Prevent any desktop sidebar toggle button from appearing on mobile screen
+                    if (chatToggleBtn) {
+                        chatToggleBtn.style.setProperty('display', 'none', 'important');
+                    }
+                    if (emptyToggleBtn) {
+                        emptyToggleBtn.style.setProperty('display', 'none', 'important');
+                    }
                 }
             }
             window.showChatViewMobile = showChatViewMobile;
@@ -659,6 +668,8 @@
                 const sidebar = document.getElementById('messages-sidebar');
                 const chatContainer = document.getElementById('main-chat-container');
                 const backBtn = document.getElementById('chat-back-to-list-btn');
+                const chatToggleBtn = document.getElementById('chat-sidebar-toggle-btn');
+                const emptyToggleBtn = document.getElementById('empty-sidebar-toggle-btn');
 
                 if (window.innerWidth < 768) {
                     if (sidebar) {
@@ -676,53 +687,57 @@
                         backBtn.classList.add('hidden');
                         backBtn.style.setProperty('display', 'none', 'important');
                     }
+                    if (chatToggleBtn) {
+                        chatToggleBtn.style.setProperty('display', 'none', 'important');
+                    }
+                    if (emptyToggleBtn) {
+                        emptyToggleBtn.style.setProperty('display', 'none', 'important');
+                    }
                     try {
                         window.history.pushState({}, '', '/messages');
                     } catch (e) {}
                 } else {
-                    toggleSidebar(true);
+                    toggleMessagesSidebar(true);
                 }
             }
             window.showSidebarMobile = showSidebarMobile;
 
-            function toggleSidebar(forceShow) {
+            function toggleMessagesSidebar(forceShow) {
+                // Not necessary on small/mobile screen (handled by list <-> chat screens)
+                if (window.innerWidth < 768) {
+                    return;
+                }
+
                 const sidebar = document.getElementById('messages-sidebar');
                 const chatToggleBtn = document.getElementById('chat-sidebar-toggle-btn');
                 const emptyToggleBtn = document.getElementById('empty-sidebar-toggle-btn');
                 if (!sidebar) return;
 
-                if (window.innerWidth < 768) {
-                    if (forceShow === true) {
-                        showSidebarMobile();
-                    } else if (forceShow === false) {
-                        showChatViewMobile();
-                    } else {
-                        const isHidden = sidebar.style.display === 'none' || sidebar.classList.contains('hidden') || window.getComputedStyle(sidebar).display === 'none';
-                        if (isHidden) showSidebarMobile();
-                        else showChatViewMobile();
-                    }
-                    return;
-                }
-
                 let show;
                 if (typeof forceShow === 'boolean') {
                     show = forceShow;
                 } else {
-                    const isCurrentlyHidden = sidebar.style.display === 'none' || window.getComputedStyle(sidebar).display === 'none';
+                    const isCurrentlyHidden = sidebar.classList.contains('hidden') || sidebar.style.display === 'none' || window.getComputedStyle(sidebar).display === 'none';
                     show = isCurrentlyHidden;
                 }
 
                 if (show) {
+                    sidebar.classList.remove('hidden');
+                    sidebar.classList.add('flex');
+                    sidebar.style.removeProperty('display');
                     sidebar.style.setProperty('display', 'flex', 'important');
                     if (chatToggleBtn) chatToggleBtn.style.setProperty('display', 'none', 'important');
                     if (emptyToggleBtn) emptyToggleBtn.style.setProperty('display', 'none', 'important');
                 } else {
+                    sidebar.classList.add('hidden');
+                    sidebar.classList.remove('flex');
                     sidebar.style.setProperty('display', 'none', 'important');
                     if (chatToggleBtn) chatToggleBtn.style.setProperty('display', 'flex', 'important');
                     if (emptyToggleBtn) emptyToggleBtn.style.setProperty('display', 'flex', 'important');
                 }
             }
-            window.toggleSidebar = toggleSidebar;
+            window.toggleMessagesSidebar = toggleMessagesSidebar;
+            window.toggleSidebar = toggleMessagesSidebar;
 
             let activeTeacherId = '<%= locals.activeTeacher ? activeTeacher._id : "" %>';
             const currentStudentId = '<%= user._id %>';
@@ -931,18 +946,22 @@
                 if (open) {
                     panel.classList.remove('hidden');
                     if (infoBtn) infoBtn.style.setProperty('display', 'none', 'important');
-                    // Auto hide instructors sidebar when details panel is opened
-                    if (sidebar) sidebar.style.setProperty('display', 'none', 'important');
-                    if (sidebarToggleBtn) sidebarToggleBtn.style.setProperty('display', 'flex', 'important');
-                    if (emptySidebarToggleBtn) emptySidebarToggleBtn.style.setProperty('display', 'flex', 'important');
+                    // On large screens only: auto hide instructors sidebar when details panel is opened
+                    if (window.innerWidth >= 768) {
+                        if (sidebar) sidebar.style.setProperty('display', 'none', 'important');
+                        if (sidebarToggleBtn) sidebarToggleBtn.style.setProperty('display', 'flex', 'important');
+                        if (emptySidebarToggleBtn) emptySidebarToggleBtn.style.setProperty('display', 'flex', 'important');
+                    }
                 } else {
                     panel.classList.add('hidden');
                     openAllPinnedView(false); // reset view when closed
                     if (infoBtn) infoBtn.style.removeProperty('display');
-                    // Auto restore instructors sidebar when details panel is closed
-                    if (sidebar) sidebar.style.removeProperty('display');
-                    if (sidebarToggleBtn) sidebarToggleBtn.style.setProperty('display', 'none', 'important');
-                    if (emptySidebarToggleBtn) emptySidebarToggleBtn.style.setProperty('display', 'none', 'important');
+                    // On large screens only: auto restore instructors sidebar when details panel is closed
+                    if (window.innerWidth >= 768) {
+                        if (sidebar) sidebar.style.removeProperty('display');
+                        if (sidebarToggleBtn) sidebarToggleBtn.style.setProperty('display', 'none', 'important');
+                        if (emptySidebarToggleBtn) emptySidebarToggleBtn.style.setProperty('display', 'none', 'important');
+                    }
                 }
             }
             window.toggleDetailsPanel = toggleDetailsPanel;
@@ -975,7 +994,7 @@
                     if (msgStream)    msgStream.classList.add('hidden');
                     if (chatHeader)   chatHeader.classList.add('hidden');
                     if (bottomBar)    bottomBar.classList.add('hidden');
-                    if (sidebar)      sidebar.style.setProperty('display', 'none', 'important');
+                    if (window.innerWidth >= 768 && sidebar) sidebar.style.setProperty('display', 'none', 'important');
                     // Use classList so toggleDetailsPanel's logic stays intact
                     if (detailsPanel) {
                         detailsPanel.classList.add('hidden');
@@ -987,7 +1006,7 @@
                     if (msgStream)  msgStream.classList.remove('hidden');
                     if (chatHeader) chatHeader.classList.remove('hidden');
                     if (bottomBar)  bottomBar.classList.remove('hidden');
-                    if (sidebar)    sidebar.style.removeProperty('display');
+                    if (window.innerWidth >= 768 && sidebar) sidebar.style.removeProperty('display');
                     // Restore i-button (toggleDetailsPanel hides it when panel is open)
                     const infoBtn = document.getElementById('chat-details-toggle-btn');
                     if (infoBtn) infoBtn.style.removeProperty('display');
