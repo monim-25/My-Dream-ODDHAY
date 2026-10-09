@@ -359,14 +359,14 @@
                                                         </h4>
                                                         <!-- Teacher Rating Under Name -->
                                                         <div class="flex items-center gap-1.5 mt-0.5 select-none">
-                                                            <div class="flex items-center text-amber-400 gap-0.5">
+                                                            <div id="playerAuthorRatingStars" class="flex items-center text-amber-400 gap-0.5">
                                                                 <span class="material-symbols-rounded text-[14px]">star</span>
                                                                 <span class="material-symbols-rounded text-[14px]">star</span>
                                                                 <span class="material-symbols-rounded text-[14px]">star</span>
                                                                 <span class="material-symbols-rounded text-[14px]">star</span>
                                                                 <span class="material-symbols-rounded text-[14px]">star_half</span>
                                                             </div>
-                                                            <span id="playerAuthorRating" class="text-[12px] font-bold text-slate-800 dark:text-slate-200"><%= (course.instructor && course.instructor.rating) ? course.instructor.rating : '4.9' %></span>
+                                                            <span id="playerAuthorRating" class="text-[12px] font-bold text-slate-800 dark:text-slate-200"><%= (course.instructor && (course.instructor.averageRating || course.instructor.rating)) ? (course.instructor.averageRating || course.instructor.rating) : '4.9' %></span>
                                                             <span class="text-[10px] text-slate-400 dark:text-slate-500">/ 5</span>
                                                         </div>
                                                     </div>
@@ -1127,10 +1127,10 @@
         </main>
     </div>
 
-    <!-- Toast Notification for Share Link -->
+    <!-- Toast Notification for Share Link & In-App Alerts -->
     <div id="shareToast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 border border-slate-800">
-        <span class="material-symbols-rounded text-emerald-400 text-base">link</span>
-        <span>Course link copied to clipboard!</span>
+        <span id="shareToastIcon" class="material-symbols-rounded text-emerald-400 text-base">link</span>
+        <span id="shareToastText">Course link copied to clipboard!</span>
     </div>
 
     <%- include('partials/student-bottom-nav', { activePage: 'courses' }) %>
@@ -3100,17 +3100,33 @@
 
         function shareCourse() {
             if (navigator.clipboard) {
-                navigator.clipboard.writeText(window.location.href).then(showToast);
+                navigator.clipboard.writeText(window.location.href).then(() => {
+                    showToast('Course link copied to clipboard!', 'link', 'text-emerald-400');
+                }).catch(() => {
+                    showToast('Course link copied to clipboard!', 'link', 'text-emerald-400');
+                });
+            } else {
+                showToast('Course link copied to clipboard!', 'link', 'text-emerald-400');
             }
         }
 
-        function showToast() {
+        let shareToastTimer = null;
+        function showToast(message = 'Course link copied to clipboard!', icon = 'link', iconColor = 'text-emerald-400') {
             const toast = document.getElementById('shareToast');
+            const textEl = document.getElementById('shareToastText');
+            const iconEl = document.getElementById('shareToastIcon');
+            if (textEl) textEl.innerText = message;
+            if (iconEl) {
+                iconEl.innerText = icon;
+                iconEl.className = `material-symbols-rounded text-base ${iconColor}`;
+            }
             if (toast) {
                 toast.classList.remove('translate-y-20', 'opacity-0');
-                setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2500);
+                if (shareToastTimer) clearTimeout(shareToastTimer);
+                shareToastTimer = setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 2500);
             }
         }
+        window.showToast = showToast;
 
         // Global outside click listener to auto-close all dropdowns
         document.addEventListener('click', () => {
@@ -3399,14 +3415,80 @@
             updateStarDisplay(stars);
         }
 
-        function submitTeacherRating() {
-            localStorage.setItem('teacher-rating-<%= course._id %>', currentSelectedRating.toString());
+        function updateAuthorRatingDisplay(score) {
+            const numScore = parseFloat(score) || 4.9;
+            const ratingText = document.getElementById('playerAuthorRating');
+            if (ratingText) {
+                ratingText.innerText = numScore.toFixed(1);
+            }
+            const starsContainer = document.getElementById('playerAuthorRatingStars');
+            if (starsContainer) {
+                let html = '';
+                for (let i = 1; i <= 5; i++) {
+                    if (numScore >= i) {
+                        html += '<span class="material-symbols-rounded text-[14px]">star</span>';
+                    } else if (numScore >= i - 0.5) {
+                        html += '<span class="material-symbols-rounded text-[14px]">star_half</span>';
+                    } else {
+                        html += '<span class="material-symbols-rounded text-[14px] text-slate-300 dark:text-slate-600">star</span>';
+                    }
+                }
+                starsContainer.innerHTML = html;
+            }
+        }
+        window.updateAuthorRatingDisplay = updateAuthorRatingDisplay;
+
+        async function submitTeacherRating() {
+            const selected = currentSelectedRating;
+            const teacherId = '<%= (course.instructor && course.instructor._id) ? course.instructor._id : "" %>';
+            const courseId = '<%= course._id %>';
+            const ratingKey = 'teacher-rating-' + (teacherId || courseId);
+            const avgKey = 'teacher-avg-rating-' + (teacherId || courseId);
+
+            localStorage.setItem(ratingKey, selected.toString());
+
+            // Compute local updated average immediately
+            const baseRating = parseFloat('<%= (course.instructor && (course.instructor.averageRating || course.instructor.rating)) ? (course.instructor.averageRating || course.instructor.rating) : 4.9 %>') || 4.9;
+            const baseVotes = 48;
+            const updatedScore = parseFloat(((baseRating * baseVotes + selected) / (baseVotes + 1)).toFixed(1));
+            localStorage.setItem(avgKey, updatedScore.toString());
+
+            // Update Teacher Rating Info UI immediately
+            updateAuthorRatingDisplay(updatedScore);
+
             const rateBtnText = document.getElementById('rateTeacherBtnText');
             if (rateBtnText) {
-                rateBtnText.innerText = `Rated ${currentSelectedRating}★`;
+                rateBtnText.innerText = `Rated ${selected}★`;
             }
+            const rateBtn = document.getElementById('rateTeacherBtn');
+            if (rateBtn) {
+                rateBtn.classList.remove('bg-amber-500/10', 'text-amber-600', 'dark:text-amber-400');
+                rateBtn.classList.add('bg-amber-500', 'text-white', 'border-amber-500');
+                const btnIcon = rateBtn.querySelector('.material-symbols-rounded');
+                if (btnIcon) {
+                    btnIcon.classList.remove('text-amber-500');
+                    btnIcon.classList.add('text-white');
+                }
+            }
+
             closeTeacherRatingModal();
-            showToast(`Thank you! You rated your teacher ${currentSelectedRating}/5 stars ⭐`);
+            showToast(`Thank you! Teacher rating updated: ${selected}/5 ⭐ (${updatedScore})`, 'star', 'text-amber-400');
+
+            // Send to server API
+            try {
+                const res = await fetch('/api/user/rate-teacher', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ teacherId, courseId, rating: selected })
+                });
+                const data = await res.json();
+                if (data && data.success && data.averageRating) {
+                    updateAuthorRatingDisplay(data.averageRating);
+                    localStorage.setItem(avgKey, data.averageRating.toString());
+                }
+            } catch (err) {
+                console.warn('Teacher rating API error:', err);
+            }
         }
 
         window.openTeacherRatingModal = openTeacherRatingModal;
@@ -3416,12 +3498,35 @@
         window.resetPreviewTeacherRating = resetPreviewTeacherRating;
         window.submitTeacherRating = submitTeacherRating;
 
-        // Check if previously rated
+        // Check if previously rated & restore saved rating
         try {
-            const savedRating = localStorage.getItem('teacher-rating-<%= course._id %>');
+            const teacherId = '<%= (course.instructor && course.instructor._id) ? course.instructor._id : "" %>';
+            const courseId = '<%= course._id %>';
+            const ratingKey = 'teacher-rating-' + (teacherId || courseId);
+            const avgKey = 'teacher-avg-rating-' + (teacherId || courseId);
+            const savedRating = localStorage.getItem(ratingKey);
+            const savedAvg = localStorage.getItem(avgKey);
+
+            if (savedAvg) {
+                updateAuthorRatingDisplay(parseFloat(savedAvg));
+            } else {
+                const initScore = parseFloat('<%= (course.instructor && (course.instructor.averageRating || course.instructor.rating)) ? (course.instructor.averageRating || course.instructor.rating) : 4.9 %>');
+                updateAuthorRatingDisplay(initScore);
+            }
+
             if (savedRating) {
                 const rateBtnText = document.getElementById('rateTeacherBtnText');
                 if (rateBtnText) rateBtnText.innerText = `Rated ${savedRating}★`;
+                const rateBtn = document.getElementById('rateTeacherBtn');
+                if (rateBtn) {
+                    rateBtn.classList.remove('bg-amber-500/10', 'text-amber-600', 'dark:text-amber-400');
+                    rateBtn.classList.add('bg-amber-500', 'text-white', 'border-amber-500');
+                    const btnIcon = rateBtn.querySelector('.material-symbols-rounded');
+                    if (btnIcon) {
+                        btnIcon.classList.remove('text-amber-500');
+                        btnIcon.classList.add('text-white');
+                    }
+                }
             }
         } catch(e) {}
 

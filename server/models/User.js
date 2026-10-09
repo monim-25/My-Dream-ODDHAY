@@ -90,6 +90,13 @@ const userSchema = new mongoose.Schema({
     education: { type: String },             // General education summary
     bio: { type: String },                   // Short professional bio
     achievements: { type: String },          // Notable achievements
+    teacherRatings: [{
+        student: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        rating: { type: Number, min: 1, max: 5 },
+        course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
+        ratedAt: { type: Date, default: Date.now }
+    }],
+    averageRating: { type: Number, default: 4.9 },
     
     // Additional Detailed Info
     presentAddress: { type: String },

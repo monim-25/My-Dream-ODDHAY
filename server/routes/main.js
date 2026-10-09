@@ -4092,7 +4092,7 @@ router.get(['/course-details/:id', '/course/:id'], protect, async (req, res) => 
         // Fetch course, user, QAs, enrolled count, related courses, and course notices in parallel
         const [courseDoc, user, qas, enrolledCount, relatedCourses, courseAnnouncements, courseLogs] = await Promise.all([
             Course.findById(courseId)
-                .populate('instructor', 'name profileImage profilePicture bio email role')
+                .populate('instructor', 'name profileImage profilePicture bio email role averageRating teacherRatings')
                 .populate('permittedTeachers', 'name profileImage profilePicture bio email role')
                 .populate('chapters.quizzes', 'title duration totalMarks questions')
                 .populate('curriculumNodes.quizId', 'title duration totalMarks questions')
