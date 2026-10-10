@@ -14,73 +14,140 @@
         
         <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-[#f8fafc] dark:bg-[#0b1120] relative">
             
-            <!-- Category Navigation Tabs & Stats Bar (Seamlessly Attached to Header & Sidebar) -->
-            <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 px-3 sm:px-4 py-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
+            <!-- Mobile On-Screen Search & Custom Subject Filter Bar (< lg only, placed directly on the page) -->
+            <div class="lg:hidden w-full px-3.5 pt-3 pb-2.5 bg-white dark:bg-[#0f172a] border-b border-slate-200/80 dark:border-slate-800/80 font-['Plus_Jakarta_Sans',sans-serif]">
+                <!-- Single row containing Search Bar and Custom Dropdown Filter -->
+                <div class="flex items-center gap-2 w-full">
+                    <!-- Search Input (takes available width) -->
+                    <div class="relative flex-1 min-w-0">
+                        <!-- Search Icon (Vertically centered, positioned inside the searchbox with perfect spacing) -->
+                        <div class="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none select-none text-slate-400 dark:text-slate-500">
+                            <span class="material-symbols-rounded text-[18px] leading-none">search</span>
+                        </div>
+                        <input type="text" id="mobile-library-search-input"
+                            oninput="handleMobileLibrarySearch(this.value)"
+                            onkeyup="handleMobileLibrarySearch(this.value)"
+                            placeholder="Search books, guides, authors..."
+                            class="w-full h-10 pl-10 pr-9 bg-slate-50 dark:bg-[#1e293b] border border-slate-200/90 dark:border-slate-700/90 text-xs font-semibold text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 shadow-2xs transition-all">
+                        <button type="button" id="mobile-library-clear-search-btn" onclick="clearMobileLibrarySearch()"
+                            class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 size-5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 items-center justify-center transition-colors cursor-pointer select-none">
+                            <span class="material-symbols-rounded text-sm">cancel</span>
+                        </button>
+                    </div>
+
+                    <!-- Custom Subject Dropdown (NOT native browser select) -->
+                    <div class="relative shrink-0" id="mobileLibrarySubjectDropdownContainer">
+                        <!-- Trigger Button -->
+                        <button type="button" id="mobileLibrarySubjectDropdownBtn" onclick="toggleMobileLibrarySubjectDropdown(event)"
+                            class="h-10 px-3 bg-slate-50 dark:bg-[#1e293b] border border-slate-200/90 dark:border-slate-700/90 hover:bg-slate-100 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all active:scale-95 shadow-2xs">
+                            <span class="material-symbols-rounded text-primary text-[17px] leading-none shrink-0">tune</span>
+                            <span id="mobileLibrarySubjectSelectedLabel" class="truncate max-w-[85px] sm:max-w-[120px] font-bold">All Subjects</span>
+                            <span id="mobileLibrarySubjectDropdownArrow" class="material-symbols-rounded text-slate-400 text-sm leading-none shrink-0 transition-transform duration-200">expand_more</span>
+                        </button>
+
+                        <!-- Custom Popover Menu -->
+                        <div id="mobileLibrarySubjectDropdownMenu"
+                            class="hidden absolute right-0 top-full mt-1.5 w-48 sm:w-56 max-h-60 overflow-y-auto no-scrollbar rounded-xl bg-white dark:bg-[#1e293b] border border-slate-200/90 dark:border-slate-700/90 shadow-xl z-50 py-1 divide-y divide-slate-100 dark:divide-slate-800/50">
+                            <!-- All Subjects Option -->
+                            <button type="button" onclick="selectMobileLibrarySubject('all')"
+                                data-library-subject-opt="all"
+                                class="mobile-library-sub-opt w-full px-3 py-2 text-left text-xs flex items-center justify-between transition-colors bg-primary/10 text-primary font-bold">
+                                <span class="flex items-center gap-2">
+                                    <span class="opt-dot size-1.5 rounded-full bg-primary"></span>
+                                    <span>All Subjects</span>
+                                </span>
+                                <span class="opt-check material-symbols-rounded text-base text-primary inline">check</span>
+                            </button>
+                            <% 
+                                const libSubjectsList = (locals.subjects && locals.subjects.length > 0) 
+                                    ? locals.subjects 
+                                    : ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic'];
+                                libSubjectsList.forEach(sub => { 
+                            %>
+                            <button type="button" onclick="selectMobileLibrarySubject('<%= sub %>')"
+                                data-library-subject-opt="<%= sub %>"
+                                class="mobile-library-sub-opt w-full px-3 py-2 text-left text-xs flex items-center justify-between transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-medium">
+                                <span class="flex items-center gap-2">
+                                    <span class="opt-dot size-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                                    <span class="truncate"><%= sub %></span>
+                                </span>
+                                <span class="opt-check material-symbols-rounded text-base text-primary hidden">check</span>
+                            </button>
+                            <% }) %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Category Navigation Tabs & Stats Bar -->
+            <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 px-3 sm:px-4 py-2 flex items-center justify-between gap-2 shrink-0 font-['Plus_Jakarta_Sans',sans-serif]">
                 
-                <!-- Category Tabs Row -->
-                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-                    <button class="cat-tab active px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border shrink-0 bg-primary text-white border-primary shadow-2xs flex items-center gap-1.5 cursor-pointer select-none" data-category="all">
-                        <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0 select-none">grid_view</span> All Resources
+                <!-- Category Tabs Row (Smooth horizontal scrollable pill buttons) -->
+                <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 flex-1 min-w-0">
+                    <button class="cat-tab active px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shrink-0 bg-primary text-white border-primary shadow-xs flex items-center gap-1.5 cursor-pointer select-none active:scale-95" data-category="all">
+                        <span class="material-symbols-rounded text-[15px] leading-none shrink-0">grid_view</span> All Resources
                     </button>
-                    <button class="cat-tab px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border shrink-0 bg-slate-50 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary/40 flex items-center gap-1.5 cursor-pointer select-none" data-category="Guide">
-                        <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0 select-none">menu_book</span> Guides
+                    <button class="cat-tab px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shrink-0 bg-slate-50 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary/40 flex items-center gap-1.5 cursor-pointer select-none active:scale-95" data-category="Guide">
+                        <span class="material-symbols-rounded text-[15px] leading-none shrink-0">menu_book</span> Guides
                     </button>
-                    <button class="cat-tab px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border shrink-0 bg-slate-50 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary/40 flex items-center gap-1.5 cursor-pointer select-none" data-category="your-notes">
-                        <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0 select-none">edit_note</span> Your Notes
+                    <button class="cat-tab px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shrink-0 bg-slate-50 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary/40 flex items-center gap-1.5 cursor-pointer select-none active:scale-95" data-category="your-notes">
+                        <span class="material-symbols-rounded text-[15px] leading-none text-teal-600 dark:text-teal-400 shrink-0">edit_note</span> Your Notes
                     </button>
-                    <button class="cat-tab px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border shrink-0 bg-slate-50 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary/40 flex items-center gap-1.5 cursor-pointer select-none" data-category="General Reading">
-                        <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0 select-none">library_books</span> General Reading
+                    <button class="cat-tab px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shrink-0 bg-slate-50 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary/40 flex items-center gap-1.5 cursor-pointer select-none active:scale-95" data-category="General Reading">
+                        <span class="material-symbols-rounded text-[15px] leading-none shrink-0">library_books</span> General Reading
                     </button>
-                    <button class="cat-tab px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all border shrink-0 bg-slate-50 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary/40 flex items-center gap-1.5 cursor-pointer select-none" data-category="saved">
-                        <span class="material-symbols-rounded text-amber-500 text-sm leading-none flex items-center justify-center shrink-0 select-none">bookmark</span> Saved Books
+                    <button class="cat-tab px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shrink-0 bg-slate-50 dark:bg-[#1e293b] text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary/40 flex items-center gap-1.5 cursor-pointer select-none active:scale-95" data-category="saved">
+                        <span class="material-symbols-rounded text-amber-500 text-[15px] leading-none shrink-0">bookmark</span> Saved
                     </button>
                 </div>
 
-                <!-- Right Side: Stats Badges -->
-                <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-                    <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 h-7 sm:h-7.5">
-                        <span class="material-symbols-rounded text-primary text-[14px] leading-none flex items-center justify-center shrink-0 select-none">auto_stories</span>
+                <!-- Right Side: Stats Badges (Hidden on mobile phones, neatly aligned on sm+ screens) -->
+                <div class="hidden sm:flex items-center gap-1.5 shrink-0">
+                    <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 h-7.5">
+                        <span class="material-symbols-rounded text-primary text-[14px] leading-none shrink-0">auto_stories</span>
                         <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200"><%= books ? books.length : 0 %> Books</span>
                     </div>
-                    <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 h-7 sm:h-7.5">
-                        <span class="material-symbols-rounded text-teal-600 dark:text-teal-400 text-[14px] leading-none flex items-center justify-center shrink-0 select-none">edit_note</span>
+                    <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 h-7.5">
+                        <span class="material-symbols-rounded text-teal-600 dark:text-teal-400 text-[14px] leading-none shrink-0">edit_note</span>
                         <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200" id="user-notes-count-badge"><%= locals.userNotes ? userNotes.length : 0 %> Notes</span>
                     </div>
-                    <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 h-7 sm:h-7.5">
-                        <span class="material-symbols-rounded text-amber-500 text-[14px] leading-none flex items-center justify-center shrink-0 select-none">bookmark</span>
+                    <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 h-7.5">
+                        <span class="material-symbols-rounded text-amber-500 text-[14px] leading-none shrink-0">bookmark</span>
                         <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200" id="saved-count-display"><%= locals.savedBookmarks ? savedBookmarks.length : 0 %> Saved</span>
                     </div>
                 </div>
             </div>
 
             <!-- Content Area: Reading Materials Grid & Your Notes Grid -->
-            <div class="flex-1 bg-white dark:bg-[#0f172a] p-3 sm:p-4 space-y-3">
+            <div class="flex-1 bg-white dark:bg-[#0f172a] p-3 sm:p-4 space-y-3 font-['Plus_Jakarta_Sans',sans-serif]">
                 
                 <!-- Section Header Bar -->
-                <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
                     <div class="flex items-center gap-2">
-                        <span id="section-icon" class="material-symbols-rounded text-primary text-lg leading-none flex items-center justify-center shrink-0 select-none">auto_stories</span>
-                        <h2 id="section-title" class="text-xs font-bold text-slate-800 dark:text-white">Available Reading Materials</h2>
+                        <div class="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                            <span id="section-icon" class="material-symbols-rounded text-[17px] leading-none">auto_stories</span>
+                        </div>
+                        <h2 id="section-title" class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">Available Reading Materials</h2>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button id="upload-note-top-btn" onclick="openUploadNoteModal()" class="hidden px-3 py-1.5 bg-teal-600 hover:bg-teal-700 active:scale-[0.98] text-white rounded-lg text-xs font-bold transition-all shadow-xs inline-flex items-center justify-center gap-1.5 cursor-pointer select-none">
-                            <span class="material-symbols-rounded text-base leading-none shrink-0 flex items-center justify-center -mt-0.5 select-none">upload_file</span>
-                            <span class="leading-none select-none">Upload Note</span>
+                    <div class="flex items-center gap-2 shrink-0">
+                        <button id="upload-note-top-btn" onclick="openUploadNoteModal()" class="hidden h-7.5 px-3 bg-teal-600 hover:bg-teal-700 active:scale-95 text-white rounded-lg text-xs font-bold transition-all shadow-2xs inline-flex items-center justify-center gap-1.5 cursor-pointer select-none">
+                            <span class="material-symbols-rounded text-[15px] leading-none shrink-0">upload_file</span>
+                            <span class="leading-none">Upload Note</span>
                         </button>
-                        <span id="showing-count-badge" class="text-[10px] font-semibold text-slate-400">
+                        <span id="showing-count-badge" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10.5px] font-bold text-slate-500 dark:text-slate-400">
                             Showing <%= books ? books.length : 0 %> items
                         </span>
                     </div>
                 </div>
 
                 <!-- 1. Public Library Books Grid List -->
-                <div id="library-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                <div id="library-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-3">
                     <% if (locals.books && books.length > 0) { %>
                         <% books.forEach((item) => { %>
                             <% 
                                 const isSaved = locals.savedBookmarks && savedBookmarks.some(b => b.link === item.fileUrl || b.title === item.title);
                             %>
-                            <div class="library-item bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 rounded-xl p-2.5 flex flex-col justify-between hover:border-primary/40 transition-all group relative"
+                            <div class="library-item bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/70 rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between hover:border-primary/50 transition-all group relative shadow-2xs"
                                 data-class="<%= item.classLevel %>" 
                                 data-subject="<%= item.subject %>" 
                                 data-category="<%= item.category %>"
@@ -91,7 +158,7 @@
 
                                 <!-- Cover Visual & Badges -->
                                 <div>
-                                    <div class="w-full aspect-[3/4] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 relative mb-2 shadow-inner group cursor-pointer" onclick="openReaderModal('<%= item.fileUrl %>', '<%= item.title.replace(/'/g, '\\\'') %>', 'pdf', '<%= (item.author || '').replace(/'/g, '\\\'') %>')">
+                                    <div class="w-full aspect-[3/4] rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-700 border border-slate-200/90 dark:border-slate-700/90 relative mb-2 shadow-inner group cursor-pointer" onclick="openReaderModal('<%= item.fileUrl %>', '<%= item.title.replace(/'/g, '\\\'') %>', 'pdf', '<%= (item.author || '').replace(/'/g, '\\\'') %>')">
                                         <% if (item.coverImage) { %>
                                             <img src="<%= item.coverImage %>" alt="<%= item.title %>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                                         <% } else { %>
@@ -99,58 +166,58 @@
                                                 <span class="material-symbols-rounded text-3xl mb-1 text-primary/70 flex items-center justify-center leading-none select-none">
                                                     <%= item.category === 'Formula Sheet' ? 'functions' : (item.category === 'Board Solution' ? 'quiz' : 'auto_stories') %>
                                                 </span>
-                                                <span class="text-[9px] font-bold text-slate-500 text-center"><%= item.subject %></span>
+                                                <span class="text-[10px] font-bold text-slate-500 text-center"><%= item.subject %></span>
                                             </div>
                                         <% } %>
 
                                         <!-- Category Tag Badge -->
-                                        <span class="absolute top-1.5 left-1.5 px-2 py-0.5 bg-slate-900/85 text-white text-[8px] font-bold rounded backdrop-blur-md border border-white/10 shadow-sm pointer-events-none">
+                                        <span class="absolute top-1.5 left-1.5 px-2 py-0.5 bg-slate-900/85 text-white text-[9.5px] font-bold rounded-md backdrop-blur-md border border-white/10 shadow-sm pointer-events-none">
                                             <%= item.category || 'Book' %>
                                         </span>
 
                                         <!-- Bookmark Button -->
                                         <button onclick="toggleBookmark(event, '<%= item._id %>', '<%= item.title %>', '<%= item.fileUrl %>')" 
-                                            class="bookmark-btn absolute top-1.5 right-1.5 size-6 rounded-full bg-slate-900/70 hover:bg-slate-900 text-white flex items-center justify-center backdrop-blur-md border border-white/10 transition-transform active:scale-95 shadow-sm cursor-pointer"
+                                            class="bookmark-btn absolute top-1.5 right-1.5 size-7 rounded-full bg-slate-900/75 hover:bg-slate-900 text-white flex items-center justify-center backdrop-blur-md border border-white/10 transition-transform active:scale-90 shadow-sm cursor-pointer"
                                             title="Save to Bookmarks">
-                                            <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center select-none <%= isSaved ? 'text-amber-400 fill-1' : 'text-slate-300' %>">
+                                            <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center select-none <%= isSaved ? 'text-amber-400 fill-1' : 'text-slate-300' %>">
                                                 <%= isSaved ? 'bookmark_added' : 'bookmark' %>
                                             </span>
                                         </button>
                                     </div>
 
                                     <!-- Class & Subject Pills -->
-                                    <div class="flex items-center gap-1 mb-1 flex-wrap">
-                                        <span class="px-1.5 py-0.5 bg-primary/10 text-primary text-[8px] font-bold rounded border border-primary/20">
+                                    <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+                                        <span class="px-1.5 py-0.5 bg-primary/10 text-primary text-[9.5px] font-bold rounded-md border border-primary/20">
                                             <%= item.classLevel %>
                                         </span>
-                                        <span class="text-[9px] font-semibold text-slate-400 truncate"><%= item.subject %></span>
+                                        <span class="text-[10.5px] font-semibold text-slate-500 dark:text-slate-400 truncate"><%= item.subject %></span>
                                     </div>
 
                                     <!-- Book Title -->
-                                    <h3 class="font-bold text-xs text-slate-800 dark:text-white group-hover:text-primary transition-colors line-clamp-2 leading-snug mb-1 cursor-pointer" onclick="openReaderModal('<%= item.fileUrl %>', '<%= item.title.replace(/'/g, '\\\'') %>', 'pdf', '<%= (item.author || '').replace(/'/g, '\\\'') %>')" title="<%= item.title %>">
+                                    <h3 class="font-bold text-xs sm:text-[13px] text-slate-800 dark:text-white group-hover:text-primary transition-colors line-clamp-2 leading-snug mb-1.5 min-h-[2rem] cursor-pointer" onclick="openReaderModal('<%= item.fileUrl %>', '<%= item.title.replace(/'/g, '\\\'') %>', 'pdf', '<%= (item.author || '').replace(/'/g, '\\\'') %>')" title="<%= item.title %>">
                                         <%= item.title %>
                                     </h3>
 
                                     <!-- Metadata Info -->
-                                    <div class="flex items-center gap-2 text-[9.5px] font-semibold text-slate-400 mb-2.5">
+                                    <div class="flex items-center gap-2 text-[10px] sm:text-[10.5px] font-semibold text-slate-400 dark:text-slate-400 mb-2">
                                         <% if (item.pageCount) { %>
-                                            <span class="flex items-center gap-0.5" title="Pages"><span class="material-symbols-rounded text-[11px] leading-none flex items-center justify-center shrink-0 select-none">description</span> <%= item.pageCount %> pages</span>
+                                            <span class="flex items-center gap-0.5" title="Pages"><span class="material-symbols-rounded text-[13px] leading-none shrink-0 select-none">description</span> <%= item.pageCount %> pages</span>
                                         <% } %>
                                         <% if (item.fileSize) { %>
-                                            <span class="flex items-center gap-0.5" title="File Size"><span class="material-symbols-rounded text-[11px] leading-none flex items-center justify-center shrink-0 select-none">sd_card</span> <%= item.fileSize %></span>
+                                            <span class="flex items-center gap-0.5" title="File Size"><span class="material-symbols-rounded text-[13px] leading-none shrink-0 select-none">sd_card</span> <%= item.fileSize %></span>
                                         <% } %>
                                     </div>
                                 </div>
 
                                 <!-- Action Buttons -->
-                                <div class="grid grid-cols-2 gap-1 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                                <div class="grid grid-cols-2 gap-1.5 pt-2 border-t border-slate-200/70 dark:border-slate-700/70">
                                     <button onclick="openReaderModal('<%= item.fileUrl %>', '<%= item.title.replace(/'/g, '\\\'') %>', 'pdf', '<%= (item.author || '').replace(/'/g, '\\\'') %>')" 
-                                        class="w-full py-1 bg-primary hover:bg-primary-dark text-white rounded-md text-xs font-bold text-center transition-colors flex items-center justify-center gap-1 shadow-sm cursor-pointer">
-                                        <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0 select-none">visibility</span> Read
+                                        class="w-full h-7.5 sm:h-8 bg-primary hover:bg-primary-dark active:scale-95 text-white rounded-lg text-xs font-bold text-center transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer">
+                                        <span class="material-symbols-rounded text-sm leading-none shrink-0 select-none">visibility</span> Read
                                     </button>
                                     <a href="<%= item.fileUrl %>" download target="_blank" 
-                                        class="w-full py-1 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-md text-xs font-bold text-center transition-colors flex items-center justify-center gap-1 border border-slate-200 dark:border-slate-600">
-                                        <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center shrink-0 select-none">download</span> PDF
+                                        class="w-full h-7.5 sm:h-8 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 active:scale-95 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold text-center transition-all flex items-center justify-center gap-1 border border-slate-200 dark:border-slate-600 shadow-2xs">
+                                        <span class="material-symbols-rounded text-sm leading-none shrink-0 select-none">download</span> PDF
                                     </a>
                                 </div>
                             </div>
@@ -160,10 +227,10 @@
 
                 <!-- 2. Student Personal "Your Notes" Container (Private to Logged In Student) -->
                 <div id="user-notes-container" class="hidden space-y-3">
-                    <div id="user-notes-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5">
+                    <div id="user-notes-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 sm:gap-3">
                         <% if (locals.userNotes && userNotes.length > 0) { %>
                             <% userNotes.forEach(note => { %>
-                                <div class="user-note-card bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 rounded-xl p-2.5 flex flex-col justify-between hover:border-teal-500/50 transition-all group relative"
+                                <div class="user-note-card bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/70 rounded-2xl p-2 sm:p-2.5 flex flex-col justify-between hover:border-teal-500/50 transition-all group relative shadow-2xs"
                                     id="user-note-<%= note._id %>"
                                     data-title="<%= note.title.toLowerCase() %>"
                                     data-subject="<%= (note.subject || '').toLowerCase() %>"
@@ -171,58 +238,58 @@
 
                                     <!-- Cover Preview -->
                                     <div>
-                                        <div class="w-full aspect-[3/4] rounded-lg overflow-hidden bg-slate-200 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 relative mb-2 shadow-inner group cursor-pointer" onclick="openReaderModal('<%= note.fileUrl %>', '<%= note.title.replace(/'/g, '\\\'') %>', '<%= note.fileType %>', '<%= (note.subject || '').replace(/'/g, '\\\'') %>')">
+                                        <div class="w-full aspect-[3/4] rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-700 border border-slate-200/90 dark:border-slate-700/90 relative mb-2 shadow-inner group cursor-pointer" onclick="openReaderModal('<%= note.fileUrl %>', '<%= note.title.replace(/'/g, '\\\'') %>', '<%= note.fileType %>', '<%= (note.subject || '').replace(/'/g, '\\\'') %>')">
                                             <% if (note.fileType === 'image') { %>
                                                 <img src="<%= note.fileUrl %>" alt="<%= note.title %>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500">
                                             <% } else if (note.fileType === 'text') { %>
                                                 <div class="w-full h-full flex flex-col items-center justify-center p-3 text-slate-400 bg-gradient-to-br from-sky-50 to-indigo-100 dark:from-sky-950/40 dark:to-slate-900">
                                                     <span class="material-symbols-rounded text-4xl text-sky-600 dark:text-sky-400 mb-1 leading-none">description</span>
-                                                    <span class="text-[9px] font-bold text-sky-800 dark:text-sky-300 text-center uppercase tracking-wide">Text Note</span>
+                                                    <span class="text-[9.5px] font-bold text-sky-800 dark:text-sky-300 text-center uppercase tracking-wide">Text Note</span>
                                                 </div>
                                             <% } else { %>
                                                 <div class="w-full h-full flex flex-col items-center justify-center p-3 text-slate-400 bg-gradient-to-br from-teal-50 to-emerald-100 dark:from-teal-950/40 dark:to-slate-900">
                                                     <span class="material-symbols-rounded text-4xl text-teal-600 dark:text-teal-400 mb-1 leading-none">picture_as_pdf</span>
-                                                    <span class="text-[9px] font-bold text-teal-800 dark:text-teal-300 text-center uppercase tracking-wide">PDF Note</span>
+                                                    <span class="text-[9.5px] font-bold text-teal-800 dark:text-teal-300 text-center uppercase tracking-wide">PDF Note</span>
                                                 </div>
                                             <% } %>
 
                                             <!-- Badges -->
-                                            <span class="absolute top-1.5 left-1.5 px-2 py-0.5 bg-slate-900/85 text-white text-[8px] font-bold rounded backdrop-blur-md border border-white/10 shadow-sm flex items-center gap-1 pointer-events-none">
-                                                <span class="material-symbols-rounded text-[10px] text-teal-400">lock</span>
+                                            <span class="absolute top-1.5 left-1.5 px-2 py-0.5 bg-slate-900/85 text-white text-[9.5px] font-bold rounded-md backdrop-blur-md border border-white/10 shadow-sm flex items-center gap-1 pointer-events-none">
+                                                <span class="material-symbols-rounded text-[11px] text-teal-400">lock</span>
                                                 <span>Your Note</span>
                                             </span>
 
-                                            <span class="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded text-[8px] font-black uppercase <%= note.fileType === 'pdf' ? 'bg-rose-500 text-white' : (note.fileType === 'text' ? 'bg-sky-500 text-white' : 'bg-emerald-500 text-white') %> shadow-sm pointer-events-none">
+                                            <span class="absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase <%= note.fileType === 'pdf' ? 'bg-rose-500 text-white' : (note.fileType === 'text' ? 'bg-sky-500 text-white' : 'bg-emerald-500 text-white') %> shadow-sm pointer-events-none">
                                                 <%= note.fileType.toUpperCase() %>
                                             </span>
                                         </div>
 
                                         <!-- Subject Badge -->
-                                        <div class="flex items-center gap-1 mb-1">
-                                            <span class="px-1.5 py-0.5 bg-teal-500/10 text-teal-700 dark:text-teal-300 text-[8px] font-bold rounded border border-teal-500/20">
+                                        <div class="flex items-center gap-1.5 mb-1">
+                                            <span class="px-1.5 py-0.5 bg-teal-500/10 text-teal-700 dark:text-teal-300 text-[9.5px] font-bold rounded-md border border-teal-500/20">
                                                 <%= note.subject || 'General' %>
                                             </span>
-                                            <span class="text-[9px] font-semibold text-slate-400"><%= note.fileSize || '' %></span>
+                                            <span class="text-[10px] font-semibold text-slate-400"><%= note.fileSize || '' %></span>
                                         </div>
 
                                         <!-- Title -->
-                                        <h3 class="font-bold text-xs text-slate-800 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors line-clamp-2 leading-snug mb-2 cursor-pointer" onclick="openReaderModal('<%= note.fileUrl %>', '<%= note.title.replace(/'/g, '\\\'') %>', '<%= note.fileType %>', '<%= (note.subject || '').replace(/'/g, '\\\'') %>')" title="<%= note.title %>">
+                                        <h3 class="font-bold text-xs sm:text-[13px] text-slate-800 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors line-clamp-2 leading-snug mb-1.5 min-h-[2rem] cursor-pointer" onclick="openReaderModal('<%= note.fileUrl %>', '<%= note.title.replace(/'/g, '\\\'') %>', '<%= note.fileType %>', '<%= (note.subject || '').replace(/'/g, '\\\'') %>')" title="<%= note.title %>">
                                             <%= note.title %>
                                         </h3>
                                     </div>
 
                                     <!-- Actions: Read, Download, Delete -->
-                                    <div class="flex items-center gap-1 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                                    <div class="flex items-center gap-1.5 pt-2 border-t border-slate-200/70 dark:border-slate-700/70">
                                         <button onclick="openReaderModal('<%= note.fileUrl %>', '<%= note.title.replace(/'/g, '\\\'') %>', '<%= note.fileType %>', '<%= (note.subject || '').replace(/'/g, '\\\'') %>')" 
-                                            class="flex-1 py-1 bg-teal-600 hover:bg-teal-700 text-white rounded-md text-xs font-bold text-center transition-colors flex items-center justify-center gap-1 shadow-sm cursor-pointer">
-                                            <span class="material-symbols-rounded text-xs leading-none">visibility</span> Read
+                                            class="flex-1 h-7.5 sm:h-8 bg-teal-600 hover:bg-teal-700 active:scale-95 text-white rounded-lg text-xs font-bold text-center transition-all flex items-center justify-center gap-1 shadow-2xs cursor-pointer">
+                                            <span class="material-symbols-rounded text-sm leading-none">visibility</span> Read
                                         </button>
                                         <a href="<%= note.fileUrl %>" download target="_blank" 
-                                            class="p-1 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-md text-xs font-bold transition-colors flex items-center justify-center border border-slate-200 dark:border-slate-600" title="Download">
+                                            class="size-7.5 sm:size-8 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 active:scale-95 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-bold transition-all flex items-center justify-center border border-slate-200 dark:border-slate-600 shadow-2xs" title="Download">
                                             <span class="material-symbols-rounded text-sm leading-none">download</span>
                                         </a>
                                         <button onclick="deleteUserNote('<%= note._id %>')" 
-                                            class="p-1 bg-white dark:bg-slate-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 rounded-md text-xs font-bold transition-colors flex items-center justify-center border border-slate-200 dark:border-slate-600 cursor-pointer" title="Delete Note">
+                                            class="size-7.5 sm:size-8 bg-white dark:bg-slate-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 active:scale-95 rounded-lg text-xs font-bold transition-all flex items-center justify-center border border-slate-200 dark:border-slate-600 shadow-2xs cursor-pointer" title="Delete Note">
                                             <span class="material-symbols-rounded text-sm leading-none">delete</span>
                                         </button>
                                     </div>
@@ -350,14 +417,122 @@
         let currentLibrarySearch = '';
         let currentLibrarySubject = (window.currentSelectedLibrarySubject || 'all').toLowerCase().trim();
 
+        window.handleMobileLibrarySearch = function(val) {
+            currentLibrarySearch = (val || '').toLowerCase().trim();
+            const clearBtn = document.getElementById('mobile-library-clear-search-btn');
+            if (clearBtn) {
+                if (currentLibrarySearch.length > 0) clearBtn.classList.remove('hidden');
+                else clearBtn.classList.add('hidden');
+            }
+            // Sync desktop header search input if present
+            const headerInput = document.getElementById('library-search-input-header');
+            if (headerInput && headerInput.value !== val) headerInput.value = val;
+            const headerClearBtn = document.getElementById('library-clear-search-btn');
+            if (headerClearBtn) {
+                if (currentLibrarySearch.length > 0) headerClearBtn.classList.remove('hidden');
+                else headerClearBtn.classList.add('hidden');
+            }
+            filterLibrary();
+        };
+
+        window.clearMobileLibrarySearch = function() {
+            const mInput = document.getElementById('mobile-library-search-input');
+            if (mInput) mInput.value = '';
+            handleMobileLibrarySearch('');
+        };
+
+        window.toggleMobileLibrarySubjectDropdown = function(e) {
+            if (e) e.stopPropagation();
+            const menu = document.getElementById('mobileLibrarySubjectDropdownMenu');
+            const arrow = document.getElementById('mobileLibrarySubjectDropdownArrow');
+            if (!menu) return;
+            const isHidden = menu.classList.contains('hidden');
+            if (isHidden) {
+                menu.classList.remove('hidden');
+                if (arrow) arrow.classList.add('rotate-180');
+            } else {
+                menu.classList.add('hidden');
+                if (arrow) arrow.classList.remove('rotate-180');
+            }
+        };
+
+        window.closeMobileLibrarySubjectDropdown = function() {
+            const menu = document.getElementById('mobileLibrarySubjectDropdownMenu');
+            const arrow = document.getElementById('mobileLibrarySubjectDropdownArrow');
+            if (menu) menu.classList.add('hidden');
+            if (arrow) arrow.classList.remove('rotate-180');
+        };
+
+        window.selectMobileLibrarySubject = function(sub) {
+            filterLibraryWithSubject(sub);
+            closeMobileLibrarySubjectDropdown();
+        };
+
+        function updateMobileLibrarySubjectDropdownUI(selectedSubject) {
+            const label = document.getElementById('mobileLibrarySubjectSelectedLabel');
+            if (label) {
+                label.textContent = (!selectedSubject || selectedSubject === 'all') ? 'All Subjects' : selectedSubject;
+            }
+            const opts = document.querySelectorAll('.mobile-library-sub-opt');
+            const target = (selectedSubject || 'all').toLowerCase();
+            opts.forEach(opt => {
+                const optVal = (opt.getAttribute('data-library-subject-opt') || '').toLowerCase();
+                const isMatch = optVal === target;
+                const dot = opt.querySelector('.opt-dot');
+                const check = opt.querySelector('.opt-check');
+
+                if (isMatch) {
+                    opt.className = 'mobile-library-sub-opt w-full px-3 py-2 text-left text-xs flex items-center justify-between transition-colors bg-primary/10 text-primary font-bold';
+                    if (dot) dot.className = 'opt-dot size-1.5 rounded-full bg-primary';
+                    if (check) {
+                        check.classList.remove('hidden');
+                        check.classList.add('inline');
+                    }
+                } else {
+                    opt.className = 'mobile-library-sub-opt w-full px-3 py-2 text-left text-xs flex items-center justify-between transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-medium';
+                    if (dot) dot.className = 'opt-dot size-1.5 rounded-full bg-slate-300 dark:bg-slate-600';
+                    if (check) {
+                        check.classList.remove('inline');
+                        check.classList.add('hidden');
+                    }
+                }
+            });
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            const container = document.getElementById('mobileLibrarySubjectDropdownContainer');
+            if (container && !container.contains(e.target)) {
+                closeMobileLibrarySubjectDropdown();
+            }
+        });
+
+        // Close on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeMobileLibrarySubjectDropdown();
+            }
+        });
+
         window.filterLibraryWithSearch = function(query) {
             currentLibrarySearch = (query || '').toLowerCase().trim();
+            const mInput = document.getElementById('mobile-library-search-input');
+            if (mInput && mInput.value !== query) mInput.value = query || '';
+            const clearBtn = document.getElementById('mobile-library-clear-search-btn');
+            if (clearBtn) {
+                if (currentLibrarySearch.length > 0) clearBtn.classList.remove('hidden');
+                else clearBtn.classList.add('hidden');
+            }
             filterLibrary();
         };
 
         window.filterLibraryWithSubject = function(subject) {
             window.currentSelectedLibrarySubject = subject || 'all';
             currentLibrarySubject = (subject || 'all').toLowerCase().trim();
+            updateMobileLibrarySubjectDropdownUI(subject);
+            // Sync desktop header select if present
+            const headerSelect = document.getElementById('library-header-subject');
+            if (headerSelect && headerSelect.value !== subject) headerSelect.value = subject;
             filterLibrary();
         };
 
@@ -486,6 +661,9 @@
             currentLibrarySearch = '';
             currentLibrarySubject = 'all';
             activeCategory = 'all';
+
+            clearMobileLibrarySearch();
+            updateMobileLibrarySubjectDropdownUI('all');
 
             if (typeof selectLibrarySubject === 'function') {
                 selectLibrarySubject('all');
