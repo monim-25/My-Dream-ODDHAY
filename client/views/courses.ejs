@@ -151,7 +151,146 @@
 
                     <!-- Featured Courses Carousel -->
                     <% if(locals.exploreCourses && exploreCourses.length > 0) { %>
-                    <div id="featuredCarouselBox" class="w-full relative text-white pt-4 sm:pt-5 pb-12 sm:pb-14 px-0 group/carousel select-none overflow-hidden bg-[#FFFFFF] dark:bg-[#0b1120] border-b border-slate-200/80 dark:border-slate-800/80">
+
+                    <!-- Mobile Courses Carousel (< lg only, matching student-dashboard) -->
+                    <div id="coursesMobileCarouselBox" class="w-full mt-1 mb-2 relative z-20 lg:hidden font-['Plus_Jakarta_Sans',sans-serif] select-none">
+                        <!-- Header with title & My Courses button -->
+                        <div class="flex items-center justify-between w-full mb-3 px-3.5 pt-2">
+                            <div class="flex items-center gap-1.5">
+                                <div class="size-6 rounded-lg bg-indigo-500/10 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                                    <span class="material-symbols-rounded text-base leading-none">stars</span>
+                                </div>
+                                <span class="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 tracking-tight">Featured Courses</span>
+                            </div>
+                            <a href="/my-courses" class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-500 hover:bg-rose-600 text-white text-[11px] font-bold shadow-xs active:scale-95 transition-all">
+                                <span class="material-symbols-rounded text-[14px] leading-none">school</span>
+                                <span>My Courses</span>
+                                <span class="px-1 py-0.2 rounded-full text-[9px] font-black bg-white/20 text-white leading-none"><%= (locals.enrolledCourses || []).filter(ec => ec && ec.course).length %></span>
+                            </a>
+                        </div>
+
+                        <!-- Swipeable Cards Track Centered with snap-center -->
+                        <div id="coursesMobileCarouselTrack" class="flex items-stretch gap-3 overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar pb-1.5 w-full px-[6vw] sm:px-[calc((100%-295px)/2)]">
+                            <% exploreCourses.forEach((c, cIdx) => { 
+                                const cImg = getImg(c.thumbnail);
+                                const isFree = c.accessType === 'free' || c.accessType === 'Free';
+                                const subName = (Array.isArray(c.subject) && c.subject.length > 0) ? c.subject[0] : (c.subject || 'Academic');
+                                const instructorName = c.instructor?.name || 'Oddhay Specialist';
+                                const hasDiscount = !isFree && c.discountPrice && c.discountPrice > 0 && c.price && c.price > c.discountPrice;
+                                const displayPrice = isFree ? 'Free' : (c.discountPrice > 0 ? '৳' + c.discountPrice : (c.price > 0 ? '৳' + c.price : 'Free'));
+
+                                let itemType = 'Course';
+                                const titleLower = (c.title || '').toLowerCase();
+                                const catStr = Array.isArray(c.category) ? c.category.join(' ').toLowerCase() : (c.category || '').toLowerCase();
+                                const tagStr = Array.isArray(c.tags) ? c.tags.join(' ').toLowerCase() : (c.tags || '').toLowerCase();
+                                if (c.isPackage || /package|bundle|প্যাকেজ|বান্ডেল/.test(titleLower) || /package|bundle|প্যাকেজ|বান্ডেল/.test(catStr) || /package|bundle/.test(tagStr)) {
+                                    itemType = 'Package';
+                                }
+
+                                let lessonCount = 0;
+                                if (c.chapters && Array.isArray(c.chapters)) {
+                                    c.chapters.forEach(ch => {
+                                        if (ch.recordedClasses) lessonCount += ch.recordedClasses.length;
+                                        if (ch.liveClasses) lessonCount += ch.liveClasses.length;
+                                    });
+                                }
+                                if (c.curriculumNodes && Array.isArray(c.curriculumNodes)) {
+                                    c.curriculumNodes.forEach(node => {
+                                        if (node.type === 'video' || node.type === 'liveClass') lessonCount++;
+                                    });
+                                }
+
+                                const isCardActive = cIdx === 0;
+                            %>
+                            <div class="mobile-carousel-course-card snap-center shrink-0 w-[84vw] max-w-[295px] min-w-[250px] rounded-2xl bg-white dark:bg-[#131d31] border border-slate-200/90 dark:border-slate-800/90 transition-all duration-500 ease-out flex flex-col overflow-hidden group cursor-pointer <%= isCardActive ? 'opacity-100 scale-100 shadow-md ring-1 ring-indigo-500/25 dark:ring-indigo-400/20' : 'opacity-40 dark:opacity-35 scale-[0.92] brightness-75 shadow-none' %>" data-card-idx="<%= cIdx %>" onclick="window.location.href='/course-details/<%= c._id %>'">
+                                <!-- Card Thumbnail Container -->
+                                <div class="w-full h-28 sm:h-32 relative overflow-hidden bg-slate-100 dark:bg-slate-800 shrink-0">
+                                    <% if (cImg) { %>
+                                        <img src="<%= cImg %>" alt="<%= c.title %>" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                    <% } %>
+                                    <div class="w-full h-full <%= cImg ? 'hidden' : 'flex' %> items-center justify-center bg-gradient-to-br from-indigo-500/20 via-sky-500/15 to-purple-500/20">
+                                        <span class="material-symbols-rounded text-3xl text-indigo-500/60 dark:text-indigo-400/60">school</span>
+                                    </div>
+                                    
+                                    <!-- Gradient Overlay -->
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none"></div>
+
+                                    <!-- Top Badges -->
+                                    <div class="absolute top-2 left-2 right-2 flex items-center justify-between z-10 pointer-events-none">
+                                        <span class="px-2 py-0.5 rounded-lg text-xs font-medium bg-slate-900/70 text-white backdrop-blur-md border border-white/10 truncate max-w-[140px]">
+                                            <%= subName %>
+                                        </span>
+                                        <% if (isFree) { %>
+                                            <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-500 text-white shadow-xs">
+                                                Free <%= itemType %>
+                                            </span>
+                                        <% } else if (hasDiscount) { %>
+                                            <span class="px-1.5 py-0.5 rounded-lg text-[10px] font-bold bg-rose-500 text-white shadow-xs flex items-center gap-0.5">
+                                                <span class="material-symbols-rounded text-xs leading-none">local_offer</span>
+                                                <span>Save ৳<%= c.price - c.discountPrice %></span>
+                                            </span>
+                                        <% } else { %>
+                                            <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-600 text-white shadow-xs">
+                                                <%= itemType %>
+                                            </span>
+                                        <% } %>
+                                    </div>
+                                </div>
+
+                                <!-- Card Content -->
+                                <div class="p-2.5 sm:p-3 flex-1 flex flex-col justify-between gap-2">
+                                    <div>
+                                        <h4 class="text-sm sm:text-base font-semibold text-slate-800 dark:text-slate-100 line-clamp-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                            <%= c.title %>
+                                        </h4>
+                                        <div class="flex items-center gap-1.5 mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                            <span class="material-symbols-rounded text-xs text-indigo-500 leading-none">person</span>
+                                            <span class="truncate max-w-[110px]"><%= instructorName %></span>
+                                            <span class="text-slate-300 dark:text-slate-600">•</span>
+                                            <span class="px-1.5 py-0.2 rounded-md text-[9.5px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60"><%= c.classLevel || itemType %></span>
+                                            <% if (lessonCount > 0) { %>
+                                                <span class="text-slate-300 dark:text-slate-600">•</span>
+                                                <span class="material-symbols-rounded text-xs text-sky-500 leading-none">play_circle</span>
+                                                <span><%= lessonCount %> Lessons</span>
+                                            <% } %>
+                                        </div>
+                                    </div>
+
+                                    <!-- Price & CTA Button Row -->
+                                    <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/80">
+                                        <div class="flex items-baseline gap-1">
+                                            <span class="text-xs sm:text-sm font-black <%= isFree ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white' %>">
+                                                <%= displayPrice %>
+                                            </span>
+                                            <% if (hasDiscount) { %>
+                                                <span class="text-[10px] font-medium text-slate-400 line-through">
+                                                    ৳<%= c.price %>
+                                                </span>
+                                            <% } %>
+                                        </div>
+
+                                        <a href="/course-details/<%= c._id %>" onclick="event.stopPropagation()" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white text-xs font-semibold flex items-center gap-1 shadow-xs active:scale-95 transition-all shrink-0">
+                                            <span><%= isFree ? 'Enroll Free' : 'View Details' %></span>
+                                            <span class="material-symbols-rounded text-xs leading-none">arrow_forward</span>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            <% }) %>
+                        </div>
+
+                        <!-- Mini Dot Indicators for Mobile Carousel -->
+                        <% if (exploreCourses.length > 1) { %>
+                        <div class="flex items-center justify-center gap-1 mt-2.5" id="coursesMobileCarouselDots">
+                            <% exploreCourses.forEach((_, dIdx) => { %>
+                                <button type="button" class="courses-mobile-dot h-1.5 rounded-full transition-all duration-300 cursor-pointer <%= dIdx === 0 ? 'bg-indigo-600 w-3.5' : 'bg-slate-300 dark:bg-slate-700 w-1.5' %>" data-dot-idx="<%= dIdx %>" title="Slide <%= dIdx + 1 %>"></button>
+                            <% }) %>
+                        </div>
+                        <% } %>
+                    </div>
+
+                    <!-- Desktop Featured Courses Carousel (>= lg only) -->
+                    <div id="featuredCarouselBox" class="hidden lg:block w-full relative text-white pt-4 sm:pt-5 pb-12 sm:pb-14 px-0 group/carousel select-none overflow-hidden bg-[#FFFFFF] dark:bg-[#0b1120] border-b border-slate-200/80 dark:border-slate-800/80">
 
                         <!-- Subtle diagonal shimmer stripe -->
                         <div class="absolute inset-0 pointer-events-none z-0 opacity-30" style="background: linear-gradient(120deg, transparent 30%, rgba(99,102,241,0.12) 50%, transparent 70%);"></div>
@@ -349,7 +488,46 @@
                     </div>
                     <% } %>
 
+                    <!-- Mobile On-Screen Search & Filter Bar (< lg only) -->
+                    <div class="lg:hidden w-full px-3.5 pt-3 pb-3 bg-white dark:bg-[#0b1120] border-b border-slate-200/80 dark:border-slate-800/80 space-y-2.5">
+                        <!-- Search Input -->
+                        <div class="relative flex items-center w-full">
+                            <span class="material-symbols-rounded absolute left-3 text-slate-400 dark:text-slate-500 text-lg leading-none pointer-events-none select-none">search</span>
+                            <input type="text" id="mobile-courses-search-input"
+                                oninput="handleMobileCoursesSearch(this.value)"
+                                onkeyup="handleMobileCoursesSearch(this.value)"
+                                placeholder="Search courses, topics, teachers..."
+                                value="<%= locals.search || '' %>"
+                                class="w-full pl-9.5 pr-8 py-2 bg-slate-50 dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-xl outline-none focus:border-indigo-500 dark:focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/10 shadow-2xs transition-all">
+                            <button type="button" id="mobile-courses-clear-search-btn" onclick="clearMobileCoursesSearch()"
+                                class="<%= (locals.search && locals.search.trim().length > 0) ? '' : 'hidden' %> absolute right-2.5 size-5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition-colors cursor-pointer select-none">
+                                <span class="material-symbols-rounded text-sm">cancel</span>
+                            </button>
+                        </div>
 
+                        <!-- Subject Filter Horizontal Pills Scroll -->
+                        <div class="w-full flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1">
+                            <!-- All Subjects Chip -->
+                            <button type="button" onclick="handleMobileCoursesSubject('all')"
+                                data-subject-pill="all"
+                                class="mobile-subject-pill shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-all active:scale-95 <%= (!locals.activeSubject || locals.activeSubject === 'all') ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80 hover:bg-slate-200 dark:hover:bg-slate-700/60' %>">
+                                All Subjects
+                            </button>
+                            <% 
+                                const allAvailableSubjects = (locals.subjects && locals.subjects.length > 0) 
+                                    ? locals.subjects 
+                                    : ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic'];
+                                allAvailableSubjects.forEach(sub => { 
+                                    const isSelected = locals.activeSubject === sub;
+                            %>
+                            <button type="button" onclick="handleMobileCoursesSubject('<%= sub %>')"
+                                data-subject-pill="<%= sub %>"
+                                class="mobile-subject-pill shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-all active:scale-95 <%= isSelected ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80 hover:bg-slate-200 dark:hover:bg-slate-700/60' %>">
+                                <%= sub %>
+                            </button>
+                            <% }) %>
+                        </div>
+                    </div>
 
                     <!-- Explore Courses Section -->
                     <section id="section-explore" class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 rounded-none shadow-none p-3.5 lg:p-4 min-h-[400px]">
@@ -362,7 +540,7 @@
                                 </span>
                                 <h2 class="text-sm font-bold text-slate-800 dark:text-slate-100 tracking-tight">Explore Courses</h2>
                             </div>
-                            <span class="text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 px-2 py-1 rounded-md shrink-0">
+                            <span id="explore-course-count-badge" class="text-xs font-bold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/40 px-2 py-1 rounded-md shrink-0">
                                 <%= (locals.exploreCourses || []).length %> Course<%= (locals.exploreCourses || []).length !== 1 ? 's' : '' %>
                             </span>
                         </div>
@@ -371,7 +549,13 @@
                             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 lg:gap-4">
                                 <% if(locals.exploreCourses && exploreCourses.length > 0) { %>
                                     <% exploreCourses.forEach(course => { %>
-                                        <div class="p-1 course-card-studio course-item group cursor-pointer" data-title="<%= course.title ? course.title.toLowerCase() : '' %>" data-subject="<%= course.subject || '' %>" onclick="window.location.href='/course-details/<%= course._id %>'">
+                                        <div class="p-1 course-card-studio course-item group cursor-pointer" 
+                                            data-title="<%= course.title ? course.title.toLowerCase() : '' %>" 
+                                            data-subject="<%= course.subject || '' %>" 
+                                            data-instructor="<%= (course.instructor?.name || '').toLowerCase() %>"
+                                            data-class="<%= (course.classLevel || '').toLowerCase() %>"
+                                            data-desc="<%= (course.description ? course.description.replace(/(\<([^>]+)>)/gi, '') : '').toLowerCase() %>"
+                                            onclick="window.location.href='/course-details/<%= course._id %>'">
                                             <div class="course-card-inner h-full flex flex-col relative overflow-hidden">
 
                                                 <!-- Thumbnail -->
@@ -456,6 +640,16 @@
                                             </div>
                                         </div>
                                     <% }) %>
+                                    <div id="courses-grid-empty-state" class="hidden col-span-full py-12 px-4 text-center">
+                                        <div class="size-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 mx-auto flex items-center justify-center mb-2.5">
+                                            <span class="material-symbols-rounded text-2xl">search_off</span>
+                                        </div>
+                                        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-200">No courses found</h3>
+                                        <p class="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-xs mx-auto">Try adjusting your search terms or selecting a different subject filter.</p>
+                                        <button type="button" onclick="resetAllCoursesFilters()" class="mt-3 px-3 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/50 text-xs font-semibold hover:bg-indigo-100 dark:hover:bg-indigo-900/40 active:scale-95 transition-all">
+                                            Clear Filters
+                                        </button>
+                                    </div>
                                 <% } else { %>
                                     <div class="col-span-full py-16 text-center text-xs font-bold text-slate-400 italic">No courses found</div>
                                 <% } %>
@@ -475,42 +669,255 @@
         let currentCoursesSearch = '<%= locals.search || "" %>';
         let currentCoursesSubject = '<%= locals.activeSubject || "all" %>';
 
+        function updateMobileSubjectPillsUI(selectedSubject) {
+            const pills = document.querySelectorAll('.mobile-subject-pill');
+            const target = (selectedSubject || 'all').toLowerCase();
+            pills.forEach(pill => {
+                const sub = (pill.getAttribute('data-subject-pill') || '').toLowerCase();
+                if (sub === target) {
+                    pill.className = 'mobile-subject-pill shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-all active:scale-95 bg-indigo-600 text-white shadow-xs';
+                } else {
+                    pill.className = 'mobile-subject-pill shrink-0 px-3 py-1 rounded-full text-[11px] font-semibold transition-all active:scale-95 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80 hover:bg-slate-200 dark:hover:bg-slate-700/60';
+                }
+            });
+        }
+
+        window.handleMobileCoursesSearch = function(val) {
+            currentCoursesSearch = (val || '').toLowerCase().trim();
+            const clearBtn = document.getElementById('mobile-courses-clear-search-btn');
+            if (clearBtn) {
+                if (currentCoursesSearch.length > 0) clearBtn.classList.remove('hidden');
+                else clearBtn.classList.add('hidden');
+            }
+            // Sync desktop header input if present
+            const headerInput = document.getElementById('courses-search-input-header');
+            if (headerInput && headerInput.value !== val) headerInput.value = val;
+            const headerClearBtn = document.getElementById('courses-clear-search-btn');
+            if (headerClearBtn) {
+                if (currentCoursesSearch.length > 0) headerClearBtn.classList.remove('hidden');
+                else headerClearBtn.classList.add('hidden');
+            }
+            filterCourses();
+        };
+
+        window.clearMobileCoursesSearch = function() {
+            const mInput = document.getElementById('mobile-courses-search-input');
+            if (mInput) mInput.value = '';
+            handleMobileCoursesSearch('');
+        };
+
+        window.handleMobileCoursesSubject = function(sub) {
+            currentCoursesSubject = sub || 'all';
+            updateMobileSubjectPillsUI(currentCoursesSubject);
+            // Sync desktop header select if present
+            const headerSelect = document.getElementById('courses-header-subject');
+            if (headerSelect && headerSelect.value !== sub) headerSelect.value = sub;
+            filterCourses();
+        };
+
+        window.resetAllCoursesFilters = function() {
+            clearMobileCoursesSearch();
+            handleMobileCoursesSubject('all');
+        };
+
         window.filterCoursesWithSearch = function(query) {
             currentCoursesSearch = (query || '').toLowerCase().trim();
+            const mInput = document.getElementById('mobile-courses-search-input');
+            if (mInput && mInput.value !== query) mInput.value = query || '';
+            const clearBtn = document.getElementById('mobile-courses-clear-search-btn');
+            if (clearBtn) {
+                if (currentCoursesSearch.length > 0) clearBtn.classList.remove('hidden');
+                else clearBtn.classList.add('hidden');
+            }
             filterCourses();
         };
 
         window.filterCoursesWithSubject = function(subject) {
             currentCoursesSubject = subject || 'all';
+            updateMobileSubjectPillsUI(currentCoursesSubject);
             filterCourses();
         };
 
         function filterCourses() {
-            const searchVal = currentCoursesSearch.toLowerCase().trim();
-            const subjectVal = currentCoursesSubject;
+            const searchVal = (currentCoursesSearch || '').toLowerCase().trim();
+            const subjectVal = (currentCoursesSubject || 'all').toLowerCase().trim();
             
             const items = document.querySelectorAll('.course-item');
-            
-            let enrolledVisible = 0;
             let exploreVisible = 0;
 
             items.forEach(item => {
                 const title = (item.getAttribute('data-title') || '').toLowerCase();
-                const subject = item.getAttribute('data-subject') || '';
+                const subject = (item.getAttribute('data-subject') || '').toLowerCase();
+                const instructor = (item.getAttribute('data-instructor') || '').toLowerCase();
+                const classLevel = (item.getAttribute('data-class') || '').toLowerCase();
+                const desc = (item.getAttribute('data-desc') || '').toLowerCase();
                 
-                const matchSearch = !searchVal || title.includes(searchVal) || subject.toLowerCase().includes(searchVal);
-                const matchSubject = subjectVal === 'all' || subject === subjectVal || subject.toLowerCase() === subjectVal.toLowerCase();
+                const matchSearch = !searchVal || 
+                    title.includes(searchVal) || 
+                    subject.includes(searchVal) || 
+                    instructor.includes(searchVal) || 
+                    classLevel.includes(searchVal) || 
+                    desc.includes(searchVal);
+
+                const matchSubject = subjectVal === 'all' || subject === subjectVal || subject.includes(subjectVal);
                 
-                if(matchSearch && matchSubject) {
-                    item.style.display = 'block';
-                    if(item.closest('#section-enrolled')) enrolledVisible++;
-                    if(item.closest('#section-explore')) exploreVisible++;
+                if (matchSearch && matchSubject) {
+                    item.style.display = '';
+                    exploreVisible++;
                 } else {
                     item.style.display = 'none';
                 }
             });
+
+            // Dynamic count badge
+            const badge = document.getElementById('explore-course-count-badge');
+            if (badge) {
+                badge.textContent = `${exploreVisible} Course${exploreVisible !== 1 ? 's' : ''}`;
+            }
+
+            // Empty state container
+            const emptyState = document.getElementById('courses-grid-empty-state');
+            if (emptyState) {
+                if (exploreVisible === 0) {
+                    emptyState.classList.remove('hidden');
+                } else {
+                    emptyState.classList.add('hidden');
+                }
+            }
         }
-        // ── Carousel state ───────────────────────────────────────────────────
+
+        function isDesktopView() {
+            return window.innerWidth >= 1024;
+        }
+
+        // ── Mobile Courses Carousel Controller (< lg only, matching student-dashboard) ──
+        function initCoursesMobileCarousel() {
+            const mTrack = document.getElementById('coursesMobileCarouselTrack');
+            if (!mTrack) return;
+            const mCards = mTrack.querySelectorAll('.mobile-carousel-course-card');
+            const mDots = document.querySelectorAll('.courses-mobile-dot');
+            if (!mCards || mCards.length === 0) return;
+
+            let mCurrentIndex = 0;
+            let mAutoTimer = null;
+            let mIsInteracting = false;
+
+            function getClosestMobileIndex() {
+                const trackCenter = mTrack.scrollLeft + mTrack.offsetWidth / 2;
+                let closest = 0;
+                let minDiff = Infinity;
+                mCards.forEach((card, idx) => {
+                    const cardCenter = card.offsetLeft + card.offsetWidth / 2;
+                    const diff = Math.abs(trackCenter - cardCenter);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closest = idx;
+                    }
+                });
+                return closest;
+            }
+
+            function updateMobileCardStates(activeIdx) {
+                mCards.forEach((card, idx) => {
+                    if (idx === activeIdx) {
+                        card.classList.remove('opacity-40', 'dark:opacity-35', 'scale-[0.92]', 'brightness-75', 'shadow-none');
+                        card.classList.add('opacity-100', 'scale-100', 'shadow-md', 'ring-1', 'ring-indigo-500/25', 'dark:ring-indigo-400/20');
+                    } else {
+                        card.classList.remove('opacity-100', 'scale-100', 'shadow-md', 'ring-1', 'ring-indigo-500/25', 'dark:ring-indigo-400/20');
+                        card.classList.add('opacity-40', 'dark:opacity-35', 'scale-[0.92]', 'brightness-75', 'shadow-none');
+                    }
+                });
+            }
+
+            function updateMobileDots(activeIdx) {
+                mDots.forEach((dot, idx) => {
+                    if (idx === activeIdx) {
+                        dot.classList.add('bg-indigo-600', 'w-3.5');
+                        dot.classList.remove('bg-slate-300', 'dark:bg-slate-700', 'w-1.5');
+                    } else {
+                        dot.classList.remove('bg-indigo-600', 'w-3.5');
+                        dot.classList.add('bg-slate-300', 'dark:bg-slate-700', 'w-1.5');
+                    }
+                });
+            }
+
+            function scrollMobileToCard(index) {
+                if (!mCards[index]) return;
+                const card = mCards[index];
+                const targetScroll = card.offsetLeft - (mTrack.offsetWidth - card.offsetWidth) / 2;
+                mTrack.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' });
+                mCurrentIndex = index;
+                updateMobileDots(index);
+                updateMobileCardStates(index);
+            }
+
+            function startMobileAutoPlay() {
+                stopMobileAutoPlay();
+                if (mCards.length <= 1 || isDesktopView()) return;
+                mAutoTimer = setInterval(() => {
+                    if (mIsInteracting) return;
+                    mCurrentIndex = (getClosestMobileIndex() + 1) % mCards.length;
+                    scrollMobileToCard(mCurrentIndex);
+                }, 4500);
+            }
+
+            function stopMobileAutoPlay() {
+                if (mAutoTimer) {
+                    clearInterval(mAutoTimer);
+                    mAutoTimer = null;
+                }
+            }
+
+            // Scroll detection to sync dots & active states
+            mTrack.addEventListener('scroll', () => {
+                const closest = getClosestMobileIndex();
+                mCurrentIndex = closest;
+                updateMobileDots(closest);
+                updateMobileCardStates(closest);
+            }, { passive: true });
+
+            // Touch interaction handling
+            mTrack.addEventListener('touchstart', () => {
+                mIsInteracting = true;
+                stopMobileAutoPlay();
+            }, { passive: true });
+
+            mTrack.addEventListener('touchend', () => {
+                mIsInteracting = false;
+                startMobileAutoPlay();
+            }, { passive: true });
+
+            // Dot navigation
+            mDots.forEach((dot, idx) => {
+                dot.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    scrollMobileToCard(idx);
+                    startMobileAutoPlay();
+                });
+            });
+
+            // Card click behavior: if inactive, snap center first
+            mCards.forEach((card, idx) => {
+                card.addEventListener('click', (e) => {
+                    if (getClosestMobileIndex() !== idx) {
+                        e.preventDefault();
+                        scrollMobileToCard(idx);
+                    }
+                });
+            });
+
+            startMobileAutoPlay();
+
+            window.addEventListener('resize', () => {
+                if (isDesktopView()) {
+                    stopMobileAutoPlay();
+                } else if (!mAutoTimer) {
+                    startMobileAutoPlay();
+                }
+            });
+        }
+
+        // ── Desktop Stacked Carousel State (>= lg only) ──────────────────────
         let currentSlide = 0;
         const totalSlides = <%= (locals.exploreCourses || []).length %>;
         let slideTimer = null;
@@ -691,10 +1098,12 @@
 
         function resetTimer() {
             if (slideTimer) clearInterval(slideTimer);
-            if (totalSlides > 1) slideTimer = setInterval(nextFeaturedSlide, 5000);
+            if (totalSlides > 1 && isDesktopView()) slideTimer = setInterval(nextFeaturedSlide, 5000);
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            initCoursesMobileCarousel();
+
             const firstCard = document.getElementById('carousel-card-0');
             const container = document.getElementById('courseCarouselContainer');
             if (firstCard && container) {
@@ -702,10 +1111,10 @@
                     container.style.minHeight = (firstCard.offsetHeight + 16) + 'px';
                 }, 60);
             }
-            if (totalSlides > 1) slideTimer = setInterval(nextFeaturedSlide, 5000);
+            if (totalSlides > 1 && isDesktopView()) slideTimer = setInterval(nextFeaturedSlide, 5000);
             updateSlide();
 
-            // Touch Swipe Support
+            // Touch Swipe Support for Desktop 3D Stacked Carousel
             if (container) {
                 let touchStartX = 0;
                 let touchStartY = 0;
@@ -723,7 +1132,6 @@
                         const touchEndY = e.changedTouches[0].clientY;
                         const dx = touchEndX - touchStartX;
                         const dy = touchEndY - touchStartY;
-                        // Check horizontal gesture with threshold
                         if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.2) {
                             if (dx < 0) nextFeaturedSlide();
                             else prevFeaturedSlide();
@@ -733,13 +1141,18 @@
                 }, { passive: true });
             }
 
-            // Window resize adjustment
+            // Window resize adjustment for desktop carousel
             window.addEventListener('resize', () => {
                 updateSlide();
                 if (firstCard && container) {
                     container.style.minHeight = (firstCard.offsetHeight + 16) + 'px';
                 }
             });
+
+            // Initial filter run if query params exist
+            if (currentCoursesSearch || (currentCoursesSubject && currentCoursesSubject !== 'all')) {
+                filterCourses();
+            }
         });
     </script>
 </body>
