@@ -104,7 +104,23 @@
 
     <!-- In-App Document Viewport (Edge-to-Edge Main Screen) -->
     <div id="pdfViewerContainer" class="flex-1 min-h-0 w-full h-full relative overflow-hidden hidden flex-col p-0 m-0 bg-slate-950">
-        <!-- Floating Minimal Close Button for Fullscreen PDF Reader (Header is hidden in PDF mode) -->
+        <!-- Mobile PDF Notice Bar (Provides 1-tap direct opening on mobile devices where iframes block PDFs) -->
+        <div id="pdfMobileFallbackBanner" class="sm:hidden px-3 py-2 bg-slate-900/95 border-b border-white/10 flex items-center justify-between gap-2 shrink-0 z-20">
+            <div class="flex items-center gap-1.5 min-w-0">
+                <span class="material-symbols-rounded text-base text-rose-400 shrink-0">picture_as_pdf</span>
+                <span class="text-[11px] font-medium text-slate-300 truncate">পিডিএফ দেখতে অসুবিধা হলে:</span>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <a id="pdfMobileOpenBtn" href="#" target="_blank" class="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-bold inline-flex items-center gap-1 shadow-sm">
+                    <span class="material-symbols-rounded text-xs">open_in_new</span>
+                    <span>ফুলস্ক্রিন</span>
+                </a>
+                <a id="pdfMobileDownloadBtn" href="#" download class="p-1 rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-white/10 text-xs inline-flex items-center justify-center">
+                    <span class="material-symbols-rounded text-xs">download</span>
+                </a>
+            </div>
+        </div>
+        <!-- Floating Minimal Close Button for Fullscreen PDF Reader (Header is visible) -->
         <button id="pdfFloatingCloseBtn" type="button" onclick="closeImageViewer()" class="hidden fixed top-1.5 right-1.5 sm:top-2 sm:right-2.5 z-50 size-8.5 sm:size-9 rounded-full bg-slate-900/90 hover:bg-rose-600 active:scale-95 text-white/90 hover:text-white backdrop-blur-md border border-white/20 shadow-2xl items-center justify-center transition-all cursor-pointer select-none" title="Close PDF (Esc)">
             <span class="material-symbols-rounded text-lg sm:text-xl leading-none flex items-center justify-center select-none font-normal">close</span>
         </button>
@@ -164,6 +180,20 @@
         const typeBadge = document.getElementById('viewerTypeBadge');
         const imgControls = document.getElementById('imageControlsGroup');
 
+        function resolveMediaUrl(p) {
+            if (!p) return '';
+            if (typeof p !== 'string') p = String(p);
+            p = p.trim();
+            if (p.startsWith('http://') || p.startsWith('https://') || p.startsWith('blob:') || p.startsWith('data:')) {
+                return p;
+            }
+            let normalized = p.replace(/\\/g, '/');
+            if (!normalized.startsWith('/')) {
+                normalized = '/' + normalized;
+            }
+            return normalized;
+        }
+
         function normalizeMediaArgs(arg1, arg2, arg3, arg4) {
             let url = arg1;
             let title = arg2;
@@ -174,12 +204,15 @@
                 if (!val || typeof val !== 'string') return false;
                 const v = val.trim();
                 return v.startsWith('/') ||
+                       v.startsWith('\\') ||
                        v.startsWith('http://') ||
                        v.startsWith('https://') ||
                        v.startsWith('blob:') ||
                        v.startsWith('data:') ||
                        /\.(pdf|png|jpe?g|webp|gif|svg|bmp)(\?.*)?$/i.test(v) ||
                        v.includes('/uploads/') ||
+                       v.includes('\\uploads\\') ||
+                       v.includes('uploads/') ||
                        v.includes('/images/') ||
                        v.includes('/assets/') ||
                        v.includes('/public/');
@@ -425,21 +458,36 @@
             if (!els.modal || !els.pdfContainer || !els.pdfIframe) return;
 
             viewerState.mode = 'pdf';
-            const resolvedUrl = (typeof getImg === 'function') ? getImg(url) : url;
+            const resolvedUrl = resolveMediaUrl(url);
             viewerState.pdfUrl = resolvedUrl;
             viewerState.pdfTitle = title || 'PDF Document';
 
-            // Hide the top studio header in PDF view (edge-to-edge native reader)
+            // Show sleek studio header in PDF view with Title, Download, Popout, and Back buttons
             if (els.header) {
-                els.header.classList.add('hidden');
-                els.header.style.display = 'none';
+                els.header.classList.remove('hidden');
+                els.header.style.display = 'flex';
             }
-            // Show sleek floating close button in PDF view
-            if (els.pdfCloseBtn) {
-                els.pdfCloseBtn.classList.remove('hidden');
-                els.pdfCloseBtn.style.display = 'flex';
+            if (els.titleEl) els.titleEl.textContent = title || 'PDF Document';
+            if (els.subtitleEl) els.subtitleEl.textContent = subtitle || 'ODDHAY Study Material';
+            if (els.typeBadge) {
+                els.typeBadge.textContent = 'PDF';
+                els.typeBadge.classList.remove('hidden');
+            }
+            if (els.modeIcon) els.modeIcon.textContent = 'picture_as_pdf';
+            if (els.modeIconBox) {
+                els.modeIconBox.className = 'size-9 rounded-xl bg-rose-500/20 text-rose-400 inline-flex items-center justify-center shrink-0 select-none';
+            }
+            if (els.popoutBtn) {
+                els.popoutBtn.href = resolvedUrl;
+                els.popoutBtn.classList.remove('hidden');
+                els.popoutBtn.style.display = 'inline-flex';
+            }
+            if (els.downloadBtn) {
+                els.downloadBtn.classList.remove('hidden');
+                els.downloadBtn.style.display = 'inline-flex';
             }
 
+            // Hide image-only canvas controls
             if (els.canvas) {
                 els.canvas.classList.add('hidden');
                 els.canvas.style.display = 'none';
@@ -454,12 +502,25 @@
                 els.imgControls.classList.add('hidden');
                 els.imgControls.style.display = 'none';
             }
+            if (els.pdfCloseBtn) {
+                els.pdfCloseBtn.classList.add('hidden');
+                els.pdfCloseBtn.style.display = 'none';
+            }
 
             els.pdfContainer.classList.remove('hidden');
             els.pdfContainer.style.display = 'flex';
 
             const canDownload = (typeof window.canDownloadMaterial !== 'undefined') ? !!window.canDownloadMaterial : true;
             els.pdfIframe.src = resolvedUrl + (canDownload ? '' : '#toolbar=0');
+
+            // Wire up mobile fallback links
+            const mobileOpenBtn = document.getElementById('pdfMobileOpenBtn');
+            const mobileDownloadBtn = document.getElementById('pdfMobileDownloadBtn');
+            if (mobileOpenBtn) mobileOpenBtn.href = resolvedUrl;
+            if (mobileDownloadBtn) {
+                mobileDownloadBtn.href = resolvedUrl;
+                mobileDownloadBtn.download = (title || 'document').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_') + '.pdf';
+            }
 
             els.modal.classList.remove('hidden');
             els.modal.style.display = 'flex';

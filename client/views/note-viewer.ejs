@@ -37,7 +37,7 @@
                 <span class="material-symbols-outlined text-sm" id="saveNoteIcon">bookmark_border</span>
                 <span id="saveNoteText">সেভ করুন</span>
             </button>
-            <a href="<%= note.fileUrl %>" download class="btn-secondary !py-2 !px-4 !text-xs flex items-center gap-2">
+            <a href="<%= (typeof getImg === 'function' ? getImg(note.fileUrl) : note.fileUrl) %>" download class="btn-secondary !py-2 !px-4 !text-xs flex items-center gap-2">
                 <span class="material-symbols-outlined text-sm">download</span> ডাউনলোড
             </a>
             <button id="themeToggleBtn" onclick="toggleTheme()"
@@ -52,20 +52,35 @@
         <div
             class="max-w-5xl mx-auto h-full bg-white dark:bg-slate-950 rounded-2xl sm:rounded-[2rem] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden relative flex flex-col">
             <!-- PDF Viewer / Content -->
-            <% if (note.fileUrl && note.fileUrl.endsWith('.pdf')) { %>
-                <iframe src="<%= note.fileUrl %>#toolbar=0" class="w-full h-full border-none"></iframe>
-                <% } else if (note.fileUrl && (note.fileUrl.endsWith('.jpg') || note.fileUrl.endsWith('.png') ||
-                    note.fileUrl.endsWith('.jpeg'))) { %>
-                    <div class="flex-1 overflow-auto p-4 sm:p-8 flex justify-center bg-slate-100 dark:bg-slate-900">
-                        <img src="<%= note.fileUrl %>" class="max-w-full shadow-2xl rounded-xl h-fit">
+            <% 
+                const rawUrl = note.fileUrl || '';
+                const cleanUrl = rawUrl.split('?')[0].toLowerCase();
+                const isPdf = Boolean(cleanUrl.endsWith('.pdf') || rawUrl.includes('.pdf'));
+                const isImg = Boolean(cleanUrl.endsWith('.jpg') || cleanUrl.endsWith('.png') || cleanUrl.endsWith('.jpeg') || cleanUrl.endsWith('.webp') || cleanUrl.endsWith('.gif'));
+                const resolvedFileUrl = typeof getImg === 'function' ? getImg(rawUrl) : (rawUrl.startsWith('/') || rawUrl.startsWith('http') ? rawUrl : '/' + rawUrl.replace(/\\/g, '/'));
+            %>
+            <% if (rawUrl && isPdf) { %>
+                <div class="w-full h-full flex flex-col relative bg-slate-900">
+                    <!-- Mobile Fallback Bar (Ensures mobile devices can view full PDF if inline iframe is blocked) -->
+                    <div class="sm:hidden px-3.5 py-2 bg-slate-900 border-b border-white/10 flex items-center justify-between text-xs shrink-0 z-20">
+                        <span class="text-slate-300 font-medium truncate">পিডিএফ পড়তে সমস্যা হলে:</span>
+                        <a href="<%= resolvedFileUrl %>" target="_blank" class="px-2.5 py-1 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-bold flex items-center gap-1 shadow-xs">
+                            <span class="material-symbols-outlined text-xs">open_in_new</span> ফুলস্ক্রিন
+                        </a>
                     </div>
-                    <% } else { %>
-                        <div class="flex-1 p-5 sm:p-12 overflow-auto body-main dark:text-slate-300">
-                            <div class="prose dark:prose-invert max-w-none">
-                                <%- note.description || 'এই নোটের কোনো টেক্সট কন্টেন্ট নেই।' %>
-                            </div>
-                        </div>
-                        <% } %>
+                    <iframe src="<%= resolvedFileUrl %>#toolbar=0" class="w-full flex-1 border-none bg-white dark:bg-slate-950"></iframe>
+                </div>
+            <% } else if (rawUrl && isImg) { %>
+                <div class="flex-1 overflow-auto p-4 sm:p-8 flex justify-center bg-slate-100 dark:bg-slate-900">
+                    <img src="<%= resolvedFileUrl %>" class="max-w-full shadow-2xl rounded-xl h-fit">
+                </div>
+            <% } else { %>
+                <div class="flex-1 p-5 sm:p-12 overflow-auto body-main dark:text-slate-300">
+                    <div class="prose dark:prose-invert max-w-none">
+                        <%- note.description || 'এই নোটের কোনো টেক্সট কন্টেন্ট নেই।' %>
+                    </div>
+                </div>
+            <% } %>
 
                             <!-- Bottom Floating Toolbar -->
                             <div
