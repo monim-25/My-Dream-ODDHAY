@@ -2217,24 +2217,50 @@ router.get('/courses', protect, async (req, res) => {
             .lean();
 
         const userClass = user.classLevel || 'Class 10';
-        const enrolledCourseIds = user.enrolledCourses.map(ec => ec.course?._id.toString()).filter(id => id);
+        const enrolledCourseIds = (user.enrolledCourses || []).map(ec => {
+            if (!ec) return null;
+            if (ec.course && ec.course._id) return ec.course._id.toString();
+            if (ec.course) return ec.course.toString();
+            if (ec._id) return ec._id.toString();
+            return null;
+        }).filter(Boolean);
 
-        // --- Fetch Non-Enrolled Paid Courses ---
+        // --- Fetch Courses to Explore ---
         let exploreQuery = {
-            classLevel: userClass,
-            _id: { $nin: enrolledCourseIds },
-            accessType: { $ne: 'free' }
+            _id: { $nin: enrolledCourseIds }
         };
+        if (userClass) {
+            exploreQuery.$or = [
+                { classLevel: userClass },
+                { featuredForClasses: userClass },
+                { classLevel: { $size: 0 } },
+                { classLevel: { $exists: false } }
+            ];
+        }
         if (search) exploreQuery.title = { $regex: search, $options: 'i' };
         if (subject && subject !== 'all') exploreQuery.subject = subject;
 
-        const exploreCourses = await Course.find(exploreQuery).sort({ createdAt: -1 }).populate('instructor', 'name').lean();
+        let exploreCourses = await Course.find(exploreQuery).sort({ createdAt: -1 }).populate('instructor', 'name').lean();
 
-        // --- Fetch Free Resources (Grouped by Subject later in EJS) ---
-        const freeCourses = await Course.find({
-            classLevel: userClass,
-            accessType: 'free'
-        }).populate('instructor', 'name').lean();
+        // Fallback: If no courses match the filter/class or student enrolled in all, fall back to any courses so page never appears blank
+        if (!exploreCourses || exploreCourses.length === 0) {
+            let fallbackQuery = {};
+            if (search) fallbackQuery.title = { $regex: search, $options: 'i' };
+            if (subject && subject !== 'all') fallbackQuery.subject = subject;
+            exploreCourses = await Course.find(fallbackQuery).sort({ createdAt: -1 }).limit(10).populate('instructor', 'name').lean();
+        }
+
+        // --- Fetch Free Resources ---
+        let freeQuery = { accessType: 'free' };
+        if (userClass) {
+            freeQuery.$or = [
+                { classLevel: userClass },
+                { featuredForClasses: userClass },
+                { classLevel: { $size: 0 } },
+                { classLevel: { $exists: false } }
+            ];
+        }
+        const freeCourses = await Course.find(freeQuery).populate('instructor', 'name').lean();
 
         // --- Extract Live Classes & Subjects ---
         const liveClasses = [];
