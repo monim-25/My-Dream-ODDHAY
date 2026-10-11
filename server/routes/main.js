@@ -5109,48 +5109,127 @@ router.get('/exams/subject-tests', protect, async (req, res) => {
 
         // 2. Fetch distinct topics for the selected subject
         let subjectTopics = [];
-        if (selectedSubject && selectedSubject !== 'all') {
+        const rawSelected = (selectedSubject && selectedSubject !== 'all') ? selectedSubject.toLowerCase().trim() : '';
+
+        // Standard high-yield curriculum topics for academic subjects
+        const defaultCurriculumTopics = {
+            'bangla': ['বাংলা ১ম পত্র (গদ্য ও পদ্য)', 'বাংলা ২য় পত্র (ব্যাকরণ)', 'সোনার তরী', 'শুভা', 'অপরিচিতা', 'বোর্ড প্রশ্নাবলি'],
+            'english': ['Grammar', 'Reading Comprehension', 'Right Form of Verbs', 'Tense & Voice', 'Writing & Composition', 'Board Questions'],
+            'physics': ['ভৌত রাশি ও পরিমাপ', 'গতি ও বল (Motion & Force)', 'কাজ, শক্তি ও ক্ষমতা', 'পদার্থের অবস্থা ও চাপ', 'স্থির ও চলতড়িৎ', 'আলোর প্রতিফলন'],
+            'chemistry': ['পদার্থের গঠন', 'পর্যায় সারণি (Periodic Table)', 'রাসায়নিক বন্ধন', 'রাসায়নিক গণনা', 'এসিড-ক্ষারক ও লবণ'],
+            'higher math': ['সেট ও ফাংশন', 'বীজগণিতীয় রাশি', 'ত্রিকোণমিতি (Trigonometry)', 'স্থানাঙ্ক জ্যামিতি', 'সম্ভাবনা (Probability)'],
+            'math': ['বাস্তব সংখ্যা ও সেট', 'বীজগণিতীয় সূত্রাবলি', 'জ্যামিতি ও বৃত্ত', 'ত্রিকোণমিতি ও পরিমিতি', 'পরিসংখ্যান'],
+            'biology': ['কোষ ও টিস্যু', 'কোষ বিভাজন', 'খাদ্য ও পুষ্টি', 'রক্ত ও সংবহন', 'শ্বসন প্রক্রিয়া'],
+            'ict': ['তথ্য ও যোগাযোগ প্রযুক্তি', 'ওয়েব ডিজাইন ও HTML', 'সি প্রোগ্রামিং (C)', 'ডেটাবেজ সিস্টেম']
+        };
+
+        if (rawSelected) {
             const subRegex = new RegExp(`^${selectedSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
-            const qTopics = await Question.distinct('topic', { subject: subRegex, topic: { $ne: '' } });
-            const qbTopics = await QuestionBank.distinct('topic', { subject: subRegex, topic: { $ne: '' } });
-            subjectTopics = Array.from(new Set([...(qTopics || []), ...(qbTopics || [])])).filter(Boolean);
+            const [qTopics, qbTopics, quizTopics] = await Promise.all([
+                Question.distinct('topic', { subject: subRegex, topic: { $ne: '' } }),
+                QuestionBank.distinct('topic', { subject: subRegex, topic: { $ne: '' } }),
+                Quiz.distinct('topic', { subject: subRegex, topic: { $ne: '' } })
+            ]);
+
+            const combined = [...(qTopics || []), ...(qbTopics || []), ...(quizTopics || [])];
+            const seenLower = new Set();
+            const validTopics = [];
+
+            combined.forEach(t => {
+                const cleanT = (t || '').trim();
+                const low = cleanT.toLowerCase();
+                if (!cleanT) return;
+                if (low === rawSelected) return; // Never show the subject name itself as a topic!
+                if (low === 'custom quiz' || low === 'personalized exam' || low === 'undefined' || low === 'null') return;
+                if (seenLower.has(low)) return;
+                seenLower.add(low);
+                validTopics.push(cleanT);
+            });
+
+            // Merge standard curriculum topics if not already included
+            const stdList = defaultCurriculumTopics[rawSelected] || [];
+            stdList.forEach(st => {
+                const low = st.toLowerCase();
+                if (!seenLower.has(low)) {
+                    seenLower.add(low);
+                    validTopics.push(st);
+                }
+            });
+
+            subjectTopics = validTopics;
         } else {
-            subjectTopics = await Question.distinct('topic', { topic: { $ne: '' } });
+            const [qTopics, qbTopics] = await Promise.all([
+                Question.distinct('topic', { topic: { $ne: '' } }),
+                QuestionBank.distinct('topic', { topic: { $ne: '' } })
+            ]);
+            const combined = [...(qTopics || []), ...(qbTopics || [])];
+            const seenLower = new Set();
+            subjectTopics = combined.filter(t => {
+                const cleanT = (t || '').trim();
+                const low = cleanT.toLowerCase();
+                if (!cleanT || low === 'custom quiz' || low === 'personalized exam' || low === 'undefined' || low === 'null') return false;
+                if (seenLower.has(low)) return false;
+                seenLower.add(low);
+                return true;
+            });
         }
 
         // 3. Fetch all approved official QuestionBanks & Quizzes
-        const [questionBanks, quizzes] = await Promise.all([
+        const [questionBanks, quizzes, bankCounts] = await Promise.all([
             QuestionBank.find({
                 status: 'approved',
                 isCustom: { $ne: true },
                 title: { $not: /Personalized Exam|Custom Exam/i }
             }).sort({ createdAt: -1 }).lean(),
-            Quiz.find().populate('course').sort({ createdAt: -1 }).lean()
+            Quiz.find().populate('course').sort({ createdAt: -1 }).lean(),
+            Question.aggregate([
+                { $match: { bankId: { $ne: null } } },
+                { $group: { _id: '$bankId', count: { $sum: 1 } } }
+            ])
         ]);
+
+        const bankCountMap = {};
+        (bankCounts || []).forEach(bc => {
+            if (bc._id) bankCountMap[bc._id.toString()] = bc.count;
+        });
 
         const examList = [];
 
         questionBanks.forEach(qb => {
+            const rawTopic = (qb.topic || '').trim();
+            const subLow = (qb.subject || '').toLowerCase().trim();
+            const isTopicDuplicate = (rawTopic.toLowerCase() === subLow) || (rawTopic.toLowerCase() === 'custom quiz');
+            const cleanTopic = isTopicDuplicate ? '' : rawTopic;
+            const qCount = bankCountMap[qb._id.toString()] || (qb.questions ? qb.questions.length : 0);
+
             examList.push({
                 _id: qb._id,
                 title: qb.title || `${qb.subject || 'Practice'} Exam`,
                 subject: (qb.subject || 'General').trim(),
-                topic: (qb.topic || '').trim(),
+                topic: cleanTopic,
                 duration: qb.duration || 30,
+                totalQuestions: qCount > 0 ? qCount : (qb.duration ? Math.round(qb.duration * 0.8) : 25),
                 solveUrl: `/question-bank/solve/${qb._id}?from=exams`,
-                subtitle: [qb.topic, qb.board, qb.year].filter(Boolean).join(' • ') || 'Practice Exam'
+                subtitle: [cleanTopic, qb.board, qb.year].filter(Boolean).join(' • ') || 'Practice Exam'
             });
         });
 
         quizzes.forEach(qz => {
+            const rawTopic = (qz.topic || '').trim();
+            const subLow = (qz.subject || '').toLowerCase().trim();
+            const isTopicDuplicate = (rawTopic.toLowerCase() === subLow) || (rawTopic.toLowerCase() === 'custom quiz');
+            const cleanTopic = isTopicDuplicate ? '' : rawTopic;
+            const qCount = qz.questions ? qz.questions.length : (qz.totalQuestions || 15);
+
             examList.push({
                 _id: qz._id,
                 title: qz.title || `${qz.subject || 'Mock'} Test`,
                 subject: (qz.subject || 'General').trim(),
-                topic: (qz.topic || '').trim(),
+                topic: cleanTopic,
                 duration: qz.duration || 15,
+                totalQuestions: qCount,
                 solveUrl: `/quiz/${qz._id}?from=exams`,
-                subtitle: [qz.topic, qz.course ? qz.course.title : 'Mock Test'].filter(Boolean).join(' • ') || 'Mock Test'
+                subtitle: [cleanTopic, qz.course ? qz.course.title : 'Mock Test'].filter(Boolean).join(' • ') || 'Mock Test'
             });
         });
 
