@@ -12,7 +12,7 @@
     <div class="flex-1 flex overflow-hidden w-full relative">
         <%- include('partials/student-sidebar', { activePage: 'qa' }) %>
 
-        <main class="flex-1 w-full overflow-hidden p-0 m-0 space-y-0 flex flex-col no-scrollbar bg-[#FFFFFF] dark:bg-[#0b1120] relative">
+        <main id="qa-main-scroll" class="flex-1 w-full overflow-y-auto p-0 m-0 space-y-0 flex flex-col no-scrollbar bg-[#FFFFFF] dark:bg-[#0b1120] relative scroll-smooth">
             
             <% const u = locals.user || {}; %>
             <% const qList = locals.qas || []; %>
@@ -208,7 +208,7 @@
             </div>
 
             <!-- Scrollable Questions Feed (Dashboard-Aligned Card System) -->
-            <div id="questions-feed" class="flex-1 overflow-y-auto space-y-2.5 w-full p-2.5 sm:p-4 no-scrollbar">
+            <div id="questions-feed" class="flex-1 space-y-2.5 w-full p-2.5 sm:p-4">
                 <% if (qList.length === 0) { %>
                     <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-10 text-center shadow-none w-full">
                         <span class="material-symbols-rounded text-5xl text-slate-300 mb-3 flex items-center justify-center leading-none select-none">help_outline</span>
@@ -445,8 +445,18 @@
 
                 </form>
             </div>
+
+            <!-- Safe Bottom Spacing for Mobile Bottom Navigation -->
+            <div class="h-20 sm:h-24 lg:h-8 w-full shrink-0"></div>
         </main>
     </div>
+
+    <!-- Floating Write / Ask Question Action Button (Auto-appears on scroll, disappears at top & composer) -->
+    <button type="button" id="floating-write-btn" onclick="focusAskComposer()"
+        class="fixed bottom-20 right-4 sm:bottom-22 sm:right-6 lg:hidden size-12 rounded-full bg-primary hover:bg-primary/90 text-white shadow-xl shadow-primary/35 flex items-center justify-center active:scale-90 transition-all duration-300 z-35 opacity-0 scale-75 translate-y-4 pointer-events-none cursor-pointer"
+        title="Write a Question" aria-label="Write a Question">
+        <span class="material-symbols-rounded text-2xl leading-none select-none">edit_square</span>
+    </button>
 
     <!-- Fullscreen In-Page Lightbox Image Viewer Modal -->
     <div id="image-modal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-200" onclick="closeImageModal()">
@@ -714,10 +724,36 @@
         }
 
         function focusAskComposer() {
+            const box = document.getElementById('ask-question-box');
             const textarea = document.getElementById('ask-question-textarea');
+            if (box) {
+                box.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
             if (textarea) {
-                textarea.focus();
-                textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                setTimeout(() => textarea.focus(), 350);
+            }
+        }
+
+        // Floating Write Button Scroll Listener (Appears during scrolling, disappears at top and bottom composer)
+        function handleQaScroll() {
+            const scrollContainer = document.getElementById('qa-main-scroll');
+            const fab = document.getElementById('floating-write-btn');
+            if (!fab) return;
+
+            const scrollTop = scrollContainer ? scrollContainer.scrollTop : (window.pageYOffset || document.documentElement.scrollTop || 0);
+            const scrollHeight = scrollContainer ? scrollContainer.scrollHeight : document.documentElement.scrollHeight;
+            const clientHeight = scrollContainer ? scrollContainer.clientHeight : window.innerHeight;
+            const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
+
+            // Hide at the very top (search and filter are visible)
+            // Hide near the bottom composer (within 220px of bottom, composer is visible)
+            // Otherwise show write button when scrolling through feed
+            if (scrollTop > 60 && distanceFromBottom > 220) {
+                fab.classList.remove('opacity-0', 'scale-75', 'translate-y-4', 'pointer-events-none');
+                fab.classList.add('opacity-100', 'scale-100', 'translate-y-0', 'pointer-events-auto');
+            } else {
+                fab.classList.remove('opacity-100', 'scale-100', 'translate-y-0', 'pointer-events-auto');
+                fab.classList.add('opacity-0', 'scale-75', 'translate-y-4', 'pointer-events-none');
             }
         }
 
@@ -810,6 +846,14 @@
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'Escape') closeImageModal();
             });
+
+            // Attach Scroll Listener for Floating Write Button
+            const scrollContainer = document.getElementById('qa-main-scroll');
+            if (scrollContainer) {
+                scrollContainer.addEventListener('scroll', handleQaScroll, { passive: true });
+            }
+            window.addEventListener('scroll', handleQaScroll, { passive: true });
+            handleQaScroll();
         });
     </script>
 </body>
