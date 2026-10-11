@@ -12,7 +12,7 @@
     <div class="flex-1 flex overflow-hidden w-full relative">
         <%- include('partials/student-sidebar', { activePage: 'qa' }) %>
 
-        <main class="flex-1 w-full overflow-y-auto p-0 m-0 space-y-0 flex flex-col no-scrollbar bg-[#FFFFFF] dark:bg-[#0b1120] relative">
+        <main class="flex-1 w-full overflow-hidden p-0 m-0 space-y-0 flex flex-col no-scrollbar bg-[#FFFFFF] dark:bg-[#0b1120] relative">
             
             <% const u = locals.user || {}; %>
             <% const qList = locals.qas || []; %>
@@ -35,9 +35,8 @@
                 <input type="hidden" name="subject" value="<%= activeSubject %>">
             </form>
 
-            <!-- Top Controls Toolbar (Search, Subject Dropdown & Sturdy Status Filter Tabs) -->
-            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 p-2.5 sm:p-3 shrink-0 space-y-2.5">
-                <!-- ROW 1: LIVE SEARCH INPUT & SUBJECT FILTER DROPDOWN BESIDE IT -->
+            <!-- Top Controls Toolbar (Search Input & Filter Dropdown in ONE LINE) -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 p-2.5 sm:p-3 shrink-0">
                 <div class="flex items-center gap-2 w-full">
                     <!-- Live Search Box -->
                     <div class="relative flex-1 min-w-0">
@@ -56,127 +55,124 @@
                         </button>
                     </div>
 
-                    <!-- Subject Filter Dropdown beside Search Bar -->
-                    <div class="relative shrink-0" id="qa-subject-dropdown-container">
-                        <button type="button" id="qa-subject-dropdown-btn" onclick="toggleQaSubjectDropdown(event)"
-                            class="h-11 px-3 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-xl flex items-center gap-1.5 sm:gap-2 text-xs sm:text-[13px] font-bold transition-all shadow-2xs cursor-pointer select-none max-w-[145px] sm:max-w-[200px]">
-                            <span class="material-symbols-rounded text-primary text-base sm:text-lg leading-none shrink-0">menu_book</span>
-                            <span id="qa-selected-subject-label" class="truncate"><%= activeSubject === 'all' ? 'All Subjects' : activeSubject %></span>
+                    <!-- Filter Dropdown Trigger Button (In the SAME LINE as Search) -->
+                    <div class="relative shrink-0" id="qa-filter-dropdown-container">
+                        <button type="button" id="qa-filter-dropdown-btn" onclick="toggleQaFilterDropdown(event)"
+                            class="h-11 px-3 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-xl flex items-center gap-1.5 text-xs sm:text-[13px] font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 <%= (activeFilter !== 'all' || activeSubject !== 'all') ? 'border-primary/60 text-primary dark:text-primary ring-1 ring-primary/20 bg-primary/5 dark:bg-primary/10' : '' %>">
+                            <span class="material-symbols-rounded text-base sm:text-lg text-primary leading-none shrink-0">tune</span>
+                            <span class="truncate max-w-[85px] sm:max-w-[120px]">
+                                <% if (activeFilter === 'resolved') { %>
+                                    Answered
+                                <% } else if (activeFilter === 'open') { %>
+                                    Pending
+                                <% } else if (activeFilter === 'my') { %>
+                                    My Qs
+                                <% } else if (activeSubject !== 'all') { %>
+                                    <%= activeSubject %>
+                                <% } else { %>
+                                    Filter
+                                <% } %>
+                            </span>
+                            <% if (activeFilter !== 'all' || activeSubject !== 'all') { %>
+                                <span class="size-2 rounded-full bg-primary shrink-0"></span>
+                            <% } %>
                             <span class="material-symbols-rounded text-slate-400 text-sm leading-none shrink-0">expand_more</span>
                         </button>
 
-                        <!-- Dropdown Menu -->
-                        <div id="qa-subject-dropdown-menu" class="hidden absolute right-0 mt-1.5 w-52 sm:w-60 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 py-1.5 max-h-72 overflow-y-auto no-scrollbar">
-                            <button type="button" onclick="selectQaSubjectFilter('all')"
-                                class="w-full text-left px-3.5 py-2 text-xs font-semibold flex items-center justify-between transition-colors <%= activeSubject === 'all' ? 'bg-primary/10 text-primary font-bold' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60' %>">
-                                <span class="flex items-center gap-2">
-                                    <span class="material-symbols-rounded text-base">apps</span>
-                                    <span>All Subjects</span>
-                                </span>
-                                <% if (activeSubject === 'all') { %>
-                                    <span class="material-symbols-rounded text-sm text-primary">check</span>
+                        <!-- Filter Dropdown Menu with Status Tabs & Subjects Included -->
+                        <div id="qa-filter-dropdown-menu" class="hidden absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 max-h-[80vh] overflow-y-auto no-scrollbar space-y-3">
+                            <!-- Dropdown Header -->
+                            <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                                <div class="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-white">
+                                    <span class="material-symbols-rounded text-base text-primary">tune</span>
+                                    <span>Filter Community</span>
+                                </div>
+                                <% if (activeFilter !== 'all' || activeSubject !== 'all') { %>
+                                    <a href="/qa?status=all&subject=all" class="text-[11px] font-bold text-primary hover:underline">
+                                        Reset All
+                                    </a>
                                 <% } %>
-                            </button>
-                            <div class="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
-                            <% (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
-                                <button type="button" onclick="selectQaSubjectFilter('<%= sub %>')"
-                                    class="w-full text-left px-3.5 py-2 text-xs font-semibold flex items-center justify-between transition-colors <%= activeSubject === sub ? 'bg-primary/10 text-primary font-bold' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60' %>">
-                                    <span class="flex items-center gap-2 truncate">
-                                        <span class="material-symbols-rounded text-base text-slate-400">subject</span>
-                                        <span class="truncate"><%= sub %></span>
-                                    </span>
-                                    <% if (activeSubject === sub) { %>
-                                        <span class="material-symbols-rounded text-sm text-primary">check</span>
-                                    <% } %>
-                                </button>
-                            <% }) %>
+                            </div>
+
+                            <!-- SECTION 1: Status Filter Tabs Included Inside Filter -->
+                            <div class="space-y-1.5">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Status</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-1.5">
+                                    <!-- All Tab -->
+                                    <button type="button" onclick="applyQaFilter('status', 'all')"
+                                        class="p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= activeFilter === 'all' ? 'bg-primary/10 border-primary text-primary shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60' %>">
+                                        <span class="flex items-center gap-1.5 truncate">
+                                            <span class="material-symbols-rounded text-base <%= activeFilter === 'all' ? 'text-primary' : 'text-slate-400' %>">forum</span>
+                                            <span class="truncate">All</span>
+                                        </span>
+                                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold <%= activeFilter === 'all' ? 'bg-primary text-white' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-400' %>"><%= st.totalCount %></span>
+                                    </button>
+
+                                    <!-- Answered Tab -->
+                                    <button type="button" onclick="applyQaFilter('status', 'resolved')"
+                                        class="p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= activeFilter === 'resolved' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60' %>">
+                                        <span class="flex items-center gap-1.5 truncate">
+                                            <span class="material-symbols-rounded text-base <%= activeFilter === 'resolved' ? 'text-emerald-500' : 'text-slate-400' %>">verified</span>
+                                            <span class="truncate">Answered</span>
+                                        </span>
+                                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold <%= activeFilter === 'resolved' ? 'bg-emerald-600 text-white' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-400' %>"><%= st.resolvedCount %></span>
+                                    </button>
+
+                                    <!-- Pending Tab -->
+                                    <button type="button" onclick="applyQaFilter('status', 'open')"
+                                        class="p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= activeFilter === 'open' ? 'bg-amber-500/10 border-amber-500 text-amber-600 dark:text-amber-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60' %>">
+                                        <span class="flex items-center gap-1.5 truncate">
+                                            <span class="material-symbols-rounded text-base <%= activeFilter === 'open' ? 'text-amber-500' : 'text-slate-400' %>">schedule</span>
+                                            <span class="truncate">Pending</span>
+                                        </span>
+                                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold <%= activeFilter === 'open' ? 'bg-amber-600 text-white' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-400' %>"><%= st.openCount %></span>
+                                    </button>
+
+                                    <!-- My Questions Tab -->
+                                    <button type="button" onclick="applyQaFilter('status', 'my')"
+                                        class="p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= activeFilter === 'my' ? 'bg-indigo-500/10 border-indigo-500 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60' %>">
+                                        <span class="flex items-center gap-1.5 truncate">
+                                            <span class="material-symbols-rounded text-base <%= activeFilter === 'my' ? 'text-indigo-500' : 'text-slate-400' %>">person</span>
+                                            <span class="truncate">My Qs</span>
+                                        </span>
+                                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold <%= activeFilter === 'my' ? 'bg-indigo-600 text-white' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-400' %>"><%= st.myCount %></span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- SECTION 2: Subject Filter Included Inside Filter -->
+                            <div class="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Subject</span>
+                                <div class="space-y-1 max-h-48 overflow-y-auto no-scrollbar pr-0.5">
+                                    <button type="button" onclick="applyQaFilter('subject', 'all')"
+                                        class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer <%= activeSubject === 'all' ? 'bg-primary/10 text-primary font-bold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60' %>">
+                                        <span class="flex items-center gap-2">
+                                            <span class="material-symbols-rounded text-base">apps</span>
+                                            <span>All Subjects</span>
+                                        </span>
+                                        <% if (activeSubject === 'all') { %>
+                                            <span class="material-symbols-rounded text-sm text-primary">check</span>
+                                        <% } %>
+                                    </button>
+                                    <% (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
+                                        <button type="button" onclick="applyQaFilter('subject', '<%= sub %>')"
+                                            class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer <%= activeSubject === sub ? 'bg-primary/10 text-primary font-bold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60' %>">
+                                            <span class="flex items-center gap-2 truncate">
+                                                <span class="material-symbols-rounded text-base text-slate-400">subject</span>
+                                                <span class="truncate"><%= sub %></span>
+                                            </span>
+                                            <% if (activeSubject === sub) { %>
+                                                <span class="material-symbols-rounded text-sm text-primary">check</span>
+                                            <% } %>
+                                        </button>
+                                    <% }) %>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- ROW 2: TOUCH-FRIENDLY STATUS FILTER TABS (Unclipped 2x2 Grid on Mobile, 4-Col on Desktop) -->
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
-                    <a href="/qa?status=all&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
-                        class="qa-status-tab w-full h-10 sm:h-11 px-2.5 sm:px-3 border text-xs sm:text-[13px] font-bold rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 shadow-2xs <%= activeFilter === 'all' ? 'bg-primary border-primary text-white shadow-primary/25' : 'bg-slate-50 dark:bg-slate-800/90 border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200' %>">
-                        <span class="material-symbols-rounded text-base sm:text-lg <%= activeFilter === 'all' ? 'text-white' : 'text-primary' %> leading-none shrink-0">forum</span>
-                        <span class="truncate">All</span>
-                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 <%= activeFilter === 'all' ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary' %>"><%= st.totalCount %></span>
-                    </a>
-
-                    <a href="/qa?status=resolved&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
-                        class="qa-status-tab w-full h-10 sm:h-11 px-2.5 sm:px-3 border text-xs sm:text-[13px] font-bold rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 shadow-2xs <%= activeFilter === 'resolved' ? 'bg-emerald-600 border-emerald-600 text-white shadow-emerald-600/25' : 'bg-slate-50 dark:bg-slate-800/90 border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200' %>">
-                        <span class="material-symbols-rounded text-base sm:text-lg <%= activeFilter === 'resolved' ? 'text-white' : 'text-emerald-500' %> leading-none shrink-0">verified</span>
-                        <span class="truncate">Answered</span>
-                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 <%= activeFilter === 'resolved' ? 'bg-white/20 text-white' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' %>"><%= st.resolvedCount %></span>
-                    </a>
-
-                    <a href="/qa?status=open&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
-                        class="qa-status-tab w-full h-10 sm:h-11 px-2.5 sm:px-3 border text-xs sm:text-[13px] font-bold rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 shadow-2xs <%= activeFilter === 'open' ? 'bg-amber-600 border-amber-600 text-white shadow-amber-600/25' : 'bg-slate-50 dark:bg-slate-800/90 border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200' %>">
-                        <span class="material-symbols-rounded text-base sm:text-lg <%= activeFilter === 'open' ? 'text-white' : 'text-amber-500' %> leading-none shrink-0">schedule</span>
-                        <span class="truncate">Pending</span>
-                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 <%= activeFilter === 'open' ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400' %>"><%= st.openCount %></span>
-                    </a>
-
-                    <a href="/qa?status=my&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
-                        class="qa-status-tab w-full h-10 sm:h-11 px-2.5 sm:px-3 border text-xs sm:text-[13px] font-bold rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 shadow-2xs <%= activeFilter === 'my' ? 'bg-indigo-600 border-indigo-600 text-white shadow-indigo-600/25' : 'bg-slate-50 dark:bg-slate-800/90 border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200' %>">
-                        <span class="material-symbols-rounded text-base sm:text-lg <%= activeFilter === 'my' ? 'text-white' : 'text-indigo-500' %> leading-none shrink-0">person</span>
-                        <span class="truncate">My Questions</span>
-                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 <%= activeFilter === 'my' ? 'bg-white/20 text-white' : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' %>"><%= st.myCount %></span>
-                    </a>
-                </div>
-            </div>
-
-            <!-- Ask Question Composer Card (Placed above feed for full accessibility on small screens) -->
-            <div id="ask-question-box" class="w-full p-3 sm:p-4 bg-white dark:bg-[#0f172a] border-b border-slate-200/80 dark:border-slate-800/80 shrink-0">
-                <form action="/qa-ask" method="POST" enctype="multipart/form-data" class="w-full flex flex-col gap-2.5">
-                    
-                    <!-- Selected Image Preview Badge -->
-                    <div id="ask-img-preview" class="hidden flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-xs font-semibold text-primary max-w-xs self-start">
-                        <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none select-none shrink-0">image</span>
-                        <span class="truncate flex-1" id="ask-img-name">Photo attached</span>
-                        <button type="button" onclick="clearAskImage()" class="text-rose-500 hover:text-rose-700 text-xs font-bold flex items-center justify-center leading-none select-none shrink-0">
-                            <span class="material-symbols-rounded text-base flex items-center justify-center leading-none">cancel</span>
-                        </button>
-                    </div>
-
-                    <!-- Student Avatar & Question Textarea -->
-                    <div class="flex items-start gap-2.5 w-full">
-                        <div class="size-8 sm:size-9 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-800 mt-0.5">
-                            <img src="<%= (u.profileImage || u.profilePicture) ? (u.profileImage || u.profilePicture) : `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'Student')}&background=random` %>" class="w-full h-full object-cover">
-                        </div>
-
-                        <div class="flex-1 min-w-0">
-                            <textarea id="ask-question-textarea" name="question" rows="2" required placeholder="Have an academic question or doubt? Write it here..."
-                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/70 focus:border-primary focus:ring-2 focus:ring-primary/15 text-xs sm:text-[13px] font-semibold text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl outline-none transition-all resize-none shadow-inner"></textarea>
-                        </div>
-                    </div>
-
-                    <!-- Controls Row: Attach Image, Subject & Ask Button -->
-                    <div class="flex items-center justify-between gap-2 w-full flex-wrap sm:flex-nowrap pt-0.5">
-                        <div class="flex items-center gap-2 flex-wrap">
-                            <!-- Attach Image Button -->
-                            <label class="h-9 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 whitespace-nowrap active:scale-95 shadow-2xs">
-                                <span class="material-symbols-rounded text-base leading-none select-none text-primary">add_a_photo</span>
-                                <span class="text-xs">Attach Photo</span>
-                                <input type="file" name="image" id="ask-file-input" accept="image/*" class="hidden" onchange="previewAskImage(this)">
-                            </label>
-
-                            <!-- Subject Select Dropdown -->
-                            <select name="subject" class="h-9 px-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/70 text-xs font-bold text-slate-700 dark:text-slate-200 rounded-xl outline-none cursor-pointer shrink-0 shadow-2xs">
-                                <% (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
-                                    <option value="<%= sub %>" <%= (activeSubject === sub) ? 'selected' : '' %>><%= sub %></option>
-                                <% }) %>
-                            </select>
-                        </div>
-
-                        <!-- Submit Button -->
-                        <button type="submit" class="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-xs shrink-0 whitespace-nowrap active:scale-95 ml-auto">
-                            <span class="material-symbols-rounded text-base leading-none select-none">send</span>
-                            <span>Ask Question</span>
-                        </button>
-                    </div>
-
-                </form>
             </div>
 
             <!-- Live No Matches Fallback -->
@@ -192,7 +188,7 @@
             </div>
 
             <!-- Scrollable Questions Feed (Dashboard-Aligned Card System) -->
-            <div id="questions-feed" class="flex-1 space-y-2.5 w-full p-2.5 sm:p-4">
+            <div id="questions-feed" class="flex-1 overflow-y-auto space-y-2.5 w-full p-2.5 sm:p-4 no-scrollbar">
                 <% if (qList.length === 0) { %>
                     <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-10 text-center shadow-none w-full">
                         <span class="material-symbols-rounded text-5xl text-slate-300 mb-3 flex items-center justify-center leading-none select-none">help_outline</span>
@@ -376,15 +372,59 @@
                 <% } %>
             </div>
 
-            <!-- Mobile Quick Ask Floating Action Button -->
-            <button type="button" onclick="focusAskComposer()" 
-                class="fixed bottom-20 right-4 lg:hidden size-12 rounded-full bg-primary hover:bg-primary/90 text-white shadow-lg flex items-center justify-center active:scale-90 transition-all z-30"
-                title="Ask a Question">
-                <span class="material-symbols-rounded text-2xl leading-none select-none">edit_square</span>
-            </button>
+            <!-- Bottom Ask Question Composer Field (Docked at bottom of viewport, perfectly sized) -->
+            <div id="ask-question-box" class="w-full bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 p-2.5 sm:p-3 shrink-0 z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-[0_-4px_16px_rgba(0,0,0,0.3)]">
+                <form action="/qa-ask" method="POST" enctype="multipart/form-data" class="w-full max-w-4xl mx-auto flex flex-col gap-2">
+                    
+                    <!-- Selected Image Preview Badge -->
+                    <div id="ask-img-preview" class="hidden flex items-center gap-2 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 text-xs font-semibold text-primary max-w-xs self-start">
+                        <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none select-none shrink-0">image</span>
+                        <span class="truncate flex-1" id="ask-img-name">Photo attached</span>
+                        <button type="button" onclick="clearAskImage()" class="text-rose-500 hover:text-rose-700 text-xs font-bold flex items-center justify-center leading-none select-none shrink-0 cursor-pointer">
+                            <span class="material-symbols-rounded text-base flex items-center justify-center leading-none">cancel</span>
+                        </button>
+                    </div>
 
-            <!-- Safe clearance for mobile bottom navigation -->
-            <div class="h-20 sm:h-24 lg:h-6 w-full shrink-0"></div>
+                    <!-- Input Row: Optional Avatar + Responsive Textarea -->
+                    <div class="flex items-center gap-2 w-full">
+                        <div class="size-8 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-800 hidden sm:block">
+                            <img src="<%= (u.profileImage || u.profilePicture) ? (u.profileImage || u.profilePicture) : `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'Student')}&background=random` %>" class="w-full h-full object-cover">
+                        </div>
+
+                        <div class="flex-1 min-w-0">
+                            <textarea id="ask-question-textarea" name="question" rows="1" required placeholder="Ask your question or doubt..."
+                                oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 100) + 'px'"
+                                class="w-full min-h-[42px] max-h-[100px] px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/70 focus:border-primary focus:ring-2 focus:ring-primary/15 text-xs sm:text-[13px] font-semibold text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl outline-none transition-all resize-none shadow-inner leading-relaxed"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Controls Row: Attach Image, Subject & Ask Button -->
+                    <div class="flex items-center justify-between gap-2 w-full pt-0.5">
+                        <div class="flex items-center gap-2">
+                            <!-- Attach Image Button -->
+                            <label class="h-8.5 px-2.5 sm:px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 whitespace-nowrap active:scale-95 border border-slate-200/60 dark:border-slate-700/60 shadow-2xs">
+                                <span class="material-symbols-rounded text-base leading-none select-none text-primary">add_a_photo</span>
+                                <span class="text-[11px] sm:text-xs">Photo</span>
+                                <input type="file" name="image" id="ask-file-input" accept="image/*" class="hidden" onchange="previewAskImage(this)">
+                            </label>
+
+                            <!-- Subject Select Dropdown -->
+                            <select name="subject" class="h-8.5 px-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/70 text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 rounded-xl outline-none cursor-pointer shrink-0 shadow-2xs">
+                                <% (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
+                                    <option value="<%= sub %>" <%= (activeSubject === sub) ? 'selected' : '' %>><%= sub %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="h-8.5 px-3.5 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-xs shrink-0 whitespace-nowrap active:scale-95 ml-auto">
+                            <span class="material-symbols-rounded text-base leading-none select-none">send</span>
+                            <span>Ask</span>
+                        </button>
+                    </div>
+
+                </form>
+            </div>
         </main>
     </div>
 
@@ -523,46 +563,40 @@
             clearQaScreenSearch();
         }
 
-        // Subject Filter Dropdown Handlers
-        function toggleQaSubjectDropdown(e) {
+        // Unified Filter Dropdown Handlers (Includes Status Tabs & Subjects)
+        function toggleQaFilterDropdown(e) {
             if (e) e.stopPropagation();
-            const menu = document.getElementById('qa-subject-dropdown-menu');
+            const menu = document.getElementById('qa-filter-dropdown-menu');
             if (menu) menu.classList.toggle('hidden');
         }
 
-        function selectQaSubjectFilter(sub) {
-            const menu = document.getElementById('qa-subject-dropdown-menu');
+        function applyQaFilter(type, value) {
+            const menu = document.getElementById('qa-filter-dropdown-menu');
             if (menu) menu.classList.add('hidden');
-            
-            const form = document.getElementById('qa-filter-form');
-            if (form) {
-                let subInput = form.querySelector('input[name="subject"]');
-                if (!subInput) {
-                    subInput = document.createElement('input');
-                    subInput.type = 'hidden';
-                    subInput.name = 'subject';
-                    form.appendChild(subInput);
-                }
-                subInput.value = sub;
-                form.submit();
-            } else if (typeof submitQaSubject === 'function') {
-                submitQaSubject(sub);
-            } else {
-                const url = new URL(window.location.href);
-                url.searchParams.set('subject', sub);
-                window.location.href = url.toString();
+
+            const url = new URL(window.location.href);
+            if (type === 'status') {
+                url.searchParams.set('status', value);
+            } else if (type === 'subject') {
+                url.searchParams.set('subject', value);
             }
+            
+            const screenInput = document.getElementById('qa-screen-search-input');
+            const headerInput = document.getElementById('qa-search-input');
+            const query = (screenInput && screenInput.value.trim()) || (headerInput && headerInput.value.trim()) || '';
+            if (query) {
+                url.searchParams.set('search', query);
+            } else {
+                url.searchParams.delete('search');
+            }
+            window.location.href = url.toString();
         }
 
-        // Quick Ask Composer Focus for Mobile Floating Action Button
         function focusAskComposer() {
-            const box = document.getElementById('ask-question-box');
             const textarea = document.getElementById('ask-question-textarea');
-            if (box) {
-                box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
             if (textarea) {
-                setTimeout(() => textarea.focus(), 350);
+                textarea.focus();
+                textarea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
         }
 
@@ -610,10 +644,10 @@
                 .catch(err => console.error('Upvote error:', err));
         }
 
-        // Close dropdown when tapping outside
+        // Close filter dropdown when tapping outside
         document.addEventListener('click', function(e) {
-            const container = document.getElementById('qa-subject-dropdown-container');
-            const menu = document.getElementById('qa-subject-dropdown-menu');
+            const container = document.getElementById('qa-filter-dropdown-container');
+            const menu = document.getElementById('qa-filter-dropdown-menu');
             if (container && menu && !container.contains(e.target)) {
                 menu.classList.add('hidden');
             }
