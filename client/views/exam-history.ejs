@@ -14,65 +14,143 @@
 
         <main class="flex-1 w-full overflow-y-auto p-4 sm:p-6 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative space-y-4 pb-12">
             
-            <!-- HEADER BAR WITH TITLE, LIFETIME MARKS BADGES & SEARCH -->
-            <div class="max-w-5xl w-full mx-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-                <div class="flex items-center gap-3 flex-wrap">
-                    <div class="flex items-center gap-2">
-                        <span class="material-symbols-rounded text-cyan-600 dark:text-cyan-400 text-xl leading-none flex items-center justify-center shrink-0">history</span>
-                        <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight">Exam History</h1>
-                    </div>
-
-                    <!-- LIFETIME GAINED MARKS BADGES -->
-                    <% 
-                       let lifeMcq = 0;
-                       let lifeWritten = 0;
-                       attempts.forEach(function(a) {
-                           lifeMcq += (a.mcqScore || 0);
-                           if (a.writtenStatus === 'reviewed') {
-                               if (a.teacherReview && typeof a.teacherReview.totalWrittenScore === 'number') {
-                                   lifeWritten += a.teacherReview.totalWrittenScore;
-                               } else if (Array.isArray(a.userAnswers)) {
-                                   a.userAnswers.forEach(function(ua) {
-                                       if (ua.questionType !== 'MCQ' && ua.marksObtained !== undefined && ua.marksObtained !== null) {
-                                           lifeWritten += ua.marksObtained;
-                                       }
-                                   });
+            <!-- LIFETIME GAINED MARKS CALCULATION -->
+            <% 
+               let lifeMcq = 0;
+               let lifeWritten = 0;
+               attempts.forEach(function(a) {
+                   lifeMcq += (a.mcqScore || 0);
+                   if (a.writtenStatus === 'reviewed') {
+                       if (a.teacherReview && typeof a.teacherReview.totalWrittenScore === 'number') {
+                           lifeWritten += a.teacherReview.totalWrittenScore;
+                       } else if (Array.isArray(a.userAnswers)) {
+                           a.userAnswers.forEach(function(ua) {
+                               if (ua.questionType !== 'MCQ' && ua.marksObtained !== undefined && ua.marksObtained !== null) {
+                                   lifeWritten += ua.marksObtained;
                                }
-                           }
-                       });
-                       let lifeTotal = lifeMcq + lifeWritten;
-                    %>
-                    <div class="flex items-center gap-1.5 flex-wrap">
-                        <span class="px-2.5 py-1 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/20 text-xs font-semibold">
-                            MCQ: <%= lifeMcq %>
-                        </span>
-                        <span class="px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-500/20 text-xs font-semibold">
-                            Written: <%= lifeWritten %>
-                        </span>
-                        <span class="px-2.5 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 text-xs font-semibold">
-                            Total: <%= lifeTotal %>
-                        </span>
+                           });
+                       }
+                   }
+               });
+               let lifeTotal = lifeMcq + lifeWritten;
+            %>
+
+            <!-- ON-SCREEN CONTROLS TOOLBAR (Live Search & Platform Dropdown in ONE LINE) -->
+            <div class="max-w-5xl w-full mx-auto space-y-2">
+                <div class="flex items-center gap-2 w-full">
+                    <!-- Live Search Input (Moved directly to screen from navbar) -->
+                    <div class="relative flex-1 min-w-0">
+                        <div class="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none select-none text-slate-400 dark:text-slate-500">
+                            <span class="material-symbols-rounded text-[19px] leading-none">search</span>
+                        </div>
+                        <input type="text" id="screenHistorySearchInput"
+                            oninput="handleHistoryLiveSearch(this.value)"
+                            onkeyup="handleHistoryLiveSearch(this.value)"
+                            placeholder="Search exam name, subject, topic..."
+                            class="w-full h-11 pl-10 pr-9 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 text-xs sm:text-[13px] font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-xl outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/15 shadow-2xs transition-all">
+                        <button type="button" id="screenHistoryClearBtn" onclick="clearScreenHistorySearch()"
+                            class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 size-6 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                            <span class="material-symbols-rounded text-base">cancel</span>
+                        </button>
+                    </div>
+
+                    <!-- Filter & Stats Dropdown Trigger Button (Beside Search) -->
+                    <div class="relative shrink-0" id="history-filter-dropdown-container">
+                        <button type="button" id="history-filter-dropdown-btn" onclick="toggleHistoryFilterDropdown(event)"
+                            class="h-11 px-3 sm:px-3.5 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-xl flex items-center gap-1.5 sm:gap-2 text-xs sm:text-[13px] font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95">
+                            <span class="material-symbols-rounded text-base sm:text-lg text-cyan-600 dark:text-cyan-400 leading-none shrink-0">tune</span>
+                            <span>Filter & Stats</span>
+                            <span id="activeTypeFilterBadge" class="hidden px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-cyan-600 text-white shrink-0 shadow-xs">1</span>
+                            <span class="material-symbols-rounded text-slate-400 text-sm leading-none shrink-0">expand_more</span>
+                        </button>
+
+                        <!-- Mobile Backdrop Overlay -->
+                        <div id="history-filter-backdrop" class="hidden fixed inset-0 bg-black/40 backdrop-blur-2xs z-40 sm:hidden" onclick="toggleHistoryFilterDropdown(event)"></div>
+
+                        <!-- Platform Dropdown Menu / Bottom Sheet -->
+                        <div id="history-filter-dropdown-menu" class="hidden fixed inset-x-3 bottom-20 max-h-[75vh] sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-80 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3.5 sm:p-4 space-y-3.5 overflow-y-auto no-scrollbar">
+                            <!-- Dropdown Header -->
+                            <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                                <div class="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-white">
+                                    <span class="material-symbols-rounded text-base text-cyan-600 dark:text-cyan-400">tune</span>
+                                    <span>Filters & Stats</span>
+                                </div>
+                                <button type="button" onclick="resetHistoryFilters()" class="text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer">
+                                    Reset
+                                </button>
+                            </div>
+
+                            <!-- SECTION 1: Filter by Exam Type -->
+                            <div class="space-y-2">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Filter By Exam Type</span>
+                                <div class="grid grid-cols-3 gap-1.5">
+                                    <button type="button" onclick="setHistoryTypeFilter('all')" id="btn-type-all"
+                                        class="history-type-btn py-2 px-1.5 rounded-xl border text-center text-xs font-bold transition-all active:scale-95 cursor-pointer bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-2xs">
+                                        All
+                                    </button>
+                                    <button type="button" onclick="setHistoryTypeFilter('written')" id="btn-type-written"
+                                        class="history-type-btn py-2 px-1.5 rounded-xl border text-center text-xs font-bold transition-all active:scale-95 cursor-pointer bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100">
+                                        Written
+                                    </button>
+                                    <button type="button" onclick="setHistoryTypeFilter('mcq')" id="btn-type-mcq"
+                                        class="history-type-btn py-2 px-1.5 rounded-xl border text-center text-xs font-bold transition-all active:scale-95 cursor-pointer bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100">
+                                        MCQ Only
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- SECTION 2: Lifetime Performance Stats Cards -->
+                            <div class="space-y-2 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Lifetime Performance</span>
+                                <div class="grid grid-cols-2 gap-2 text-[11px]">
+                                    <div class="col-span-2 p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200/60 dark:border-indigo-500/20 flex items-center justify-between">
+                                        <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                                            <span class="material-symbols-rounded text-sm text-indigo-500">assignment_turned_in</span> Total Attempts
+                                        </span>
+                                        <span id="dropdownAttemptCount" class="font-extrabold text-xs text-indigo-600 dark:text-indigo-300"><%= attempts.length %></span>
+                                    </div>
+                                    <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 flex flex-col gap-0.5">
+                                        <span class="text-[10px] text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
+                                            <span class="material-symbols-rounded text-xs text-cyan-500">quiz</span> MCQ Marks
+                                        </span>
+                                        <span class="font-extrabold text-slate-800 dark:text-slate-100 text-xs"><%= lifeMcq %></span>
+                                    </div>
+                                    <div class="p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 flex flex-col gap-0.5">
+                                        <span class="text-[10px] text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
+                                            <span class="material-symbols-rounded text-xs text-indigo-500">rate_review</span> Written Marks
+                                        </span>
+                                        <span class="font-extrabold text-slate-800 dark:text-slate-100 text-xs"><%= lifeWritten %></span>
+                                    </div>
+                                    <div class="col-span-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20 flex items-center justify-between">
+                                        <span class="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
+                                            <span class="material-symbols-rounded text-sm text-emerald-500">military_tech</span> Total Marks Gained
+                                        </span>
+                                        <span class="font-extrabold text-xs text-emerald-600 dark:text-emerald-300"><%= lifeTotal %></span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- SECTION 3: Quick Link to Written Exam Results -->
+                            <div class="pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                                <a href="/exams/written-results" class="w-full h-10 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95">
+                                    <span class="material-symbols-rounded text-base leading-none">rate_review</span>
+                                    <span>View Written Results & Evaluations</span>
+                                </a>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-2 shrink-0">
-                    <!-- WRITTEN RESULTS BUTTON -->
-                    <a href="/exams/written-results" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs active:scale-95 shrink-0" title="Written Exam Results & Evaluations">
-                        <span class="material-symbols-rounded text-sm text-cyan-500 leading-none flex items-center justify-center shrink-0">rate_review</span>
-                        <span>Written Results</span>
-                    </a>
-
-                    <!-- TOTAL ATTEMPTS BADGE -->
-                    <span class="px-3 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold flex items-center gap-1.5 shrink-0">
-                        <span class="material-symbols-rounded text-sm text-cyan-500 leading-none">assignment_turned_in</span>
-                        <span id="attemptCountBadge"><%= attempts.length %> <%= attempts.length === 1 ? 'Attempt' : 'Attempts' %></span>
+                <!-- Active Filter Chip Bar (Dismissible) -->
+                <div id="activeFilterBar" class="hidden flex items-center gap-2 py-0.5">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Filtered:</span>
+                    <span id="activeFilterChip" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 text-xs font-bold">
+                        <span id="activeFilterChipText">Written</span>
+                        <button type="button" onclick="setHistoryTypeFilter('all')" class="hover:text-cyan-700 dark:hover:text-cyan-200 cursor-pointer flex items-center">
+                            <span class="material-symbols-rounded text-xs leading-none">close</span>
+                        </button>
                     </span>
-                </div>
-
-                <!-- SEARCH INPUT -->
-                <div class="relative w-full sm:w-64">
-                    <span class="material-symbols-rounded absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">search</span>
-                    <input type="text" id="historySearchInput" placeholder="Search exam name..." class="w-full pl-9 pr-4 py-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-slate-100 placeholder-slate-400 outline-none focus:border-cyan-500 transition-colors">
+                    <span id="liveResultCountText" class="text-[11px] font-semibold text-slate-400 ml-auto"></span>
                 </div>
             </div>
 
@@ -154,7 +232,10 @@
                                 const formattedSubmission = subDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
                             %>
                             
-                            <div class="history-item bg-slate-50 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all duration-200 hover:border-cyan-500/50 shadow-2xs" data-title="<%= displayTitle.toLowerCase() %>">
+                            <div class="history-item bg-slate-50 dark:bg-slate-900/90 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all duration-200 hover:border-cyan-500/50 shadow-2xs"
+                                data-title="<%= displayTitle.toLowerCase() %>"
+                                data-type="<%= hasWritten ? 'written' : 'mcq' %>"
+                                data-search="<%= (displayTitle + ' ' + (bankObj.subject || '') + ' ' + (bankObj.course ? bankObj.course.title || '' : '')).toLowerCase().replace(/"/g, '&quot;') %>">
                                 
                                 <div class="min-w-0 flex-1 space-y-1">
                                     <div class="flex items-center gap-2 flex-wrap">
@@ -207,13 +288,13 @@
                                 <!-- ACTION BUTTONS -->
                                 <div class="shrink-0 flex items-center justify-end gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/60 dark:border-slate-800">
                                     <% if (hasWritten) { %>
-                                        <a href="/question-bank/written-evaluation/<%= att._id %>?from=exams" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1 shadow-2xs active:scale-95" title="View Written Evaluation">
-                                            <span class="material-symbols-rounded text-sm leading-none">rate_review</span>
+                                        <a href="/question-bank/written-evaluation/<%= att._id %>?from=exams" class="h-9 px-3.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs active:scale-95" title="View Written Evaluation">
+                                            <span class="material-symbols-rounded text-base leading-none">rate_review</span>
                                             <span>Written Result</span>
                                         </a>
                                     <% } %>
-                                    <a href="/question-bank/review/<%= att._id %>?from=exams" class="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-cyan-600 dark:hover:bg-cyan-500 text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs active:scale-95" title="See Answers">
-                                        <span class="material-symbols-rounded text-sm leading-none">visibility</span>
+                                    <a href="/question-bank/review/<%= att._id %>?from=exams" class="h-9 px-3.5 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 dark:bg-cyan-600 dark:hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs active:scale-95" title="See Answers">
+                                        <span class="material-symbols-rounded text-base leading-none">visibility</span>
                                         <span>See Answers</span>
                                     </a>
                                 </div>
@@ -239,14 +320,135 @@
     <%- include('partials/student-bottom-nav', { activePage: 'exams' }) %>
 
     <script>
-        window.filterHistoryWithQuery = function(query) {
-            const q = (query || '').toLowerCase().trim();
+        let currentTypeFilter = 'all';
+
+        function toggleHistoryFilterDropdown(e) {
+            if (e) e.stopPropagation();
+            const menu = document.getElementById('history-filter-dropdown-menu');
+            const backdrop = document.getElementById('history-filter-backdrop');
+            if (!menu) return;
+            const isHidden = menu.classList.contains('hidden');
+            if (isHidden) {
+                menu.classList.remove('hidden');
+                if (backdrop) backdrop.classList.remove('hidden');
+            } else {
+                closeHistoryFilterDropdown();
+            }
+        }
+
+        function closeHistoryFilterDropdown() {
+            const menu = document.getElementById('history-filter-dropdown-menu');
+            const backdrop = document.getElementById('history-filter-backdrop');
+            if (menu) menu.classList.add('hidden');
+            if (backdrop) backdrop.classList.add('hidden');
+        }
+
+        function setHistoryTypeFilter(type) {
+            currentTypeFilter = type || 'all';
+            
+            // Update button styles
+            ['all', 'written', 'mcq'].forEach(t => {
+                const btn = document.getElementById(`btn-type-${t}`);
+                if (!btn) return;
+                if (t === currentTypeFilter) {
+                    btn.className = 'history-type-btn py-2 px-1.5 rounded-xl border text-center text-xs font-bold transition-all active:scale-95 cursor-pointer bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-2xs';
+                } else {
+                    btn.className = 'history-type-btn py-2 px-1.5 rounded-xl border text-center text-xs font-bold transition-all active:scale-95 cursor-pointer bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100';
+                }
+            });
+
+            // Update active badge on trigger button
+            const activeBadge = document.getElementById('activeTypeFilterBadge');
+            if (activeBadge) {
+                if (currentTypeFilter !== 'all') {
+                    activeBadge.classList.remove('hidden');
+                } else {
+                    activeBadge.classList.add('hidden');
+                }
+            }
+
+            // Update active filter chip bar
+            const chipBar = document.getElementById('activeFilterBar');
+            const chipText = document.getElementById('activeFilterChipText');
+            if (chipBar && chipText) {
+                if (currentTypeFilter !== 'all') {
+                    chipText.textContent = currentTypeFilter === 'written' ? 'Written' : 'MCQ Only';
+                    chipBar.classList.remove('hidden');
+                } else {
+                    chipBar.classList.add('hidden');
+                }
+            }
+
+            applyHistoryFilters();
+        }
+
+        function resetHistoryFilters() {
+            const input = document.getElementById('screenHistorySearchInput');
+            if (input) input.value = '';
+            const clearBtn = document.getElementById('screenHistoryClearBtn');
+            if (clearBtn) clearBtn.classList.add('hidden');
+
+            const headerInput = document.getElementById('historySearchBox');
+            if (headerInput) headerInput.value = '';
+
+            setHistoryTypeFilter('all');
+            closeHistoryFilterDropdown();
+        }
+
+        function handleHistoryLiveSearch(query) {
+            const clearBtn = document.getElementById('screenHistoryClearBtn');
+            if (clearBtn) {
+                if (query && query.trim() !== '') {
+                    clearBtn.classList.remove('hidden');
+                } else {
+                    clearBtn.classList.add('hidden');
+                }
+            }
+            applyHistoryFilters();
+        }
+
+        function clearScreenHistorySearch() {
+            const input = document.getElementById('screenHistorySearchInput');
+            if (input) {
+                input.value = '';
+                input.focus();
+            }
+            const clearBtn = document.getElementById('screenHistoryClearBtn');
+            if (clearBtn) clearBtn.classList.add('hidden');
+
+            const headerInput = document.getElementById('historySearchBox');
+            if (headerInput) headerInput.value = '';
+
+            applyHistoryFilters();
+        }
+
+        function applyHistoryFilters() {
+            const screenInput = document.getElementById('screenHistorySearchInput');
+            const q = (screenInput ? screenInput.value : '').toLowerCase().trim();
+            
             const items = document.querySelectorAll('.history-item');
             let visibleCount = 0;
+            const totalCount = items.length;
 
             items.forEach(item => {
-                const title = (item.getAttribute('data-title') || '').toLowerCase().trim();
-                if (q === '' || title.includes(q)) {
+                const itemType = (item.getAttribute('data-type') || '').toLowerCase();
+                const searchPool = (item.getAttribute('data-search') || item.getAttribute('data-title') || '').toLowerCase();
+
+                // 1. Check type filter
+                let typeMatches = true;
+                if (currentTypeFilter === 'written') {
+                    typeMatches = (itemType === 'written');
+                } else if (currentTypeFilter === 'mcq') {
+                    typeMatches = (itemType === 'mcq');
+                }
+
+                // 2. Check query filter
+                let queryMatches = true;
+                if (q !== '') {
+                    queryMatches = searchPool.includes(q);
+                }
+
+                if (typeMatches && queryMatches) {
                     item.classList.remove('hidden');
                     visibleCount++;
                 } else {
@@ -254,20 +456,56 @@
                 }
             });
 
+            // Update badge in header if exists
             const badgeEl = document.getElementById('attemptCountBadge');
             if (badgeEl) {
                 badgeEl.textContent = `${visibleCount} ${visibleCount === 1 ? 'Attempt' : 'Attempts'}`;
             }
 
+            // Update live result count text under toolbar
+            const liveCount = document.getElementById('liveResultCountText');
+            if (liveCount) {
+                if (q !== '' || currentTypeFilter !== 'all') {
+                    liveCount.textContent = `Showing ${visibleCount} of ${totalCount}`;
+                } else {
+                    liveCount.textContent = '';
+                }
+            }
+
+            // Show or hide empty state
             const noRes = document.getElementById('noHistoryResults');
             if (noRes) {
-                if (visibleCount === 0 && items.length > 0) {
+                if (visibleCount === 0 && totalCount > 0) {
                     noRes.classList.remove('hidden');
                 } else {
                     noRes.classList.add('hidden');
                 }
             }
+        }
+
+        // Bridge for desktop header search if called
+        window.filterHistoryWithQuery = function(query) {
+            const input = document.getElementById('screenHistorySearchInput');
+            if (input) {
+                input.value = query || '';
+            }
+            handleHistoryLiveSearch(query);
         };
+
+        // Click outside listener for dropdown
+        document.addEventListener('click', function(e) {
+            const container = document.getElementById('history-filter-dropdown-container');
+            if (container && !container.contains(e.target)) {
+                closeHistoryFilterDropdown();
+            }
+        });
+
+        // ESC key closes dropdown
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeHistoryFilterDropdown();
+            }
+        });
     </script>
 </body>
 </html>
