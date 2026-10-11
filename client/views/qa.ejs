@@ -434,13 +434,49 @@
                                     <input type="file" name="image" id="ask-file-input" accept="image/*" class="hidden" onchange="previewAskImage(this)">
                                 </label>
 
-                                <!-- Subject Filter Select -->
-                                <div class="relative shrink-0">
-                                    <select name="subject" class="h-8.5 px-2.5 max-w-[150px] sm:max-w-[200px] bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200/90 dark:border-slate-700/80 text-xs font-bold text-slate-700 dark:text-slate-200 rounded-xl outline-none cursor-pointer shadow-2xs truncate">
-                                        <% (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
-                                            <option value="<%= sub %>"><%= sub %></option>
-                                        <% }) %>
-                                    </select>
+                                <!-- Hidden input for form submission -->
+                                <input type="hidden" name="subject" id="ask-subject-input" value="<%= (locals.availableSubjects && locals.availableSubjects[0]) || 'Physics' %>">
+
+                                <!-- Custom Platform Subject Selector Dropdown Trigger -->
+                                <div class="relative shrink-0" id="ask-subject-picker-container">
+                                    <button type="button" id="ask-subject-picker-btn" onclick="toggleAskSubjectPicker(event)"
+                                        class="h-8.5 px-3 max-w-[170px] sm:max-w-[210px] bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200/90 dark:border-slate-700/80 text-xs font-bold text-slate-700 dark:text-slate-200 rounded-xl flex items-center gap-1.5 cursor-pointer shadow-2xs transition-all active:scale-95 select-none"
+                                        title="Select Subject">
+                                        <span class="material-symbols-rounded text-primary text-base leading-none select-none">auto_stories</span>
+                                        <span id="ask-subject-selected-text" class="truncate"><%= (locals.availableSubjects && locals.availableSubjects[0]) || 'Physics' %></span>
+                                        <span class="material-symbols-rounded text-slate-400 text-sm leading-none shrink-0 select-none">expand_more</span>
+                                    </button>
+
+                                    <!-- Mobile Backdrop Overlay -->
+                                    <div id="ask-subject-backdrop" class="hidden fixed inset-0 bg-black/40 backdrop-blur-2xs z-40 sm:hidden" onclick="toggleAskSubjectPicker(event)"></div>
+
+                                    <!-- Platform Dropdown Menu / Bottom Sheet -->
+                                    <div id="ask-subject-menu" class="hidden fixed inset-x-4 bottom-24 max-h-[65vh] sm:absolute sm:inset-auto sm:left-0 sm:bottom-full sm:mb-2 w-auto sm:w-64 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-2.5 space-y-1.5 overflow-y-auto no-scrollbar">
+                                        <!-- Header -->
+                                        <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 px-1">
+                                            <div class="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-white">
+                                                <span class="material-symbols-rounded text-base text-primary">auto_stories</span>
+                                                <span>Select Subject</span>
+                                            </div>
+                                            <button type="button" onclick="toggleAskSubjectPicker(event)" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 flex items-center justify-center cursor-pointer">
+                                                <span class="material-symbols-rounded text-base">close</span>
+                                            </button>
+                                        </div>
+
+                                        <!-- Subject Options List -->
+                                        <div class="space-y-1 max-h-52 overflow-y-auto no-scrollbar py-0.5">
+                                            <% const subsList = (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']); %>
+                                            <% subsList.forEach((sub, idx) => { %>
+                                                <button type="button" onclick="selectAskSubject('<%= sub %>')" id="ask-sub-opt-<%= sub.toLowerCase().replace(/\s+/g, '-') %>"
+                                                    class="ask-subject-item w-full px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= idx === 0 ? 'bg-primary/10 text-primary border border-primary/20' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent' %>">
+                                                    <span class="truncate"><%= sub %></span>
+                                                    <span class="material-symbols-rounded text-base <%= idx === 0 ? 'text-primary' : 'text-transparent' %> ask-sub-check">
+                                                        check
+                                                    </span>
+                                                </button>
+                                            <% }) %>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -822,7 +858,60 @@
                 .catch(err => console.error('Upvote error:', err));
         }
 
-        // Close filter dropdown when tapping outside
+        // Platform Subject Picker Handlers for Composer
+        function toggleAskSubjectPicker(e) {
+            if (e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }
+            const menu = document.getElementById('ask-subject-menu');
+            const backdrop = document.getElementById('ask-subject-backdrop');
+            if (menu) {
+                const isHidden = menu.classList.contains('hidden');
+                if (isHidden) {
+                    menu.classList.remove('hidden');
+                    if (backdrop) backdrop.classList.remove('hidden');
+                } else {
+                    menu.classList.add('hidden');
+                    if (backdrop) backdrop.classList.add('hidden');
+                }
+            }
+        }
+
+        function selectAskSubject(subName) {
+            const input = document.getElementById('ask-subject-input');
+            const label = document.getElementById('ask-subject-selected-text');
+            const menu = document.getElementById('ask-subject-menu');
+            const backdrop = document.getElementById('ask-subject-backdrop');
+
+            if (input) input.value = subName;
+            if (label) label.textContent = subName;
+
+            // Update item highlights and checkmarks
+            const items = document.querySelectorAll('.ask-subject-item');
+            items.forEach(btn => {
+                const btnText = btn.querySelector('span:first-child')?.textContent?.trim();
+                const checkIcon = btn.querySelector('.ask-sub-check');
+                if (btnText === subName) {
+                    btn.className = "ask-subject-item w-full px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer bg-primary/10 text-primary border border-primary/20";
+                    if (checkIcon) {
+                        checkIcon.classList.remove('text-transparent');
+                        checkIcon.classList.add('text-primary');
+                    }
+                } else {
+                    btn.className = "ask-subject-item w-full px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent";
+                    if (checkIcon) {
+                        checkIcon.classList.add('text-transparent');
+                        checkIcon.classList.remove('text-primary');
+                    }
+                }
+            });
+
+            if (menu) menu.classList.add('hidden');
+            if (backdrop) backdrop.classList.add('hidden');
+        }
+
+        // Close dropdowns when tapping outside
         document.addEventListener('click', function(e) {
             const container = document.getElementById('qa-filter-dropdown-container');
             const menu = document.getElementById('qa-filter-dropdown-menu');
@@ -830,6 +919,14 @@
             if (container && menu && !container.contains(e.target)) {
                 menu.classList.add('hidden');
                 if (backdrop) backdrop.classList.add('hidden');
+            }
+
+            const subContainer = document.getElementById('ask-subject-picker-container');
+            const subMenu = document.getElementById('ask-subject-menu');
+            const subBackdrop = document.getElementById('ask-subject-backdrop');
+            if (subContainer && subMenu && !subContainer.contains(e.target)) {
+                subMenu.classList.add('hidden');
+                if (subBackdrop) subBackdrop.classList.add('hidden');
             }
         });
 
