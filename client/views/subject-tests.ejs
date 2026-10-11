@@ -7,83 +7,256 @@
 </head>
 
 <body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-full flex flex-col transition-colors duration-300 overflow-hidden">
-    <%- include('partials/student-header') %>
+    <%- include('partials/student-header', { pageTitle: (selectedSubject && selectedSubject !== 'all') ? 'Subject Tests / ' + selectedSubject : 'Subject Tests', activePage: 'exams', backUrl: '/exams' }) %>
 
     <div class="flex-1 flex overflow-hidden w-full relative">
         <%- include('partials/student-sidebar', { activePage: 'exams' }) %>
 
-        <main class="flex-1 w-full overflow-y-auto p-4 sm:p-6 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative space-y-4 pb-12">
+        <%
+            const curSubject = (selectedSubject || 'all').trim();
+            const isAllSubject = (!curSubject || curSubject.toLowerCase() === 'all');
+            const placeholderText = isAllSubject ? 'Search exams, topics...' : `Search ${curSubject} exams, topics...`;
+        %>
+
+        <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative space-y-0 pb-20 sm:pb-24 lg:pb-8">
             
-            <!-- DYNAMIC COUNT BADGE BAR -->
-            <div class="max-w-6xl w-full mx-auto flex items-center justify-end">
-                <span class="px-3 py-1 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/20 text-xs font-semibold flex items-center gap-1.5">
-                    <span class="material-symbols-rounded text-sm leading-none">menu_book</span>
-                    <span id="subjectTestCountBadge">0 Exams Available</span>
-                </span>
+            <!-- STICKY ON-SCREEN SEARCH & FILTER TOOLBAR (Tailored for Small Screens & Touch) -->
+            <div class="sticky top-0 z-20 w-full bg-white/95 dark:bg-[#0b1120]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-3 sm:px-6 py-2.5 sm:py-3 shadow-2xs">
+                <div class="max-w-6xl w-full mx-auto space-y-2.5">
+                    
+                    <!-- ROW 1: LIVE SEARCH INPUT + FILTER & TOPIC DROPDOWN BUTTON -->
+                    <div class="flex items-center gap-2 w-full">
+                        <!-- Live Search Input -->
+                        <div class="relative flex-1 min-w-0">
+                            <div class="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none select-none text-slate-400 dark:text-slate-500">
+                                <span class="material-symbols-rounded text-lg leading-none">search</span>
+                            </div>
+                            <input type="text" id="screenSubjectTestsSearchInput"
+                                oninput="handleScreenSubjectTestsSearch(this.value)"
+                                onkeyup="handleScreenSubjectTestsSearch(this.value)"
+                                placeholder="<%= placeholderText %>"
+                                class="w-full h-11 pl-10 pr-9 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 text-xs sm:text-[13px] font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-xl outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/15 shadow-2xs transition-all">
+                            <button type="button" id="screenSubjectTestsClearBtn" onclick="clearScreenSubjectTestsSearch()"
+                                class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 size-6 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white flex items-center justify-center transition-colors cursor-pointer select-none">
+                                <span class="material-symbols-rounded text-base">cancel</span>
+                            </button>
+                        </div>
+
+                        <!-- Filter & Topic Dropdown Trigger Button -->
+                        <div class="relative shrink-0" id="screenSubjectTestsFilterContainer">
+                            <button type="button" id="screenSubjectTestsFilterBtn" onclick="toggleSubjectTestsFilterMenu(event)"
+                                class="h-11 px-3 sm:px-3.5 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-xl flex items-center gap-1.5 sm:gap-2 text-xs sm:text-[13px] font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95"
+                                title="Topics and Filters">
+                                <span class="material-symbols-rounded text-base sm:text-lg text-cyan-600 dark:text-cyan-400 leading-none shrink-0">tune</span>
+                                <span id="screenFilterBtnLabel" class="truncate max-w-[80px] sm:max-w-[120px]">Topics</span>
+                                <span id="screenFilterActiveBadge" class="hidden px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-cyan-600 text-white shrink-0 shadow-xs">1</span>
+                                <span class="material-symbols-rounded text-slate-400 text-sm leading-none shrink-0">expand_more</span>
+                            </button>
+
+                            <!-- Mobile Backdrop Overlay -->
+                            <div id="screenSubjectTestsFilterBackdrop" class="hidden fixed inset-0 bg-black/40 backdrop-blur-2xs z-40 sm:hidden" onclick="toggleSubjectTestsFilterMenu(event)"></div>
+
+                            <!-- Platform Dropdown Menu / Bottom Sheet -->
+                            <div id="screenSubjectTestsFilterMenu" class="hidden fixed inset-x-3 bottom-20 max-h-[75vh] sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-80 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3.5 sm:p-4 space-y-3.5 overflow-y-auto no-scrollbar">
+                                
+                                <!-- Menu Header -->
+                                <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                                    <div class="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-white">
+                                        <span class="material-symbols-rounded text-base text-cyan-600 dark:text-cyan-400">tune</span>
+                                        <span>Topics & Filters</span>
+                                    </div>
+                                    <button type="button" onclick="resetSubjectTestsFilters()" class="text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer">
+                                        Reset All
+                                    </button>
+                                </div>
+
+                                <!-- SECTION 1: TOPIC FILTER -->
+                                <div class="space-y-2">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Filter By Topic</span>
+                                        <span class="text-[10px] text-slate-400 font-semibold"><%= (subjectTopics || []).length %> Topics</span>
+                                    </div>
+                                    <div class="flex flex-col gap-1 max-h-48 overflow-y-auto no-scrollbar pr-0.5">
+                                        <!-- All Topics Option -->
+                                        <button type="button" onclick="setScreenTopicFilter('all')" id="topic-btn-all"
+                                            class="screen-topic-opt w-full px-3 py-2 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between cursor-pointer active:scale-95 bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-2xs">
+                                            <span class="truncate">All Topics</span>
+                                            <span class="material-symbols-rounded text-sm opt-check">check</span>
+                                        </button>
+                                        
+                                        <% (subjectTopics || []).forEach(tp => { %>
+                                            <button type="button" onclick="setScreenTopicFilter('<%= tp.replace(/'/g, "\\'") %>')" id="topic-btn-<%= tp.toLowerCase().replace(/[^a-z0-9]/g, '-') %>"
+                                                data-topic-val="<%= tp.toLowerCase() %>"
+                                                class="screen-topic-opt w-full px-3 py-2 rounded-xl border text-left text-xs font-medium transition-all flex items-center justify-between cursor-pointer active:scale-95 bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100">
+                                                <span class="truncate"><%= tp %></span>
+                                                <span class="material-symbols-rounded text-sm opt-check hidden">check</span>
+                                            </button>
+                                        <% }) %>
+                                    </div>
+                                </div>
+
+                                <!-- SECTION 2: SWITCH SUBJECT -->
+                                <div class="space-y-2 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Switch Subject</span>
+                                    <div class="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto no-scrollbar">
+                                        <a href="/exams/subject-tests?subject=all" 
+                                           class="px-2.5 py-1.5 rounded-xl border text-center text-[11px] font-bold transition-all truncate <%= isAllSubject ? 'bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-2xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100' %>">
+                                           All Subjects
+                                        </a>
+                                        <% (assignedSubjects || []).forEach(sub => { 
+                                            const isActive = (!isAllSubject && curSubject.toLowerCase() === sub.toLowerCase());
+                                        %>
+                                            <a href="/exams/subject-tests?subject=<%= encodeURIComponent(sub) %>" 
+                                               class="px-2.5 py-1.5 rounded-xl border text-center text-[11px] font-bold transition-all truncate <%= isActive ? 'bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-2xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100' %>">
+                                               <%= sub %>
+                                            </a>
+                                        <% }) %>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ROW 2: HORIZONTAL SUBJECT PILL SCROLLER (Fast Touch Switcher on Mobile) -->
+                    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1">
+                        <a href="/exams/subject-tests?subject=all" 
+                           class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all select-none <%= isAllSubject ? 'bg-cyan-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 border border-slate-200/80 dark:border-slate-700/60' %>">
+                            All Subjects
+                        </a>
+                        <% (assignedSubjects || []).forEach(function(sub) { 
+                            const isSubActive = (!isAllSubject && curSubject.toLowerCase() === sub.toLowerCase());
+                        %>
+                            <a href="/exams/subject-tests?subject=<%= encodeURIComponent(sub) %>" 
+                               class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all select-none <%= isSubActive ? 'bg-cyan-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 border border-slate-200/80 dark:border-slate-700/60' %>">
+                                <%= sub %>
+                            </a>
+                        <% }); %>
+                    </div>
+
+                </div>
             </div>
 
-            <!-- SUBJECT EXAMS GRID -->
-            <div class="max-w-6xl w-full mx-auto">
-                <div id="subjectTestsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+            <!-- CONTENT BODY WRAPPER -->
+            <div class="max-w-6xl w-full mx-auto px-3 sm:px-6 pt-3 sm:pt-4 space-y-3 sm:space-y-4">
+                
+                <!-- STATUS & COUNT BAR -->
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 min-w-0 flex-wrap">
+                        <!-- Active Topic Filter Chip -->
+                        <span id="activeTopicChip" class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20 text-xs font-bold">
+                            <span class="text-[10px] text-slate-400 uppercase font-semibold">Topic:</span>
+                            <span id="activeTopicChipText">Topic</span>
+                            <button type="button" onclick="setScreenTopicFilter('all')" class="hover:text-cyan-700 dark:hover:text-cyan-200 cursor-pointer flex items-center">
+                                <span class="material-symbols-rounded text-xs leading-none">close</span>
+                            </button>
+                        </span>
+
+                        <span id="screenFilterResultText" class="text-xs font-bold text-slate-500 dark:text-slate-400 truncate">
+                            <%= isAllSubject ? 'All Subject Tests' : curSubject + ' Tests' %>
+                        </span>
+
+                        <button type="button" id="resetSubjectTestsFiltersBtn" onclick="resetSubjectTestsFilters()" class="hidden text-[11px] font-bold text-cyan-600 dark:text-cyan-400 hover:underline flex items-center gap-0.5 shrink-0 cursor-pointer">
+                            <span>Reset</span>
+                            <span class="material-symbols-rounded text-xs leading-none">close</span>
+                        </button>
+                    </div>
+
+                    <!-- Exam Count Badge -->
+                    <span class="px-2.5 py-1 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-200/80 dark:border-cyan-500/20 text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-2xs">
+                        <span class="material-symbols-rounded text-sm leading-none">menu_book</span>
+                        <span id="subjectTestCountBadge"><%= examList.length %> Exams Available</span>
+                    </span>
+                </div>
+
+                <!-- SUBJECT EXAMS GRID -->
+                <div id="subjectTestsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                     <% if (examList.length === 0) { %>
-                        <div class="col-span-full py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
-                            <span class="material-symbols-rounded text-3xl text-slate-400 leading-none">event_busy</span>
+                        <div class="col-span-full py-16 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                            <span class="material-symbols-rounded text-4xl text-slate-400 leading-none flex items-center justify-center mx-auto">event_busy</span>
                             <h3 class="text-xs font-bold text-slate-600 dark:text-slate-400">No Subject Exams Available</h3>
                             <p class="text-[11px] text-slate-400">There are no exams uploaded for this subject yet.</p>
+                            <div class="pt-2">
+                                <a href="/exams" class="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-cyan-600 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all">
+                                    <span>Browse All Exams</span>
+                                </a>
+                            </div>
                         </div>
                     <% } else { %>
                         <% examList.forEach(function(item) { %>
-                            <div class="exam-card bg-[#F2F6F9] dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 rounded-2xl p-3.5 flex flex-col justify-between hover:border-cyan-500/50 dark:hover:border-cyan-500/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group relative space-y-3" data-subject="<%= item.subject %>" data-topic="<%= (item.topic || '').toLowerCase() %>" data-title="<%= item.title.toLowerCase() %>">
-                                <div>
-                                    <div class="flex items-center justify-between gap-1.5 mb-2">
-                                        <div class="flex items-center gap-1 flex-wrap">
-                                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/20">
-                                                <%= item.subject %>
+                            <div class="exam-card bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 rounded-2xl p-3.5 sm:p-4 flex flex-col justify-between hover:border-cyan-500/50 dark:hover:border-cyan-500/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group relative space-y-3 shadow-2xs"
+                                 data-subject="<%= (item.subject || '').toLowerCase() %>" 
+                                 data-topic="<%= (item.topic || '').toLowerCase() %>" 
+                                 data-title="<%= (item.title || '').toLowerCase() %>"
+                                 data-search="<%= ((item.title || '') + ' ' + (item.subject || '') + ' ' + (item.topic || '') + ' ' + (item.subtitle || '')).toLowerCase().replace(/"/g, '&quot;') %>">
+                                
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center justify-between gap-1.5">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-200/80 dark:border-cyan-500/20">
+                                                <%= item.subject || 'General' %>
                                             </span>
                                             <% if (item.topic) { %>
-                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20">
+                                                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-500/20">
                                                     <%= item.topic %>
                                                 </span>
                                             <% } %>
                                             <% if (item.duration && item.duration > 0) { %>
-                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700">
-                                                    <%= item.duration %> Mins
+                                                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-700/60 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-600/50 flex items-center gap-1">
+                                                    <span class="material-symbols-rounded text-xs leading-none">timer</span>
+                                                    <span><%= item.duration %>m</span>
                                                 </span>
                                             <% } %>
                                         </div>
                                     </div>
 
-                                    <h3 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white leading-snug line-clamp-2 group-hover:text-cyan-600 transition-colors">
+                                    <h3 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white leading-snug line-clamp-2 group-hover:text-cyan-600 transition-colors pt-0.5">
                                         <%= item.title %>
                                     </h3>
+
+                                    <% if (item.subtitle && item.subtitle.trim() !== '') { %>
+                                        <p class="text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate">
+                                            <%= item.subtitle %>
+                                        </p>
+                                    <% } %>
                                 </div>
 
-                                <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200/70 dark:border-slate-700/50">
-                                    <div class="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                                <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-100 dark:border-slate-700/60">
+                                    <div class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 font-semibold">
                                         <span class="material-symbols-rounded text-sm text-cyan-500 leading-none">quiz</span>
-                                        <span><%= item.totalQuestions %> Questions</span>
+                                        <span><%= item.totalQuestions ? (item.totalQuestions + ' Questions') : (item.duration ? (item.duration + ' Mins') : 'Practice') %></span>
                                     </div>
 
-                                    <a href="/question-bank/solve/<%= item._id %>?from=subject" class="px-3 py-1 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all shadow-xs active:scale-95 flex items-center gap-1 shrink-0">
+                                    <a href="<%= item.solveUrl || ('/question-bank/solve/' + item._id + '?from=subject') %>" 
+                                       class="h-9 px-3.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white text-xs font-bold transition-all shadow-2xs active:scale-95 flex items-center gap-1.5 shrink-0"
+                                       title="Start Exam">
                                         <span>Start Exam</span>
-                                        <span class="material-symbols-rounded text-sm leading-none">arrow_forward</span>
+                                        <span class="material-symbols-rounded text-base leading-none">arrow_forward</span>
                                     </a>
                                 </div>
+
                             </div>
                         <% }); %>
                     <% } %>
                 </div>
 
                 <!-- EMPTY SEARCH RESULT STATE -->
-                <div id="noResultsState" class="hidden py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
-                    <span class="material-symbols-rounded text-3xl text-slate-400 leading-none">search_off</span>
+                <div id="noResultsState" class="hidden py-14 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2.5">
+                    <span class="material-symbols-rounded text-4xl text-slate-400 leading-none">search_off</span>
                     <h3 class="text-xs font-bold text-slate-600 dark:text-slate-400">No Matching Subject Exams</h3>
                     <p class="text-[11px] text-slate-400">Try adjusting your topic filter or search terms.</p>
+                    <div class="pt-1">
+                        <button type="button" onclick="resetSubjectTestsFilters()" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition-all active:scale-95">
+                            <span>Reset Filters</span>
+                        </button>
+                    </div>
                 </div>
+
             </div>
 
             <!-- SAFE BOTTOM CLEARANCE FOR MOBILE BOTTOM NAV -->
-            <div class="h-20 sm:h-24 lg:h-4 shrink-0"></div>
+            <div class="h-20 sm:h-24 lg:h-6 shrink-0"></div>
+
         </main>
     </div>
 
@@ -94,28 +267,155 @@
         let currentSubjectTopic = 'all';
         let currentSubjectSearch = '';
 
-        window.filterSubjectTestsWithTopic = function(topic) {
+        function toggleSubjectTestsFilterMenu(e) {
+            if (e) e.stopPropagation();
+            const menu = document.getElementById('screenSubjectTestsFilterMenu');
+            const backdrop = document.getElementById('screenSubjectTestsFilterBackdrop');
+            if (!menu) return;
+            const isHidden = menu.classList.contains('hidden');
+            if (isHidden) {
+                menu.classList.remove('hidden');
+                if (backdrop) backdrop.classList.remove('hidden');
+            } else {
+                closeSubjectTestsFilterMenu();
+            }
+        }
+
+        function closeSubjectTestsFilterMenu() {
+            const menu = document.getElementById('screenSubjectTestsFilterMenu');
+            const backdrop = document.getElementById('screenSubjectTestsFilterBackdrop');
+            if (menu) menu.classList.add('hidden');
+            if (backdrop) backdrop.classList.add('hidden');
+        }
+
+        function setScreenTopicFilter(topic) {
             currentSubjectTopic = (topic || 'all').toLowerCase().trim();
+            
+            // Update topic buttons styling
+            const allBtn = document.getElementById('topic-btn-all');
+            if (allBtn) {
+                const isAll = (currentSubjectTopic === 'all');
+                allBtn.className = `screen-topic-opt w-full px-3 py-2 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between cursor-pointer active:scale-95 ${
+                    isAll ? 'bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-2xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100'
+                }`;
+                const chk = allBtn.querySelector('.opt-check');
+                if (chk) chk.classList.toggle('hidden', !isAll);
+            }
+
+            document.querySelectorAll('.screen-topic-opt[data-topic-val]').forEach(btn => {
+                const val = btn.getAttribute('data-topic-val') || '';
+                const isMatch = (val === currentSubjectTopic);
+                btn.className = `screen-topic-opt w-full px-3 py-2 rounded-xl border text-left text-xs transition-all flex items-center justify-between cursor-pointer active:scale-95 ${
+                    isMatch ? 'bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 font-bold shadow-2xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 font-medium hover:bg-slate-100'
+                }`;
+                const chk = btn.querySelector('.opt-check');
+                if (chk) chk.classList.toggle('hidden', !isMatch);
+            });
+
+            // Update badge on trigger button
+            const badge = document.getElementById('screenFilterActiveBadge');
+            const label = document.getElementById('screenFilterBtnLabel');
+            if (badge) {
+                if (currentSubjectTopic !== 'all') {
+                    badge.classList.remove('hidden');
+                    if (label) label.textContent = topic;
+                } else {
+                    badge.classList.add('hidden');
+                    if (label) label.textContent = 'Topics';
+                }
+            }
+
+            // Update active topic chip
+            const chip = document.getElementById('activeTopicChip');
+            const chipText = document.getElementById('activeTopicChipText');
+            if (chip && chipText) {
+                if (currentSubjectTopic !== 'all') {
+                    chipText.textContent = topic;
+                    chip.classList.remove('hidden');
+                } else {
+                    chip.classList.add('hidden');
+                }
+            }
+
+            // Also synchronize desktop header select if present
+            const headerSelect = document.getElementById('subject-tests-header-topic');
+            if (headerSelect) {
+                headerSelect.value = (currentSubjectTopic === 'all') ? 'all' : topic;
+            }
+
+            closeSubjectTestsFilterMenu();
             filterSubjectTests();
+        }
+
+        function resetSubjectTestsFilters() {
+            const input = document.getElementById('screenSubjectTestsSearchInput');
+            if (input) input.value = '';
+            const clearBtn = document.getElementById('screenSubjectTestsClearBtn');
+            if (clearBtn) clearBtn.classList.add('hidden');
+
+            const headerInput = document.getElementById('subject-tests-search-input-header');
+            if (headerInput) headerInput.value = '';
+
+            currentSubjectSearch = '';
+            setScreenTopicFilter('all');
+            closeSubjectTestsFilterMenu();
+        }
+
+        function handleScreenSubjectTestsSearch(val) {
+            currentSubjectSearch = (val || '').toLowerCase().trim();
+            const clearBtn = document.getElementById('screenSubjectTestsClearBtn');
+            if (clearBtn) {
+                if (val && val.trim() !== '') {
+                    clearBtn.classList.remove('hidden');
+                } else {
+                    clearBtn.classList.add('hidden');
+                }
+            }
+
+            // Sync with header search input
+            const headerInput = document.getElementById('subject-tests-search-input-header');
+            if (headerInput && headerInput.value !== val) {
+                headerInput.value = val;
+            }
+
+            filterSubjectTests();
+        }
+
+        function clearScreenSubjectTestsSearch() {
+            const input = document.getElementById('screenSubjectTestsSearchInput');
+            if (input) {
+                input.value = '';
+                input.focus();
+            }
+            handleScreenSubjectTestsSearch('');
+        }
+
+        // Bridge functions for header synchronization
+        window.filterSubjectTestsWithTopic = function(topic) {
+            setScreenTopicFilter(topic);
         };
 
         window.filterSubjectTestsWithSearch = function(search) {
-            currentSubjectSearch = (search || '').toLowerCase().trim();
-            filterSubjectTests();
+            const input = document.getElementById('screenSubjectTestsSearchInput');
+            if (input) {
+                input.value = search || '';
+            }
+            handleScreenSubjectTestsSearch(search);
         };
 
         function filterSubjectTests() {
             const cards = document.querySelectorAll('.exam-card');
             let visibleCount = 0;
+            const totalCount = cards.length;
 
             cards.forEach(card => {
                 const cardSubject = (card.getAttribute('data-subject') || '').toLowerCase().trim();
                 const cardTopic = (card.getAttribute('data-topic') || '').toLowerCase().trim();
-                const cardTitle = (card.getAttribute('data-title') || '').toLowerCase().trim();
+                const cardPool = (card.getAttribute('data-search') || card.getAttribute('data-title') || '').toLowerCase().trim();
 
                 const matchesSubject = (targetSubject === 'all' || cardSubject === targetSubject || cardSubject.includes(targetSubject) || targetSubject.includes(cardSubject));
-                const matchesTopic = (currentSubjectTopic === 'all' || cardTopic === currentSubjectTopic || cardTopic.includes(currentSubjectTopic) || cardTitle.includes(currentSubjectTopic));
-                const matchesSearch = (currentSubjectSearch === '' || cardTitle.includes(currentSubjectSearch) || cardTopic.includes(currentSubjectSearch) || cardSubject.includes(currentSubjectSearch));
+                const matchesTopic = (currentSubjectTopic === 'all' || cardTopic === currentSubjectTopic || cardTopic.includes(currentSubjectTopic) || cardPool.includes(currentSubjectTopic));
+                const matchesSearch = (currentSubjectSearch === '' || cardPool.includes(currentSubjectSearch));
 
                 if (matchesSubject && matchesTopic && matchesSearch) {
                     card.classList.remove('hidden');
@@ -130,15 +430,39 @@
                 badgeEl.textContent = `${visibleCount} Exams Available`;
             }
 
+            const resetBtn = document.getElementById('resetSubjectTestsFiltersBtn');
+            if (resetBtn) {
+                if (currentSubjectTopic !== 'all' || currentSubjectSearch !== '') {
+                    resetBtn.classList.remove('hidden');
+                } else {
+                    resetBtn.classList.add('hidden');
+                }
+            }
+
             const noResults = document.getElementById('noResultsState');
             if (noResults) {
-                if (visibleCount === 0 && cards.length > 0) {
+                if (visibleCount === 0 && totalCount > 0) {
                     noResults.classList.remove('hidden');
                 } else {
                     noResults.classList.add('hidden');
                 }
             }
         }
+
+        // Click outside listener for dropdown
+        document.addEventListener('click', function(e) {
+            const container = document.getElementById('screenSubjectTestsFilterContainer');
+            if (container && !container.contains(e.target)) {
+                closeSubjectTestsFilterMenu();
+            }
+        });
+
+        // ESC key closes dropdown
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeSubjectTestsFilterMenu();
+            }
+        });
 
         window.onload = () => {
             filterSubjectTests();
