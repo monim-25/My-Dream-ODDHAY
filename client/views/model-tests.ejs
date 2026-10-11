@@ -7,24 +7,83 @@
 </head>
 
 <body class="bg-white dark:bg-[#0b1120] text-slate-800 dark:text-slate-200 font-sans h-[100dvh] w-full flex flex-col transition-colors duration-300 overflow-hidden">
-    <%- include('partials/student-header', { pageTitle: 'Model Test', activePage: 'exams' }) %>
+    <%- include('partials/student-header', { pageTitle: 'Model Test', activePage: 'exams', backUrl: '/exams' }) %>
 
     <div class="flex-1 flex overflow-hidden w-full relative">
         <%- include('partials/student-sidebar', { activePage: 'exams' }) %>
 
-        <main class="flex-1 w-full overflow-y-auto p-4 sm:p-6 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative space-y-4 pb-12">
+        <main class="flex-1 w-full overflow-y-auto px-3 sm:px-5 py-3 sm:py-5 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative space-y-3.5 pb-24 sm:pb-28 lg:pb-8">
             
-            <!-- DYNAMIC COUNT BADGE BAR -->
-            <div class="max-w-6xl w-full mx-auto flex items-center justify-end">
-                <span class="px-3 py-1 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 text-xs font-semibold flex items-center gap-1.5">
-                    <span class="material-symbols-rounded text-sm leading-none">workspace_premium</span>
-                    <span id="modelTestCountBadge"><%= modelTests.length %> Model Tests Available</span>
-                </span>
+            <% 
+               const testSubjects = Array.from(new Set(modelTests.map(t => (t.subject || '').trim()).filter(Boolean)));
+               const allFilterSubjects = Array.from(new Set([...(assignedSubjects || []), ...testSubjects])).filter(Boolean);
+            %>
+
+            <!-- TOP CONTROLS & SEARCH BAR (MOBILE FIRST) -->
+            <div class="max-w-6xl w-full mx-auto space-y-2.5">
+                
+                <!-- TOP HEADER ROW -->
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <span class="size-7 sm:size-8 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                            <span class="material-symbols-rounded text-base sm:text-lg leading-none">workspace_premium</span>
+                        </span>
+                        <div>
+                            <h1 class="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-tight flex items-center gap-1.5">
+                                <span>Model Tests</span>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/20">
+                                    <%= userClassLevel %>
+                                </span>
+                            </h1>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 shrink-0 ml-auto">
+                        <a href="/exams" class="h-7.5 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] sm:text-xs font-medium flex items-center gap-1 transition-all border border-slate-200/60 dark:border-slate-700/60" title="Back to Exams">
+                            <span class="material-symbols-rounded text-xs leading-none">arrow_back</span>
+                            <span>All Exams</span>
+                        </a>
+
+                        <span id="modelTestCountBadge" class="h-7.5 px-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 text-[11px] sm:text-xs font-semibold flex items-center gap-1">
+                            <span class="material-symbols-rounded text-xs leading-none">verified</span>
+                            <span id="modelCountText"><%= modelTests.length %> Available</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- LIVE SEARCH INPUT & RESET BAR -->
+                <div class="flex items-center gap-2">
+                    <div class="relative flex-1">
+                        <span class="material-symbols-rounded absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base leading-none pointer-events-none select-none">search</span>
+                        <input type="text" id="modelSearchInput" oninput="handleModelSearch(this.value)" placeholder="Search model tests, subjects, boards..."
+                            class="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-200 placeholder-slate-400 outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-all shadow-2xs">
+                        <button type="button" id="clearModelSearchBtn" onclick="clearModelSearch()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 size-4.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition-colors">
+                            <span class="material-symbols-rounded text-sm">cancel</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- HORIZONTALLY SCROLLABLE SUBJECT FILTER PILLS -->
+                <% if (allFilterSubjects.length > 0) { %>
+                    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 select-none -mx-1 px-1">
+                        <button type="button" onclick="selectModelSubject('all')" data-subject-pill="all"
+                            class="model-subject-pill px-3 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all shadow-2xs shrink-0 bg-emerald-600 text-white">
+                            All
+                        </button>
+                        <% allFilterSubjects.forEach(function(sub) { %>
+                            <button type="button" onclick="selectModelSubject('<%= sub.replace(/'/g, "\\'") %>')" data-subject-pill="<%= sub %>"
+                                class="model-subject-pill px-3 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all shadow-2xs shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700/80 border border-slate-200/60 dark:border-slate-700/60">
+                                <%= sub %>
+                            </button>
+                        <% }); %>
+                    </div>
+                <% } %>
+
             </div>
 
             <!-- MODEL TESTS GRID -->
             <div class="max-w-6xl w-full mx-auto">
-                <div id="modelTestsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+                <div id="modelTestsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
                     <% if (modelTests.length === 0) { %>
                         <div class="col-span-full py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
                             <span class="material-symbols-rounded text-3xl text-slate-400 leading-none">event_busy</span>
@@ -39,35 +98,44 @@
                                const tYear = (test.year || '').trim();
                                const tTitle = test.title && test.title.trim() !== '' ? test.title.trim() : `${tSubject} ${tBoard} ${tYear}`.trim();
                             %>
-                            <div class="model-card bg-[#F2F6F9] dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 rounded-2xl p-3.5 flex flex-col justify-between hover:border-emerald-500/50 dark:hover:border-emerald-500/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group relative space-y-3" data-subject="<%= tSubject %>" data-title="<%= tTitle.toLowerCase() %>">
+                            <div class="model-card bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/70 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between hover:border-emerald-500/50 dark:hover:border-emerald-500/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group relative space-y-2.5 shadow-2xs" 
+                                 data-subject="<%= tSubject %>" 
+                                 data-title="<%= tTitle.toLowerCase() %>"
+                                 data-board="<%= tBoard.toLowerCase() %>"
+                                 data-year="<%= tYear %>">
                                 <div>
-                                    <div class="flex items-center justify-between gap-1.5 mb-2">
+                                    <div class="flex items-center justify-between gap-1.5 mb-1.5">
                                         <div class="flex items-center gap-1 flex-wrap">
-                                            <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
                                                 <%= tSubject %>
                                             </span>
                                             <% if (test.duration && test.duration > 0) { %>
-                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300/60 dark:border-slate-700">
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                                     <%= test.duration %> Mins
+                                                </span>
+                                            <% } %>
+                                            <% if (tBoard || tYear) { %>
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60 truncate max-w-[120px]">
+                                                    <%= [tBoard, tYear].filter(Boolean).join(' ') %>
                                                 </span>
                                             <% } %>
                                         </div>
                                     </div>
 
-                                    <h3 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white leading-snug line-clamp-2 group-hover:text-emerald-500 transition-colors">
+                                    <h3 class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white leading-snug line-clamp-2 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                                         <%= tTitle %>
                                     </h3>
                                 </div>
 
-                                <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200/70 dark:border-slate-700/50">
-                                    <div class="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                                        <span class="material-symbols-rounded text-sm text-emerald-500 leading-none">quiz</span>
-                                        <span><%= test.totalQuestions %> Questions</span>
+                                <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-700/50">
+                                    <div class="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
+                                        <span class="material-symbols-rounded text-sm text-emerald-500 leading-none select-none">quiz</span>
+                                        <span><%= test.totalQuestions || 0 %> Qs</span>
                                     </div>
 
-                                    <a href="/question-bank/solve/<%= test._id %>?from=model" class="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all shadow-xs active:scale-95 flex items-center gap-1 shrink-0">
+                                    <a href="/question-bank/solve/<%= test._id %>?from=model" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] sm:text-xs font-semibold transition-all shadow-2xs active:scale-95 flex items-center gap-1 shrink-0">
+                                        <span class="material-symbols-rounded text-xs sm:text-sm leading-none">play_arrow</span>
                                         <span>Start Exam</span>
-                                        <span class="material-symbols-rounded text-sm leading-none">arrow_forward</span>
                                     </a>
                                 </div>
                             </div>
@@ -76,15 +144,16 @@
                 </div>
 
                 <!-- EMPTY SEARCH RESULT STATE -->
-                <div id="noResultsState" class="hidden py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
+                <div id="noResultsState" class="hidden py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2.5">
                     <span class="material-symbols-rounded text-3xl text-slate-400 leading-none">search_off</span>
-                    <h3 class="text-xs font-bold text-slate-600 dark:text-slate-400">No Matching Model Tests</h3>
-                    <p class="text-[11px] text-slate-400">Try adjusting your subject filter or search terms.</p>
+                    <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300">No Matching Model Tests</h3>
+                    <p class="text-[11px] text-slate-400 max-w-xs mx-auto">We couldn't find any model tests matching your filter. Try adjusting your subject or search term.</p>
+                    <button type="button" onclick="resetModelFilters()" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition-all active:scale-95 inline-flex items-center gap-1">
+                        <span class="material-symbols-rounded text-sm">refresh</span>
+                        <span>Reset Filters</span>
+                    </button>
                 </div>
             </div>
-
-            <!-- SAFE BOTTOM CLEARANCE FOR MOBILE BOTTOM NAV -->
-            <div class="h-20 sm:h-24 lg:h-4 shrink-0"></div>
 
         </main>
     </div>
@@ -95,14 +164,54 @@
         let currentModelSubject = 'all';
         let currentModelSearch = '';
 
-        window.filterModelWithSubject = function(subject) {
+        function selectModelSubject(subject) {
             currentModelSubject = subject || 'all';
+            
+            // Update active styling on subject pills
+            document.querySelectorAll('.model-subject-pill').forEach(btn => {
+                const pillSubject = btn.getAttribute('data-subject-pill');
+                if (pillSubject === currentModelSubject) {
+                    btn.className = 'model-subject-pill px-3 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all shadow-2xs shrink-0 bg-emerald-600 text-white';
+                } else {
+                    btn.className = 'model-subject-pill px-3 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all shadow-2xs shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700/80 border border-slate-200/60 dark:border-slate-700/60';
+                }
+            });
+
             filterModelTests();
+        }
+
+        function handleModelSearch(val) {
+            currentModelSearch = (val || '').toLowerCase().trim();
+            const clearBtn = document.getElementById('clearModelSearchBtn');
+            if (clearBtn) {
+                if (currentModelSearch.length > 0) {
+                    clearBtn.classList.remove('hidden');
+                } else {
+                    clearBtn.classList.add('hidden');
+                }
+            }
+            filterModelTests();
+        }
+
+        function clearModelSearch() {
+            const input = document.getElementById('modelSearchInput');
+            if (input) input.value = '';
+            handleModelSearch('');
+        }
+
+        function resetModelFilters() {
+            clearModelSearch();
+            selectModelSubject('all');
+        }
+
+        window.filterModelWithSubject = function(subject) {
+            selectModelSubject(subject);
         };
 
         window.filterModelWithSearch = function(search) {
-            currentModelSearch = (search || '').toLowerCase().trim();
-            filterModelTests();
+            const input = document.getElementById('modelSearchInput');
+            if (input) input.value = search || '';
+            handleModelSearch(search);
         };
 
         function filterModelTests() {
@@ -112,9 +221,17 @@
             cards.forEach(card => {
                 const cardSubject = card.getAttribute('data-subject') || '';
                 const cardTitle = card.getAttribute('data-title') || '';
+                const cardBoard = card.getAttribute('data-board') || '';
+                const cardYear = card.getAttribute('data-year') || '';
 
                 const matchesSubject = (currentModelSubject === 'all' || cardSubject === currentModelSubject);
-                const matchesSearch = (currentModelSearch === '' || cardTitle.includes(currentModelSearch) || cardSubject.toLowerCase().includes(currentModelSearch));
+                const matchesSearch = (
+                    currentModelSearch === '' || 
+                    cardTitle.includes(currentModelSearch) || 
+                    cardSubject.toLowerCase().includes(currentModelSearch) ||
+                    cardBoard.includes(currentModelSearch) ||
+                    cardYear.includes(currentModelSearch)
+                );
 
                 if (matchesSubject && matchesSearch) {
                     card.classList.remove('hidden');
@@ -124,9 +241,9 @@
                 }
             });
 
-            const badgeEl = document.getElementById('modelTestCountBadge');
-            if (badgeEl) {
-                badgeEl.textContent = `${visibleCount} Model Tests Available`;
+            const countTextEl = document.getElementById('modelCountText');
+            if (countTextEl) {
+                countTextEl.textContent = `${visibleCount} Available`;
             }
 
             const noResults = document.getElementById('noResultsState');
