@@ -17,9 +17,14 @@
             <% const u = locals.user || {}; %>
             <% const qList = locals.qas || []; %>
             <% const st = locals.stats || { totalCount: 0, resolvedCount: 0, openCount: 0, myCount: 0 }; %>
-            <% const activeFilter = (locals.filters && locals.filters.status) || 'all'; %>
-            <% const activeSubject = (locals.filters && locals.filters.subject) || 'all'; %>
-            <% const searchVal = (locals.filters && locals.filters.search) || ''; %>
+            <% 
+                const rawStatus = (locals.filters && locals.filters.status) || 'all'; 
+                const rawSubject = (locals.filters && locals.filters.subject) || 'all'; 
+                const searchVal = (locals.filters && locals.filters.search) || ''; 
+                const activeStatuses = (rawStatus !== 'all') ? rawStatus.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+                const activeSubjects = (rawSubject !== 'all') ? rawSubject.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+                const totalActiveFilters = activeStatuses.length + activeSubjects.length;
+            %>
 
             <!-- Auto-dismissing Flash Notification Banner -->
             <% if (locals.success) { %>
@@ -31,12 +36,12 @@
 
             <!-- Hidden form state for filters -->
             <form action="/qa" method="GET" id="qa-filter-form" class="hidden">
-                <input type="hidden" name="status" value="<%= activeFilter %>">
-                <input type="hidden" name="subject" value="<%= activeSubject %>">
+                <input type="hidden" name="status" value="<%= rawStatus %>">
+                <input type="hidden" name="subject" value="<%= rawSubject %>">
             </form>
 
-            <!-- Top Controls Toolbar (Search Input & Filter Dropdown in ONE LINE) -->
-            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 p-2.5 sm:p-3 shrink-0">
+            <!-- Top Controls Toolbar (Search Input & Multiple Filter Dropdown in ONE LINE) -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 p-2.5 sm:p-3 shrink-0 space-y-2">
                 <div class="flex items-center gap-2 w-full">
                     <!-- Live Search Box -->
                     <div class="relative flex-1 min-w-0">
@@ -58,121 +63,136 @@
                     <!-- Filter Dropdown Trigger Button (In the SAME LINE as Search) -->
                     <div class="relative shrink-0" id="qa-filter-dropdown-container">
                         <button type="button" id="qa-filter-dropdown-btn" onclick="toggleQaFilterDropdown(event)"
-                            class="h-11 px-3 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-xl flex items-center gap-1.5 text-xs sm:text-[13px] font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 <%= (activeFilter !== 'all' || activeSubject !== 'all') ? 'border-primary/60 text-primary dark:text-primary ring-1 ring-primary/20 bg-primary/5 dark:bg-primary/10' : '' %>">
+                            class="h-11 px-3 sm:px-3.5 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-xl flex items-center gap-1.5 sm:gap-2 text-xs sm:text-[13px] font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95 <%= (totalActiveFilters > 0) ? 'border-primary/60 text-primary dark:text-primary ring-1 ring-primary/20 bg-primary/5 dark:bg-primary/10' : '' %>">
                             <span class="material-symbols-rounded text-base sm:text-lg text-primary leading-none shrink-0">tune</span>
-                            <span class="truncate max-w-[85px] sm:max-w-[120px]">
-                                <% if (activeFilter === 'resolved') { %>
-                                    Answered
-                                <% } else if (activeFilter === 'open') { %>
-                                    Pending
-                                <% } else if (activeFilter === 'my') { %>
-                                    My Qs
-                                <% } else if (activeSubject !== 'all') { %>
-                                    <%= activeSubject %>
-                                <% } else { %>
-                                    Filter
-                                <% } %>
-                            </span>
-                            <% if (activeFilter !== 'all' || activeSubject !== 'all') { %>
-                                <span class="size-2 rounded-full bg-primary shrink-0"></span>
+                            <span>Filter</span>
+                            <% if (totalActiveFilters > 0) { %>
+                                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-primary text-white shrink-0 shadow-xs"><%= totalActiveFilters %></span>
                             <% } %>
                             <span class="material-symbols-rounded text-slate-400 text-sm leading-none shrink-0">expand_more</span>
                         </button>
 
-                        <!-- Filter Dropdown Menu with Status Tabs & Subjects Included -->
-                        <div id="qa-filter-dropdown-menu" class="hidden absolute right-0 mt-2 w-72 sm:w-80 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3 max-h-[80vh] overflow-y-auto no-scrollbar space-y-3">
+                        <!-- Mobile Backdrop Overlay -->
+                        <div id="qa-filter-backdrop" class="hidden fixed inset-0 bg-black/40 backdrop-blur-2xs z-40 sm:hidden" onclick="toggleQaFilterDropdown(event)"></div>
+
+                        <!-- Multiple Filter Dropdown Panel -->
+                        <div id="qa-filter-dropdown-menu" class="hidden fixed inset-x-3 bottom-20 max-h-[75vh] sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-96 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3.5 sm:p-4 space-y-3.5 overflow-y-auto no-scrollbar">
                             <!-- Dropdown Header -->
-                            <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                                <div class="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-white">
+                            <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                                <div class="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-white">
                                     <span class="material-symbols-rounded text-base text-primary">tune</span>
-                                    <span>Filter Community</span>
+                                    <span>Multiple Filtering</span>
+                                    <% if (totalActiveFilters > 0) { %>
+                                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/15 text-primary"><%= totalActiveFilters %> active</span>
+                                    <% } %>
                                 </div>
-                                <% if (activeFilter !== 'all' || activeSubject !== 'all') { %>
-                                    <a href="/qa?status=all&subject=all" class="text-[11px] font-bold text-primary hover:underline">
-                                        Reset All
-                                    </a>
-                                <% } %>
+                                <button type="button" onclick="clearAllFiltersModal()" class="text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer">
+                                    Reset
+                                </button>
                             </div>
 
-                            <!-- SECTION 1: Status Filter Tabs Included Inside Filter -->
-                            <div class="space-y-1.5">
+                            <!-- SECTION 1: Status Filters (Multi-Selectable) -->
+                            <div class="space-y-2">
                                 <div class="flex items-center justify-between">
-                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Status</span>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Filter By Status</span>
+                                    <span class="text-[10px] font-medium text-slate-400">Multi-select</span>
                                 </div>
-                                <div class="grid grid-cols-2 gap-1.5">
-                                    <!-- All Tab -->
-                                    <button type="button" onclick="applyQaFilter('status', 'all')"
-                                        class="p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= activeFilter === 'all' ? 'bg-primary/10 border-primary text-primary shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60' %>">
-                                        <span class="flex items-center gap-1.5 truncate">
-                                            <span class="material-symbols-rounded text-base <%= activeFilter === 'all' ? 'text-primary' : 'text-slate-400' %>">forum</span>
-                                            <span class="truncate">All</span>
-                                        </span>
-                                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold <%= activeFilter === 'all' ? 'bg-primary text-white' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-400' %>"><%= st.totalCount %></span>
-                                    </button>
-
+                                <div class="grid grid-cols-2 gap-2">
                                     <!-- Answered Tab -->
-                                    <button type="button" onclick="applyQaFilter('status', 'resolved')"
-                                        class="p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= activeFilter === 'resolved' ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60' %>">
+                                    <button type="button" onclick="toggleStatusFilterItem('resolved')" id="modal-status-resolved"
+                                        class="modal-status-btn p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= activeStatuses.includes('resolved') ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60' %>">
                                         <span class="flex items-center gap-1.5 truncate">
-                                            <span class="material-symbols-rounded text-base <%= activeFilter === 'resolved' ? 'text-emerald-500' : 'text-slate-400' %>">verified</span>
+                                            <span class="material-symbols-rounded text-base <%= activeStatuses.includes('resolved') ? 'text-emerald-500' : 'text-slate-400' %>">verified</span>
                                             <span class="truncate">Answered</span>
                                         </span>
-                                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold <%= activeFilter === 'resolved' ? 'bg-emerald-600 text-white' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-400' %>"><%= st.resolvedCount %></span>
+                                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold <%= activeStatuses.includes('resolved') ? 'bg-emerald-600 text-white' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-400' %>"><%= st.resolvedCount %></span>
                                     </button>
 
                                     <!-- Pending Tab -->
-                                    <button type="button" onclick="applyQaFilter('status', 'open')"
-                                        class="p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= activeFilter === 'open' ? 'bg-amber-500/10 border-amber-500 text-amber-600 dark:text-amber-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60' %>">
+                                    <button type="button" onclick="toggleStatusFilterItem('open')" id="modal-status-open"
+                                        class="modal-status-btn p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= activeStatuses.includes('open') ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60' %>">
                                         <span class="flex items-center gap-1.5 truncate">
-                                            <span class="material-symbols-rounded text-base <%= activeFilter === 'open' ? 'text-amber-500' : 'text-slate-400' %>">schedule</span>
+                                            <span class="material-symbols-rounded text-base <%= activeStatuses.includes('open') ? 'text-amber-500' : 'text-slate-400' %>">schedule</span>
                                             <span class="truncate">Pending</span>
                                         </span>
-                                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold <%= activeFilter === 'open' ? 'bg-amber-600 text-white' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-400' %>"><%= st.openCount %></span>
+                                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold <%= activeStatuses.includes('open') ? 'bg-amber-600 text-white' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-400' %>"><%= st.openCount %></span>
                                     </button>
 
                                     <!-- My Questions Tab -->
-                                    <button type="button" onclick="applyQaFilter('status', 'my')"
-                                        class="p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= activeFilter === 'my' ? 'bg-indigo-500/10 border-indigo-500 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60' %>">
+                                    <button type="button" onclick="toggleStatusFilterItem('my')" id="modal-status-my"
+                                        class="modal-status-btn col-span-2 p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer <%= activeStatuses.includes('my') ? 'bg-indigo-500/15 border-indigo-500 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60' %>">
                                         <span class="flex items-center gap-1.5 truncate">
-                                            <span class="material-symbols-rounded text-base <%= activeFilter === 'my' ? 'text-indigo-500' : 'text-slate-400' %>">person</span>
-                                            <span class="truncate">My Qs</span>
+                                            <span class="material-symbols-rounded text-base <%= activeStatuses.includes('my') ? 'text-indigo-500' : 'text-slate-400' %>">person</span>
+                                            <span class="truncate">My Questions Only</span>
                                         </span>
-                                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold <%= activeFilter === 'my' ? 'bg-indigo-600 text-white' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-400' %>"><%= st.myCount %></span>
+                                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold <%= activeStatuses.includes('my') ? 'bg-indigo-600 text-white' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-600 dark:text-slate-400' %>"><%= st.myCount %></span>
                                     </button>
                                 </div>
                             </div>
 
-                            <!-- SECTION 2: Subject Filter Included Inside Filter -->
-                            <div class="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
-                                <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Subject</span>
-                                <div class="space-y-1 max-h-48 overflow-y-auto no-scrollbar pr-0.5">
-                                    <button type="button" onclick="applyQaFilter('subject', 'all')"
-                                        class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer <%= activeSubject === 'all' ? 'bg-primary/10 text-primary font-bold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60' %>">
-                                        <span class="flex items-center gap-2">
-                                            <span class="material-symbols-rounded text-base">apps</span>
-                                            <span>All Subjects</span>
-                                        </span>
-                                        <% if (activeSubject === 'all') { %>
-                                            <span class="material-symbols-rounded text-sm text-primary">check</span>
-                                        <% } %>
-                                    </button>
+                            <!-- SECTION 2: Subject Filters (Multi-Selectable Grid) -->
+                            <div class="space-y-2 pt-2.5 border-t border-slate-100 dark:border-slate-800">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Filter By Subject</span>
+                                    <span class="text-[10px] font-medium text-slate-400">Select multiple</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto no-scrollbar pr-0.5">
                                     <% (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
-                                        <button type="button" onclick="applyQaFilter('subject', '<%= sub %>')"
-                                            class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer <%= activeSubject === sub ? 'bg-primary/10 text-primary font-bold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/60' %>">
-                                            <span class="flex items-center gap-2 truncate">
-                                                <span class="material-symbols-rounded text-base text-slate-400">subject</span>
-                                                <span class="truncate"><%= sub %></span>
+                                        <% const isSubActive = activeSubjects.includes(sub.toLowerCase()); %>
+                                        <button type="button" onclick="toggleSubjectFilterItem('<%= sub.toLowerCase() %>')" id="modal-sub-<%= sub.toLowerCase().replace(/\s+/g, '-') %>"
+                                            class="modal-sub-btn px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all active:scale-95 cursor-pointer <%= isSubActive ? 'bg-primary/10 border-primary text-primary font-bold shadow-2xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100' %>">
+                                            <span class="truncate"><%= sub %></span>
+                                            <span class="material-symbols-rounded text-sm <%= isSubActive ? 'text-primary' : 'text-slate-300 dark:text-slate-600' %>">
+                                                <%= isSubActive ? 'check_box' : 'check_box_outline_blank' %>
                                             </span>
-                                            <% if (activeSubject === sub) { %>
-                                                <span class="material-symbols-rounded text-sm text-primary">check</span>
-                                            <% } %>
                                         </button>
                                     <% }) %>
                                 </div>
                             </div>
+
+                            <!-- SECTION 3: Modal Actions Footer -->
+                            <div class="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                                <button type="button" onclick="clearAllFiltersModal()" class="h-10 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold transition-all active:scale-95">
+                                    Clear
+                                </button>
+                                <button type="button" onclick="applyMultipleFilters()" class="h-10 flex-1 rounded-xl bg-primary hover:bg-primary/90 text-white text-xs sm:text-[13px] font-bold transition-all shadow-md shadow-primary/25 active:scale-95 flex items-center justify-center gap-1.5">
+                                    <span class="material-symbols-rounded text-base">done_all</span>
+                                    <span>Apply Filters</span>
+                                </button>
+                            </div>
+
                         </div>
                     </div>
                 </div>
+
+                <!-- Active Filter Chips (Instant dismissal for each filter) -->
+                <% if (totalActiveFilters > 0) { %>
+                    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider shrink-0 mr-0.5">Active:</span>
+                        
+                        <% activeStatuses.forEach(st => { %>
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 text-[11px] font-bold shrink-0">
+                                <span><%= st === 'resolved' ? 'Answered' : (st === 'open' ? 'Pending' : 'My Questions') %></span>
+                                <button type="button" onclick="removeSingleFilter('status', '<%= st %>')" class="hover:text-primary/70 cursor-pointer flex items-center">
+                                    <span class="material-symbols-rounded text-xs leading-none">close</span>
+                                </button>
+                            </span>
+                        <% }) %>
+
+                        <% activeSubjects.forEach(sub => { %>
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-[11px] font-bold shrink-0 capitalize">
+                                <span><%= sub %></span>
+                                <button type="button" onclick="removeSingleFilter('subject', '<%= sub %>')" class="hover:text-slate-500 cursor-pointer flex items-center">
+                                    <span class="material-symbols-rounded text-xs leading-none">close</span>
+                                </button>
+                            </span>
+                        <% }) %>
+
+                        <button type="button" onclick="clearAllFiltersModal(); applyMultipleFilters();" class="text-[11px] font-bold text-rose-500 hover:text-rose-600 underline shrink-0 ml-1 cursor-pointer">
+                            Clear all
+                        </button>
+                    </div>
+                <% } %>
             </div>
 
             <!-- Live No Matches Fallback -->
@@ -392,34 +412,34 @@
                         </div>
 
                         <div class="flex-1 min-w-0">
-                            <textarea id="ask-question-textarea" name="question" rows="1" required placeholder="Ask your question or doubt..."
-                                oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 100) + 'px'"
-                                class="w-full min-h-[42px] max-h-[100px] px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/70 focus:border-primary focus:ring-2 focus:ring-primary/15 text-xs sm:text-[13px] font-semibold text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl outline-none transition-all resize-none shadow-inner leading-relaxed"></textarea>
+                            <textarea id="ask-question-textarea" name="question" rows="1" required placeholder="Ask your question or academic doubt..."
+                                oninput="this.style.height = ''; this.style.height = Math.min(this.scrollHeight, 110) + 'px'"
+                                class="w-full min-h-[46px] max-h-[110px] px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 focus:border-primary focus:ring-2 focus:ring-primary/15 text-xs sm:text-[13px] font-semibold text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl outline-none transition-all resize-none shadow-inner leading-relaxed"></textarea>
                         </div>
                     </div>
 
-                    <!-- Controls Row: Attach Image, Subject & Ask Button -->
-                    <div class="flex items-center justify-between gap-2 w-full pt-0.5">
-                        <div class="flex items-center gap-2">
-                            <!-- Attach Image Button -->
-                            <label class="h-8.5 px-2.5 sm:px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 whitespace-nowrap active:scale-95 border border-slate-200/60 dark:border-slate-700/60 shadow-2xs">
-                                <span class="material-symbols-rounded text-base leading-none select-none text-primary">add_a_photo</span>
-                                <span class="text-[11px] sm:text-xs">Photo</span>
+                    <!-- Controls Row: Sturdy, perfectly placed Photo attach, Subject & Ask Button -->
+                    <div class="flex items-center justify-between gap-2 w-full pt-1">
+                        <div class="flex items-center gap-2 min-w-0 flex-1">
+                            <!-- Attach Image Button (Sturdy, tactile h-10 with bold text) -->
+                            <label class="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs sm:text-[13px] font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 border border-slate-200/90 dark:border-slate-700/80 shadow-2xs shrink-0 select-none" title="Attach Photo">
+                                <span class="material-symbols-rounded text-primary text-lg leading-none select-none">add_a_photo</span>
+                                <span>Photo</span>
                                 <input type="file" name="image" id="ask-file-input" accept="image/*" class="hidden" onchange="previewAskImage(this)">
                             </label>
 
-                            <!-- Subject Select Dropdown -->
-                            <select name="subject" class="h-8.5 px-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/70 text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-200 rounded-xl outline-none cursor-pointer shrink-0 shadow-2xs">
+                            <!-- Subject Select Dropdown (Sturdy h-10 with bold text) -->
+                            <select name="subject" class="h-10 px-3 max-w-[140px] sm:max-w-[200px] bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200/90 dark:border-slate-700/80 text-xs sm:text-[13px] font-bold text-slate-700 dark:text-slate-200 rounded-xl outline-none cursor-pointer shadow-2xs truncate">
                                 <% (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
-                                    <option value="<%= sub %>" <%= (activeSubject === sub) ? 'selected' : '' %>><%= sub %></option>
+                                    <option value="<%= sub %>"><%= sub %></option>
                                 <% }) %>
                             </select>
                         </div>
 
-                        <!-- Submit Button -->
-                        <button type="submit" class="h-8.5 px-3.5 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-xs shrink-0 whitespace-nowrap active:scale-95 ml-auto">
-                            <span class="material-symbols-rounded text-base leading-none select-none">send</span>
-                            <span>Ask</span>
+                        <!-- Ask Question Submit Button (Sturdy, perfectly placed, bold vibrant primary) -->
+                        <button type="submit" class="h-10 px-4 sm:px-5 bg-primary hover:bg-primary/90 text-white text-xs sm:text-[13px] font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-md shadow-primary/25 shrink-0 active:scale-95 cursor-pointer select-none ml-auto">
+                            <span class="material-symbols-rounded text-lg leading-none select-none">send</span>
+                            <span>Ask Question</span>
                         </button>
                     </div>
 
@@ -563,24 +583,112 @@
             clearQaScreenSearch();
         }
 
-        // Unified Filter Dropdown Handlers (Includes Status Tabs & Subjects)
+        // Multiple Filtering State & Handlers
+        let currentSelectedStatuses = <%- JSON.stringify(activeStatuses) %>;
+        let currentSelectedSubjects = <%- JSON.stringify(activeSubjects) %>;
+
         function toggleQaFilterDropdown(e) {
             if (e) e.stopPropagation();
             const menu = document.getElementById('qa-filter-dropdown-menu');
-            if (menu) menu.classList.toggle('hidden');
+            const backdrop = document.getElementById('qa-filter-backdrop');
+            if (menu) {
+                const isHidden = menu.classList.contains('hidden');
+                if (isHidden) {
+                    menu.classList.remove('hidden');
+                    if (backdrop) backdrop.classList.remove('hidden');
+                } else {
+                    menu.classList.add('hidden');
+                    if (backdrop) backdrop.classList.add('hidden');
+                }
+            }
         }
 
-        function applyQaFilter(type, value) {
+        function toggleStatusFilterItem(statusVal) {
+            statusVal = statusVal.toLowerCase();
+            const idx = currentSelectedStatuses.indexOf(statusVal);
+            if (idx > -1) {
+                currentSelectedStatuses.splice(idx, 1);
+            } else {
+                currentSelectedStatuses.push(statusVal);
+            }
+            renderFilterModalDOM();
+        }
+
+        function toggleSubjectFilterItem(subVal) {
+            subVal = subVal.toLowerCase();
+            const idx = currentSelectedSubjects.indexOf(subVal);
+            if (idx > -1) {
+                currentSelectedSubjects.splice(idx, 1);
+            } else {
+                currentSelectedSubjects.push(subVal);
+            }
+            renderFilterModalDOM();
+        }
+
+        function clearAllFiltersModal() {
+            currentSelectedStatuses = [];
+            currentSelectedSubjects = [];
+            renderFilterModalDOM();
+        }
+
+        function renderFilterModalDOM() {
+            // Update status buttons in modal
+            const statusBtns = document.querySelectorAll('.modal-status-btn');
+            statusBtns.forEach(btn => {
+                const id = btn.id.replace('modal-status-', '');
+                const isActive = currentSelectedStatuses.includes(id);
+                if (id === 'resolved') {
+                    btn.className = "modal-status-btn p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer " + 
+                        (isActive ? 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100');
+                    const icon = btn.querySelector('.material-symbols-rounded');
+                    if (icon) icon.className = "material-symbols-rounded text-base " + (isActive ? 'text-emerald-500' : 'text-slate-400');
+                } else if (id === 'open') {
+                    btn.className = "modal-status-btn p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer " + 
+                        (isActive ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100');
+                    const icon = btn.querySelector('.material-symbols-rounded');
+                    if (icon) icon.className = "material-symbols-rounded text-base " + (isActive ? 'text-amber-500' : 'text-slate-400');
+                } else if (id === 'my') {
+                    btn.className = "modal-status-btn col-span-2 p-2.5 rounded-xl border text-xs font-bold flex items-center justify-between transition-all active:scale-95 cursor-pointer " + 
+                        (isActive ? 'bg-indigo-500/15 border-indigo-500 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100');
+                    const icon = btn.querySelector('.material-symbols-rounded');
+                    if (icon) icon.className = "material-symbols-rounded text-base " + (isActive ? 'text-indigo-500' : 'text-slate-400');
+                }
+            });
+
+            // Update subject buttons in modal
+            const subBtns = document.querySelectorAll('.modal-sub-btn');
+            subBtns.forEach(btn => {
+                const subKey = btn.id.replace('modal-sub-', '').replace(/-/g, ' ');
+                const isActive = currentSelectedSubjects.includes(subKey);
+                btn.className = "modal-sub-btn px-2.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between border transition-all active:scale-95 cursor-pointer " +
+                    (isActive ? 'bg-primary/10 border-primary text-primary font-bold shadow-2xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100');
+                const icon = btn.querySelector('.material-symbols-rounded');
+                if (icon) {
+                    icon.textContent = isActive ? 'check_box' : 'check_box_outline_blank';
+                    icon.className = "material-symbols-rounded text-sm " + (isActive ? 'text-primary' : 'text-slate-300 dark:text-slate-600');
+                }
+            });
+        }
+
+        function applyMultipleFilters() {
             const menu = document.getElementById('qa-filter-dropdown-menu');
+            const backdrop = document.getElementById('qa-filter-backdrop');
             if (menu) menu.classList.add('hidden');
+            if (backdrop) backdrop.classList.add('hidden');
 
             const url = new URL(window.location.href);
-            if (type === 'status') {
-                url.searchParams.set('status', value);
-            } else if (type === 'subject') {
-                url.searchParams.set('subject', value);
+            if (currentSelectedStatuses.length > 0) {
+                url.searchParams.set('status', currentSelectedStatuses.join(','));
+            } else {
+                url.searchParams.set('status', 'all');
             }
-            
+
+            if (currentSelectedSubjects.length > 0) {
+                url.searchParams.set('subject', currentSelectedSubjects.join(','));
+            } else {
+                url.searchParams.set('subject', 'all');
+            }
+
             const screenInput = document.getElementById('qa-screen-search-input');
             const headerInput = document.getElementById('qa-search-input');
             const query = (screenInput && screenInput.value.trim()) || (headerInput && headerInput.value.trim()) || '';
@@ -588,6 +696,19 @@
                 url.searchParams.set('search', query);
             } else {
                 url.searchParams.delete('search');
+            }
+            window.location.href = url.toString();
+        }
+
+        function removeSingleFilter(type, value) {
+            const url = new URL(window.location.href);
+            value = value.toLowerCase();
+            if (type === 'status') {
+                const list = currentSelectedStatuses.filter(s => s !== value);
+                url.searchParams.set('status', list.length > 0 ? list.join(',') : 'all');
+            } else if (type === 'subject') {
+                const list = currentSelectedSubjects.filter(s => s !== value);
+                url.searchParams.set('subject', list.length > 0 ? list.join(',') : 'all');
             }
             window.location.href = url.toString();
         }
@@ -648,8 +769,10 @@
         document.addEventListener('click', function(e) {
             const container = document.getElementById('qa-filter-dropdown-container');
             const menu = document.getElementById('qa-filter-dropdown-menu');
+            const backdrop = document.getElementById('qa-filter-backdrop');
             if (container && menu && !container.contains(e.target)) {
                 menu.classList.add('hidden');
+                if (backdrop) backdrop.classList.add('hidden');
             }
         });
 

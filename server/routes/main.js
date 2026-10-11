@@ -3860,11 +3860,25 @@ router.get('/qa', protect, async (req, res) => {
         const openCount = classScopedQAs.filter(q => q.status !== 'resolved' && !q.answer).length;
         const myCount = classScopedQAs.filter(q => q.askedBy && q.askedBy._id && q.askedBy._id.toString() === req.session.userId.toString()).length;
 
+        const statusList = (statusFilter && statusFilter !== 'all') ? statusFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+        const subjectList = (subjectFilter && subjectFilter !== 'all') ? subjectFilter.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+
         let filteredQAs = classScopedQAs.filter(q => {
-            if (statusFilter === 'resolved' && (q.status !== 'resolved' && !q.answer)) return false;
-            if (statusFilter === 'open' && (q.status === 'resolved' || q.answer)) return false;
-            if (statusFilter === 'my' && (!q.askedBy || !q.askedBy._id || q.askedBy._id.toString() !== req.session.userId.toString())) return false;
-            if (subjectFilter !== 'all' && q.subject !== subjectFilter) return false;
+            if (statusList.length > 0) {
+                const isResolved = q.status === 'resolved' || q.answer;
+                const isMy = q.askedBy && q.askedBy._id && q.askedBy._id.toString() === req.session.userId.toString();
+                const matchesStatus = statusList.some(s => {
+                    if (s === 'resolved' || s === 'answered') return isResolved;
+                    if (s === 'open' || s === 'pending') return !isResolved;
+                    if (s === 'my') return isMy;
+                    return false;
+                });
+                if (!matchesStatus) return false;
+            }
+            if (subjectList.length > 0) {
+                const qSub = (q.subject || '').trim().toLowerCase();
+                if (!subjectList.includes(qSub)) return false;
+            }
             if (searchQuery) {
                 const text = (q.question || '') + ' ' + (q.answer || '') + ' ' + (q.askedBy?.name || '');
                 if (!text.toLowerCase().includes(searchQuery)) return false;
