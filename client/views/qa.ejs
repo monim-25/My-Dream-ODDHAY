@@ -35,6 +35,150 @@
                 <input type="hidden" name="subject" value="<%= activeSubject %>">
             </form>
 
+            <!-- Top Controls Toolbar (Search, Subject Dropdown & Sturdy Status Filter Tabs) -->
+            <div class="w-full bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800 p-2.5 sm:p-3 shrink-0 space-y-2.5">
+                <!-- ROW 1: LIVE SEARCH INPUT & SUBJECT FILTER DROPDOWN BESIDE IT -->
+                <div class="flex items-center gap-2 w-full">
+                    <!-- Live Search Box -->
+                    <div class="relative flex-1 min-w-0">
+                        <div class="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none select-none text-slate-400 dark:text-slate-500">
+                            <span class="material-symbols-rounded text-[19px] leading-none">search</span>
+                        </div>
+                        <input type="text" id="qa-screen-search-input"
+                            oninput="filterLiveQuestions()"
+                            onkeyup="filterLiveQuestions()"
+                            placeholder="Search questions, topics, mentors..."
+                            value="<%= searchVal %>"
+                            class="w-full h-11 pl-10 pr-9 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 text-xs sm:text-[13px] font-medium text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-xl outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 shadow-2xs transition-all">
+                        <button type="button" id="qa-screen-clear-btn" onclick="clearQaScreenSearch()"
+                            class="<%= (searchVal && searchVal.trim().length > 0) ? 'flex' : 'hidden' %> absolute right-2.5 top-1/2 -translate-y-1/2 size-6 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white items-center justify-center transition-colors cursor-pointer select-none">
+                            <span class="material-symbols-rounded text-base">cancel</span>
+                        </button>
+                    </div>
+
+                    <!-- Subject Filter Dropdown beside Search Bar -->
+                    <div class="relative shrink-0" id="qa-subject-dropdown-container">
+                        <button type="button" id="qa-subject-dropdown-btn" onclick="toggleQaSubjectDropdown(event)"
+                            class="h-11 px-3 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-xl flex items-center gap-1.5 sm:gap-2 text-xs sm:text-[13px] font-bold transition-all shadow-2xs cursor-pointer select-none max-w-[145px] sm:max-w-[200px]">
+                            <span class="material-symbols-rounded text-primary text-base sm:text-lg leading-none shrink-0">menu_book</span>
+                            <span id="qa-selected-subject-label" class="truncate"><%= activeSubject === 'all' ? 'All Subjects' : activeSubject %></span>
+                            <span class="material-symbols-rounded text-slate-400 text-sm leading-none shrink-0">expand_more</span>
+                        </button>
+
+                        <!-- Dropdown Menu -->
+                        <div id="qa-subject-dropdown-menu" class="hidden absolute right-0 mt-1.5 w-52 sm:w-60 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl z-50 py-1.5 max-h-72 overflow-y-auto no-scrollbar">
+                            <button type="button" onclick="selectQaSubjectFilter('all')"
+                                class="w-full text-left px-3.5 py-2 text-xs font-semibold flex items-center justify-between transition-colors <%= activeSubject === 'all' ? 'bg-primary/10 text-primary font-bold' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60' %>">
+                                <span class="flex items-center gap-2">
+                                    <span class="material-symbols-rounded text-base">apps</span>
+                                    <span>All Subjects</span>
+                                </span>
+                                <% if (activeSubject === 'all') { %>
+                                    <span class="material-symbols-rounded text-sm text-primary">check</span>
+                                <% } %>
+                            </button>
+                            <div class="h-px bg-slate-100 dark:bg-slate-800 my-1"></div>
+                            <% (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
+                                <button type="button" onclick="selectQaSubjectFilter('<%= sub %>')"
+                                    class="w-full text-left px-3.5 py-2 text-xs font-semibold flex items-center justify-between transition-colors <%= activeSubject === sub ? 'bg-primary/10 text-primary font-bold' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/60' %>">
+                                    <span class="flex items-center gap-2 truncate">
+                                        <span class="material-symbols-rounded text-base text-slate-400">subject</span>
+                                        <span class="truncate"><%= sub %></span>
+                                    </span>
+                                    <% if (activeSubject === sub) { %>
+                                        <span class="material-symbols-rounded text-sm text-primary">check</span>
+                                    <% } %>
+                                </button>
+                            <% }) %>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ROW 2: TOUCH-FRIENDLY STATUS FILTER TABS (Unclipped 2x2 Grid on Mobile, 4-Col on Desktop) -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full">
+                    <a href="/qa?status=all&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
+                        class="qa-status-tab w-full h-10 sm:h-11 px-2.5 sm:px-3 border text-xs sm:text-[13px] font-bold rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 shadow-2xs <%= activeFilter === 'all' ? 'bg-primary border-primary text-white shadow-primary/25' : 'bg-slate-50 dark:bg-slate-800/90 border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200' %>">
+                        <span class="material-symbols-rounded text-base sm:text-lg <%= activeFilter === 'all' ? 'text-white' : 'text-primary' %> leading-none shrink-0">forum</span>
+                        <span class="truncate">All</span>
+                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 <%= activeFilter === 'all' ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary' %>"><%= st.totalCount %></span>
+                    </a>
+
+                    <a href="/qa?status=resolved&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
+                        class="qa-status-tab w-full h-10 sm:h-11 px-2.5 sm:px-3 border text-xs sm:text-[13px] font-bold rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 shadow-2xs <%= activeFilter === 'resolved' ? 'bg-emerald-600 border-emerald-600 text-white shadow-emerald-600/25' : 'bg-slate-50 dark:bg-slate-800/90 border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200' %>">
+                        <span class="material-symbols-rounded text-base sm:text-lg <%= activeFilter === 'resolved' ? 'text-white' : 'text-emerald-500' %> leading-none shrink-0">verified</span>
+                        <span class="truncate">Answered</span>
+                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 <%= activeFilter === 'resolved' ? 'bg-white/20 text-white' : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' %>"><%= st.resolvedCount %></span>
+                    </a>
+
+                    <a href="/qa?status=open&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
+                        class="qa-status-tab w-full h-10 sm:h-11 px-2.5 sm:px-3 border text-xs sm:text-[13px] font-bold rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 shadow-2xs <%= activeFilter === 'open' ? 'bg-amber-600 border-amber-600 text-white shadow-amber-600/25' : 'bg-slate-50 dark:bg-slate-800/90 border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200' %>">
+                        <span class="material-symbols-rounded text-base sm:text-lg <%= activeFilter === 'open' ? 'text-white' : 'text-amber-500' %> leading-none shrink-0">schedule</span>
+                        <span class="truncate">Pending</span>
+                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 <%= activeFilter === 'open' ? 'bg-white/20 text-white' : 'bg-amber-500/10 text-amber-600 dark:text-amber-400' %>"><%= st.openCount %></span>
+                    </a>
+
+                    <a href="/qa?status=my&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
+                        class="qa-status-tab w-full h-10 sm:h-11 px-2.5 sm:px-3 border text-xs sm:text-[13px] font-bold rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 transition-all active:scale-95 shadow-2xs <%= activeFilter === 'my' ? 'bg-indigo-600 border-indigo-600 text-white shadow-indigo-600/25' : 'bg-slate-50 dark:bg-slate-800/90 border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200' %>">
+                        <span class="material-symbols-rounded text-base sm:text-lg <%= activeFilter === 'my' ? 'text-white' : 'text-indigo-500' %> leading-none shrink-0">person</span>
+                        <span class="truncate">My Questions</span>
+                        <span class="px-1.5 py-0.5 rounded-full text-[10px] font-bold shrink-0 <%= activeFilter === 'my' ? 'bg-white/20 text-white' : 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' %>"><%= st.myCount %></span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Ask Question Composer Card (Placed above feed for full accessibility on small screens) -->
+            <div id="ask-question-box" class="w-full p-3 sm:p-4 bg-white dark:bg-[#0f172a] border-b border-slate-200/80 dark:border-slate-800/80 shrink-0">
+                <form action="/qa-ask" method="POST" enctype="multipart/form-data" class="w-full flex flex-col gap-2.5">
+                    
+                    <!-- Selected Image Preview Badge -->
+                    <div id="ask-img-preview" class="hidden flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/10 border border-primary/20 text-xs font-semibold text-primary max-w-xs self-start">
+                        <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none select-none shrink-0">image</span>
+                        <span class="truncate flex-1" id="ask-img-name">Photo attached</span>
+                        <button type="button" onclick="clearAskImage()" class="text-rose-500 hover:text-rose-700 text-xs font-bold flex items-center justify-center leading-none select-none shrink-0">
+                            <span class="material-symbols-rounded text-base flex items-center justify-center leading-none">cancel</span>
+                        </button>
+                    </div>
+
+                    <!-- Student Avatar & Question Textarea -->
+                    <div class="flex items-start gap-2.5 w-full">
+                        <div class="size-8 sm:size-9 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-800 mt-0.5">
+                            <img src="<%= (u.profileImage || u.profilePicture) ? (u.profileImage || u.profilePicture) : `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'Student')}&background=random` %>" class="w-full h-full object-cover">
+                        </div>
+
+                        <div class="flex-1 min-w-0">
+                            <textarea id="ask-question-textarea" name="question" rows="2" required placeholder="Have an academic question or doubt? Write it here..."
+                                class="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/70 focus:border-primary focus:ring-2 focus:ring-primary/15 text-xs sm:text-[13px] font-semibold text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 rounded-xl outline-none transition-all resize-none shadow-inner"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Controls Row: Attach Image, Subject & Ask Button -->
+                    <div class="flex items-center justify-between gap-2 w-full flex-wrap sm:flex-nowrap pt-0.5">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <!-- Attach Image Button -->
+                            <label class="h-9 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 whitespace-nowrap active:scale-95 shadow-2xs">
+                                <span class="material-symbols-rounded text-base leading-none select-none text-primary">add_a_photo</span>
+                                <span class="text-xs">Attach Photo</span>
+                                <input type="file" name="image" id="ask-file-input" accept="image/*" class="hidden" onchange="previewAskImage(this)">
+                            </label>
+
+                            <!-- Subject Select Dropdown -->
+                            <select name="subject" class="h-9 px-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/70 text-xs font-bold text-slate-700 dark:text-slate-200 rounded-xl outline-none cursor-pointer shrink-0 shadow-2xs">
+                                <% (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
+                                    <option value="<%= sub %>" <%= (activeSubject === sub) ? 'selected' : '' %>><%= sub %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="h-9 px-4 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 shadow-xs shrink-0 whitespace-nowrap active:scale-95 ml-auto">
+                            <span class="material-symbols-rounded text-base leading-none select-none">send</span>
+                            <span>Ask Question</span>
+                        </button>
+                    </div>
+
+                </form>
+            </div>
+
             <!-- Live No Matches Fallback -->
             <div id="no-live-results" class="hidden bg-white dark:bg-[#0f172a] border-b border-slate-200/80 dark:border-slate-800/80 p-8 text-center shadow-none w-full">
                 <span class="material-symbols-rounded text-4xl text-slate-300 mb-2 flex items-center justify-center leading-none select-none">search_off</span>
@@ -42,19 +186,19 @@
                 <p class="text-xs font-medium text-slate-400 mt-1 max-w-sm mx-auto">
                     No questions or subjects match your live search query.
                 </p>
-                <button onclick="clearLiveSearch()" class="mt-3 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded text-xs font-bold inline-flex items-center gap-1">
+                <button onclick="clearQaScreenSearch()" class="mt-3 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 rounded text-xs font-bold inline-flex items-center gap-1">
                     <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none select-none">refresh</span> Reset Live Search
                 </button>
             </div>
 
             <!-- Scrollable Questions Feed (Dashboard-Aligned Card System) -->
-            <div id="questions-feed" class="flex-1 space-y-1.5 w-full p-0 sm:p-1">
+            <div id="questions-feed" class="flex-1 space-y-2.5 w-full p-2.5 sm:p-4">
                 <% if (qList.length === 0) { %>
-                    <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 rounded-md p-10 text-center shadow-none w-full">
+                    <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-10 text-center shadow-none w-full">
                         <span class="material-symbols-rounded text-5xl text-slate-300 mb-3 flex items-center justify-center leading-none select-none">help_outline</span>
                         <h3 class="text-base font-bold text-slate-800 dark:text-white">No Questions Found</h3>
                         <p class="text-xs font-medium text-slate-400 mt-1 max-w-sm mx-auto">
-                            No academic questions match your current class feed. Ask your question in the composer below!
+                            No academic questions match your current class feed. Ask your question in the composer above!
                         </p>
                     </div>
                 <% } else { %>
@@ -68,23 +212,23 @@
                            const replies = item.replies || [];
                            
                            const searchableText = [
-                               item.question || '',
-                               item.subject || '',
-                               asker.name || item.askedByName || '',
-                               asker.classLevel || '',
-                               item.answer || '',
-                               mentor.name || '',
-                               replies.map(r => r.text || '').join(' ')
+                                item.question || '',
+                                item.subject || '',
+                                asker.name || item.askedByName || '',
+                                asker.classLevel || '',
+                                item.answer || '',
+                                mentor.name || '',
+                                replies.map(r => r.text || '').join(' ')
                            ].join(' ').toLowerCase();
                         %>
                         <div id="qa-<%= item._id %>" 
-                             class="qa-card bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 rounded-md p-4 sm:p-5 shadow-2xs transition-all flex flex-col justify-between"
+                             class="qa-card bg-white dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 rounded-2xl p-3.5 sm:p-5 shadow-2xs transition-all flex flex-col justify-between"
                              data-search="<%= searchableText.replace(/"/g, '&quot;') %>"
                              data-subject="<%= (item.subject || 'general').toLowerCase() %>">
                             
                             <div>
                                 <!-- Question Header: Asker Avatar, Name & Status -->
-                                <div class="flex items-center justify-between gap-3 mb-2.5">
+                                <div class="flex items-center justify-between gap-2.5 mb-2.5">
                                     <div class="flex items-center gap-2.5 min-w-0">
                                         <div class="size-9 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-800">
                                             <img src="<%= (asker.profileImage || asker.profilePicture) ? (asker.profileImage || asker.profilePicture) : `https://ui-avatars.com/api/?name=${encodeURIComponent(asker.name || item.askedByName || 'Student')}&background=random` %>" class="w-full h-full object-cover">
@@ -106,26 +250,26 @@
                                         </div>
                                     </div>
 
-                                    <div class="flex items-center gap-2 shrink-0">
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold border <%= isResolved ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-400' %> flex items-center gap-1">
+                                    <div class="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold border <%= isResolved ? 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20 text-amber-600 dark:text-amber-400' %> flex items-center gap-1">
                                             <span class="material-symbols-rounded text-xs leading-none flex items-center justify-center select-none"><%= isResolved ? 'verified' : 'schedule' %></span>
                                             <span><%= isResolved ? 'Answered' : 'Pending' %></span>
                                         </span>
-                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                        <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                             <%= item.subject || 'General' %>
                                         </span>
                                     </div>
                                 </div>
 
                                 <!-- Question Content Box -->
-                                <div class="p-3.5 sm:p-4 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200/70 dark:border-slate-700/60 mb-3">
-                                    <p class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 leading-relaxed">
+                                <div class="p-3 sm:p-4 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/60 mb-2.5">
+                                    <p class="text-xs sm:text-[13px] font-semibold text-slate-800 dark:text-slate-100 leading-relaxed">
                                         "<%= item.question %>"
                                     </p>
 
                                     <!-- Attached Question Image (In-Page Lightbox Trigger) -->
                                     <% if (item.image) { %>
-                                        <div class="mt-3 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700/80 max-w-md bg-black/5">
+                                        <div class="mt-2.5 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700/80 max-w-md bg-black/5">
                                             <img src="<%= item.image %>" class="w-full max-h-80 object-contain cursor-pointer hover:opacity-95 transition-opacity" onclick="openImageModal(this.src)">
                                         </div>
                                     <% } %>
@@ -133,7 +277,7 @@
 
                                 <!-- Verified Mentor Answer Box -->
                                 <% if (item.answer) { %>
-                                    <div class="p-3.5 sm:p-4 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-500/30 border-l-4 border-l-emerald-600 dark:border-l-emerald-500 mb-3 relative">
+                                    <div class="p-3 sm:p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/25 border border-emerald-200/90 dark:border-emerald-500/30 border-l-4 border-l-emerald-600 dark:border-l-emerald-500 mb-2.5 relative">
                                         <div class="flex items-center gap-2 mb-2">
                                             <div class="size-7 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
                                                 <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none select-none">verified_user</span>
@@ -152,14 +296,14 @@
                                                 <% } %>
                                             </div>
                                         </div>
-                                        <p class="text-xs sm:text-sm font-medium text-slate-800 dark:text-slate-200 leading-relaxed pl-9">
+                                        <p class="text-xs sm:text-[13px] font-medium text-slate-800 dark:text-slate-200 leading-relaxed pl-9">
                                             <%= item.answer %>
                                         </p>
                                     </div>
                                 <% } %>
 
                                 <!-- Discussion / Reply Thread Box -->
-                                <div id="reply-drawer-<%= item._id %>" class="hidden mt-3 p-3.5 sm:p-4 rounded-xl bg-slate-100/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-3">
+                                <div id="reply-drawer-<%= item._id %>" class="hidden mt-2.5 p-3 sm:p-4 rounded-xl bg-slate-100/80 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 space-y-2.5">
                                     <h5 class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                                         <span class="material-symbols-rounded text-base text-primary">forum</span>
                                         Discussion Replies (<%= replies.length %>)
@@ -169,7 +313,7 @@
                                     <% if (replies.length > 0) { %>
                                         <div class="space-y-2 max-h-60 overflow-y-auto pr-1 no-scrollbar">
                                             <% replies.forEach(function(rep) { %>
-                                                <div class="p-2.5 rounded-lg bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 flex items-start gap-2.5">
+                                                <div class="p-2.5 rounded-xl bg-white dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 flex items-start gap-2.5">
                                                     <div class="size-7 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-800 mt-0.5">
                                                         <img src="<%= rep.user?.profileImage ? rep.user.profileImage : `https://ui-avatars.com/api/?name=${encodeURIComponent(rep.userName || 'Student')}&background=random` %>" class="w-full h-full object-cover">
                                                     </div>
@@ -196,13 +340,13 @@
                                         <p class="text-[11px] font-medium text-slate-400 italic">No discussion replies yet. Start the conversation!</p>
                                     <% } %>
 
-                                    <!-- Discussion Reply Form (Text Only, Image Attach Removed) -->
+                                    <!-- Discussion Reply Form (Text Only) -->
                                     <form action="/qa/reply/<%= item._id %>" method="POST" class="space-y-2 pt-1">
                                         <textarea id="reply-input-<%= item._id %>" name="replyText" rows="2" placeholder="Write your discussion reply here..."
-                                            class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none focus:border-primary transition-all resize-none"></textarea>
+                                            class="w-full px-3 py-2 bg-white dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700/70 text-xs font-semibold text-slate-800 dark:text-white rounded-xl outline-none focus:border-primary transition-all resize-none shadow-2xs"></textarea>
                                         
                                         <div class="flex items-center justify-end gap-2">
-                                            <button type="submit" class="px-4 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-xs">
+                                            <button type="submit" class="h-8.5 px-3.5 bg-primary hover:bg-primary/90 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 shadow-xs active:scale-95">
                                                 <span class="material-symbols-rounded text-base flex items-center justify-center leading-none select-none">reply</span>
                                                 <span>Reply</span>
                                             </button>
@@ -211,17 +355,17 @@
                                 </div>
                             </div>
 
-                            <!-- Card Footer Bar: Helpful & Discussions Buttons -->
-                            <div class="flex items-center justify-between gap-2 pt-2.5 mt-2 border-t border-slate-100 dark:border-slate-800">
+                            <!-- Card Footer Bar: Touch-Friendly Helpful & Discussions Buttons -->
+                            <div class="flex items-center justify-between gap-2 pt-2.5 mt-2 border-t border-slate-100 dark:border-slate-800/80">
                                 <div class="flex items-center gap-2">
                                     <button onclick="toggleUpvote('<%= item._id %>', this)" 
-                                            class="upvote-btn px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 <%= hasUpvoted ? 'bg-rose-50 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 shadow-2xs' : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-transparent' %>">
-                                        <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none select-none <%= hasUpvoted ? 'text-rose-500 fill-1' : 'text-slate-400' %>">thumb_up</span>
+                                            class="upvote-btn h-8.5 sm:h-9 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 <%= hasUpvoted ? 'bg-rose-50 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 shadow-2xs' : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700/60' %>">
+                                        <span class="material-symbols-rounded text-base flex items-center justify-center leading-none select-none <%= hasUpvoted ? 'text-rose-500 fill-1' : 'text-slate-400' %>">thumb_up</span>
                                         <span>Helpful (<span class="upvote-count"><%= upvotesArr.length %></span>)</span>
                                     </button>
 
-                                    <button onclick="toggleReplyDrawer('<%= item._id %>')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 transition-colors flex items-center gap-1.5">
-                                        <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none text-slate-400 select-none">chat_bubble</span>
+                                    <button onclick="toggleReplyDrawer('<%= item._id %>')" class="h-8.5 sm:h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700/60 transition-colors flex items-center gap-1.5 active:scale-95">
+                                        <span class="material-symbols-rounded text-base flex items-center justify-center leading-none text-slate-400 select-none">chat_bubble</span>
                                         <span>Discussions (<%= replies.length %>)</span>
                                     </button>
                                 </div>
@@ -232,85 +376,15 @@
                 <% } %>
             </div>
 
-            <!-- Sticky Bottom Ask Question Composer Bar (2-Line Textarea + 3rd Line Controls & Filter Tabs) -->
-            <div class="sticky bottom-0 z-30 w-full bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur border-t border-b border-slate-200/80 dark:border-slate-800/80 p-2.5 sm:p-3 shadow-none shrink-0">
-                <form action="/qa-ask" method="POST" enctype="multipart/form-data" class="flex flex-col gap-2 w-full max-w-7xl mx-auto">
-                    
-                    <!-- Selected Image Preview Badge -->
-                    <div id="ask-img-preview" class="hidden flex items-center gap-2 px-2.5 py-1 rounded-md bg-primary/10 border border-primary/20 text-xs font-semibold text-primary max-w-xs self-start">
-                        <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none select-none shrink-0">image</span>
-                        <span class="truncate flex-1" id="ask-img-name">Photo attached</span>
-                        <button type="button" onclick="clearAskImage()" class="text-rose-500 hover:text-rose-700 text-xs font-bold flex items-center justify-center leading-none select-none shrink-0">
-                            <span class="material-symbols-rounded text-base flex items-center justify-center leading-none">cancel</span>
-                        </button>
-                    </div>
-
-                    <!-- 1st & 2nd Lines: Student Avatar + 2-Line High Question Textarea -->
-                    <div class="flex items-start gap-2.5 w-full">
-                        <div class="size-8 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden shrink-0 bg-slate-100 dark:bg-slate-800 hidden sm:block mt-0.5">
-                            <img src="<%= (u.profileImage || u.profilePicture) ? (u.profileImage || u.profilePicture) : `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name || 'Student')}&background=random` %>" class="w-full h-full object-cover">
-                        </div>
-
-                        <!-- 2-Line High Question Input Field -->
-                        <div class="flex-1 min-w-0">
-                            <textarea name="question" rows="2" required placeholder="Have an academic question or doubt? Write it here..."
-                                class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/70 focus:border-primary text-xs sm:text-sm font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-all resize-none shadow-inner"></textarea>
-                        </div>
-                    </div>
-
-                    <!-- 3rd Line: Controls Row (Left: Attach Image, Subject & Ask Question | Right: Status Filter Tabs) -->
-                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 w-full pt-0.5">
-                        
-                        <!-- Left Side: Attach Image, Subject & Ask Question -->
-                        <div class="flex items-center gap-2 flex-wrap shrink-0">
-                            <!-- Attach Image Button -->
-                            <label class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 whitespace-nowrap">
-                                <span class="material-symbols-rounded text-base flex items-center justify-center leading-none select-none text-primary">add_a_photo</span>
-                                <span>Attach Image</span>
-                                <input type="file" name="image" id="ask-file-input" accept="image/*" class="hidden" onchange="previewAskImage(this)">
-                            </label>
-
-                            <!-- Subject Select Dropdown -->
-                            <select name="subject" class="px-2.5 py-1.5 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/70 text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none cursor-pointer shrink-0">
-                                <% (locals.availableSubjects || ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'English', 'Bangla', 'General Academic']).forEach(sub => { %>
-                                    <option value="<%= sub %>"><%= sub %></option>
-                                <% }) %>
-                            </select>
-
-                            <!-- Ask Question Button -->
-                            <button type="submit" class="px-3.5 py-1.5 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 shadow-xs shrink-0 whitespace-nowrap">
-                                <span class="material-symbols-rounded text-base flex items-center justify-center leading-none select-none">edit_square</span>
-                                <span>Ask Question</span>
-                            </button>
-                        </div>
-
-                        <!-- Right Side: Status Filter Tabs (All, Answered, Pending, My Questions) -->
-                        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar shrink-0 justify-end">
-                            <a href="/qa?status=all&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
-                                class="px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap <%= activeFilter === 'all' ? 'bg-primary text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' %>">
-                                All (<%= st.totalCount %>)
-                            </a>
-                            <a href="/qa?status=resolved&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
-                                class="px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap <%= activeFilter === 'resolved' ? 'bg-emerald-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' %>">
-                                Answered (<%= st.resolvedCount %>)
-                            </a>
-                            <a href="/qa?status=open&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
-                                class="px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap <%= activeFilter === 'open' ? 'bg-amber-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' %>">
-                                Pending (<%= st.openCount %>)
-                            </a>
-                            <a href="/qa?status=my&subject=<%= activeSubject %>&search=<%= encodeURIComponent(searchVal) %>"
-                                class="px-2.5 py-1 rounded-md text-[11px] font-bold transition-all whitespace-nowrap <%= activeFilter === 'my' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' %>">
-                                My Questions (<%= st.myCount %>)
-                            </a>
-                        </div>
-
-                    </div>
-
-                </form>
-            </div>
+            <!-- Mobile Quick Ask Floating Action Button -->
+            <button type="button" onclick="focusAskComposer()" 
+                class="fixed bottom-20 right-4 lg:hidden size-12 rounded-full bg-primary hover:bg-primary/90 text-white shadow-lg flex items-center justify-center active:scale-90 transition-all z-30"
+                title="Ask a Question">
+                <span class="material-symbols-rounded text-2xl leading-none select-none">edit_square</span>
+            </button>
 
             <!-- Safe clearance for mobile bottom navigation -->
-            <div class="h-20 sm:h-24 lg:h-4 w-full shrink-0"></div>
+            <div class="h-20 sm:h-24 lg:h-6 w-full shrink-0"></div>
         </main>
     </div>
 
@@ -384,17 +458,37 @@
 
         // Live client-side search functionality
         function filterLiveQuestions() {
-            const searchInput = document.getElementById('qa-search-input');
-            const clearBtn = document.getElementById('clear-search-btn');
-            const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
-            const cards = document.querySelectorAll('.qa-card');
-            const noResultsBox = document.getElementById('no-live-results');
+            const screenInput = document.getElementById('qa-screen-search-input');
+            const headerInput = document.getElementById('qa-search-input');
             
-            if (clearBtn) {
-                if (query.length > 0) clearBtn.classList.remove('hidden');
-                else clearBtn.classList.add('hidden');
+            // Prefer whichever input was typed into, or screen input by default
+            let query = '';
+            if (screenInput && screenInput.value.trim().length > 0) {
+                query = screenInput.value.trim().toLowerCase();
+            } else if (headerInput && headerInput.value.trim().length > 0) {
+                query = headerInput.value.trim().toLowerCase();
             }
 
+            // Keep both inputs in sync if both exist
+            if (screenInput && headerInput) {
+                if (document.activeElement === screenInput) headerInput.value = screenInput.value;
+                else if (document.activeElement === headerInput) screenInput.value = headerInput.value;
+            }
+
+            const screenClearBtn = document.getElementById('qa-screen-clear-btn');
+            const headerClearBtn = document.getElementById('clear-search-btn');
+            
+            if (screenClearBtn) {
+                if (query.length > 0) screenClearBtn.classList.remove('hidden');
+                else screenClearBtn.classList.add('hidden');
+            }
+            if (headerClearBtn) {
+                if (query.length > 0) headerClearBtn.classList.remove('hidden');
+                else headerClearBtn.classList.add('hidden');
+            }
+
+            const cards = document.querySelectorAll('.qa-card');
+            const noResultsBox = document.getElementById('no-live-results');
             let visibleCount = 0;
 
             cards.forEach(card => {
@@ -416,12 +510,59 @@
             }
         }
 
+        function clearQaScreenSearch() {
+            const screenInput = document.getElementById('qa-screen-search-input');
+            const headerInput = document.getElementById('qa-search-input');
+            if (screenInput) screenInput.value = '';
+            if (headerInput) headerInput.value = '';
+            filterLiveQuestions();
+            if (screenInput) screenInput.focus();
+        }
+
         function clearLiveSearch() {
-            const searchInput = document.getElementById('qa-search-input');
-            if (searchInput) {
-                searchInput.value = '';
-                filterLiveQuestions();
-                searchInput.focus();
+            clearQaScreenSearch();
+        }
+
+        // Subject Filter Dropdown Handlers
+        function toggleQaSubjectDropdown(e) {
+            if (e) e.stopPropagation();
+            const menu = document.getElementById('qa-subject-dropdown-menu');
+            if (menu) menu.classList.toggle('hidden');
+        }
+
+        function selectQaSubjectFilter(sub) {
+            const menu = document.getElementById('qa-subject-dropdown-menu');
+            if (menu) menu.classList.add('hidden');
+            
+            const form = document.getElementById('qa-filter-form');
+            if (form) {
+                let subInput = form.querySelector('input[name="subject"]');
+                if (!subInput) {
+                    subInput = document.createElement('input');
+                    subInput.type = 'hidden';
+                    subInput.name = 'subject';
+                    form.appendChild(subInput);
+                }
+                subInput.value = sub;
+                form.submit();
+            } else if (typeof submitQaSubject === 'function') {
+                submitQaSubject(sub);
+            } else {
+                const url = new URL(window.location.href);
+                url.searchParams.set('subject', sub);
+                window.location.href = url.toString();
+            }
+        }
+
+        // Quick Ask Composer Focus for Mobile Floating Action Button
+        function focusAskComposer() {
+            const box = document.getElementById('ask-question-box');
+            const textarea = document.getElementById('ask-question-textarea');
+            if (box) {
+                box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            if (textarea) {
+                setTimeout(() => textarea.focus(), 350);
             }
         }
 
@@ -452,13 +593,13 @@
                         if (countSpan) countSpan.textContent = data.count;
                         
                         if (data.upvoted) {
-                            btn.className = "upvote-btn px-2.5 py-1 rounded-lg bg-rose-50 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs";
+                            btn.className = "upvote-btn h-8.5 sm:h-9 px-3 rounded-xl bg-rose-50 dark:bg-rose-500/15 border border-rose-200 dark:border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs active:scale-95";
                             if (iconSpan) {
                                 iconSpan.classList.add('text-rose-500', 'fill-1');
                                 iconSpan.classList.remove('text-slate-400');
                             }
                         } else {
-                            btn.className = "upvote-btn px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 border border-transparent transition-all flex items-center gap-1.5";
+                            btn.className = "upvote-btn h-8.5 sm:h-9 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700/60 transition-all flex items-center gap-1.5 active:scale-95";
                             if (iconSpan) {
                                 iconSpan.classList.remove('text-rose-500', 'fill-1');
                                 iconSpan.classList.add('text-slate-400');
@@ -469,11 +610,28 @@
                 .catch(err => console.error('Upvote error:', err));
         }
 
+        // Close dropdown when tapping outside
+        document.addEventListener('click', function(e) {
+            const container = document.getElementById('qa-subject-dropdown-container');
+            const menu = document.getElementById('qa-subject-dropdown-menu');
+            if (container && menu && !container.contains(e.target)) {
+                menu.classList.add('hidden');
+            }
+        });
+
         document.addEventListener('DOMContentLoaded', function() {
-            const searchInput = document.getElementById('qa-search-input');
-            if (searchInput) {
-                searchInput.addEventListener('input', filterLiveQuestions);
-                if (searchInput.value.trim().length > 0) {
+            const screenInput = document.getElementById('qa-screen-search-input');
+            const headerInput = document.getElementById('qa-search-input');
+            
+            if (screenInput) {
+                screenInput.addEventListener('input', filterLiveQuestions);
+                if (screenInput.value.trim().length > 0) {
+                    filterLiveQuestions();
+                }
+            }
+            if (headerInput) {
+                headerInput.addEventListener('input', filterLiveQuestions);
+                if (headerInput.value.trim().length > 0) {
                     filterLiveQuestions();
                 }
             }
