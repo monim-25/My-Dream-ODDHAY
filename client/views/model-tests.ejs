@@ -12,77 +12,119 @@
     <div class="flex-1 flex overflow-hidden w-full relative">
         <%- include('partials/student-sidebar', { activePage: 'exams' }) %>
 
-        <main class="flex-1 w-full overflow-y-auto px-3 sm:px-5 py-3 sm:py-5 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative space-y-3.5 pb-24 sm:pb-28 lg:pb-8">
-            
-            <% 
-               const testSubjects = Array.from(new Set(modelTests.map(t => (t.subject || '').trim()).filter(Boolean)));
-               const allFilterSubjects = Array.from(new Set([...(assignedSubjects || []), ...testSubjects])).filter(Boolean);
-            %>
+        <%
+            const subjectsSet = new Set();
+            if (locals.assignedSubjects && Array.isArray(assignedSubjects)) {
+                assignedSubjects.forEach(s => { if (s && s.trim()) subjectsSet.add(s.trim()); });
+            }
+            if (locals.modelTests && Array.isArray(modelTests)) {
+                modelTests.forEach(t => { if (t.subject && t.subject.trim()) subjectsSet.add(t.subject.trim()); });
+            }
+            const allModelSubjects = Array.from(subjectsSet).sort();
+        %>
 
-            <!-- TOP CONTROLS & SEARCH BAR (MOBILE FIRST) -->
-            <div class="max-w-6xl w-full mx-auto space-y-2.5">
-                
-                <!-- TOP HEADER ROW -->
-                <div class="flex items-center justify-between gap-2 flex-wrap">
-                    <div class="flex items-center gap-2 min-w-0">
-                        <span class="size-7 sm:size-8 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                            <span class="material-symbols-rounded text-base sm:text-lg leading-none">workspace_premium</span>
-                        </span>
-                        <div>
-                            <h1 class="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-tight flex items-center gap-1.5">
-                                <span>Model Tests</span>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/20">
-                                    <%= userClassLevel %>
-                                </span>
-                            </h1>
+        <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative space-y-0 pb-24 sm:pb-28 lg:pb-8">
+            
+            <!-- ON-SCREEN SEARCH & CUSTOM FILTER BAR (Placed directly on screen, ideal for small screens) -->
+            <div class="sticky top-0 z-20 w-full bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-3 sm:px-4 py-2.5 sm:py-3 shadow-2xs">
+                <div class="max-w-6xl w-full mx-auto space-y-2">
+                    
+                    <!-- Search Input & Custom Filter Dropdown Row -->
+                    <div class="flex items-center gap-2 w-full">
+                        <!-- Live Search Input -->
+                        <div class="relative flex-1 min-w-0">
+                            <div class="absolute left-2.5 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none select-none text-slate-400 dark:text-slate-500">
+                                <span class="material-symbols-rounded text-lg leading-none">search</span>
+                            </div>
+                            <input type="text" id="screenModelSearchInput"
+                                oninput="handleScreenModelSearch(this.value)"
+                                onkeyup="handleScreenModelSearch(this.value)"
+                                placeholder="Search model tests, board, year..."
+                                class="w-full h-9.5 sm:h-10 pl-9 pr-8 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 text-xs font-semibold text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 rounded-xl outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 shadow-2xs transition-all">
+                            <button type="button" id="screenModelClearSearchBtn" onclick="clearScreenModelSearch()"
+                                class="hidden absolute right-2 top-1/2 -translate-y-1/2 size-5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 items-center justify-center transition-colors cursor-pointer select-none">
+                                <span class="material-symbols-rounded text-sm">cancel</span>
+                            </button>
+                        </div>
+
+                        <!-- Custom Subject Filter Dropdown -->
+                        <div class="relative shrink-0" id="screenModelSubjectDropdownContainer">
+                            <button type="button" id="screenModelSubjectDropdownBtn" onclick="toggleScreenModelSubjectDropdown(event)"
+                                class="h-9.5 sm:h-10 px-2.5 sm:px-3 bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-200/80 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-all active:scale-95 shadow-2xs">
+                                <span class="material-symbols-rounded text-emerald-600 dark:text-emerald-400 text-base leading-none shrink-0">tune</span>
+                                <span id="screenModelSubjectSelectedLabel" class="truncate max-w-[85px] sm:max-w-[130px] font-bold">All Subjects</span>
+                                <span id="screenModelSubjectDropdownArrow" class="material-symbols-rounded text-slate-400 text-sm leading-none shrink-0 transition-transform duration-200">expand_more</span>
+                            </button>
+
+                            <!-- Custom Dropdown Popover Menu -->
+                            <div id="screenModelSubjectDropdownMenu"
+                                class="hidden absolute right-0 top-full mt-1.5 w-52 sm:w-60 max-h-64 overflow-y-auto no-scrollbar rounded-xl bg-white dark:bg-[#1e293b] border border-slate-200 dark:border-slate-700 shadow-xl z-50 py-1 divide-y divide-slate-100 dark:divide-slate-800/60">
+                                <!-- All Subjects Option -->
+                                <button type="button" onclick="selectScreenModelSubject('all')"
+                                    data-screen-subject-opt="all"
+                                    class="screen-model-sub-opt w-full px-3 py-2 text-left text-xs flex items-center justify-between transition-colors bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-bold">
+                                    <span class="flex items-center gap-2">
+                                        <span class="opt-dot size-1.5 rounded-full bg-emerald-500"></span>
+                                        <span>All Subjects</span>
+                                    </span>
+                                    <span class="opt-check material-symbols-rounded text-base text-emerald-600 dark:text-emerald-400 inline">check</span>
+                                </button>
+                                
+                                <% allModelSubjects.forEach(sub => { %>
+                                    <button type="button" onclick="selectScreenModelSubject('<%= sub.replace(/'/g, "\\'") %>')"
+                                        data-screen-subject-opt="<%= sub %>"
+                                        class="screen-model-sub-opt w-full px-3 py-2 text-left text-xs flex items-center justify-between transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium">
+                                        <span class="flex items-center gap-2">
+                                            <span class="opt-dot size-1.5 rounded-full bg-slate-300 dark:bg-slate-600"></span>
+                                            <span class="truncate"><%= sub %></span>
+                                        </span>
+                                        <span class="opt-check material-symbols-rounded text-base text-emerald-600 dark:text-emerald-400 hidden">check</span>
+                                    </button>
+                                <% }); %>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="flex items-center gap-1.5 shrink-0 ml-auto">
-                        <a href="/exams" class="h-7.5 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] sm:text-xs font-medium flex items-center gap-1 transition-all border border-slate-200/60 dark:border-slate-700/60" title="Back to Exams">
-                            <span class="material-symbols-rounded text-xs leading-none">arrow_back</span>
-                            <span>All Exams</span>
-                        </a>
-
-                        <span id="modelTestCountBadge" class="h-7.5 px-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 text-[11px] sm:text-xs font-semibold flex items-center gap-1">
-                            <span class="material-symbols-rounded text-xs leading-none">verified</span>
-                            <span id="modelCountText"><%= modelTests.length %> Available</span>
-                        </span>
-                    </div>
-                </div>
-
-                <!-- LIVE SEARCH INPUT & RESET BAR -->
-                <div class="flex items-center gap-2">
-                    <div class="relative flex-1">
-                        <span class="material-symbols-rounded absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base leading-none pointer-events-none select-none">search</span>
-                        <input type="text" id="modelSearchInput" oninput="handleModelSearch(this.value)" placeholder="Search model tests, subjects, boards..."
-                            class="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-800 dark:text-slate-200 placeholder-slate-400 outline-none focus:border-emerald-500 dark:focus:border-emerald-500 transition-all shadow-2xs">
-                        <button type="button" id="clearModelSearchBtn" onclick="clearModelSearch()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 size-4.5 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition-colors">
-                            <span class="material-symbols-rounded text-sm">cancel</span>
+                    <!-- Horizontally Scrollable Quick Subject Filter Chips -->
+                    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                        <button type="button" onclick="selectScreenModelSubject('all')" data-chip-subject="all"
+                            class="model-subject-chip px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all bg-emerald-600 text-white shadow-2xs active:scale-95">
+                            All (<%= modelTests.length %>)
                         </button>
-                    </div>
-                </div>
-
-                <!-- HORIZONTALLY SCROLLABLE SUBJECT FILTER PILLS -->
-                <% if (allFilterSubjects.length > 0) { %>
-                    <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 select-none -mx-1 px-1">
-                        <button type="button" onclick="selectModelSubject('all')" data-subject-pill="all"
-                            class="model-subject-pill px-3 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all shadow-2xs shrink-0 bg-emerald-600 text-white">
-                            All
-                        </button>
-                        <% allFilterSubjects.forEach(function(sub) { %>
-                            <button type="button" onclick="selectModelSubject('<%= sub.replace(/'/g, "\\'") %>')" data-subject-pill="<%= sub %>"
-                                class="model-subject-pill px-3 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all shadow-2xs shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700/80 border border-slate-200/60 dark:border-slate-700/60">
-                                <%= sub %>
+                        <% allModelSubjects.forEach(sub => { %>
+                            <% const subCount = modelTests.filter(m => (m.subject || '').trim() === sub).length; %>
+                            <button type="button" onclick="selectScreenModelSubject('<%= sub.replace(/'/g, "\\'") %>')" data-chip-subject="<%= sub %>"
+                                class="model-subject-chip px-2.5 py-1 rounded-lg text-[11px] font-semibold shrink-0 transition-all bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700/70 active:scale-95">
+                                <%= sub %> (<%= subCount %>)
                             </button>
                         <% }); %>
                     </div>
-                <% } %>
 
+                </div>
             </div>
 
-            <!-- MODEL TESTS GRID -->
-            <div class="max-w-6xl w-full mx-auto">
+            <!-- CONTENT BODY WRAPPER -->
+            <div class="max-w-6xl w-full mx-auto px-3 sm:px-4 pt-3 sm:pt-4 space-y-3 sm:space-y-4">
+
+                <!-- STATUS & COUNT BAR -->
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-1.5 min-w-0">
+                        <span class="text-xs font-bold text-slate-500 dark:text-slate-400 truncate">
+                            <span id="activeFilterLabel">All Model Tests</span>
+                        </span>
+                        <button type="button" id="resetFiltersBtn" onclick="resetModelFilters()" class="hidden text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-0.5 shrink-0">
+                            <span>Reset</span>
+                            <span class="material-symbols-rounded text-xs leading-none">close</span>
+                        </button>
+                    </div>
+
+                    <span class="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-500/20 text-[11px] font-semibold flex items-center gap-1.5 shrink-0">
+                        <span class="material-symbols-rounded text-xs sm:text-sm leading-none">workspace_premium</span>
+                        <span id="modelTestCountBadge"><%= modelTests.length %> Available</span>
+                    </span>
+                </div>
+
+                <!-- MODEL TESTS GRID -->
                 <div id="modelTestsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
                     <% if (modelTests.length === 0) { %>
                         <div class="col-span-full py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
@@ -98,25 +140,20 @@
                                const tYear = (test.year || '').trim();
                                const tTitle = test.title && test.title.trim() !== '' ? test.title.trim() : `${tSubject} ${tBoard} ${tYear}`.trim();
                             %>
-                            <div class="model-card bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/70 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between hover:border-emerald-500/50 dark:hover:border-emerald-500/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group relative space-y-2.5 shadow-2xs" 
+                            <div class="model-card bg-white dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/70 rounded-xl sm:rounded-2xl p-3 sm:p-3.5 flex flex-col justify-between hover:border-emerald-500/50 dark:hover:border-emerald-500/50 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group relative space-y-2.5"
                                  data-subject="<%= tSubject %>" 
                                  data-title="<%= tTitle.toLowerCase() %>"
                                  data-board="<%= tBoard.toLowerCase() %>"
-                                 data-year="<%= tYear %>">
+                                 data-year="<%= tYear.toLowerCase() %>">
                                 <div>
                                     <div class="flex items-center justify-between gap-1.5 mb-1.5">
                                         <div class="flex items-center gap-1 flex-wrap">
-                                            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
+                                            <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20">
                                                 <%= tSubject %>
                                             </span>
                                             <% if (test.duration && test.duration > 0) { %>
-                                                <span class="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                                     <%= test.duration %> Mins
-                                                </span>
-                                            <% } %>
-                                            <% if (tBoard || tYear) { %>
-                                                <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60 truncate max-w-[120px]">
-                                                    <%= [tBoard, tYear].filter(Boolean).join(' ') %>
                                                 </span>
                                             <% } %>
                                         </div>
@@ -128,14 +165,14 @@
                                 </div>
 
                                 <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-700/50">
-                                    <div class="flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
-                                        <span class="material-symbols-rounded text-sm text-emerald-500 leading-none select-none">quiz</span>
-                                        <span><%= test.totalQuestions || 0 %> Qs</span>
+                                    <div class="flex items-center gap-1 text-[10px] font-medium text-slate-400 truncate">
+                                        <span class="material-symbols-rounded text-xs text-emerald-500 leading-none">quiz</span>
+                                        <span class="truncate"><%= test.totalQuestions %> Questions <%= tBoard ? '• ' + tBoard : '' %></span>
                                     </div>
 
-                                    <a href="/question-bank/solve/<%= test._id %>?from=model" class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] sm:text-xs font-semibold transition-all shadow-2xs active:scale-95 flex items-center gap-1 shrink-0">
-                                        <span class="material-symbols-rounded text-xs sm:text-sm leading-none">play_arrow</span>
+                                    <a href="/question-bank/solve/<%= test._id %>?from=model" class="px-2.5 sm:px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition-all shadow-2xs active:scale-95 flex items-center gap-1 shrink-0">
                                         <span>Start Exam</span>
+                                        <span class="material-symbols-rounded text-xs leading-none">play_arrow</span>
                                     </a>
                                 </div>
                             </div>
@@ -144,15 +181,17 @@
                 </div>
 
                 <!-- EMPTY SEARCH RESULT STATE -->
-                <div id="noResultsState" class="hidden py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2.5">
+                <div id="noResultsState" class="hidden py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
                     <span class="material-symbols-rounded text-3xl text-slate-400 leading-none">search_off</span>
-                    <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300">No Matching Model Tests</h3>
-                    <p class="text-[11px] text-slate-400 max-w-xs mx-auto">We couldn't find any model tests matching your filter. Try adjusting your subject or search term.</p>
-                    <button type="button" onclick="resetModelFilters()" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-xs transition-all active:scale-95 inline-flex items-center gap-1">
-                        <span class="material-symbols-rounded text-sm">refresh</span>
-                        <span>Reset Filters</span>
-                    </button>
+                    <h3 class="text-xs font-bold text-slate-600 dark:text-slate-400">No Matching Model Tests</h3>
+                    <p class="text-[11px] text-slate-400">Try adjusting your subject filter or search terms.</p>
+                    <div class="pt-1">
+                        <button type="button" onclick="resetModelFilters()" class="px-3 py-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl hover:bg-emerald-100 transition-colors">
+                            Clear Filters
+                        </button>
+                    </div>
                 </div>
+
             </div>
 
         </main>
@@ -164,56 +203,125 @@
         let currentModelSubject = 'all';
         let currentModelSearch = '';
 
-        function selectModelSubject(subject) {
-            currentModelSubject = subject || 'all';
-            
-            // Update active styling on subject pills
-            document.querySelectorAll('.model-subject-pill').forEach(btn => {
-                const pillSubject = btn.getAttribute('data-subject-pill');
-                if (pillSubject === currentModelSubject) {
-                    btn.className = 'model-subject-pill px-3 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all shadow-2xs shrink-0 bg-emerald-600 text-white';
+        // Toggle custom dropdown
+        function toggleScreenModelSubjectDropdown(e) {
+            if (e) e.stopPropagation();
+            const menu = document.getElementById('screenModelSubjectDropdownMenu');
+            const arrow = document.getElementById('screenModelSubjectDropdownArrow');
+            if (menu) {
+                const isOpen = !menu.classList.contains('hidden');
+                if (isOpen) {
+                    menu.classList.add('hidden');
+                    if (arrow) arrow.style.transform = 'rotate(0deg)';
                 } else {
-                    btn.className = 'model-subject-pill px-3 py-1 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all shadow-2xs shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 dark:hover:bg-slate-700/80 border border-slate-200/60 dark:border-slate-700/60';
+                    menu.classList.remove('hidden');
+                    if (arrow) arrow.style.transform = 'rotate(180deg)';
+                }
+            }
+        }
+
+        // Close dropdown when tapping outside
+        document.addEventListener('click', function(e) {
+            const container = document.getElementById('screenModelSubjectDropdownContainer');
+            const menu = document.getElementById('screenModelSubjectDropdownMenu');
+            const arrow = document.getElementById('screenModelSubjectDropdownArrow');
+            if (container && menu && !container.contains(e.target)) {
+                menu.classList.add('hidden');
+                if (arrow) arrow.style.transform = 'rotate(0deg)';
+            }
+        });
+
+        // Select subject from dropdown or chips
+        function selectScreenModelSubject(subject) {
+            currentModelSubject = subject || 'all';
+
+            // Close dropdown
+            const menu = document.getElementById('screenModelSubjectDropdownMenu');
+            const arrow = document.getElementById('screenModelSubjectDropdownArrow');
+            if (menu) menu.classList.add('hidden');
+            if (arrow) arrow.style.transform = 'rotate(0deg)';
+
+            // Update dropdown trigger label
+            const labelEl = document.getElementById('screenModelSubjectSelectedLabel');
+            if (labelEl) {
+                labelEl.textContent = (currentModelSubject === 'all') ? 'All Subjects' : currentModelSubject;
+            }
+
+            // Update dropdown options checkmarks and colors
+            document.querySelectorAll('.screen-model-sub-opt').forEach(opt => {
+                const optSub = opt.getAttribute('data-screen-subject-opt');
+                const dot = opt.querySelector('.opt-dot');
+                const check = opt.querySelector('.opt-check');
+                if (optSub === currentModelSubject) {
+                    opt.classList.add('bg-emerald-50', 'dark:bg-emerald-950/40', 'text-emerald-600', 'dark:text-emerald-400', 'font-bold');
+                    opt.classList.remove('text-slate-700', 'dark:text-slate-300', 'font-medium');
+                    if (dot) dot.classList.replace('bg-slate-300', 'bg-emerald-500');
+                    if (check) check.classList.remove('hidden');
+                } else {
+                    opt.classList.remove('bg-emerald-50', 'dark:bg-emerald-950/40', 'text-emerald-600', 'dark:text-emerald-400', 'font-bold');
+                    opt.classList.add('text-slate-700', 'dark:text-slate-300', 'font-medium');
+                    if (dot) dot.classList.replace('bg-emerald-500', 'bg-slate-300');
+                    if (check) check.classList.add('hidden');
                 }
             });
 
+            // Update quick subject chips style
+            document.querySelectorAll('.model-subject-chip').forEach(chip => {
+                const chipSub = chip.getAttribute('data-chip-subject');
+                if (chipSub === currentModelSubject) {
+                    chip.className = 'model-subject-chip px-2.5 py-1 rounded-lg text-[11px] font-bold shrink-0 transition-all bg-emerald-600 text-white shadow-2xs active:scale-95';
+                } else {
+                    chip.className = 'model-subject-chip px-2.5 py-1 rounded-lg text-[11px] font-semibold shrink-0 transition-all bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200/70 dark:border-slate-700/70 active:scale-95';
+                }
+            });
+
+            // Synchronize desktop nav select if present
+            const headerSelect = document.getElementById('model-header-subject');
+            if (headerSelect && headerSelect.value !== currentModelSubject) {
+                headerSelect.value = currentModelSubject;
+            }
+
             filterModelTests();
         }
 
-        function handleModelSearch(val) {
+        // Live Search Handler
+        function handleScreenModelSearch(val) {
             currentModelSearch = (val || '').toLowerCase().trim();
-            const clearBtn = document.getElementById('clearModelSearchBtn');
+            
+            const clearBtn = document.getElementById('screenModelClearSearchBtn');
             if (clearBtn) {
                 if (currentModelSearch.length > 0) {
                     clearBtn.classList.remove('hidden');
+                    clearBtn.classList.add('flex');
                 } else {
                     clearBtn.classList.add('hidden');
+                    clearBtn.classList.remove('flex');
                 }
             }
+
+            // Synchronize desktop header search input if present
+            const headerInput = document.getElementById('model-search-input-header');
+            if (headerInput && headerInput.value !== val) {
+                headerInput.value = val;
+            }
+
             filterModelTests();
         }
 
-        function clearModelSearch() {
-            const input = document.getElementById('modelSearchInput');
+        // Clear Search
+        function clearScreenModelSearch() {
+            const input = document.getElementById('screenModelSearchInput');
             if (input) input.value = '';
-            handleModelSearch('');
+            handleScreenModelSearch('');
         }
 
+        // Reset all filters
         function resetModelFilters() {
-            clearModelSearch();
-            selectModelSubject('all');
+            clearScreenModelSearch();
+            selectScreenModelSubject('all');
         }
 
-        window.filterModelWithSubject = function(subject) {
-            selectModelSubject(subject);
-        };
-
-        window.filterModelWithSearch = function(search) {
-            const input = document.getElementById('modelSearchInput');
-            if (input) input.value = search || '';
-            handleModelSearch(search);
-        };
-
+        // Core filter function
         function filterModelTests() {
             const cards = document.querySelectorAll('.model-card');
             let visibleCount = 0;
@@ -241,11 +349,38 @@
                 }
             });
 
-            const countTextEl = document.getElementById('modelCountText');
-            if (countTextEl) {
-                countTextEl.textContent = `${visibleCount} Available`;
+            // Update badge count
+            const badgeEl = document.getElementById('modelTestCountBadge');
+            if (badgeEl) {
+                badgeEl.textContent = `${visibleCount} Available`;
             }
 
+            // Update active filter label and reset button
+            const activeLabel = document.getElementById('activeFilterLabel');
+            const resetBtn = document.getElementById('resetFiltersBtn');
+            const hasFilter = (currentModelSubject !== 'all' || currentModelSearch !== '');
+
+            if (activeLabel) {
+                if (currentModelSubject !== 'all' && currentModelSearch) {
+                    activeLabel.textContent = `Filtered: "${currentModelSubject}" & "${currentModelSearch}"`;
+                } else if (currentModelSubject !== 'all') {
+                    activeLabel.textContent = `Subject: ${currentModelSubject}`;
+                } else if (currentModelSearch) {
+                    activeLabel.textContent = `Search: "${currentModelSearch}"`;
+                } else {
+                    activeLabel.textContent = 'All Model Tests';
+                }
+            }
+
+            if (resetBtn) {
+                if (hasFilter) {
+                    resetBtn.classList.remove('hidden');
+                } else {
+                    resetBtn.classList.add('hidden');
+                }
+            }
+
+            // No results state
             const noResults = document.getElementById('noResultsState');
             if (noResults) {
                 if (visibleCount === 0 && cards.length > 0) {
@@ -255,6 +390,17 @@
                 }
             }
         }
+
+        // Interop with desktop header if called from header
+        window.filterModelWithSubject = function(subject) {
+            selectScreenModelSubject(subject);
+        };
+
+        window.filterModelWithSearch = function(search) {
+            const screenInput = document.getElementById('screenModelSearchInput');
+            if (screenInput) screenInput.value = search;
+            handleScreenModelSearch(search);
+        };
     </script>
 </body>
 </html>
