@@ -208,7 +208,7 @@
             </div>
 
             <!-- Scrollable Questions Feed (Dashboard-Aligned Card System) -->
-            <div id="questions-feed" class="flex-1 space-y-2.5 w-full p-2.5 sm:p-4">
+            <div id="questions-feed" class="flex-1 space-y-2.5 w-full p-2.5 sm:p-4 pb-28 sm:pb-32">
                 <% if (qList.length === 0) { %>
                     <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-10 text-center shadow-none w-full">
                         <span class="material-symbols-rounded text-5xl text-slate-300 mb-3 flex items-center justify-center leading-none select-none">help_outline</span>
@@ -392,8 +392,8 @@
                 <% } %>
             </div>
 
-            <!-- Bottom Ask Question Composer Field (Docked at bottom of viewport, integrated text box) -->
-            <div id="ask-question-box" class="w-full bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 p-2 sm:p-3 shrink-0 z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.04)] dark:shadow-[0_-4px_16px_rgba(0,0,0,0.3)]">
+            <!-- Sticky Bottom Ask Question Composer Field (Sticky, auto-hides on scroll-down, reveals on scroll-up) -->
+            <div id="ask-question-box" class="sticky bottom-0 w-full bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md border-t border-slate-200/90 dark:border-slate-800 p-2 sm:p-3 shrink-0 z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] dark:shadow-[0_-4px_16px_rgba(0,0,0,0.35)] transition-all duration-300 ease-in-out translate-y-0 opacity-100 pointer-events-auto lg:translate-y-0 lg:opacity-100 lg:pointer-events-auto">
                 <form action="/qa-ask" method="POST" enctype="multipart/form-data" class="w-full max-w-4xl mx-auto flex flex-col gap-1.5">
                     
                     <!-- Selected Image Preview Badge -->
@@ -448,18 +448,8 @@
 
                 </form>
             </div>
-
-            <!-- Safe Bottom Spacing for Mobile Bottom Navigation -->
-            <div class="h-20 sm:h-24 lg:h-8 w-full shrink-0"></div>
         </main>
     </div>
-
-    <!-- Floating Write / Ask Question Action Button (Auto-appears on scroll, disappears at top & composer) -->
-    <button type="button" id="floating-write-btn" onclick="focusAskComposer()"
-        class="fixed bottom-20 right-4 sm:bottom-22 sm:right-6 lg:hidden size-12 rounded-full bg-primary hover:bg-primary/90 text-white shadow-xl shadow-primary/35 flex items-center justify-center active:scale-90 transition-all duration-300 z-35 opacity-0 scale-75 translate-y-4 pointer-events-none cursor-pointer"
-        title="Write a Question" aria-label="Write a Question">
-        <span class="material-symbols-rounded text-2xl leading-none select-none">edit_square</span>
-    </button>
 
     <!-- Fullscreen In-Page Lightbox Image Viewer Modal -->
     <div id="image-modal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-all duration-200" onclick="closeImageModal()">
@@ -726,38 +716,66 @@
             window.location.href = url.toString();
         }
 
+        let lastQaScrollTop = 0;
+
+        function showComposer(composer) {
+            composer.classList.remove('translate-y-[120%]', 'opacity-0', 'pointer-events-none');
+            composer.classList.add('translate-y-0', 'opacity-100', 'pointer-events-auto');
+        }
+
+        function hideComposer(composer) {
+            composer.classList.remove('translate-y-0', 'opacity-100', 'pointer-events-auto');
+            composer.classList.add('translate-y-[120%]', 'opacity-0', 'pointer-events-none');
+        }
+
         function focusAskComposer() {
-            const box = document.getElementById('ask-question-box');
+            const composer = document.getElementById('ask-question-box');
             const textarea = document.getElementById('ask-question-textarea');
-            if (box) {
-                box.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            if (composer) {
+                showComposer(composer);
             }
             if (textarea) {
-                setTimeout(() => textarea.focus(), 350);
+                textarea.focus();
             }
         }
 
-        // Floating Write Button Scroll Listener (Appears during scrolling, disappears at top and bottom composer)
+        // Sticky Bottom Composer Scroll Listener (Hides on scroll-down, reveals on scroll-up / top / bottom)
         function handleQaScroll() {
             const scrollContainer = document.getElementById('qa-main-scroll');
-            const fab = document.getElementById('floating-write-btn');
-            if (!fab) return;
+            const composer = document.getElementById('ask-question-box');
+            const textarea = document.getElementById('ask-question-textarea');
+            if (!scrollContainer || !composer) return;
 
-            const scrollTop = scrollContainer ? scrollContainer.scrollTop : (window.pageYOffset || document.documentElement.scrollTop || 0);
-            const scrollHeight = scrollContainer ? scrollContainer.scrollHeight : document.documentElement.scrollHeight;
-            const clientHeight = scrollContainer ? scrollContainer.clientHeight : window.innerHeight;
-            const distanceFromBottom = scrollHeight - (scrollTop + clientHeight);
-
-            // Hide at the very top (search and filter are visible)
-            // Hide near the bottom composer (within 220px of bottom, composer is visible)
-            // Otherwise show write button when scrolling through feed
-            if (scrollTop > 60 && distanceFromBottom > 220) {
-                fab.classList.remove('opacity-0', 'scale-75', 'translate-y-4', 'pointer-events-none');
-                fab.classList.add('opacity-100', 'scale-100', 'translate-y-0', 'pointer-events-auto');
-            } else {
-                fab.classList.remove('opacity-100', 'scale-100', 'translate-y-0', 'pointer-events-auto');
-                fab.classList.add('opacity-0', 'scale-75', 'translate-y-4', 'pointer-events-none');
+            // If user is currently typing in the input, never hide it
+            if (document.activeElement === textarea) {
+                showComposer(composer);
+                return;
             }
+
+            const currentScrollTop = scrollContainer.scrollTop;
+            const scrollHeight = scrollContainer.scrollHeight;
+            const clientHeight = scrollContainer.clientHeight;
+            const distanceFromBottom = scrollHeight - (currentScrollTop + clientHeight);
+            const scrollDelta = currentScrollTop - lastQaScrollTop;
+
+            // 1. At the very top (scrollTop <= 50): Keep visible
+            if (currentScrollTop <= 50) {
+                showComposer(composer);
+            }
+            // 2. Near the very bottom (within 50px): Keep visible
+            else if (distanceFromBottom <= 50) {
+                showComposer(composer);
+            }
+            // 3. Scrolling DOWN (reading questions): hide composer
+            else if (scrollDelta > 6) {
+                hideComposer(composer);
+            }
+            // 4. Scrolling UP (navigating or wanting to write): reveal composer
+            else if (scrollDelta < -6) {
+                showComposer(composer);
+            }
+
+            lastQaScrollTop = Math.max(0, currentScrollTop);
         }
 
         function toggleReplyDrawer(qaId) {
