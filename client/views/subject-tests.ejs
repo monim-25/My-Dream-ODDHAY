@@ -15,7 +15,58 @@
         <%
             const curSubject = (selectedSubject || 'all').trim();
             const isAllSubject = (!curSubject || curSubject.toLowerCase() === 'all');
+            const curSubKey = curSubject.toLowerCase();
             const placeholderText = isAllSubject ? 'Search exams, topics...' : `Search ${curSubject} exams, topics...`;
+
+            // Standard curriculum topics mapped strictly per subject
+            const standardSubjectTopics = {
+                'bangla': ['বাংলা ১ম পত্র (সাহিত্য পাঠ)', 'বাংলা ২য় পত্র (ব্যাকরণ ও নির্মিতি)', 'সোনার তরী', 'শুভা', 'অপরিচিতা', 'বোর্ড প্রশ্নাবলি'],
+                'english': ['Grammar & Vocabulary', 'Reading Comprehension', 'Right Form of Verbs', 'Tense & Voice', 'Writing & Composition', 'Board Questions'],
+                'physics': ['ভৌত রাশি ও পরিমাপ', 'গতি ও বল (Motion & Force)', 'কাজ, শক্তি ও ক্ষমতা', 'পদার্থের অবস্থা ও চাপ', 'স্থির ও চলতড়িৎ', 'আলোর প্রতিফলন ও প্রতিসরণ', 'বোর্ড প্রশ্নাবলি'],
+                'chemistry': ['পদার্থের গঠন ও অবস্থা', 'পর্যায় সারণি (Periodic Table)', 'রাসায়নিক বন্ধন', 'রাসায়নিক গণনা ও বিক্রিয়া', 'এসিড-ক্ষারক ও লবণ', 'বোর্ড প্রশ্নাবলি'],
+                'higher math': ['সেট ও ফাংশন', 'বীজগণিতীয় রাশি', 'ত্রিকোণমিতি (Trigonometry)', 'স্থানাঙ্ক জ্যামিতি', 'সম্ভাবনা (Probability)', 'বোর্ড প্রশ্নাবলি'],
+                'math': ['বাস্তব সংখ্যা ও সেট', 'বীজগণিতীয় সূত্রাবলি', 'জ্যামিতি ও বৃত্ত', 'ত্রিকোণমিতি ও পরিমিতি', 'পরিসংখ্যান', 'বোর্ড প্রশ্নাবলি'],
+                'general math': ['বাস্তব সংখ্যা ও সেট', 'বীজগণিতীয় সূত্রাবলি', 'জ্যামিতি ও বৃত্ত', 'ত্রিকোণমিতি ও পরিমিতি', 'পরিসংখ্যান', 'বোর্ড প্রশ্নাবলি'],
+                'biology': ['কোষ ও টিস্যু', 'কোষ বিভাজন', 'খাদ্য, পুষ্টি ও পরিপাক', 'রক্ত ও সংবহন', 'শ্বসন প্রক্রিয়া', 'বোর্ড প্রশ্নাবলি'],
+                'ict': ['তথ্য ও যোগাযোগ প্রযুক্তি', 'ওয়েব ডিজাইন ও HTML', 'সি প্রোগ্রামিং (C Language)', 'ডেটাবেজ ম্যানেজমেন্ট', 'বোর্ড প্রশ্নাবলি'],
+                'general academic': ['সাধারণ জ্ঞান', 'বিজ্ঞান ও প্রযুক্তি', 'মৌলিক ব্যাকরণ']
+            };
+
+            let activeSubjectTopics = [];
+            if (!isAllSubject) {
+                const stdList = standardSubjectTopics[curSubKey] || (locals.subjectTopicMap && locals.subjectTopicMap[curSubKey]) || [];
+                const seenTopics = new Set();
+                const cleanList = [];
+
+                // 1. Gather topics from exams strictly for this subject
+                (examList || []).forEach(e => {
+                    const eSub = (e.subject || '').toLowerCase().trim();
+                    const eTop = (e.topic || '').trim();
+                    const eTopLow = eTop.toLowerCase();
+                    if (eSub === curSubKey && eTop && eTopLow !== curSubKey && eTopLow !== 'custom quiz' && eTopLow !== 'personalized exam') {
+                        if (!seenTopics.has(eTopLow)) {
+                            seenTopics.add(eTopLow);
+                            cleanList.push(eTop);
+                        }
+                    }
+                });
+
+                // 2. Add standard topics for this subject
+                stdList.forEach(t => {
+                    const low = t.toLowerCase().trim();
+                    if (!seenTopics.has(low)) {
+                        seenTopics.add(low);
+                        cleanList.push(t);
+                    }
+                });
+
+                activeSubjectTopics = cleanList;
+            } else {
+                activeSubjectTopics = (subjectTopics || []).filter(t => {
+                    const low = (t || '').toLowerCase().trim();
+                    return low && low !== 'custom quiz' && low !== 'personalized exam';
+                });
+            }
         %>
 
         <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative space-y-0 pb-20 sm:pb-24 lg:pb-8">
@@ -42,13 +93,13 @@
                             </button>
                         </div>
 
-                        <!-- Filter & Topic Dropdown Trigger Button -->
+                        <!-- Topic Filter Dropdown Trigger Button -->
                         <div class="relative shrink-0" id="screenSubjectTestsFilterContainer">
                             <button type="button" id="screenSubjectTestsFilterBtn" onclick="toggleSubjectTestsFilterMenu(event)"
                                 class="h-11 px-3 sm:px-3.5 bg-slate-50 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-700 dark:text-slate-200 rounded-xl flex items-center gap-1.5 sm:gap-2 text-xs sm:text-[13px] font-bold transition-all shadow-2xs cursor-pointer select-none active:scale-95"
-                                title="Topics and Filters">
-                                <span class="material-symbols-rounded text-base sm:text-lg text-cyan-600 dark:text-cyan-400 leading-none shrink-0">tune</span>
-                                <span id="screenFilterBtnLabel" class="truncate max-w-[80px] sm:max-w-[120px]">Topics</span>
+                                title="Topics">
+                                <span class="material-symbols-rounded text-base sm:text-lg text-cyan-600 dark:text-cyan-400 leading-none shrink-0">topic</span>
+                                <span id="screenFilterBtnLabel" class="truncate max-w-[85px] sm:max-w-[130px]">All Topics</span>
                                 <span id="screenFilterActiveBadge" class="hidden px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-cyan-600 text-white shrink-0 shadow-xs">1</span>
                                 <span class="material-symbols-rounded text-slate-400 text-sm leading-none shrink-0">expand_more</span>
                             </button>
@@ -57,26 +108,26 @@
                             <div id="screenSubjectTestsFilterBackdrop" class="hidden fixed inset-0 bg-black/40 backdrop-blur-2xs z-40 sm:hidden" onclick="toggleSubjectTestsFilterMenu(event)"></div>
 
                             <!-- Platform Dropdown Menu / Bottom Sheet -->
-                            <div id="screenSubjectTestsFilterMenu" class="hidden fixed inset-x-3 bottom-20 max-h-[75vh] sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-80 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3.5 sm:p-4 space-y-3.5 overflow-y-auto no-scrollbar">
+                            <div id="screenSubjectTestsFilterMenu" class="hidden fixed inset-x-3 bottom-20 max-h-[75vh] sm:absolute sm:inset-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-80 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl z-50 p-3.5 sm:p-4 space-y-3 overflow-y-auto no-scrollbar">
                                 
                                 <!-- Menu Header -->
                                 <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
                                     <div class="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-800 dark:text-white">
-                                        <span class="material-symbols-rounded text-base text-cyan-600 dark:text-cyan-400">tune</span>
-                                        <span>Topics & Filters</span>
+                                        <span class="material-symbols-rounded text-base text-cyan-600 dark:text-cyan-400">topic</span>
+                                        <span><%= isAllSubject ? 'All Subject Topics' : curSubject + ' Topics' %></span>
                                     </div>
-                                    <button type="button" onclick="resetSubjectTestsFilters()" class="text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer">
-                                        Reset All
+                                    <button type="button" onclick="setScreenTopicFilter('all')" class="text-[11px] font-bold text-slate-400 hover:text-rose-500 transition-colors cursor-pointer">
+                                        Reset to All
                                     </button>
                                 </div>
 
-                                <!-- SECTION 1: TOPIC FILTER -->
-                                <div class="space-y-2">
+                                <!-- TOPIC FILTER SECTION (Strictly for selected subject) -->
+                                <div class="space-y-1.5">
                                     <div class="flex items-center justify-between">
                                         <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Filter By Topic</span>
-                                        <span class="text-[10px] text-slate-400 font-semibold"><%= (subjectTopics || []).length %> Topics</span>
+                                        <span class="text-[10px] text-slate-400 font-semibold"><%= activeSubjectTopics.length %> Topics</span>
                                     </div>
-                                    <div class="flex flex-col gap-1 max-h-48 overflow-y-auto no-scrollbar pr-0.5">
+                                    <div class="flex flex-col gap-1 max-h-56 overflow-y-auto no-scrollbar pr-0.5">
                                         <!-- All Topics Option -->
                                         <button type="button" onclick="setScreenTopicFilter('all')" data-topic-val="all"
                                             class="screen-topic-menu-opt w-full px-3 py-2.5 rounded-xl border text-left text-xs font-bold transition-all flex items-center justify-between cursor-pointer active:scale-95 bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-2xs">
@@ -84,32 +135,13 @@
                                             <span class="material-symbols-rounded text-sm opt-check">check</span>
                                         </button>
                                         
-                                        <% (subjectTopics || []).forEach(tp => { %>
+                                        <% activeSubjectTopics.forEach(tp => { %>
                                             <button type="button" onclick="setScreenTopicFilter('<%= tp.replace(/'/g, "\\'") %>')"
                                                 data-topic-val="<%= tp.toLowerCase().trim() %>"
                                                 class="screen-topic-menu-opt w-full px-3 py-2.5 rounded-xl border text-left text-xs font-medium transition-all flex items-center justify-between cursor-pointer active:scale-95 bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100">
                                                 <span class="truncate"><%= tp %></span>
                                                 <span class="material-symbols-rounded text-sm opt-check hidden">check</span>
                                             </button>
-                                        <% }) %>
-                                    </div>
-                                </div>
-
-                                <!-- SECTION 2: SWITCH SUBJECT -->
-                                <div class="space-y-2 pt-2.5 border-t border-slate-100 dark:border-slate-800">
-                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">Switch Subject</span>
-                                    <div class="grid grid-cols-2 gap-1.5 max-h-36 overflow-y-auto no-scrollbar">
-                                        <a href="/exams/subject-tests?subject=all" 
-                                           class="px-2.5 py-1.5 rounded-xl border text-center text-[11px] font-bold transition-all truncate <%= isAllSubject ? 'bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-2xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100' %>">
-                                           All Subjects
-                                        </a>
-                                        <% (assignedSubjects || []).forEach(sub => { 
-                                            const isActive = (!isAllSubject && curSubject.toLowerCase() === sub.toLowerCase());
-                                        %>
-                                            <a href="/exams/subject-tests?subject=<%= encodeURIComponent(sub) %>" 
-                                               class="px-2.5 py-1.5 rounded-xl border text-center text-[11px] font-bold transition-all truncate <%= isActive ? 'bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-2xs' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100' %>">
-                                               <%= sub %>
-                                            </a>
                                         <% }) %>
                                     </div>
                                 </div>
@@ -121,30 +153,30 @@
                     <!-- ROW 2: HORIZONTAL SUBJECT PILL SCROLLER (Fast Touch Switcher on Mobile) -->
                     <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1">
                         <a href="/exams/subject-tests?subject=all" 
-                           class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all select-none <%= isAllSubject ? 'bg-cyan-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 border border-slate-200/80 dark:border-slate-700/60' %>">
+                           class="shrink-0 h-8 px-3 rounded-xl text-xs font-bold flex items-center justify-center transition-all select-none <%= isAllSubject ? 'bg-cyan-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 border border-slate-200/80 dark:border-slate-700/60' %>">
                             All Subjects
                         </a>
                         <% (assignedSubjects || []).forEach(function(sub) { 
                             const isSubActive = (!isAllSubject && curSubject.toLowerCase() === sub.toLowerCase());
                         %>
                             <a href="/exams/subject-tests?subject=<%= encodeURIComponent(sub) %>" 
-                               class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all select-none <%= isSubActive ? 'bg-cyan-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 border border-slate-200/80 dark:border-slate-700/60' %>">
+                               class="shrink-0 h-8 px-3 rounded-xl text-xs font-bold flex items-center justify-center transition-all select-none <%= isSubActive ? 'bg-cyan-600 text-white shadow-xs' : 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200/70 border border-slate-200/80 dark:border-slate-700/60' %>">
                                 <%= sub %>
                             </a>
                         <% }); %>
                     </div>
 
                     <!-- ROW 3: HORIZONTAL TOPIC PILL STRIP (Instant 1-Tap Filter Directly on Screen) -->
-                    <% if (subjectTopics && subjectTopics.length > 0) { %>
+                    <% if (activeSubjectTopics && activeSubjectTopics.length > 0) { %>
                         <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1 border-t border-slate-100 dark:border-slate-800/60 pt-1.5">
                             <button type="button" onclick="setScreenTopicFilter('all')" data-topic-strip-val="all"
-                                class="screen-topic-strip-opt shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all select-none active:scale-95 bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-2xs">
+                                class="screen-topic-strip-opt shrink-0 h-8 px-3 rounded-xl text-xs font-bold border transition-all select-none active:scale-95 bg-cyan-600 text-white border-cyan-600 shadow-2xs">
                                 All Topics
                             </button>
-                            <% subjectTopics.forEach(function(tp) { %>
+                            <% activeSubjectTopics.forEach(function(tp) { %>
                                 <button type="button" onclick="setScreenTopicFilter('<%= tp.replace(/'/g, "\\'") %>')" 
                                     data-topic-strip-val="<%= tp.toLowerCase().trim() %>"
-                                    class="screen-topic-strip-opt shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all select-none active:scale-95 bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100">
+                                    class="screen-topic-strip-opt shrink-0 h-8 px-3 rounded-xl text-xs font-medium border transition-all select-none active:scale-95 bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100">
                                     <%= tp %>
                                 </button>
                             <% }); %>
@@ -180,15 +212,23 @@
                     </div>
 
                     <!-- Exam Count Badge -->
+                    <%
+                        const displayExams = isAllSubject 
+                            ? (examList || []) 
+                            : (examList || []).filter(item => {
+                                const s = (item.subject || '').toLowerCase().trim();
+                                return s === curSubKey || s.includes(curSubKey) || curSubKey.includes(s);
+                            });
+                    %>
                     <span class="px-2.5 py-1 rounded-xl bg-cyan-50 dark:bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-200/80 dark:border-cyan-500/20 text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-2xs">
                         <span class="material-symbols-rounded text-sm leading-none">menu_book</span>
-                        <span id="subjectTestCountBadge"><%= examList.length %> Available</span>
+                        <span id="subjectTestCountBadge"><%= displayExams.length %> Available</span>
                     </span>
                 </div>
 
                 <!-- SUBJECT EXAMS GRID -->
                 <div id="subjectTestsGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-                    <% if (examList.length === 0) { %>
+                    <% if (displayExams.length === 0) { %>
                         <div class="col-span-full py-16 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 space-y-2">
                             <span class="material-symbols-rounded text-4xl text-slate-400 leading-none flex items-center justify-center mx-auto">event_busy</span>
                             <h3 class="text-xs font-bold text-slate-600 dark:text-slate-400">No Subject Exams Available</h3>
@@ -200,7 +240,7 @@
                             </div>
                         </div>
                     <% } else { %>
-                        <% examList.forEach(function(item) { 
+                        <% displayExams.forEach(function(item) { 
                             const subLow = (item.subject || '').toLowerCase().trim();
                             const topRaw = (item.topic || '').trim();
                             const topLow = topRaw.toLowerCase();
@@ -331,9 +371,9 @@
                 const val = (btn.getAttribute('data-topic-strip-val') || '').toLowerCase().trim();
                 const isMatch = (val === currentSubjectTopic);
                 if (isMatch) {
-                    btn.className = 'screen-topic-strip-opt shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all select-none active:scale-95 bg-cyan-500/15 border-cyan-500 text-cyan-600 dark:text-cyan-400 shadow-2xs';
+                    btn.className = 'screen-topic-strip-opt shrink-0 h-8 px-3 rounded-xl text-xs font-bold border transition-all select-none active:scale-95 bg-cyan-600 text-white border-cyan-600 shadow-2xs';
                 } else {
-                    btn.className = 'screen-topic-strip-opt shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all select-none active:scale-95 bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100';
+                    btn.className = 'screen-topic-strip-opt shrink-0 h-8 px-3 rounded-xl text-xs font-medium border transition-all select-none active:scale-95 bg-slate-50 dark:bg-slate-800/80 border-slate-200/80 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-slate-100';
                 }
             });
 
@@ -346,7 +386,7 @@
                     if (label) label.textContent = topic;
                 } else {
                     badge.classList.add('hidden');
-                    if (label) label.textContent = 'Topics';
+                    if (label) label.textContent = 'All Topics';
                 }
             }
 
@@ -360,12 +400,6 @@
                 } else {
                     chip.classList.add('hidden');
                 }
-            }
-
-            // 5. Synchronize desktop header select if present
-            const headerSelect = document.getElementById('subject-tests-header-topic');
-            if (headerSelect) {
-                headerSelect.value = (currentSubjectTopic === 'all') ? 'all' : topic;
             }
 
             closeSubjectTestsFilterMenu();

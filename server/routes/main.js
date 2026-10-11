@@ -5198,6 +5198,9 @@ router.get('/exams/subject-tests', protect, async (req, res) => {
         questionBanks.forEach(qb => {
             const rawTopic = (qb.topic || '').trim();
             const subLow = (qb.subject || '').toLowerCase().trim();
+            if (rawSelected && subLow !== rawSelected && !subLow.includes(rawSelected) && !rawSelected.includes(subLow)) {
+                return;
+            }
             const isTopicDuplicate = (rawTopic.toLowerCase() === subLow) || (rawTopic.toLowerCase() === 'custom quiz');
             const cleanTopic = isTopicDuplicate ? '' : rawTopic;
             const qCount = bankCountMap[qb._id.toString()] || (qb.questions ? qb.questions.length : 0);
@@ -5217,6 +5220,9 @@ router.get('/exams/subject-tests', protect, async (req, res) => {
         quizzes.forEach(qz => {
             const rawTopic = (qz.topic || '').trim();
             const subLow = (qz.subject || '').toLowerCase().trim();
+            if (rawSelected && subLow !== rawSelected && !subLow.includes(rawSelected) && !rawSelected.includes(subLow)) {
+                return;
+            }
             const isTopicDuplicate = (rawTopic.toLowerCase() === subLow) || (rawTopic.toLowerCase() === 'custom quiz');
             const cleanTopic = isTopicDuplicate ? '' : rawTopic;
             const qCount = qz.questions ? qz.questions.length : (qz.totalQuestions || 15);
@@ -5244,6 +5250,7 @@ router.get('/exams/subject-tests', protect, async (req, res) => {
             selectedSubject: selectedSubject || 'all',
             assignedSubjects: assignedSubjects || [],
             subjectTopics: subjectTopics || [],
+            subjectTopicMap: defaultCurriculumTopics,
             examList: examList || []
         });
     } catch (err) {
