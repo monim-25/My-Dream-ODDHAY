@@ -1133,6 +1133,7 @@ router.get('/qa', teacherProtect, async (req, res) => {
         const selectedClass = req.query.class || 'all';
         const selectedSubject = req.query.subject || 'all';
         const selectedCourse = req.query.course || 'all';
+        const selectedStatus = req.query.status || 'open';
 
         // Filter courses accordingly
         let filteredCourses = myCourses;
@@ -1146,23 +1147,35 @@ router.get('/qa', teacherProtect, async (req, res) => {
             filteredCourses = filteredCourses.filter(c => c._id.toString() === selectedCourse);
         }
         const courseIds = filteredCourses.map(c => c._id);
+        const allMyCourseIds = myCourses.map(c => c._id);
         
         // 2. Build query for Q&A
         const qaQuery = { 
-            status: 'open',
             course: { $in: courseIds }
         };
+        if (selectedStatus === 'resolved') {
+            qaQuery.status = 'resolved';
+        } else if (selectedStatus === 'all') {
+            // any status
+        } else {
+            qaQuery.status = 'open';
+        }
 
         const page = parseInt(req.query.page) || 1;
         const limit = 15;
         const skip = (page - 1) * limit;
 
-        const totalQAs = await QA.countDocuments(qaQuery);
+        const [totalQAs, openQAsCount, resolvedQAsCount] = await Promise.all([
+            QA.countDocuments(qaQuery),
+            QA.countDocuments({ status: 'open', course: { $in: allMyCourseIds } }),
+            QA.countDocuments({ status: 'resolved', course: { $in: allMyCourseIds } })
+        ]);
         const totalPages = Math.ceil(totalQAs / limit) || 1;
 
         const qas = await QA.find(qaQuery)
         .populate('askedBy')
         .populate('course')
+        .populate('answeredBy')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
@@ -1172,10 +1185,13 @@ router.get('/qa', teacherProtect, async (req, res) => {
             assignedClasses,
             assignedSubjects,
             assignedCourses,
+            openQAsCount,
+            resolvedQAsCount,
             filters: {
                 class: selectedClass,
                 subject: selectedSubject,
                 course: selectedCourse,
+                status: selectedStatus,
                 page,
                 totalPages,
                 totalQAs
@@ -1201,16 +1217,28 @@ router.post('/qa/:id/answer', teacherProtect, async (req, res) => {
             { 
                 answer, 
                 answeredBy: teacherId, 
+                answeredAt: new Date(),
                 status: 'resolved' 
             },
             { new: true }
         );
 
-        if (!qa) return res.status(404).send('Question not found');
+        if (!qa) {
+            if (req.xhr || req.headers.accept?.includes('application/json')) {
+                return res.status(404).json({ success: false, message: 'Question not found' });
+            }
+            return res.status(404).send('Question not found');
+        }
         
+        if (req.xhr || req.headers.accept?.includes('application/json')) {
+            return res.json({ success: true, message: 'Response submitted successfully!' });
+        }
         res.redirect('/teacher/qa?success=1');
     } catch (err) {
         console.error('Answer QA Error:', err);
+        if (req.xhr || req.headers.accept?.includes('application/json')) {
+            return res.status(500).json({ success: false, message: 'Failed to submit answer' });
+        }
         res.status(500).send('Failed to submit answer');
     }
 });
