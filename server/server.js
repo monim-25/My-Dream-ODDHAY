@@ -134,6 +134,7 @@ app.use(async (req, res, next) => {
     res.locals.user = req.session.user || null;
     res.locals.SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || 'monimmdmonim41@gmail.com').toLowerCase().trim();
     res.locals.unreadNotificationCount = 0;
+    res.locals.unreadMessageCount = 0;
 
     const uid = req.session && (req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null));
     if (uid && mongoose.connection.readyState === 1) {
@@ -147,10 +148,13 @@ app.use(async (req, res, next) => {
                 }
             }
             const Notification = require('./models/Notification');
-            res.locals.unreadNotificationCount = await Notification.countDocuments({
-                user: uid,
-                isRead: false
-            });
+            const Message = require('./models/Message');
+            const [notifCount, msgCount] = await Promise.all([
+                Notification.countDocuments({ user: uid, isRead: false }),
+                Message.countDocuments({ receiver: uid, isRead: false })
+            ]);
+            res.locals.unreadNotificationCount = notifCount;
+            res.locals.unreadMessageCount = msgCount;
         } catch (e) {}
     }
 
