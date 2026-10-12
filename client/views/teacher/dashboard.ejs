@@ -60,8 +60,14 @@
                 
                 <div class="p-3 sm:p-5 lg:p-6 space-y-4 sm:space-y-5 max-w-7xl mx-auto w-full pb-6 sm:pb-8 lg:pb-8">
 
-                    <!-- TEACHER WELCOME GREETING -->
-                    <div class="rounded-xl p-3.5 sm:p-4 bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between gap-3">
+                    <!-- TEACHER WELCOME GREETING (Shown only on first login, dismissible with X) -->
+                    <%
+                        const tUser = locals.user || {};
+                        const tLoginCount = (typeof tUser.loginCount === 'number') ? tUser.loginCount : 1;
+                        const showWelcome = tLoginCount <= 1;
+                    %>
+                    <% if (showWelcome) { %>
+                    <div id="teacherWelcomeBanner" class="rounded-xl p-3.5 sm:p-4 bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between gap-3 transition-all duration-300">
                         <div class="flex items-center gap-3 min-w-0">
                             <div class="size-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center font-medium text-sm shadow-xs shrink-0 overflow-hidden">
                                 <% if (user.profilePicture) { %>
@@ -81,7 +87,11 @@
                                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-normal truncate">Here is your daily teaching and course overview</p>
                             </div>
                         </div>
+                        <button type="button" onclick="dismissTeacherWelcome()" class="size-7 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center shrink-0 cursor-pointer active:scale-90" title="Dismiss">
+                            <span class="material-symbols-rounded text-base">close</span>
+                        </button>
                     </div>
+                    <% } %>
 
                     <!-- QUICK ACTIONS GRID -->
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
@@ -379,5 +389,35 @@
         </main>
     </div>
 
+    <script>
+        (function() {
+            try {
+                const teacherId = "<%= (locals.user && (user._id || user.id)) || '' %>";
+                const banner = document.getElementById('teacherWelcomeBanner');
+                if (banner && teacherId) {
+                    if (localStorage.getItem('teacher_welcome_dismissed_' + teacherId) === 'true') {
+                        banner.remove();
+                    }
+                }
+            } catch (e) {}
+        })();
+
+        function dismissTeacherWelcome() {
+            const teacherId = "<%= (locals.user && (user._id || user.id)) || '' %>";
+            const banner = document.getElementById('teacherWelcomeBanner');
+            if (banner) {
+                banner.style.opacity = '0';
+                banner.style.transform = 'translateY(-8px)';
+                setTimeout(() => {
+                    banner.remove();
+                }, 300);
+            }
+            if (teacherId) {
+                try {
+                    localStorage.setItem('teacher_welcome_dismissed_' + teacherId, 'true');
+                } catch(e) {}
+            }
+        }
+    </script>
 </body>
 </html>
