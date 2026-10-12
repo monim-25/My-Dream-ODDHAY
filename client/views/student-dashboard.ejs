@@ -25,6 +25,95 @@
         
         <main class="flex-1 w-full overflow-y-auto p-0 m-0 space-y-0 no-scrollbar bg-[#FFFFFF] dark:bg-[#0b1120] relative">
             
+            <!-- FIRST 2-3 LOGINS / INCOMPLETE PROFILE SETUP ALERT -->
+            <%
+                const dashUser = locals.user || {};
+                let dashPComp = locals.profileCompletion;
+                if (!dashPComp) {
+                    const dChecks = [
+                        { key: 'name', title: 'Full Name', done: Boolean(dashUser.name && dashUser.name.trim()), icon: 'person', hint: 'Provide your full name', actionUrl: '/profile/edit#name' },
+                        { key: 'phone', title: 'Phone Number', done: Boolean(dashUser.phone && dashUser.phone.trim()), icon: 'call', hint: 'Add contact phone number', actionUrl: '/profile/edit#phone' },
+                        { key: 'email', title: 'Email Address', done: Boolean(dashUser.email && dashUser.email.trim()), icon: 'mail', hint: 'Add your email address', actionUrl: '/profile/edit#email' },
+                        { key: 'classLevel', title: 'Class / Level', done: Boolean(dashUser.classLevel && dashUser.classLevel.trim()), icon: 'school', hint: 'Select your class/grade level', actionUrl: '/profile/edit#classLevel' },
+                        { key: 'profileImage', title: 'Profile Photo', done: Boolean((dashUser.profileImage || dashUser.profilePicture) && !(dashUser.profileImage || dashUser.profilePicture).includes('default-avatar')), icon: 'photo_camera', hint: 'Upload student photo', actionUrl: '/profile/edit#avatar' },
+                        { key: 'institution', title: 'School or College', done: Boolean((dashUser.schoolName && dashUser.schoolName.trim()) || (dashUser.collegeName && dashUser.collegeName.trim())), icon: 'domain', hint: 'Enter school or college name', actionUrl: '/profile/edit#schoolName' },
+                        { key: 'address', title: 'Present Address', done: Boolean((dashUser.presentAddress && dashUser.presentAddress.trim()) || (dashUser.permanentAddress && dashUser.permanentAddress.trim()) || (dashUser.address && dashUser.address.trim())), icon: 'home_pin', hint: 'Add present address', actionUrl: '/profile/edit#presentAddress' },
+                        { key: 'guardian', title: 'Guardian Information', done: Boolean((dashUser.guardianName && dashUser.guardianName.trim()) || (dashUser.guardianPhone && dashUser.guardianPhone.trim())), icon: 'family_restroom', hint: 'Link guardian contact details', actionUrl: '/profile/edit#guardian' }
+                    ];
+                    const dCompleted = dChecks.filter(c => c.done);
+                    const dMissing = dChecks.filter(c => !c.done);
+                    const dPct = Math.round((dCompleted.length / dChecks.length) * 100);
+                    dashPComp = {
+                        percentage: dPct,
+                        completedCount: dCompleted.length,
+                        totalCount: dChecks.length,
+                        checks: dChecks,
+                        missingChecks: dMissing,
+                        nextAction: dMissing.length > 0 ? dMissing[0] : null,
+                        isComplete: dPct >= 100
+                    };
+                }
+
+                const dashLoginCount = (typeof locals.loginCount === 'number') ? locals.loginCount : (dashUser.loginCount || 1);
+                const shouldPromptDashboard = dashPComp && !dashPComp.isComplete && (dashLoginCount <= 3 || locals.isFirstLogin);
+            %>
+
+            <% if (shouldPromptDashboard) { %>
+                <div id="dashboardProfilePrompt" class="w-full bg-linear-to-r from-primary/10 via-indigo-500/10 to-amber-500/10 border-b border-primary/20 dark:border-primary/30 p-3 sm:p-3.5 relative transition-all">
+                    <div class="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                            <div class="size-9 sm:size-10 rounded-xl bg-primary text-white flex items-center justify-center shrink-0 shadow-xs ring-2 ring-primary/20">
+                                <span class="material-symbols-rounded text-xl leading-none">account_circle</span>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h4 class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white leading-tight">
+                                        Complete your student profile
+                                    </h4>
+                                    <span class="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-[10px] font-extrabold leading-tight">
+                                        <%= dashPComp.percentage %>% Done
+                                    </span>
+                                    <% if (dashLoginCount <= 3) { %>
+                                        <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                                            Login #<%= dashLoginCount %>
+                                        </span>
+                                    <% } %>
+                                </div>
+                                <p class="text-[11px] sm:text-xs text-slate-600 dark:text-slate-300 mt-0.5 truncate">
+                                    <%= dashPComp.nextAction ? ('Next: ' + dashPComp.nextAction.hint) : 'Fill in your basic information to get your Student ID card & personalized study tools.' %>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                            <a href="/profile" class="h-8 sm:h-8.5 px-3 sm:px-3.5 rounded-lg bg-primary hover:bg-primary/90 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition-all">
+                                <span>Complete Profile</span>
+                                <span class="material-symbols-rounded text-sm">arrow_forward</span>
+                            </a>
+                            <button type="button" onclick="dismissDashboardPrompt()" class="h-8 sm:h-8.5 px-2 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs transition-colors flex items-center justify-center" aria-label="Dismiss banner" title="Dismiss">
+                                <span class="material-symbols-rounded text-base">close</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <script>
+                    (function() {
+                        try {
+                            if (sessionStorage.getItem('dismiss_profile_prompt_<%= dashUser._id || "" %>') === '1') {
+                                var el = document.getElementById('dashboardProfilePrompt');
+                                if (el) el.style.display = 'none';
+                            }
+                        } catch(e) {}
+                    })();
+                    function dismissDashboardPrompt() {
+                        try {
+                            sessionStorage.setItem('dismiss_profile_prompt_<%= dashUser._id || "" %>', '1');
+                        } catch(e) {}
+                        var el = document.getElementById('dashboardProfilePrompt');
+                        if (el) el.remove();
+                    }
+                </script>
+            <% } %>
+
             <!-- Unified AI Study Assistant & Quick Actions Container (Matching Actual Page Background) -->
             <div class="w-full bg-[#FFFFFF] dark:bg-[#0b1120] border-b border-slate-200/80 dark:border-slate-800/80 text-slate-800 dark:text-slate-100 flex flex-col group relative transition-colors duration-300">
                 

@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const { connectDB, protect, parentProtect, adminProtect, User, Course, Quiz, Book, Note, QuestionBank, QA, Notification, RoutineTask, Question, Message, VideoAsset, Setting } = require('../config');
 const { processUploadedFile, processUploadedFiles } = require('../services/cloudinaryService');
+const { getProfileCompletion } = require('../utils/profileCompletion');
 
 // ---- Dashboard ----
 router.get('/dashboard', protect, async (req, res) => {
@@ -112,6 +113,12 @@ router.get('/dashboard', protect, async (req, res) => {
             await dbUser.save();
         }
         // --------------------------------
+
+        if (typeof dbUser.loginCount !== 'number') {
+            dbUser.loginCount = 1;
+            await dbUser.save();
+        }
+        const profileCompletion = getProfileCompletion(dbUser);
 
         const isFirstLogin = req.session.isFirstLogin;
         if (isFirstLogin) req.session.isFirstLogin = false;
@@ -1223,6 +1230,8 @@ router.get('/dashboard', protect, async (req, res) => {
                 levelProgress,
                 xpNeeded: nextThreshold - currentXP,
                 isFirstLogin,
+                profileCompletion,
+                loginCount: dbUser.loginCount || 1,
                 ...data,
                 promotedCourses: data.recommendations,
                 unenrolledCourses: data.recommendations,
@@ -1246,7 +1255,7 @@ router.get('/dashboard', protect, async (req, res) => {
             });
         } catch (err) {
             console.error('Data loading error:', err);
-            res.render('student-dashboard', { user: dbUser, upcomingEvent: res.locals.upcomingEvent, isFirstLogin: false, chartLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], chartData: [0, 0, 0, 0, 0, 0, 0], weakAreas: { hasData: false, weakTopics: [], moderateTopics: [], strongTopics: [] }, dailyFlashcards: [], suggestedExam: null, ...data });
+            res.render('student-dashboard', { user: dbUser, upcomingEvent: res.locals.upcomingEvent, isFirstLogin: false, profileCompletion: typeof profileCompletion !== 'undefined' ? profileCompletion : getProfileCompletion(dbUser), loginCount: dbUser.loginCount || 1, chartLabels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], chartData: [0, 0, 0, 0, 0, 0, 0], weakAreas: { hasData: false, weakTopics: [], moderateTopics: [], strongTopics: [] }, dailyFlashcards: [], suggestedExam: null, ...data });
         }
     } catch (err) {
         console.error('Dashboard Error:', err);
@@ -1267,9 +1276,12 @@ router.get('/profile', protect, async (req, res) => {
             avgScore = Math.round((totalScore / user.quizResults.length) * 100);
         }
 
+        const profileCompletion = getProfileCompletion(user);
+
         res.render(user.role === 'parent' ? 'parent-profile' : 'profile', {
             user,
             avgScore: avgScore + '%',
+            profileCompletion,
             success: req.query.success
         });
     } catch (err) {

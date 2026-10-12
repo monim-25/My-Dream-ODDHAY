@@ -210,6 +210,9 @@ router.post('/login', authLimiter, async (req, res) => {
             await user.save();
         }
 
+        user.loginCount = (user.loginCount || 0) + 1;
+        await user.save();
+
         delete req.session.tempQuiz;
         req.session.user = user.toObject();
         req.session.userId = user._id.toString();
@@ -285,7 +288,8 @@ router.post('/register', authLimiter, async (req, res) => {
         const userPayload = {
             name: name.trim(),
             password,
-            role: assignedRole
+            role: assignedRole,
+            loginCount: 1
         };
         if (assignedRole !== 'parent' && classLevel) {
             userPayload.classLevel = classLevel.trim();

@@ -78,6 +78,7 @@ const userSchema = new mongoose.Schema({
     passwordResetToken: { type: String },
     passwordResetExpires: { type: Date },
     streak: { type: Number, default: 0 },
+    loginCount: { type: Number, default: 0 },
     lastActive: { type: Date },
     totalXP: { type: Number, default: 0 },
     restrictionExpires: { type: Date },
