@@ -8,6 +8,7 @@ const qaSchema = new mongoose.Schema({
     askedByName: { type: String },
     course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
     answer: { type: String },
+    answerImage: { type: String }, // Attached picture for answer/response
     answeredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     answeredAt: { type: Date },
     status: { type: String, enum: ['open', 'resolved'], default: 'open' },

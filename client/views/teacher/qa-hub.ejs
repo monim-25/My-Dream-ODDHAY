@@ -403,7 +403,7 @@
 
                                         <!-- If already Answered: Display Existing Response -->
                                         <% if (isResolved && qa.answer) { %>
-                                            <div class="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-800/40 mb-3 space-y-1.5">
+                                            <div class="p-3 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-800/40 mb-3 space-y-2">
                                                 <div class="flex items-center justify-between text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
                                                     <span class="flex items-center gap-1">
                                                         <span class="material-symbols-rounded text-sm">verified</span>
@@ -413,15 +413,26 @@
                                                         <%= timeAgo(qa.answeredAt || qa.updatedAt) %>
                                                     </span>
                                                 </div>
-                                                <p class="text-xs text-slate-800 dark:text-slate-200 leading-relaxed break-words font-medium">
+                                                <p class="text-xs text-slate-800 dark:text-slate-200 leading-relaxed break-words font-medium whitespace-pre-line">
                                                     <%= qa.answer %>
                                                 </p>
+                                                <% if (qa.answerImage) { %>
+                                                    <div class="mt-2 pt-2 border-t border-emerald-200/60 dark:border-emerald-800/50">
+                                                        <div onclick="openQaImageLightbox('<%= qa.answerImage %>')" class="relative rounded-xl overflow-hidden border border-emerald-300/80 dark:border-emerald-700/80 max-h-44 max-w-sm bg-slate-900/10 cursor-pointer group">
+                                                            <img src="<%= qa.answerImage %>" alt="Instructor response solution" class="w-full h-auto object-cover max-h-44 group-hover:scale-102 transition-transform">
+                                                            <div class="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1">
+                                                                <span class="material-symbols-rounded text-lg">zoom_in</span>
+                                                                <span>View Solution Attachment</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                <% } %>
                                             </div>
                                         <% } %>
                                     </div>
 
                                     <!-- Answer Form (For Pending Questions, or Edit for Resolved) -->
-                                    <form onsubmit="submitQaAnswer(event, '<%= qa._id %>')" action="/teacher/qa/<%= qa._id %>/answer" method="POST" class="space-y-2 pt-2.5 border-t border-slate-100 dark:border-white/5">
+                                    <form onsubmit="submitQaAnswer(event, '<%= qa._id %>')" action="/teacher/qa/<%= qa._id %>/answer" method="POST" enctype="multipart/form-data" class="space-y-2 pt-2.5 border-t border-slate-100 dark:border-white/5">
                                         <div class="space-y-1">
                                             <label class="text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
                                                 <span class="material-symbols-rounded text-sm text-primary">reply</span> 
@@ -430,9 +441,29 @@
                                             <textarea id="qa-answer-input-<%= qa._id %>" name="answer" rows="2" placeholder="Write a clear, helpful response for this student..." required
                                                       class="w-full p-2.5 sm:p-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium outline-none focus:border-primary text-slate-800 dark:text-slate-100 transition-all resize-none shadow-2xs"><%= isResolved ? qa.answer : '' %></textarea>
                                         </div>
-                                        <div class="flex items-center justify-end gap-2">
+
+                                        <!-- Image Attachment Preview Box (Hidden until selected) -->
+                                        <div id="qa-image-preview-wrap-<%= qa._id %>" class="hidden relative inline-block rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 max-h-28 bg-slate-100 dark:bg-slate-800">
+                                            <img id="qa-image-preview-img-<%= qa._id %>" src="" alt="Response Attachment" class="h-24 w-auto object-cover">
+                                            <button type="button" onclick="clearQaAnswerImage('<%= qa._id %>')" 
+                                                    class="absolute top-1 right-1 size-6 rounded-full bg-red-600/90 text-white flex items-center justify-center hover:bg-red-700 shadow-sm cursor-pointer transition-transform hover:scale-105" title="Remove attachment">
+                                                <span class="material-symbols-rounded text-sm">close</span>
+                                            </button>
+                                        </div>
+
+                                        <!-- Action Bar: Attach Image Button + Submit Button -->
+                                        <div class="flex items-center justify-between gap-2 pt-0.5">
+                                            <!-- Hidden file input -->
+                                            <input id="qa-image-file-<%= qa._id %>" type="file" name="image" accept="image/*" class="hidden" onchange="previewQaAnswerImage(this, '<%= qa._id %>')">
+                                            
+                                            <button type="button" onclick="document.getElementById('qa-image-file-<%= qa._id %>').click()"
+                                                    class="px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-primary dark:hover:border-primary bg-slate-50 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary text-[11px] font-semibold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95">
+                                                <span class="material-symbols-rounded text-sm text-primary">add_photo_alternate</span>
+                                                <span id="qa-attach-label-<%= qa._id %>">Attach Photo/Diagram</span>
+                                            </button>
+
                                             <button id="qa-submit-btn-<%= qa._id %>" type="submit" 
-                                                    class="px-4 py-2 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer active:scale-95">
+                                                    class="px-4 py-2 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0">
                                                 <span><%= isResolved ? 'Update Answer' : 'Submit Answer' %></span>
                                                 <span class="material-symbols-rounded text-sm">send</span>
                                             </button>
@@ -612,12 +643,43 @@
             if (countEl) countEl.textContent = matchCount;
         }
 
+        // Image preview and clear handlers for teacher answer attachment
+        function previewQaAnswerImage(input, qaId) {
+            const previewWrap = document.getElementById('qa-image-preview-wrap-' + qaId);
+            const previewImg = document.getElementById('qa-image-preview-img-' + qaId);
+            const labelEl = document.getElementById('qa-attach-label-' + qaId);
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    if (previewImg) previewImg.src = e.target.result;
+                    if (previewWrap) previewWrap.classList.remove('hidden');
+                    if (labelEl) labelEl.textContent = 'Change Photo';
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        window.previewQaAnswerImage = previewQaAnswerImage;
+
+        function clearQaAnswerImage(qaId) {
+            const fileInput = document.getElementById('qa-image-file-' + qaId);
+            const previewWrap = document.getElementById('qa-image-preview-wrap-' + qaId);
+            const previewImg = document.getElementById('qa-image-preview-img-' + qaId);
+            const labelEl = document.getElementById('qa-attach-label-' + qaId);
+            if (fileInput) fileInput.value = '';
+            if (previewImg) previewImg.src = '';
+            if (previewWrap) previewWrap.classList.add('hidden');
+            if (labelEl) labelEl.textContent = 'Attach Photo/Diagram';
+        }
+        window.clearQaAnswerImage = clearQaAnswerImage;
+
         // AJAX Answer Submission with Instant Feedback & Smooth Transition
         async function submitQaAnswer(e, qaId) {
             e.preventDefault();
             const input = document.getElementById('qa-answer-input-' + qaId);
             const btn = document.getElementById('qa-submit-btn-' + qaId);
             const card = document.getElementById('qa-card-' + qaId);
+            const fileInput = document.getElementById('qa-image-file-' + qaId);
             const answer = input ? input.value.trim() : '';
 
             if (!answer) {
@@ -631,14 +693,19 @@
                 btn.innerHTML = `<span class="material-symbols-rounded text-sm animate-spin">progress_activity</span><span>Saving...</span>`;
             }
 
+            const formData = new FormData();
+            formData.append('answer', answer);
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+                formData.append('image', fileInput.files[0]);
+            }
+
             try {
                 const res = await fetch('/teacher/qa/' + qaId + '/answer', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify({ answer })
+                    body: formData
                 });
 
                 const data = await res.json().catch(() => ({}));

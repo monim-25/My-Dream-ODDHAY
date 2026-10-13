@@ -2,8 +2,26 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const mongoose = require('mongoose');
+const multer = require('multer');
 const { connectDB, teacherProtect, Course, Quiz, Note, Folder, QuestionBank, QA, User, Question, SystemLog } = require('../config');
 const { processUploadedFile, processUploadedFiles } = require('../services/cloudinaryService');
+
+// Multer storage for QA answer image attachments
+const uploadAnswerMulter = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            const fs = require('fs');
+            const dir = path.join(__dirname, '../../uploads/qa');
+            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+            cb(null, dir);
+        },
+        filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname) || '.jpg';
+            cb(null, 'qa-ans-' + Date.now() + '-' + Math.round(Math.random() * 1e4) + ext);
+        }
+    }),
+    limits: { fileSize: 25 * 1024 * 1024 }
+});
 
 // Helper to log system activity
 const logActivity = async (req, action, actionDetails, entityType, entityId = null) => {
@@ -1215,23 +1233,43 @@ router.get('/qa', teacherProtect, async (req, res) => {
     }
 });
 
-// Answer a Q&A
-router.post('/qa/:id/answer', teacherProtect, async (req, res) => {
+// Answer a Q&A with optional Image Attachment
+router.post('/qa/:id/answer', teacherProtect, (req, res, next) => {
+    uploadAnswerMulter.single('image')(req, res, (err) => {
+        if (err) console.error('Answer image upload error:', err);
+        next();
+    });
+}, async (req, res) => {
     try {
         await connectDB();
         const { answer } = req.body;
         const teacherId = req.session.user._id;
 
+        let answerImageUrl = null;
+        if (req.file) {
+            try {
+                answerImageUrl = await processUploadedFile(req.file, 'qa');
+            } catch (upErr) {
+                console.error('Cloudinary answer image upload error:', upErr);
+                answerImageUrl = '/uploads/qa/' + req.file.filename;
+            }
+        }
+
+        const updateData = {
+            answer: answer ? answer.trim() : '',
+            answeredBy: teacherId,
+            answeredAt: new Date(),
+            status: 'resolved'
+        };
+        if (answerImageUrl) {
+            updateData.answerImage = answerImageUrl;
+        }
+
         const qa = await QA.findByIdAndUpdate(
             req.params.id,
-            { 
-                answer, 
-                answeredBy: teacherId, 
-                answeredAt: new Date(),
-                status: 'resolved' 
-            },
+            updateData,
             { new: true }
-        );
+        ).populate('answeredBy', 'name profilePicture role');
 
         if (!qa) {
             if (req.xhr || req.headers.accept?.includes('application/json')) {
@@ -1241,7 +1279,14 @@ router.post('/qa/:id/answer', teacherProtect, async (req, res) => {
         }
         
         if (req.xhr || req.headers.accept?.includes('application/json')) {
-            return res.json({ success: true, message: 'Response submitted successfully!' });
+            return res.json({ 
+                success: true, 
+                message: 'Response submitted successfully!',
+                answer: qa.answer,
+                answerImage: qa.answerImage,
+                answeredBy: qa.answeredBy,
+                answeredAt: qa.answeredAt
+            });
         }
         res.redirect('/teacher/qa?success=1');
     } catch (err) {
