@@ -1149,10 +1149,33 @@ router.get('/qa', teacherProtect, async (req, res) => {
         const courseIds = filteredCourses.map(c => c._id);
         const allMyCourseIds = myCourses.map(c => c._id);
         
-        // 2. Build query for Q&A
-        const qaQuery = { 
-            course: { $in: courseIds }
-        };
+        // 2. Build query for Q&A matching student questions
+        let scopeQuery;
+        if (selectedCourse !== 'all') {
+            scopeQuery = { course: selectedCourse };
+        } else if (selectedSubject !== 'all') {
+            scopeQuery = {
+                $or: [
+                    { course: { $in: filteredCourses.map(c => c._id) } },
+                    { subject: new RegExp('^' + selectedSubject + '$', 'i') }
+                ]
+            };
+        } else if (selectedClass !== 'all') {
+            scopeQuery = { course: { $in: filteredCourses.map(c => c._id) } };
+        } else {
+            // Default view: show questions belonging to teacher's courses, teacher's subjects, or general academic doubt queries
+            const scopeConditions = [
+                { course: { $in: allMyCourseIds } },
+                { course: null }
+            ];
+            if (assignedSubjects.length > 0) {
+                scopeConditions.push({ subject: { $in: assignedSubjects } });
+            }
+            scopeConditions.push({ answeredBy: teacherId });
+            scopeQuery = { $or: scopeConditions };
+        }
+
+        const qaQuery = { ...scopeQuery };
         if (selectedStatus === 'resolved') {
             qaQuery.status = 'resolved';
         } else if (selectedStatus === 'all') {
@@ -1165,17 +1188,29 @@ router.get('/qa', teacherProtect, async (req, res) => {
         const limit = 15;
         const skip = (page - 1) * limit;
 
+        // Base scope for counting open & resolved queries
+        const baseScopeConditions = [
+            { course: { $in: allMyCourseIds } },
+            { course: null }
+        ];
+        if (assignedSubjects.length > 0) {
+            baseScopeConditions.push({ subject: { $in: assignedSubjects } });
+        }
+        baseScopeConditions.push({ answeredBy: teacherId });
+        const baseScope = { $or: baseScopeConditions };
+
         const [totalQAs, openQAsCount, resolvedQAsCount] = await Promise.all([
             QA.countDocuments(qaQuery),
-            QA.countDocuments({ status: 'open', course: { $in: allMyCourseIds } }),
-            QA.countDocuments({ status: 'resolved', course: { $in: allMyCourseIds } })
+            QA.countDocuments({ ...baseScope, status: 'open' }),
+            QA.countDocuments({ ...baseScope, status: 'resolved' })
         ]);
         const totalPages = Math.ceil(totalQAs / limit) || 1;
 
         const qas = await QA.find(qaQuery)
-        .populate('askedBy')
-        .populate('course')
-        .populate('answeredBy')
+        .populate('askedBy', 'name email profilePicture profileImage classLevel role')
+        .populate('course', 'title classLevel subject thumbnail')
+        .populate('answeredBy', 'name email profilePicture role')
+        .populate('replies.user', 'name profilePicture role')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);

@@ -293,31 +293,42 @@
                     <div id="qaGridContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-3.5 sm:gap-4">
                         <% if (qas && qas.length > 0) { %>
                             <% qas.forEach(qa => { %>
-                                <% const isResolved = qa.status === 'resolved'; %>
+                                <% 
+                                    const isResolved = qa.status === 'resolved'; 
+                                    const studentName = (qa.askedBy && qa.askedBy.name) ? qa.askedBy.name : (qa.askedByName || 'Student');
+                                    const studentAvatar = qa.askedBy ? (qa.askedBy.profilePicture || qa.askedBy.profileImage) : null;
+                                    const studentInitial = (studentName[0] || 'S').toUpperCase();
+                                    const displayClass = (qa.course && Array.isArray(qa.course.classLevel) && qa.course.classLevel.length) 
+                                        ? qa.course.classLevel.join(', ') 
+                                        : (qa.course?.classLevel || (qa.askedBy?.classLevel ? qa.askedBy.classLevel : 'General Academic'));
+                                    const displaySubject = (qa.course && Array.isArray(qa.course.subject) && qa.course.subject.length)
+                                        ? qa.course.subject.map(toTitleCase).join(', ')
+                                        : toTitleCase(qa.course?.subject || qa.subject || 'General Academic');
+                                %>
                                 <div id="qa-card-<%= qa._id %>" class="qa-item-card rounded-2xl bg-white dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 p-3.5 sm:p-5 shadow-2xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col justify-between"
                                      data-question="<%= (qa.question || '').toLowerCase() %>"
-                                     data-student="<%= (qa.askedBy && qa.askedBy.name ? qa.askedBy.name : '').toLowerCase() %>">
+                                     data-student="<%= studentName.toLowerCase() %>">
                                     
                                     <div>
                                         <!-- Header: Student Avatar & Meta -->
                                         <div class="flex items-start justify-between gap-2.5 mb-2.5">
                                             <div class="flex items-center gap-2.5 min-w-0">
                                                 <div class="size-9 sm:size-10 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-center shrink-0 overflow-hidden text-slate-600 dark:text-slate-300 font-bold text-xs sm:text-sm shadow-2xs">
-                                                    <% if (qa.askedBy && qa.askedBy.profilePicture) { %>
-                                                        <img src="<%= qa.askedBy.profilePicture %>" alt="<%= qa.askedBy.name %>" class="size-full object-cover">
+                                                    <% if (studentAvatar) { %>
+                                                        <img src="<%= studentAvatar %>" alt="<%= studentName %>" class="size-full object-cover">
                                                     <% } else { %>
-                                                        <span><%= qa.askedBy && qa.askedBy.name ? qa.askedBy.name[0].toUpperCase() : 'S' %></span>
+                                                        <span><%= studentInitial %></span>
                                                     <% } %>
                                                 </div>
                                                 <div class="min-w-0">
                                                     <h4 class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate leading-tight">
-                                                        <%= toTitleCase(qa.askedBy ? qa.askedBy.name : 'Enrolled Student') %>
+                                                        <%= toTitleCase(studentName) %>
                                                     </h4>
                                                     <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
                                                         <span class="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9.5px] sm:text-[10px] font-semibold border border-slate-200/60 dark:border-slate-700/60">
-                                                            <%= Array.isArray(qa.course?.classLevel) && qa.course.classLevel.length ? qa.course.classLevel.join(', ') : (qa.course?.classLevel || 'General') %>
+                                                            <%= displayClass %>
                                                         </span>
-                                                        <span class="text-[10px] font-medium text-slate-400">&bull; <%= timeAgo(qa.createdAt) %></span>
+                                                        <span class="text-[10px] font-medium text-slate-400" title="<%= new Date(qa.createdAt).toLocaleString() %>">&bull; <%= timeAgo(qa.createdAt) %></span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -332,19 +343,50 @@
                                         <!-- Course & Subject Pills -->
                                         <div class="flex items-center gap-1.5 mb-2.5 flex-wrap">
                                             <span class="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 text-[10px] font-semibold border border-blue-200/60 dark:border-blue-900/60 truncate max-w-full">
-                                                <%= Array.isArray(qa.course?.subject) && qa.course.subject.length ? qa.course.subject.map(toTitleCase).join(', ') : toTitleCase(qa.course?.subject || 'Subject') %>
+                                                <%= displaySubject %>
                                             </span>
                                             <% if (qa.course?.title) { %>
                                                 <span class="text-[10px] text-slate-400 truncate max-w-[180px] sm:max-w-xs">&bull; <%= qa.course.title %></span>
+                                            <% } else { %>
+                                                <span class="text-[10px] text-slate-400 truncate">&bull; Academic Doubt</span>
+                                            <% } %>
+                                            <% if (qa.upvotes && qa.upvotes.length > 0) { %>
+                                                <span class="ml-auto text-[10px] font-semibold text-slate-400 flex items-center gap-0.5">
+                                                    <span class="material-symbols-rounded text-xs text-amber-500">thumb_up</span>
+                                                    <%= qa.upvotes.length %>
+                                                </span>
                                             <% } %>
                                         </div>
 
                                         <!-- Question Text Block -->
                                         <div class="p-3 sm:p-3.5 rounded-xl bg-slate-50/90 dark:bg-slate-900/50 border border-slate-100 dark:border-white/5 mb-3">
-                                            <p class="text-xs sm:text-[13px] font-medium text-slate-800 dark:text-slate-200 leading-relaxed break-words">
+                                            <p class="text-xs sm:text-[13px] font-medium text-slate-800 dark:text-slate-200 leading-relaxed break-words whitespace-pre-line">
                                                 "<%= qa.question %>"
                                             </p>
                                         </div>
+
+                                        <!-- Threaded Replies (Follow-ups from student or others) -->
+                                        <% if (qa.replies && qa.replies.length > 0) { %>
+                                            <div class="mb-3">
+                                                <button type="button" onclick="toggleRepliesAccordion('<%= qa._id %>')" 
+                                                        class="text-[11px] font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer select-none">
+                                                    <span class="material-symbols-rounded text-sm">forum</span>
+                                                    <span><%= qa.replies.length %> <%= qa.replies.length === 1 ? 'Follow-up Reply' : 'Follow-up Replies' %></span>
+                                                    <span id="reply-arrow-<%= qa._id %>" class="material-symbols-rounded text-sm transition-transform">expand_more</span>
+                                                </button>
+                                                <div id="qa-replies-<%= qa._id %>" class="hidden mt-2 space-y-2 pl-2 border-l-2 border-primary/30">
+                                                    <% qa.replies.forEach(reply => { %>
+                                                        <div class="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/70 border border-slate-100 dark:border-white/5 text-xs">
+                                                            <div class="flex items-center justify-between text-[10px] text-slate-400 font-semibold mb-1">
+                                                                <span class="text-slate-700 dark:text-slate-300 font-bold"><%= reply.userName || (reply.user?.name || 'Student') %></span>
+                                                                <span><%= timeAgo(reply.createdAt) %></span>
+                                                            </div>
+                                                            <p class="text-slate-800 dark:text-slate-200 font-medium"><%= reply.text %></p>
+                                                        </div>
+                                                    <% }) %>
+                                                </div>
+                                            </div>
+                                        <% } %>
 
                                         <!-- Question Attached Image (If student attached a photo) -->
                                         <% if (qa.image) { %>
@@ -532,6 +574,22 @@
             params.set('page', '1');
             window.location.href = '?' + params.toString();
         }
+
+        // Toggle Threaded Discussion Replies
+        function toggleRepliesAccordion(qaId) {
+            const repliesEl = document.getElementById('qa-replies-' + qaId);
+            const arrowEl = document.getElementById('reply-arrow-' + qaId);
+            if (!repliesEl) return;
+            const isHidden = repliesEl.classList.contains('hidden');
+            if (isHidden) {
+                repliesEl.classList.remove('hidden');
+                if (arrowEl) arrowEl.style.transform = 'rotate(180deg)';
+            } else {
+                repliesEl.classList.add('hidden');
+                if (arrowEl) arrowEl.style.removeProperty('transform');
+            }
+        }
+        window.toggleRepliesAccordion = toggleRepliesAccordion;
 
         // Live Client-side Question Search
         function filterQuestionsClient(query) {
