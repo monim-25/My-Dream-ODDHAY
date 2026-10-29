@@ -245,8 +245,6 @@ router.get('/messages', teacherProtect, async (req, res) => {
         if (activeStudentId) {
             const found = conversations.find(c => c.studentId === activeStudentId);
             activeStudent = found ? found.student : null;
-        } else if (conversations.length > 0) {
-            activeStudent = conversations[0].student;
         }
 
         res.render('teacher/messages', {
