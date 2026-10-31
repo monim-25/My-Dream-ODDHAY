@@ -21,6 +21,10 @@ const questionSchema = new mongoose.Schema({
     q2: { type: String, default: '' },
     a1: { type: String, default: '' },
     a2: { type: String, default: '' },
+    s1: { type: String, default: '' },
+    s2: { type: String, default: '' },
+    solution1: { type: String, default: '' },
+    solution2: { type: String, default: '' },
     marks: { type: Number, default: 1 },
     bankId: { type: mongoose.Schema.Types.ObjectId, ref: 'QuestionBank' }
 });

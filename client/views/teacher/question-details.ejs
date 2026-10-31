@@ -6,8 +6,14 @@
     <title>Questions | ODDHAY Command Center</title>
     <style>
         * { font-family: 'Inter', 'Hind Siliguri', sans-serif !important; }
-                :root { --admin-sidebar-width: 260px; }
-        html, body { height: 100%; height: 100dvh; overflow: hidden; margin: 0; padding: 0; }
+        :root { --admin-sidebar-width: 260px; }
+        html, body { 
+            height: 100%; 
+            height: 100dvh; 
+            overflow: hidden; 
+            margin: 0; 
+            padding: 0; 
+        }
         .admin-main { 
             margin-left: var(--admin-sidebar-width); 
             height: 100%; 
@@ -15,21 +21,40 @@
             display: flex; 
             flex-direction: column; 
             min-width: 0;
+            min-height: 0;
             width: calc(100% - var(--admin-sidebar-width));
+            overflow: hidden;
             transition: all 0.3s ease; 
         }
         .content-scroll { 
-            flex: 1; 
+            flex: 1 1 0%; 
             min-height: 0;
+            height: 100%;
             overflow-y: auto; 
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
             padding: 0; 
             position: relative; 
         }
         @media (max-width: 1024px) { 
             .admin-sidebar, #adminSidebar { transform: translateX(-100%); } 
-            .admin-main { margin-left: 0 !important; width: 100% !important; } 
+            .admin-main { 
+                margin-left: 0 !important; 
+                width: 100% !important; 
+                height: 100% !important;
+                height: 100dvh !important;
+                overflow: hidden !important;
+            } 
+            .content-scroll { 
+                flex: 1 1 0% !important;
+                min-height: 0 !important;
+                height: 100% !important;
+                overflow-y: auto !important;
+                overflow-x: hidden !important;
+                -webkit-overflow-scrolling: touch !important;
+                touch-action: pan-y !important;
+            }
         }
         .admin-sidebar.active, #adminSidebar.active, .admin-sidebar.translate-x-0, #adminSidebar.translate-x-0 { 
             transform: translateX(0) !important; 
@@ -38,10 +63,33 @@
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .question-mobile-card {
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: pan-y;
+        }
+        #mobileQuestionsView:not(.mobile-selection-active) .mobile-cb-wrapper {
+            display: none !important;
+        }
+        #mobileQuestionsView.mobile-selection-active .mobile-cb-wrapper {
+            display: inline-flex !important;
+        }
+        #mobileQuestionsView:not(.mobile-selection-active) #mobileSelectBar {
+            display: none !important;
+        }
+        #mobileQuestionsView.mobile-selection-active #mobileSelectBar {
+            display: flex !important;
+        }
+        #mobileQuestionsView.mobile-selection-active #mobileHeaderInfo {
+            display: none !important;
+        }
     </style>
 </head>
 
-<body class="bg-[#F8FAFC] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden h-full h-[100dvh]">
     <div class="flex h-full h-[100dvh] w-full overflow-hidden">
         <aside id="adminSidebar" class="admin-sidebar fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100] border-r border-slate-200 dark:border-slate-800 -translate-x-full lg:translate-x-0">
             <%- include('sidebar', { active: 'question-details' }) %>
@@ -50,10 +98,10 @@
         <!-- Backdrop overlay for mobile drawer -->
         <div id="teacherSidebarBackdrop" onclick="toggleTeacherSidebar(false)" class="fixed inset-0 bg-slate-950/50 backdrop-blur-xs z-[90] lg:hidden opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-        <main class="admin-main flex-1 bg-[#F8FAFC]">
-            <%- include('header', { pageTitle: 'Questions' }) %>
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617] flex flex-col h-full h-[100dvh] min-h-0 overflow-hidden">
+            <%- include('header', { pageTitle: 'Questions', user: user }) %>
 
-            <div class="content-scroll flex flex-col gap-0 p-0 border-l-0 lg:border-l border-slate-200 dark:border-white/5 bg-[#F8FAFC] dark:bg-[#020617] pb-20 sm:pb-24 lg:pb-0">
+            <div class="content-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col gap-0 p-0 border-l-0 lg:border-l border-slate-200 dark:border-white/5 bg-[#F8FAFC] dark:bg-[#020617]">
                 <!-- Archive Stats (PERFECTLY ATTACHED WITH BORDER) -->
                 <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/80 p-2 sm:p-2.5">
                     <div class="grid grid-cols-2 lg:grid-cols-4 gap-2">
@@ -111,88 +159,283 @@
                     </div>
                 </div>
 
-                <div class="bg-white dark:bg-[#0f172a] border-0 flex flex-col relative rounded-none shadow-none">
-                    <!-- Filters Bar -->
-                    <div class="sticky top-0 z-30 bg-white/95 dark:bg-[#0b1120]/95 backdrop-blur-md px-4 sm:px-6 py-2.5 border-b border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
-                        <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
-                            <form action="" method="GET" class="relative flex-1 min-w-[180px] max-w-sm flex items-center">
+                <%
+                    const activeType = filters.type || 'all';
+                    const activeSubject = filters.subject || 'all';
+                    const activeClass = filters.class || 'all';
+                    const activeBoard = filters.board || 'all';
+                    const activeAccess = filters.access || 'all';
+
+                    const typeLabel = activeType === 'all' ? 'All Types' : activeType;
+                    const subjectLabel = activeSubject === 'all' ? 'All Subjects' : activeSubject;
+                    const classLabel = activeClass === 'all' ? 'All Classes' : (String(activeClass).startsWith('Class') ? activeClass : 'Class ' + activeClass);
+                    const boardLabel = activeBoard === 'all' ? 'All Boards' : activeBoard.replace(' Board', '');
+                    const accessLabel = activeAccess === 'all' ? 'All Access' : activeAccess;
+
+                    const hasActiveFilters = (activeType !== 'all') || (activeSubject !== 'all') || (activeClass !== 'all') || (activeBoard !== 'all') || (activeAccess !== 'all') || (filters.q && filters.q.trim().length > 0);
+                %>
+
+                <div class="bg-white dark:bg-[#0f172a] border-0 flex flex-col relative rounded-none shadow-none flex-1">
+                    <!-- Filters Bar (Responsive with Custom In-System Dropdowns) -->
+                    <div class="sticky top-0 z-30 bg-white/95 dark:bg-[#0b1120]/95 backdrop-blur-md px-3 sm:px-6 py-2.5 border-b border-slate-200 dark:border-slate-800 shadow-2xs">
+                        <!-- Top Row: Search + Quick Actions -->
+                        <div class="flex items-center gap-2">
+                            <form action="" method="GET" class="relative flex-1 min-w-0 max-w-md flex items-center">
                                 <input type="text" name="q" value="<%= filters.q %>" placeholder="Search questions..." 
-                                       class="w-full pl-3 pr-9 h-9 rounded-lg bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 text-xs font-semibold outline-none focus:border-primary text-slate-800 dark:text-slate-100 placeholder:text-slate-400 transition-all">
-                                <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-base pointer-events-none">search</span>
-                                        <input type="hidden" name="type" value="<%= filters.type %>">
-                                        <input type="hidden" name="class" value="<%= filters.class %>">
-                                        <input type="hidden" name="subject" value="<%= filters.subject %>">
-                                        <input type="hidden" name="board" value="<%= filters.board %>">
-                                        <input type="hidden" name="access" value="<%= filters.access %>">
-                                        <% if (filters.author) { %><input type="hidden" name="author" value="<%= filters.author %>"><% } %>
-                                    </form>
-                                    
-                                    <!-- Board Filter -->
-                                    <div class="relative w-28">
-                                        <select onchange="updateFilter('board', this.value)" class="w-full h-10 pl-3 pr-8 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
-                                            <option value="all" <%= filters.board === 'all' ? 'selected' : '' %>>All Boards</option>
-                                            <% ['Dhaka Board', 'Comilla Board', 'Rajshahi Board', 'Chittagong Board', 'Sylhet Board', 'Barisal Board', 'Khulna Board', 'Rangpur Board', 'Mymensingh Board'].forEach(b => { %>
-                                                <option value="<%= b %>" <%= filters.board === b ? 'selected' : '' %>><%= b %></option>
-                                            <% }) %>
-                                        </select>
-                                        <span class="material-symbols-rounded absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
-                                    </div>
+                                       class="w-full pl-8 pr-7 h-9 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 text-xs font-semibold outline-none focus:border-primary text-slate-800 dark:text-slate-100 placeholder:text-slate-400 transition-all">
+                                <span class="material-symbols-rounded absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">search</span>
+                                <% if (filters.q) { %>
+                                    <a href="?type=<%= encodeURIComponent(filters.type) %>&class=<%= encodeURIComponent(filters.class) %>&subject=<%= encodeURIComponent(filters.subject) %>&board=<%= encodeURIComponent(filters.board) %>&access=<%= encodeURIComponent(filters.access) %>" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                                        <span class="material-symbols-rounded text-sm">close</span>
+                                    </a>
+                                <% } %>
+                                <input type="hidden" name="type" value="<%= filters.type %>">
+                                <input type="hidden" name="class" value="<%= filters.class %>">
+                                <input type="hidden" name="subject" value="<%= filters.subject %>">
+                                <input type="hidden" name="board" value="<%= filters.board %>">
+                                <input type="hidden" name="access" value="<%= filters.access %>">
+                                <% if (filters.author) { %><input type="hidden" name="author" value="<%= filters.author %>"><% } %>
+                            </form>
 
-                                    <!-- Subject Filter -->
-                                    <div class="relative w-28">
-                                        <select onchange="updateFilter('subject', this.value)" class="w-full h-10 pl-3 pr-8 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
-                                            <option value="all" <%= filters.subject === 'all' ? 'selected' : '' %>>All Subjects</option>
-                                            <% assignedSubjects.forEach(s => { %>
-                                                <option value="<%= s %>" <%= filters.subject === s ? 'selected' : '' %>><%= s %></option>
-                                            <% }) %>
-                                        </select>
-                                        <span class="material-symbols-rounded absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
-                                    </div>
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <button onclick="document.getElementById('compositionWizardModal').classList.remove('hidden')" 
+                                        class="h-8 sm:h-9 px-2.5 sm:px-3 rounded-xl bg-white/70 dark:bg-white/10 backdrop-blur-md border border-slate-200/80 dark:border-white/10 hover:bg-white/90 dark:hover:bg-white/15 text-slate-800 dark:text-slate-100 text-xs font-medium shadow-2xs transition-all flex items-center gap-1 active:scale-95 cursor-pointer">
+                                    <span class="material-symbols-rounded text-base text-primary">add</span>
+                                    <span>Add</span>
+                                </button>
+                                <button onclick="exportToCSV()" title="Export CSV" 
+                                        class="h-8 sm:h-9 px-2 sm:px-2.5 rounded-xl bg-white/70 dark:bg-white/10 backdrop-blur-md border border-slate-200/80 dark:border-white/10 hover:bg-white/90 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 text-xs font-medium shadow-2xs transition-all flex items-center gap-1 cursor-pointer">
+                                    <span class="material-symbols-rounded text-base text-emerald-600 dark:text-emerald-400">download</span>
+                                    <span class="hidden md:inline">Export</span>
+                                </button>
+                            </div>
+                        </div>
 
-                                    <!-- Class Filter -->
-                                    <div class="relative w-28">
-                                        <select onchange="updateFilter('class', this.value)" class="w-full h-10 pl-3 pr-8 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
-                                            <option value="all" <%= filters.class === 'all' ? 'selected' : '' %>>All Classes</option>
-                                            <% assignedClasses.forEach(c => { %>
-                                                <option value="<%= c %>" <%= filters.class === c ? 'selected' : '' %>><%= c %></option>
-                                            <% }) %>
-                                        </select>
-                                        <span class="material-symbols-rounded absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
+                        <!-- Dropdowns Row (Custom In-System Dropdowns) -->
+                        <div class="mt-2 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                            <!-- Type Dropdown -->
+                            <div class="relative system-dropdown shrink-0" id="dropdown-type">
+                                <button type="button" onclick="toggleSystemDropdown('type', event)" 
+                                        class="h-7 sm:h-8 px-2.5 rounded-lg sm:rounded-xl bg-slate-50 dark:bg-slate-900 border <%= activeType !== 'all' ? 'border-primary/50 text-primary bg-primary/5 font-bold' : 'border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-semibold' %> flex items-center gap-1 text-[11px] transition-all cursor-pointer shadow-2xs select-none">
+                                    <span class="truncate max-w-[85px]"><%= typeLabel %></span>
+                                    <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow">expand_more</span>
+                                </button>
+                                <div id="dropdown-menu-type" class="hidden absolute top-full left-0 mt-1 w-36 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-40 max-h-56 overflow-y-auto no-scrollbar">
+                                    <div onclick="updateFilter('type', 'all')" class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeType === 'all' ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                        <span>All Types</span>
+                                        <% if (activeType === 'all') { %><span class="material-symbols-rounded text-sm text-primary">check</span><% } %>
                                     </div>
-
-                                    <!-- Type Filter -->
-                                    <div class="relative w-28">
-                                        <select onchange="updateFilter('type', this.value)" class="w-full h-10 pl-3 pr-8 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
-                                            <option value="all" <%= filters.type === 'all' ? 'selected' : '' %>>All Types</option>
-                                            <option value="MCQ" <%= filters.type === 'MCQ' ? 'selected' : '' %>>MCQ</option>
-                                            <option value="Short" <%= filters.type === 'Short' ? 'selected' : '' %>>Short</option>
-                                            <option value="Medium" <%= filters.type === 'Medium' ? 'selected' : '' %>>Medium</option>
-                                            <option value="Comprehension" <%= filters.type === 'Comprehension' ? 'selected' : '' %>>Comprehension</option>
-                                        </select>
-                                        <span class="material-symbols-rounded absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
-                                    </div>
-
-                                    <!-- Access Filter -->
-                                    <div class="relative w-28">
-                                        <select onchange="updateFilter('access', this.value)" class="w-full h-10 pl-3 pr-8 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
-                                            <option value="all" <%= filters.access === 'all' ? 'selected' : '' %>>All Access</option>
-                                            <option value="Free" <%= filters.access === 'Free' ? 'selected' : '' %>>Free</option>
-                                            <option value="Paid" <%= filters.access === 'Paid' ? 'selected' : '' %>>Paid</option>
-                                        </select>
-                                        <span class="material-symbols-rounded absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
-                                    </div>
-
-                                    <div class="h-10 px-4 bg-primary/10 border border-primary/20 rounded-lg flex items-center transition-all"><span class="text-[11px] font-bold text-primary">Found <span><%= filters.totalCount %></span> Questions</span></div>
-                                </div>
-                                <div class="flex items-center gap-2">
-                                    <button onclick="document.getElementById('compositionWizardModal').classList.remove('hidden')" class="h-10 px-4 rounded-lg bg-slate-900 text-white font-bold text-[10px] shadow-lg shadow-slate-900/10 hover:bg-black transition-all flex items-center gap-2">
-                                        <span class="material-symbols-rounded text-sm">add_circle</span> Add question
-                                    </button>
-                                    <button onclick="exportToCSV()" class="h-10 px-4 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-[10px] border border-emerald-500/20 hover:bg-emerald-500/20 transition-all flex items-center gap-1.5"><span class="material-symbols-rounded text-sm">download</span> Export</button>
+                                    <% ['MCQ', 'Short', 'Medium', 'Comprehension'].forEach(t => { %>
+                                        <div onclick="updateFilter('type', '<%= t %>')" class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeType === t ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                            <span><%= t %></span>
+                                            <% if (activeType === t) { %><span class="material-symbols-rounded text-sm text-primary">check</span><% } %>
+                                        </div>
+                                    <% }) %>
                                 </div>
                             </div>
 
-                    <div class="table-wrapper">
+                            <!-- Subject Dropdown -->
+                            <div class="relative system-dropdown shrink-0" id="dropdown-subject">
+                                <button type="button" onclick="toggleSystemDropdown('subject', event)" 
+                                        class="h-7 sm:h-8 px-2.5 rounded-lg sm:rounded-xl bg-slate-50 dark:bg-slate-900 border <%= activeSubject !== 'all' ? 'border-primary/50 text-primary bg-primary/5 font-bold' : 'border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-semibold' %> flex items-center gap-1 text-[11px] transition-all cursor-pointer shadow-2xs select-none">
+                                    <span class="truncate max-w-[95px]"><%= subjectLabel %></span>
+                                    <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow">expand_more</span>
+                                </button>
+                                <div id="dropdown-menu-subject" class="hidden absolute top-full left-0 mt-1 w-44 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-40 max-h-56 overflow-y-auto no-scrollbar">
+                                    <div onclick="updateFilter('subject', 'all')" class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeSubject === 'all' ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                        <span>All Subjects</span>
+                                        <% if (activeSubject === 'all') { %><span class="material-symbols-rounded text-sm text-primary">check</span><% } %>
+                                    </div>
+                                    <% (assignedSubjects || []).forEach(s => { %>
+                                        <div onclick="updateFilter('subject', '<%= s %>')" class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeSubject === s ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                            <span class="truncate"><%= s %></span>
+                                            <% if (activeSubject === s) { %><span class="material-symbols-rounded text-sm text-primary">check</span><% } %>
+                                        </div>
+                                    <% }) %>
+                                </div>
+                            </div>
+
+                            <!-- Class Dropdown -->
+                            <div class="relative system-dropdown shrink-0" id="dropdown-class">
+                                <button type="button" onclick="toggleSystemDropdown('class', event)" 
+                                        class="h-7 sm:h-8 px-2.5 rounded-lg sm:rounded-xl bg-slate-50 dark:bg-slate-900 border <%= activeClass !== 'all' ? 'border-primary/50 text-primary bg-primary/5 font-bold' : 'border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-semibold' %> flex items-center gap-1 text-[11px] transition-all cursor-pointer shadow-2xs select-none">
+                                    <span class="truncate max-w-[90px]"><%= classLabel %></span>
+                                    <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow">expand_more</span>
+                                </button>
+                                <div id="dropdown-menu-class" class="hidden absolute top-full left-0 mt-1 w-40 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-40 max-h-56 overflow-y-auto no-scrollbar">
+                                    <div onclick="updateFilter('class', 'all')" class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeClass === 'all' ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                        <span>All Classes</span>
+                                        <% if (activeClass === 'all') { %><span class="material-symbols-rounded text-sm text-primary">check</span><% } %>
+                                    </div>
+                                    <% (assignedClasses || []).forEach(c => { %>
+                                        <div onclick="updateFilter('class', '<%= c %>')" class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeClass === c ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                            <span class="truncate"><%= String(c).startsWith('Class') ? c : 'Class ' + c %></span>
+                                            <% if (activeClass === c) { %><span class="material-symbols-rounded text-sm text-primary">check</span><% } %>
+                                        </div>
+                                    <% }) %>
+                                </div>
+                            </div>
+
+                            <!-- Board Dropdown -->
+                            <div class="relative system-dropdown shrink-0" id="dropdown-board">
+                                <button type="button" onclick="toggleSystemDropdown('board', event)" 
+                                        class="h-7 sm:h-8 px-2.5 rounded-lg sm:rounded-xl bg-slate-50 dark:bg-slate-900 border <%= activeBoard !== 'all' ? 'border-primary/50 text-primary bg-primary/5 font-bold' : 'border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-semibold' %> flex items-center gap-1 text-[11px] transition-all cursor-pointer shadow-2xs select-none">
+                                    <span class="truncate max-w-[90px]"><%= boardLabel %></span>
+                                    <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow">expand_more</span>
+                                </button>
+                                <div id="dropdown-menu-board" class="hidden absolute top-full left-0 mt-1 w-44 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-40 max-h-56 overflow-y-auto no-scrollbar">
+                                    <div onclick="updateFilter('board', 'all')" class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeBoard === 'all' ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                        <span>All Boards</span>
+                                        <% if (activeBoard === 'all') { %><span class="material-symbols-rounded text-sm text-primary">check</span><% } %>
+                                    </div>
+                                    <% ['Dhaka Board', 'Comilla Board', 'Rajshahi Board', 'Chittagong Board', 'Sylhet Board', 'Barisal Board', 'Khulna Board', 'Rangpur Board', 'Mymensingh Board'].forEach(b => { %>
+                                        <div onclick="updateFilter('board', '<%= b %>')" class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeBoard === b ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                            <span class="truncate"><%= b %></span>
+                                            <% if (activeBoard === b) { %><span class="material-symbols-rounded text-sm text-primary">check</span><% } %>
+                                        </div>
+                                    <% }) %>
+                                </div>
+                            </div>
+
+                            <!-- Access Dropdown -->
+                            <div class="relative system-dropdown shrink-0" id="dropdown-access">
+                                <button type="button" onclick="toggleSystemDropdown('access', event)" 
+                                        class="h-7 sm:h-8 px-2.5 rounded-lg sm:rounded-xl bg-slate-50 dark:bg-slate-900 border <%= activeAccess !== 'all' ? 'border-primary/50 text-primary bg-primary/5 font-bold' : 'border-slate-200 dark:border-slate-700/80 text-slate-700 dark:text-slate-200 font-semibold' %> flex items-center gap-1 text-[11px] transition-all cursor-pointer shadow-2xs select-none">
+                                    <span class="truncate max-w-[80px]"><%= accessLabel %></span>
+                                    <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow">expand_more</span>
+                                </button>
+                                <div id="dropdown-menu-access" class="hidden absolute top-full right-0 sm:left-0 sm:right-auto mt-1 w-36 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-40 max-h-56 overflow-y-auto no-scrollbar">
+                                    <div onclick="updateFilter('access', 'all')" class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeAccess === 'all' ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                        <span>All Access</span>
+                                        <% if (activeAccess === 'all') { %><span class="material-symbols-rounded text-sm text-primary">check</span><% } %>
+                                    </div>
+                                    <div onclick="updateFilter('access', 'Free')" class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeAccess === 'Free' ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                        <span>Free</span>
+                                        <% if (activeAccess === 'Free') { %><span class="material-symbols-rounded text-sm text-primary">check</span><% } %>
+                                    </div>
+                                    <div onclick="updateFilter('access', 'Paid')" class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeAccess === 'Paid' ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                        <span>Paid</span>
+                                        <% if (activeAccess === 'Paid') { %><span class="material-symbols-rounded text-sm text-primary">check</span><% } %>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Count Badge -->
+                            <div class="h-7 sm:h-8 px-2 sm:px-2.5 bg-primary/10 border border-primary/20 rounded-lg sm:rounded-xl flex items-center shrink-0">
+                                <span class="text-[11px] font-bold text-primary whitespace-nowrap"><%= filters.totalCount %> Qs</span>
+                            </div>
+
+                            <% if (hasActiveFilters) { %>
+                                <a href="/teacher/question-details" class="h-7 sm:h-8 px-2 rounded-lg sm:rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 text-[11px] font-bold flex items-center gap-1 shrink-0 transition-colors">
+                                    <span class="material-symbols-rounded text-xs">close</span>
+                                    <span>Reset</span>
+                                </a>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <!-- MOBILE QUESTIONS VIEW (< md screens) -->
+                    <div id="mobileQuestionsView" class="md:hidden flex flex-col flex-1">
+                        <!-- Mobile Header Info (Default state when NOT selecting) -->
+                        <div id="mobileHeaderInfo" class="px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between text-xs">
+                            <div class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
+                                <span class="material-symbols-rounded text-sm text-primary/70">touch_app</span>
+                                <span class="text-[11px] font-normal">Tap &amp; hold to select questions</span>
+                            </div>
+                            <span class="text-[10px] font-medium text-slate-400 bg-slate-200/50 dark:bg-slate-800 px-2 py-0.5 rounded-full">Total <%= filters.totalCount %></span>
+                        </div>
+
+                        <!-- Mobile Select All Bar (Shown only when selection mode is active) -->
+                        <div id="mobileSelectBar" class="hidden px-3.5 py-2 bg-primary/10 dark:bg-primary/20 border-b border-primary/20 items-center justify-between text-xs transition-all">
+                            <label class="flex items-center gap-2 cursor-pointer select-none">
+                                <input type="checkbox" id="selectAllMobile" onchange="toggleSelectAllMobile()" class="size-4 rounded border-slate-300 dark:border-slate-700 text-primary cursor-pointer">
+                                <span class="text-[11px] font-medium text-slate-700 dark:text-slate-200">Select all (<%= questions.length %>)</span>
+                            </label>
+                            <div class="flex items-center gap-2">
+                                <span id="mobileSelectedCounter" class="text-[11px] font-semibold text-primary">0 selected</span>
+                                <button type="button" onclick="exitMobileSelection()" class="px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-medium shadow-xs border border-slate-200/60 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors cursor-pointer">
+                                    Done
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Mobile Cards List -->
+                        <div class="p-2.5 sm:p-3 space-y-2.5 flex-1">
+                            <% if (questions && questions.length > 0) { %>
+                                <% questions.forEach(q => { %>
+                                    <div class="question-mobile-card p-3 rounded-xl bg-white dark:bg-[#0b1120] border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-2 transition-all active:scale-[0.99] cursor-pointer"
+                                         data-question-card="<%= q._id %>"
+                                         onclick="handleMobileCardClick('<%= q._id %>', event)"
+                                         ontouchstart="handleCardTouchStart('<%= q._id %>', event)"
+                                         ontouchmove="handleCardTouchMove(event)"
+                                         ontouchend="handleCardTouchEnd(event)"
+                                         ontouchcancel="handleCardTouchCancel(event)"
+                                         onmousedown="handleCardTouchStart('<%= q._id %>', event)"
+                                         onmousemove="handleCardTouchMove(event)"
+                                         onmouseup="handleCardTouchEnd(event)">
+                                        <!-- Header of Card: Checkbox (hidden until selection mode), Badges, Quick Actions -->
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <div class="mobile-cb-wrapper items-center" onclick="event.stopPropagation()">
+                                                    <input type="checkbox" name="itemSelect" value="<%= q._id %>" id="cb-m-<%= q._id %>" onchange="toggleSelection(this)" class="item-cb size-4.5 rounded border-slate-300 dark:border-slate-700 text-primary cursor-pointer">
+                                                </div>
+                                                <% const typeMap = { 'MCQ': 'blue', 'Short': 'emerald', 'Medium': 'amber', 'Comprehension': 'purple' }; const color = typeMap[q.questionType] || 'slate'; %>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-<%= color %>-50 dark:bg-<%= color %>-500/10 text-<%= color %>-600 dark:text-<%= color %>-400 text-[10px] font-medium border border-<%= color %>-100 dark:border-<%= color %>-500/20">
+                                                    <%= q.questionType %>
+                                                </span>
+                                                <% if (q.accessType === 'Paid') { %>
+                                                    <span class="px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-medium border border-amber-100 dark:border-amber-500/20">Paid</span>
+                                                <% } else { %>
+                                                    <span class="px-1.5 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-medium border border-emerald-100 dark:border-emerald-500/20">Free</span>
+                                                <% } %>
+                                            </div>
+                                            <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
+                                                <button type="button" onclick="viewQuestion('<%= q._id %>')" class="size-7 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-100 dark:border-blue-500/20 text-blue-500 flex items-center justify-center hover:bg-blue-500 hover:text-white transition-all cursor-pointer" title="View">
+                                                    <span class="material-symbols-rounded text-sm">visibility</span>
+                                                </button>
+                                                <button type="button" onclick="deleteQuestion('<%= q._id %>')" class="size-7 rounded-lg bg-rose-50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all cursor-pointer" title="Delete">
+                                                    <span class="material-symbols-rounded text-sm">delete</span>
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Question Content -->
+                                        <p class="text-xs font-normal text-slate-800 dark:text-slate-200 leading-relaxed line-clamp-3">
+                                            <%= q.questionText %>
+                                        </p>
+
+                                        <!-- Footer Info -->
+                                        <div class="pt-2 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <span class="font-medium text-primary"><%= q.subject || 'General' %></span>
+                                                <span>•</span>
+                                                <span class="font-normal">Class <%= q.classLevel %></span>
+                                                <% if (q.board) { %>
+                                                    <span>•</span>
+                                                    <span class="font-normal"><%= q.board %> <%= q.year ? ('(' + q.year + ')') : '' %></span>
+                                                <% } %>
+                                            </div>
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <div class="size-4.5 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-[8px] font-bold text-slate-400">
+                                                    <%= (q.addedBy && q.addedBy.name ? q.addedBy.name[0].toUpperCase() : 'A') %>
+                                                </div>
+                                                <span class="truncate max-w-[65px] font-normal"><%= q.addedBy ? q.addedBy.name : 'System' %></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <% }) %>
+                            <% } else { %>
+                                <div class="p-8 text-center bg-white dark:bg-[#0b1120] rounded-xl border border-slate-200/80 dark:border-slate-800">
+                                    <span class="material-symbols-rounded text-3xl text-slate-300 dark:text-slate-600">help_center</span>
+                                    <p class="mt-2 text-xs font-medium text-slate-600 dark:text-slate-300">No questions found</p>
+                                    <p class="text-[10px] text-slate-400 mt-0.5">Try adjusting your filters or search keywords</p>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <!-- DESKTOP QUESTIONS VIEW (>= md screens) -->
+                    <div class="hidden md:block table-wrapper">
                         <table class="w-full text-left border-collapse">
                             <thead class="bg-white dark:bg-[#0f172a] border-b border-slate-100 dark:border-white/5 sticky top-[48px] z-20">
                                 <tr>
@@ -265,184 +508,398 @@
                         </table>
                     </div>
 
-                    <!-- Pagination -->
-                    <div class="px-3 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                        <p class="text-[9px] font-bold text-slate-500">Page <%= filters.page %> of <%= filters.totalPages %></p>
-                        <div class="flex items-center gap-0.5">
+                    <!-- Pagination Bar (Responsive) -->
+                    <div class="px-3 sm:px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <p class="text-[10px] font-bold text-slate-500">Page <%= filters.page %> of <%= filters.totalPages %></p>
+                        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5">
                             <% for(var i=1; i<=filters.totalPages; i++) { %>
-                                <a href="?page=<%= i %>&q=<%= encodeURIComponent(filters.q) %>&type=<%= encodeURIComponent(filters.type) %>&class=<%= encodeURIComponent(filters.class) %>&board=<%= encodeURIComponent(filters.board) %>&subject=<%= encodeURIComponent(filters.subject) %>&access=<%= encodeURIComponent(filters.access) %>" class="size-7 rounded-md flex items-center justify-center text-[9px] font-bold <%= filters.page === i ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200' %> transition-all"><%= i %></a>
+                                <a href="?page=<%= i %>&q=<%= encodeURIComponent(filters.q) %>&type=<%= encodeURIComponent(filters.type) %>&class=<%= encodeURIComponent(filters.class) %>&board=<%= encodeURIComponent(filters.board) %>&subject=<%= encodeURIComponent(filters.subject) %>&access=<%= encodeURIComponent(filters.access) %>" class="size-7 rounded-lg flex items-center justify-center text-[10px] font-bold <%= filters.page === i ? 'bg-primary text-white shadow-md shadow-primary/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200' %> transition-all shrink-0"><%= i %></a>
                             <% } %>
                         </div>
                     </div>
                 </div>
+
+                <!-- Floating Bulk Action Bar -->
+                <div id="bulkActions" class="fixed bottom-20 sm:bottom-24 lg:bottom-6 left-1/2 -translate-x-1/2 z-50 hidden bg-slate-900/95 dark:bg-white/95 text-white dark:text-slate-900 backdrop-blur-md px-3.5 py-2 rounded-2xl shadow-2xl flex items-center gap-2.5 border border-slate-700/60 dark:border-slate-200 text-xs font-bold transition-all">
+                    <div class="flex items-center gap-1.5">
+                        <span class="size-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <span class="text-[11px] whitespace-nowrap"><span id="selectedCount">0</span> selected</span>
+                    </div>
+                    <div class="h-3.5 w-px bg-white/20 dark:bg-black/20"></div>
+                    <button type="button" onclick="handleBulkAction('delete')" class="px-2 py-1 rounded-lg bg-rose-500/20 text-rose-300 dark:text-rose-600 hover:bg-rose-500/30 transition-all flex items-center gap-1 text-[11px] cursor-pointer">
+                        <span class="material-symbols-rounded text-sm">delete</span>
+                        <span>Delete</span>
+                    </button>
+                    <button type="button" onclick="clearSelection()" class="size-6 rounded-full hover:bg-white/10 dark:hover:bg-black/10 flex items-center justify-center text-slate-400 dark:text-slate-500 cursor-pointer" title="Cancel selection">
+                        <span class="material-symbols-rounded text-sm">close</span>
+                    </button>
+                </div>
+
+                <!-- Mobile bottom spacer to guarantee bottom-nav clearance -->
+                <div class="h-24 sm:h-28 lg:hidden shrink-0"></div>
             </div>
             <%- include('bottom-nav', { activePage: 'written-evaluations' }) %>
         </main>
     </div>
 
     <!-- Question Details Drawer (View + Inline Edit) -->
+    <!-- View & Edit Modal -->
     <div id="viewModal" class="fixed inset-0 z-[200] hidden">
-        <div class="absolute inset-0 bg-slate-900/20 backdrop-blur-sm" onclick="closeModal()"></div>
-        <div class="absolute inset-y-0 right-0 w-full max-w-[580px] bg-white dark:bg-[#0b1120] shadow-2xl animate-slide-left border-l border-slate-200/50 dark:border-white/5">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-xs" onclick="closeModal()"></div>
+        <div class="absolute inset-y-0 right-0 w-full sm:max-w-[560px] bg-white dark:bg-[#0b1120] shadow-2xl animate-slide-left border-l border-slate-200/80 dark:border-white/5">
             <div class="h-full flex flex-col overflow-hidden">
                 <!-- Modal Header -->
-                <div class="px-6 py-5 border-b border-slate-50 dark:border-white/5 flex items-center justify-between bg-white dark:bg-white/5">
-                    <div class="flex items-center gap-3">
-                        <div class="size-10 rounded-xl bg-slate-900 flex items-center justify-center text-white">
-                            <span class="material-symbols-rounded text-xl">visibility</span>
+                <div class="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-white dark:bg-[#0b1120]">
+                    <div class="flex items-center gap-2.5">
+                        <div class="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                            <span class="material-symbols-rounded text-lg">visibility</span>
                         </div>
-                        <div>
-                            <h2 class="text-sm font-black text-slate-900 dark:text-white tracking-tight">Question details</h2>
-                            <p class="text-[10px] font-bold text-slate-500">View and manage question properties</p>
-                        </div>
+                        <h2 class="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white" id="modalTitle">Question details</h2>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button id="modalEditBtn" class="h-8 px-4 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-bold flex items-center gap-2 hover:bg-slate-900 hover:text-white transition-all">
+                    <div class="flex items-center gap-1.5">
+                        <button id="modalEditBtn" class="h-8 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium flex items-center gap-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all cursor-pointer">
                             <span class="material-symbols-rounded text-[16px]">edit</span>
                             <span>Edit</span>
                         </button>
-                        <button onclick="closeModal()" class="size-8 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-all flex items-center justify-center group">
-                            <span class="material-symbols-rounded text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">close</span>
+                        <button onclick="closeModal()" class="size-8 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors flex items-center justify-center cursor-pointer">
+                            <span class="material-symbols-rounded text-[18px]">close</span>
                         </button>
                     </div>
                 </div>
 
                 <div class="flex-1 overflow-y-auto custom-scrollbar">
                     <!-- VIEW MODE CONTAINER -->
-                    <div id="viewModeContainer" class="p-8 space-y-8">
-                        <div class="flex items-center gap-2">
-                            <span id="modalType" class="px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-[9px] font-black border border-blue-200/50 dark:border-blue-500/20">MCQ</span>
-                            <span id="modalSubject" class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 text-[9px] font-black border border-slate-200/50 dark:border-white/5">Subject</span>
+                    <div id="viewModeContainer" class="p-4 sm:p-6 space-y-4 sm:space-y-5">
+                        <!-- Top Meta Badges -->
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span id="modalType" class="px-2.5 py-0.5 rounded-lg text-xs font-medium border bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200/50 dark:border-blue-500/20">MCQ</span>
+                            <span id="modalSubject" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium border border-slate-200 dark:border-slate-700">Subject</span>
+                            <span id="modalMarksBadge" class="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-medium border border-slate-200 dark:border-slate-700">1 Mark</span>
                             <div id="modalAccessBadge"></div>
                         </div>
 
-                        <div>
-                            <p class="text-[10px] font-black text-slate-400 mb-4">Question</p>
-                            <h3 id="modalText" class="text-xl font-black text-slate-900 dark:text-white leading-[1.3] tracking-tight italic"></h3>
+                        <!-- Standard Question Area (MCQ, Short, Medium) -->
+                        <div id="modalStandardQuestionArea" class="space-y-1">
+                            <p class="text-xs font-medium text-slate-400">Question</p>
+                            <h3 id="modalText" class="text-sm sm:text-base font-normal text-slate-800 dark:text-slate-100 leading-relaxed whitespace-pre-wrap"></h3>
                         </div>
 
-                        <div id="modalOptionsContainer" class="hidden space-y-4">
-                            <p class="text-[10px] font-black text-slate-400">Options</p>
+                        <!-- Comprehension View Area -->
+                        <div id="modalComprehensionArea" class="hidden space-y-3.5">
+                            <!-- Passage / Context -->
+                            <div class="p-3.5 sm:p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
+                                <div class="flex items-center gap-1.5 text-primary text-xs font-medium">
+                                    <span class="material-symbols-rounded text-sm">auto_stories</span>
+                                    <span>Context / Passage (উদ্দীপক)</span>
+                                </div>
+                                <div id="modalContextText" class="text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap"></div>
+                            </div>
+
+                            <!-- Sub Questions -->
+                            <div class="space-y-2.5">
+                                <!-- Part 1 -->
+                                <div class="p-3 sm:p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 space-y-2">
+                                    <div class="flex items-center gap-1.5 pb-1 border-b border-slate-200/60 dark:border-slate-800/60">
+                                        <span class="size-5 rounded-md bg-primary/10 text-primary text-[11px] font-medium flex items-center justify-center">1</span>
+                                        <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Question 1</span>
+                                    </div>
+                                    <p id="modalQ1Text" class="text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200"></p>
+                                    <div class="p-2 rounded-lg bg-emerald-50/60 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20 text-xs">
+                                        <span class="font-medium text-emerald-700 dark:text-emerald-400">Ans: </span>
+                                        <span id="modalA1Text" class="text-emerald-900 dark:text-emerald-200 font-normal"></span>
+                                    </div>
+                                    <div id="modalS1Container" class="p-2 rounded-lg bg-slate-100/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 text-xs hidden">
+                                        <span class="font-medium text-slate-600 dark:text-slate-400">Sol: </span>
+                                        <span id="modalS1Text" class="text-slate-700 dark:text-slate-300 font-normal"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Part 2 -->
+                                <div class="p-3 sm:p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 space-y-2">
+                                    <div class="flex items-center gap-1.5 pb-1 border-b border-slate-200/60 dark:border-slate-800/60">
+                                        <span class="size-5 rounded-md bg-primary/10 text-primary text-[11px] font-medium flex items-center justify-center">2</span>
+                                        <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Question 2</span>
+                                    </div>
+                                    <p id="modalQ2Text" class="text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200"></p>
+                                    <div class="p-2 rounded-lg bg-emerald-50/60 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20 text-xs">
+                                        <span class="font-medium text-emerald-700 dark:text-emerald-400">Ans: </span>
+                                        <span id="modalA2Text" class="text-emerald-900 dark:text-emerald-200 font-normal"></span>
+                                    </div>
+                                    <div id="modalS2Container" class="p-2 rounded-lg bg-slate-100/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 text-xs hidden">
+                                        <span class="font-medium text-slate-600 dark:text-slate-400">Sol: </span>
+                                        <span id="modalS2Text" class="text-slate-700 dark:text-slate-300 font-normal"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- MCQ Options Container -->
+                        <div id="modalOptionsContainer" class="hidden space-y-2">
+                            <p class="text-xs font-medium text-slate-400">Options</p>
                             <div id="modalOptions" class="grid grid-cols-1 gap-2"></div>
                         </div>
 
-                        <div class="p-6 rounded-3xl bg-emerald-50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/20">
-                            <div class="flex items-center gap-2 mb-3">
-                                <span class="material-symbols-rounded text-emerald-600 text-lg">verified</span>
-                                <p class="text-[10px] font-black text-emerald-600 dark:text-emerald-400">Correct answer</p>
+                        <!-- Correct Answer Card (for MCQ, Short, Medium) -->
+                        <div id="modalAnswerContainer" class="p-3.5 sm:p-4 rounded-xl bg-emerald-50/60 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20 space-y-1">
+                            <div class="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                                <span class="material-symbols-rounded text-base">check_circle</span>
+                                <span class="text-xs font-medium">Correct answer / Model solution</span>
                             </div>
-                            <p id="modalAnswer" class="text-base font-black text-emerald-700 dark:text-emerald-300 tracking-tight"></p>
+                            <p id="modalAnswer" class="text-xs sm:text-sm font-normal text-emerald-900 dark:text-emerald-200"></p>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-white dark:border-white/5 shadow-sm">
-                                <p class="text-[9px] font-black text-slate-400 mb-1">Board</p>
-                                <p id="modalBoard" class="text-xs font-black text-slate-900 dark:text-white tracking-tight"></p>
+                        <!-- Explanation Card -->
+                        <div id="modalExplanationContainer" class="hidden p-3.5 sm:p-4 rounded-xl bg-amber-50/60 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/20 space-y-1">
+                            <div class="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
+                                <span class="material-symbols-rounded text-base">lightbulb</span>
+                                <span class="text-xs font-medium">Explanation</span>
                             </div>
-                            <div class="p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-white dark:border-white/5 shadow-sm">
-                                <p class="text-[9px] font-black text-slate-400 mb-1">Class</p>
-                                <p id="modalClass" class="text-xs font-black text-slate-900 dark:text-white tracking-tight"></p>
+                            <p id="modalExplanationText" class="text-xs sm:text-sm font-normal text-slate-700 dark:text-slate-300 leading-relaxed"></p>
+                        </div>
+
+                        <!-- Metadata Grid -->
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-white/5">
+                                <p class="text-[11px] font-medium text-slate-400 mb-0.5">Board</p>
+                                <p id="modalBoard" class="text-xs font-normal text-slate-800 dark:text-slate-200 truncate"></p>
                             </div>
-                            <div class="p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-white dark:border-white/5 shadow-sm">
-                                <p class="text-[9px] font-black text-slate-400 mb-1">Year</p>
-                                <p id="modalYear" class="text-xs font-black text-slate-900 dark:text-white tracking-tight"></p>
+                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-white/5">
+                                <p class="text-[11px] font-medium text-slate-400 mb-0.5">Class</p>
+                                <p id="modalClass" class="text-xs font-normal text-slate-800 dark:text-slate-200 truncate"></p>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-white/5">
+                                <p class="text-[11px] font-medium text-slate-400 mb-0.5">Year</p>
+                                <p id="modalYear" class="text-xs font-normal text-slate-800 dark:text-slate-200 truncate"></p>
                             </div>
                         </div>
 
-                        <div class="flex items-center gap-4 p-5 rounded-[2rem] bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-white/5">
-                            <div class="size-12 rounded-full overflow-hidden border-2 border-white dark:border-slate-800 shadow-sm">
+                        <!-- Contributor Info -->
+                        <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-white/5">
+                            <div class="size-9 rounded-full overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
                                 <img id="modalAuthorImg" src="/images/default-avatar.png" class="size-full object-cover">
                             </div>
                             <div>
-                                <p id="modalAuthorName" class="text-xs font-black text-slate-900 dark:text-white tracking-tight mb-0.5"></p>
-                                <p id="modalAuthorRole" class="text-[10px] font-bold text-slate-400 italic">Contributor</p>
+                                <p id="modalAuthorName" class="text-xs font-medium text-slate-800 dark:text-slate-200"></p>
+                                <p id="modalAuthorRole" class="text-[11px] font-normal text-slate-400">Contributor</p>
                             </div>
                         </div>
                     </div>
 
                     <!-- EDIT MODE CONTAINER -->
-                    <div id="editModeContainer" class="hidden p-8 space-y-8 animate-slide-up">
+                    <div id="editModeContainer" class="hidden p-4 sm:p-6 space-y-4 animate-slide-up">
                         <input type="hidden" id="editQId">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="space-y-1.5">
-                                <label class="text-[10px] font-black text-slate-400 ml-1">Board</label>
-                                <input type="text" id="editBoard" class="w-full h-10 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold outline-none focus:border-primary">
+                        
+                        <!-- Row 1: Type & Marks -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <!-- Question Type Dropdown -->
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Type</label>
+                                <input type="hidden" id="editQuestionType" value="MCQ">
+                                <div class="relative system-dropdown" id="dropdown-editQuestionType">
+                                    <button type="button" onclick="toggleSystemDropdown('editQuestionType', event)" 
+                                            class="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
+                                        <span id="editQuestionType-label" class="truncate">MCQ</span>
+                                        <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                                    </button>
+                                    <div id="dropdown-menu-editQuestionType" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
+                                        <% ['MCQ', 'Short', 'Medium', 'Comprehension'].forEach(t => { %>
+                                            <div onclick="changeEditType('<%= t %>')" data-wiz-value="<%= t %>"
+                                                 class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                                <span><%= t %></span>
+                                            </div>
+                                        <% }) %>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="space-y-1.5">
-                                <label class="text-[10px] font-black text-slate-400 ml-1">Year</label>
-                                <input type="number" id="editYear" class="w-full h-10 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold outline-none focus:border-primary">
-                            </div>
-                            <div class="space-y-1.5">
-                                <label class="text-[10px] font-black text-slate-400 ml-1">Subject</label>
-                                <select id="editSubject" class="w-full h-10 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold outline-none focus:border-primary">
-                                    <option value="Physics">Physics</option>
-                                    <option value="Chemistry">Chemistry</option>
-                                    <option value="Mathematics">Mathematics</option>
-                                    <option value="Biology">Biology</option>
-                                    <option value="ICT">ICT</option>
-                                    <option value="English">English</option>
-                                    <option value="Bangla">Bangla</option>
-                                    <option value="General">General Knowledge</option>
-                                    <option value="Higher Math">Higher Math</option>
-                                    <option value="Accounting">Accounting</option>
-                                    <option value="Finance">Finance</option>
-                                    <option value="Management">Management</option>
-                                    <option value="Economics">Economics</option>
-                                </select>
-                            </div>
-                            <div class="space-y-1.5">
-                                <label class="text-[10px] font-black text-slate-400 ml-1">Class</label>
-                                <select id="editClass" class="w-full h-10 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold outline-none focus:border-primary">
-                                    <% (globalAcademicClasses || []).forEach(cls => { %>
-                                        <option value="<%= cls.name.replace('Class ', '') %>" <%= typeof filters !== 'undefined' && filters.class === cls.name.replace('Class ', '') ? 'selected' : '' %>><%= cls.name %></option>
-                                    <% }) %>
-                                    <option value="HSC">HSC</option>
-                                    <option value="SSC">SSC</option>
-                                    <option value="JSC">JSC</option>
-                                    <option value="Admission">Admission</option>
-                                    <option value="BCS">BCS</option>
-                                </select>
-                            </div>
-                            <div class="col-span-2 space-y-1.5">
-                                <label class="text-[10px] font-black text-slate-400 ml-1">Access Control</label>
-                                <select id="editAccessType" class="w-full h-10 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold outline-none focus:border-primary">
-                                    <option value="Free">Free Access</option>
-                                    <option value="Paid">Paid Content</option>
-                                </select>
+
+                            <!-- Marks Input -->
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Marks</label>
+                                <input type="number" id="editMarks" min="1" max="100" class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all text-center">
                             </div>
                         </div>
 
-                        <div class="space-y-1.5">
-                            <label class="text-[10px] font-black text-slate-400 ml-1">Question Content</label>
-                            <textarea id="editText" class="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-sm font-bold outline-none focus:border-primary leading-relaxed" rows="4"></textarea>
+                        <!-- Row 2: Board & Year -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Board</label>
+                                <input type="text" id="editBoard" class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all" placeholder="e.g. Dhaka">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Year</label>
+                                <input type="number" id="editYear" class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all" placeholder="2024">
+                            </div>
                         </div>
 
-                        <div id="editMcqArea" class="hidden space-y-4">
-                            <p class="text-[10px] font-black text-slate-400 ml-1">Options Matrix</p>
-                            <div class="grid grid-cols-1 gap-3">
+                        <!-- Row 3: Subject & Class -->
+                        <div class="grid grid-cols-2 gap-3">
+                            <!-- In-System Custom Dropdown for Subject -->
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Subject</label>
+                                <input type="hidden" id="editSubject" value="">
+                                <div class="relative system-dropdown" id="dropdown-editSubject">
+                                    <button type="button" onclick="toggleSystemDropdown('editSubject', event)" 
+                                            class="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
+                                        <span id="editSubject-label" class="truncate">Select subject</span>
+                                        <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                                    </button>
+                                    <div id="dropdown-menu-editSubject" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
+                                        <% 
+                                            const editSubList = (assignedSubjects && assignedSubjects.length > 0) ? assignedSubjects : ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'ICT', 'English', 'Bangla', 'General', 'Higher Math', 'Accounting', 'Finance', 'Management', 'Economics'];
+                                        %>
+                                        <% editSubList.forEach(s => { %>
+                                            <div onclick="selectWizardOption('editSubject', '<%= s %>', '<%= s %>')" data-wiz-value="<%= s %>"
+                                                 class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                                <span class="truncate"><%= s %></span>
+                                            </div>
+                                        <% }) %>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- In-System Custom Dropdown for Class -->
+                            <div class="space-y-1">
+                                <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Class</label>
+                                <input type="hidden" id="editClass" value="">
+                                <div class="relative system-dropdown" id="dropdown-editClass">
+                                    <button type="button" onclick="toggleSystemDropdown('editClass', event)" 
+                                            class="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
+                                        <span id="editClass-label" class="truncate">Select class</span>
+                                        <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                                    </button>
+                                    <div id="dropdown-menu-editClass" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
+                                        <% 
+                                            const editClsList = (assignedClasses && assignedClasses.length > 0) ? assignedClasses : [6,7,8,9,10,11,12,'HSC','SSC','JSC','Admission','BCS'];
+                                        %>
+                                        <% editClsList.forEach(c => { const cStr = String(c); const cLabel = cStr.startsWith('Class') ? cStr : (!isNaN(cStr) ? 'Class ' + cStr : cStr); %>
+                                            <div onclick="selectWizardOption('editClass', '<%= cStr %>', '<%= cLabel %>')" data-wiz-value="<%= cStr %>"
+                                                 class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                                <span class="truncate"><%= cLabel %></span>
+                                            </div>
+                                        <% }) %>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Row 4: Access -->
+                        <div class="space-y-1">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Access</label>
+                            <input type="hidden" id="editAccessType" value="Free">
+                            <div class="relative system-dropdown" id="dropdown-editAccessType">
+                                <button type="button" onclick="toggleSystemDropdown('editAccessType', event)" 
+                                        class="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
+                                    <span id="editAccessType-label" class="truncate">Free</span>
+                                    <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                                </button>
+                                <div id="dropdown-menu-editAccessType" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
+                                    <div onclick="selectWizardOption('editAccessType', 'Free', 'Free')" data-wiz-value="Free"
+                                         class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors bg-primary/10 text-primary font-medium">
+                                        <span>Free</span>
+                                        <span class="material-symbols-rounded text-sm text-primary wiz-check">check</span>
+                                    </div>
+                                    <div onclick="selectWizardOption('editAccessType', 'Paid', 'Paid')" data-wiz-value="Paid"
+                                         class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                        <span>Paid</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Standard Question Area (for MCQ, Short, Medium) -->
+                        <div id="editStandardQuestionArea" class="space-y-1">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Question</label>
+                            <textarea id="editText" class="w-full p-2.5 sm:p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary leading-relaxed resize-none" rows="3"></textarea>
+                        </div>
+
+                        <!-- MCQ Area -->
+                        <div id="editMcqArea" class="hidden space-y-2">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Options</label>
+                            <div class="space-y-2">
                                 <% ['A','B','C','D'].forEach((l, idx) => { %>
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-[10px] font-black text-slate-300 w-4"><%= l %></span>
-                                        <input type="text" id="editOpt<%= idx %>" class="flex-1 h-10 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 text-xs font-bold outline-none focus:border-primary">
-                                        <input type="radio" name="editCorrectIdx" value="<%= idx %>" class="size-4 accent-emerald-500">
+                                    <div class="flex items-center gap-2 group">
+                                        <span class="size-7 sm:size-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-medium text-slate-500 shrink-0"><%= l %></span>
+                                        <input type="text" id="editOpt<%= idx %>" placeholder="Option <%= l %>" class="flex-1 h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all">
+                                        <label class="flex items-center gap-1.5 px-2.5 h-9 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-xs font-normal text-slate-600 dark:text-slate-400 select-none shrink-0" title="Mark as correct answer">
+                                            <input type="radio" name="editCorrectIdx" value="<%= idx %>" class="size-3.5 accent-emerald-500 cursor-pointer">
+                                            <span class="text-[11px] hidden sm:inline">Correct</span>
+                                        </label>
                                     </div>
                                 <% }) %>
                             </div>
                         </div>
 
-                        <div id="editAnswerArea" class="hidden space-y-1.5">
-                            <label class="text-[10px] font-black text-emerald-600 ml-1">Model Solution</label>
-                            <textarea id="editAnswer" class="w-full p-4 rounded-xl bg-emerald-50/50 dark:bg-emerald-500/5 border border-emerald-100 dark:border-emerald-500/20 text-sm font-bold text-emerald-900 dark:text-emerald-300 outline-none" rows="3"></textarea>
+                        <!-- Short / Medium Solution Area -->
+                        <div id="editAnswerArea" class="hidden space-y-1">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Solution</label>
+                            <textarea id="editAnswer" class="w-full p-2.5 sm:p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all resize-none" rows="2"></textarea>
                         </div>
 
-                        <div class="space-y-1.5">
-                            <label class="text-[10px] font-black text-slate-400 ml-1">Expert Explanation</label>
-                            <textarea id="editExplanation" class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-medium outline-none focus:border-primary" rows="2"></textarea>
+                        <!-- Comprehension Edit Area -->
+                        <div id="editComprehensionArea" class="hidden space-y-3 sm:space-y-3.5">
+                            <!-- Context -->
+                            <div class="space-y-1">
+                                <label class="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 ml-0.5">
+                                    <span class="material-symbols-rounded text-sm text-primary">auto_stories</span>
+                                    <span>Context / Passage (উদ্দীপক)</span>
+                                </label>
+                                <textarea id="editContext" rows="3" placeholder="Enter context / passage..." class="w-full p-2.5 sm:p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary leading-relaxed resize-none"></textarea>
+                            </div>
+
+                            <!-- Sub-Questions Grid -->
+                            <div class="grid grid-cols-1 gap-3">
+                                <!-- Part 1 -->
+                                <div class="p-3 sm:p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 space-y-2.5">
+                                    <div class="flex items-center gap-1.5 pb-1.5 border-b border-slate-200/60 dark:border-slate-800/60">
+                                        <span class="size-5 rounded-md bg-primary/10 text-primary text-[11px] font-medium flex items-center justify-center">1</span>
+                                        <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Question 1</span>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Question 1</label>
+                                        <textarea id="editQ1" rows="2" placeholder="Question 1..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary resize-none"></textarea>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Answer 1</label>
+                                        <textarea id="editA1" rows="2" placeholder="Answer 1..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary resize-none"></textarea>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Solution 1</label>
+                                        <textarea id="editS1" rows="2" placeholder="Solution 1..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-700 dark:text-slate-300 outline-none focus:border-primary resize-none"></textarea>
+                                    </div>
+                                </div>
+
+                                <!-- Part 2 -->
+                                <div class="p-3 sm:p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 space-y-2.5">
+                                    <div class="flex items-center gap-1.5 pb-1.5 border-b border-slate-200/60 dark:border-slate-800/60">
+                                        <span class="size-5 rounded-md bg-primary/10 text-primary text-[11px] font-medium flex items-center justify-center">2</span>
+                                        <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Question 2</span>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Question 2</label>
+                                        <textarea id="editQ2" rows="2" placeholder="Question 2..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary resize-none"></textarea>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Answer 2</label>
+                                        <textarea id="editA2" rows="2" placeholder="Answer 2..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary resize-none"></textarea>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400">Solution 2</label>
+                                        <textarea id="editS2" rows="2" placeholder="Solution 2..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-700 dark:text-slate-300 outline-none focus:border-primary resize-none"></textarea>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-50 dark:border-white/5">
-                            <button type="button" onclick="toggleEditMode(false)" class="text-[10px] font-black text-slate-400 uppercase hover:text-slate-600 transition-all">Cancel</button>
-                            <button type="button" onclick="saveInlineEdit()" class="h-10 px-8 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 active:scale-95 transition-all">Save Changes</button>
+                        <!-- Explanation Area -->
+                        <div id="editExplanationArea" class="space-y-1">
+                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Explanation</label>
+                            <textarea id="editExplanation" placeholder="Explanation..." class="w-full p-2.5 sm:p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-700 dark:text-slate-300 outline-none focus:border-primary transition-all resize-none" rows="2"></textarea>
+                        </div>
+
+                        <!-- Actions (Sticky on Mobile) -->
+                        <div class="sticky bottom-0 bg-white/95 dark:bg-[#0b1120]/95 backdrop-blur-md flex items-center justify-end gap-3 pt-3 pb-2 -mx-4 px-4 sm:-mx-6 sm:px-6 border-t border-slate-100 dark:border-white/10 z-10">
+                            <button type="button" onclick="toggleEditMode(false)" class="text-xs font-normal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-all px-2.5 py-2 cursor-pointer">Cancel</button>
+                            <button type="button" onclick="saveInlineEdit()" class="h-9 px-5 sm:px-6 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-black dark:hover:bg-slate-100 rounded-lg text-xs font-medium transition-all active:scale-95 flex items-center justify-center cursor-pointer">Save Changes</button>
                         </div>
                     </div>
                 </div>
@@ -451,83 +908,143 @@
     </div>
 
     <!-- Composition Wizard Modal -->
-    <div id="compositionWizardModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xl z-[250] hidden flex items-center justify-center p-6">
-        <div class="bg-white dark:bg-[#0b1120] rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-2xl border border-white/10 relative animate-slide-up">
-            <button onclick="document.getElementById('compositionWizardModal').classList.add('hidden')" class="absolute top-6 right-6 size-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all">
-                <span class="material-symbols-rounded text-lg">close</span>
-            </button>
-            <div class="p-10">
-                <div class="flex items-center gap-4 mb-8">
-                    <div class="size-12 rounded-2xl bg-slate-900 flex items-center justify-center text-white">
-                        <span class="material-symbols-rounded text-[26px]">precision_manufacturing</span>
+    <div id="compositionWizardModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[250] hidden flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-white dark:bg-[#0f172a] rounded-2xl w-full max-w-md overflow-hidden shadow-xl border border-slate-200/80 dark:border-slate-800 relative animate-slide-up max-h-[92dvh] flex flex-col">
+            <!-- Header -->
+            <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="size-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                        <span class="material-symbols-rounded text-base">tune</span>
                     </div>
-                    <div>
-                        <h3 class="text-xl font-black text-slate-900 dark:text-white leading-tight">Composition wizard</h3>
-                        <p class="text-[11px] font-bold text-slate-500 mt-0.5">Setup metadata before studio entry</p>
+                    <h3 class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100">Compose question</h3>
+                </div>
+                <button onclick="document.getElementById('compositionWizardModal').classList.add('hidden')" class="size-7 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors flex items-center justify-center cursor-pointer">
+                    <span class="material-symbols-rounded text-base">close</span>
+                </button>
+            </div>
+
+            <!-- Form Content -->
+            <div class="p-3.5 sm:p-4 overflow-y-auto space-y-3 custom-scrollbar">
+                <!-- Class & Subject -->
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div class="space-y-1">
+                        <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Class</label>
+                        <% 
+                            const wizClassList = (assignedClasses && assignedClasses.length > 0) ? assignedClasses : [6,7,8,9,10,11,12];
+                            const defaultWizClass = String(wizClassList[0]);
+                            const defaultWizClassLabel = defaultWizClass.startsWith('Class') ? defaultWizClass : 'Class ' + defaultWizClass;
+                        %>
+                        <input type="hidden" id="wizClass" value="<%= defaultWizClass %>">
+                        <div class="relative system-dropdown" id="dropdown-wizClass">
+                            <button type="button" onclick="toggleSystemDropdown('wizClass', event)" 
+                                    class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
+                                <span id="wizClass-label" class="truncate text-[11px]"><%= defaultWizClassLabel %></span>
+                                <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                            </button>
+                            <div id="dropdown-menu-wizClass" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
+                                <% wizClassList.forEach((c, idx) => { const cVal = String(c); const cText = cVal.startsWith('Class') ? cVal : 'Class ' + cVal; %>
+                                    <div onclick="selectWizardOption('wizClass', '<%= cVal %>', '<%= cText %>')" data-wiz-value="<%= cVal %>"
+                                         class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors <%= idx === 0 ? 'bg-primary/10 text-primary font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                        <span class="truncate"><%= cText %></span>
+                                        <% if (idx === 0) { %><span class="material-symbols-rounded text-sm text-primary wiz-check">check</span><% } %>
+                                    </div>
+                                <% }) %>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Subject</label>
+                        <% 
+                            const wizSubjectList = (assignedSubjects && assignedSubjects.length > 0) ? assignedSubjects : ['Physics','Chemistry','Biology','Higher Mathematics','General Mathematics','Bangla','English','ICT'];
+                            const defaultWizSub = wizSubjectList[0];
+                        %>
+                        <input type="hidden" id="wizSubject" value="<%= defaultWizSub %>">
+                        <div class="relative system-dropdown" id="dropdown-wizSubject">
+                            <button type="button" onclick="toggleSystemDropdown('wizSubject', event)" 
+                                    class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
+                                <span id="wizSubject-label" class="truncate text-[11px]"><%= defaultWizSub %></span>
+                                <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                            </button>
+                            <div id="dropdown-menu-wizSubject" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
+                                <% wizSubjectList.forEach((s, idx) => { %>
+                                    <div onclick="selectWizardOption('wizSubject', '<%= s %>', '<%= s %>')" data-wiz-value="<%= s %>"
+                                         class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors <%= idx === 0 ? 'bg-primary/10 text-primary font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                        <span class="truncate"><%= s %></span>
+                                        <% if (idx === 0) { %><span class="material-symbols-rounded text-sm text-primary wiz-check">check</span><% } %>
+                                    </div>
+                                <% }) %>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="space-y-5">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1.5">
-                            <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Class level</label>
-                            <select id="wizClass" class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-primary">
-                                <% if (assignedClasses && assignedClasses.length > 0) { %>
-                                    <% assignedClasses.forEach(c => { %>
-                                        <option value="<%= c %>"><%= String(c).startsWith('Class') ? c : 'Class ' + c %></option>
-                                    <% }) %>
-                                <% } else { %>
-                                    <% [6,7,8,9,10,11,12].forEach(c => { %>
-                                        <option value="<%= c %>">Class <%= c %></option>
-                                    <% }) %>
-                                <% } %>
-                            </select>
-                        </div>
-                        <div class="space-y-1.5">
-                            <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Subject</label>
-                            <select id="wizSubject" class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-primary">
-                                <% if (assignedSubjects && assignedSubjects.length > 0) { %>
-                                    <% assignedSubjects.forEach(s => { %>
-                                        <option value="<%= s %>"><%= s %></option>
-                                    <% }) %>
-                                <% } else { %>
-                                    <% ['Physics','Chemistry','Biology','Higher Mathematics','General Mathematics','Bangla','English','ICT','Accounting','Business Organization','Finance & Banking','Economics'].forEach(s => { %>
-                                        <option value="<%= s %>"><%= s %></option>
-                                    <% }) %>
-                                <% } %>
-                            </select>
+
+                <!-- Topic & Access -->
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div class="space-y-1">
+                        <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Chapter / Topic</label>
+                        <input type="text" id="wizTopic" placeholder="Optional topic" class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:border-primary transition-all">
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Access</label>
+                        <input type="hidden" id="wizAccessType" value="Free">
+                        <div class="relative system-dropdown" id="dropdown-wizAccessType">
+                            <button type="button" onclick="toggleSystemDropdown('wizAccessType', event)" 
+                                    class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
+                                <span id="wizAccessType-label" class="truncate text-[11px]">Free</span>
+                                <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                            </button>
+                            <div id="dropdown-menu-wizAccessType" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
+                                <div onclick="selectWizardOption('wizAccessType', 'Free', 'Free')" data-wiz-value="Free"
+                                     class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors bg-primary/10 text-primary font-medium">
+                                    <span>Free</span>
+                                    <span class="material-symbols-rounded text-sm text-primary wiz-check">check</span>
+                                </div>
+                                <div onclick="selectWizardOption('wizAccessType', 'Paid', 'Paid')" data-wiz-value="Paid"
+                                     class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
+                                    <span>Paid</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1.5">
-                            <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Chapter / Topic</label>
-                            <input type="text" id="wizTopic" placeholder="e.g. Thermodynamics" class="w-full h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-primary">
-                        </div>
-                        <div class="space-y-1.5">
-                            <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Access type</label>
-                            <select id="wizAccessType" class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-primary">
-                                <option value="Free">Free (Open access)</option>
-                                <option value="Paid">Paid (Premium content)</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div class="space-y-1.5">
-                            <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Question type</label>
-                            <select id="wizType" class="w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-primary">
-                                <option value="MCQ">MCQ (Slots)</option>
-                                <option value="Short">Short answer</option>
-                                <option value="Medium">Medium complexity</option>
-                                <option value="Comprehension">Comprehension</option>
-                            </select>
-                        </div>
-                        <div class="space-y-1.5">
-                            <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Quantity</label>
-                            <input type="number" id="wizCount" value="10" min="1" max="50" class="w-full h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-primary">
+                </div>
+
+                <!-- Type & Quantity -->
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div class="space-y-1">
+                        <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Type</label>
+                        <input type="hidden" id="wizType" value="MCQ">
+                        <div class="relative system-dropdown" id="dropdown-wizType">
+                            <button type="button" onclick="toggleSystemDropdown('wizType', event)" 
+                                    class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
+                                <span id="wizType-label" class="truncate text-[11px]">MCQ</span>
+                                <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                            </button>
+                            <div id="dropdown-menu-wizType" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
+                                <% ['MCQ', 'Short', 'Medium', 'Comprehension'].forEach((t, idx) => { %>
+                                    <div onclick="selectWizardOption('wizType', '<%= t %>', '<%= t %>')" data-wiz-value="<%= t %>"
+                                         class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors <%= idx === 0 ? 'bg-primary/10 text-primary font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
+                                        <span class="truncate"><%= t %></span>
+                                        <% if (idx === 0) { %><span class="material-symbols-rounded text-sm text-primary wiz-check">check</span><% } %>
+                                    </div>
+                                <% }) %>
+                            </div>
                         </div>
                     </div>
-                    <div class="pt-4">
-                        <button onclick="startComposition()" class="w-full h-12 bg-slate-900 text-white rounded-lg font-black text-[11px] uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-900/10 active:scale-95">Make questions</button>
+
+                    <div class="space-y-1">
+                        <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Quantity</label>
+                        <input type="number" id="wizCount" value="10" min="1" max="50" class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-800 dark:text-slate-100 outline-none focus:border-primary transition-all">
                     </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="pt-1.5">
+                    <button onclick="startComposition()" class="w-full h-9 sm:h-10 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-medium text-xs hover:bg-black dark:hover:bg-slate-100 transition-all shadow-sm active:scale-98 cursor-pointer flex items-center justify-center gap-1.5">
+                        <span>Make questions</span>
+                        <span class="material-symbols-rounded text-sm">arrow_forward</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -537,26 +1054,246 @@
     <script>
         const questionsData = <%- JSON.stringify(questions) %>;
         const selectedItems = new Set();
-        function toggleSelectAll() { selectAllRows(document.getElementById('selectAll').checked); }
+
+        // System Custom Dropdowns
+        function toggleSystemDropdown(type, e) {
+            if (e) e.stopPropagation();
+            const targetMenu = document.getElementById(`dropdown-menu-${type}`);
+            const parent = document.getElementById(`dropdown-${type}`);
+            if (!targetMenu) return;
+            const isCurrentlyHidden = targetMenu.classList.contains('hidden');
+
+            closeAllSystemDropdowns();
+
+            if (isCurrentlyHidden) {
+                targetMenu.classList.remove('hidden');
+                if (parent) {
+                    const arrow = parent.querySelector('.dropdown-arrow');
+                    if (arrow) arrow.style.transform = 'rotate(180deg)';
+                }
+            }
+        }
+        window.toggleSystemDropdown = toggleSystemDropdown;
+
+        function closeAllSystemDropdowns() {
+            document.querySelectorAll('.system-dropdown').forEach(d => {
+                const menu = d.querySelector('[id^="dropdown-menu-"]');
+                const arrow = d.querySelector('.dropdown-arrow');
+                if (menu) menu.classList.add('hidden');
+                if (arrow) arrow.style.removeProperty('transform');
+            });
+        }
+        window.closeAllSystemDropdowns = closeAllSystemDropdowns;
+
+        function selectWizardOption(fieldId, value, label) {
+            const input = document.getElementById(fieldId);
+            const labelEl = document.getElementById(`${fieldId}-label`);
+            if (input) input.value = value;
+            if (labelEl) labelEl.innerText = label;
+
+            const menu = document.getElementById(`dropdown-menu-${fieldId}`);
+            if (menu) {
+                menu.querySelectorAll('[data-wiz-value]').forEach(opt => {
+                    const isSelected = opt.getAttribute('data-wiz-value') === String(value);
+                    if (isSelected) {
+                        opt.className = 'px-2.5 py-1.5 text-xs font-medium text-primary bg-primary/10 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                        if (!opt.querySelector('.wiz-check')) {
+                            const check = document.createElement('span');
+                            check.className = 'material-symbols-rounded text-sm text-primary wiz-check';
+                            check.innerText = 'check';
+                            opt.appendChild(check);
+                        }
+                    } else {
+                        opt.className = 'px-2.5 py-1.5 text-xs font-normal text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                        const c = opt.querySelector('.wiz-check');
+                        if (c) c.remove();
+                    }
+                });
+            }
+            closeAllSystemDropdowns();
+        }
+        window.selectWizardOption = selectWizardOption;
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.system-dropdown')) {
+                closeAllSystemDropdowns();
+            }
+        });
+
+        // Mobile Tap-and-Hold (Long Press) & Selection System
+        let isMobileSelectionActive = false;
+        let touchTimer = null;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let justLongPressed = false;
+        let lastTouchStartTime = 0;
+
+        function handleCardTouchStart(qId, e) {
+            if (e.type === 'touchstart') {
+                lastTouchStartTime = Date.now();
+            } else if (e.type === 'mousedown' && Date.now() - lastTouchStartTime < 500) {
+                return;
+            }
+            touchStartX = e.touches ? e.touches[0].clientX : e.clientX;
+            touchStartY = e.touches ? e.touches[0].clientY : e.clientY;
+            justLongPressed = false;
+
+            clearTimeout(touchTimer);
+            touchTimer = setTimeout(() => {
+                justLongPressed = true;
+                if (navigator.vibrate) {
+                    try { navigator.vibrate(40); } catch(err) {}
+                }
+                enterMobileSelection(qId);
+            }, 450);
+        }
+
+        function handleCardTouchMove(e) {
+            if (!touchTimer) return;
+            const curX = e.touches ? e.touches[0].clientX : e.clientX;
+            const curY = e.touches ? e.touches[0].clientY : e.clientY;
+            if (Math.hypot(curX - touchStartX, curY - touchStartY) > 10) {
+                clearTimeout(touchTimer);
+                touchTimer = null;
+            }
+        }
+
+        function handleCardTouchEnd(e) {
+            if (touchTimer) {
+                clearTimeout(touchTimer);
+                touchTimer = null;
+            }
+        }
+
+        function handleCardTouchCancel(e) {
+            if (touchTimer) {
+                clearTimeout(touchTimer);
+                touchTimer = null;
+            }
+        }
+
+        function enterMobileSelection(qId) {
+            isMobileSelectionActive = true;
+            const view = document.getElementById('mobileQuestionsView');
+            if (view) view.classList.add('mobile-selection-active');
+            
+            if (qId) {
+                const cb = document.getElementById(`cb-m-${qId}`);
+                if (cb && !cb.checked) {
+                    cb.checked = true;
+                    toggleSelection(cb);
+                } else if (cb && cb.checked) {
+                    updateBulkUI();
+                }
+            }
+        }
+
+        function exitMobileSelection() {
+            isMobileSelectionActive = false;
+            const view = document.getElementById('mobileQuestionsView');
+            if (view) view.classList.remove('mobile-selection-active');
+            clearSelection();
+        }
+
+        function handleMobileCardClick(qId, e) {
+            if (justLongPressed) {
+                justLongPressed = false;
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                return;
+            }
+            if (isMobileSelectionActive) {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                toggleCardSelection(qId);
+            } else {
+                viewQuestion(qId);
+            }
+        }
+
+        function toggleCardSelection(qId) {
+            const cb = document.getElementById(`cb-m-${qId}`);
+            if (cb) {
+                cb.checked = !cb.checked;
+                toggleSelection(cb);
+            }
+        }
+
+        // Selections (Mobile & Desktop sync)
+        function toggleSelectAll() { 
+            const cb = document.getElementById('selectAll');
+            selectAllRows(cb ? cb.checked : false); 
+        }
+        function toggleSelectAllMobile() {
+            const cb = document.getElementById('selectAllMobile');
+            selectAllRows(cb ? cb.checked : false);
+        }
         function selectAllRows(force) {
-            document.querySelectorAll('.item-cb').forEach(cb => { cb.checked = force; if(force) selectedItems.add(cb.value); else selectedItems.delete(cb.value); });
-            const selectAllCb = document.getElementById('selectAll');
-            if(selectAllCb) selectAllCb.checked = force;
+            document.querySelectorAll('.item-cb').forEach(cb => { 
+                cb.checked = force; 
+                if(force) selectedItems.add(cb.value); else selectedItems.delete(cb.value); 
+            });
+            const d = document.getElementById('selectAll'); if(d) d.checked = force;
+            const m = document.getElementById('selectAllMobile'); if(m) m.checked = force;
             updateBulkUI();
+
+            if (isMobileSelectionActive && !force) {
+                isMobileSelectionActive = false;
+                const view = document.getElementById('mobileQuestionsView');
+                if (view) view.classList.remove('mobile-selection-active');
+            }
         }
         function toggleSelection(el) {
             if(el.checked) selectedItems.add(el.value); else selectedItems.delete(el.value);
+            document.querySelectorAll(`.item-cb[value="${el.value}"]`).forEach(cb => cb.checked = el.checked);
             updateBulkUI();
+
+            if (isMobileSelectionActive && selectedItems.size === 0) {
+                isMobileSelectionActive = false;
+                const view = document.getElementById('mobileQuestionsView');
+                if (view) view.classList.remove('mobile-selection-active');
+            }
         }
         function updateBulkUI() {
             const bar = document.getElementById('bulkActions');
             const countEl = document.getElementById('selectedCount');
-            if(selectedItems.size > 0) { bar.classList.remove('hidden'); countEl.innerText = selectedItems.size; } else { bar.classList.add('hidden'); }
+            const mobileCountEl = document.getElementById('mobileSelectedCounter');
+
+            if (countEl) countEl.innerText = selectedItems.size;
+            if (mobileCountEl) mobileCountEl.innerText = `${selectedItems.size} selected`;
+
+            if (bar) {
+                if (selectedItems.size > 0) { 
+                    bar.classList.remove('hidden'); 
+                } else { 
+                    bar.classList.add('hidden'); 
+                }
+            }
+
+            // Sync visual highlight on mobile cards
+            document.querySelectorAll('[data-question-card]').forEach(card => {
+                const qid = card.getAttribute('data-question-card');
+                if (selectedItems.has(qid)) {
+                    card.classList.add('ring-2', 'ring-primary', 'bg-primary/5', 'dark:bg-primary/10', 'border-primary/50');
+                } else {
+                    card.classList.remove('ring-2', 'ring-primary', 'bg-primary/5', 'dark:bg-primary/10', 'border-primary/50');
+                }
+            });
         }
         function clearSelection() {
             selectedItems.clear();
             document.querySelectorAll('.item-cb').forEach(i => i.checked = false);
-            document.getElementById('selectAll').checked = false;
+            const d = document.getElementById('selectAll'); if(d) d.checked = false;
+            const m = document.getElementById('selectAllMobile'); if(m) m.checked = false;
+            if (isMobileSelectionActive) {
+                isMobileSelectionActive = false;
+                const view = document.getElementById('mobileQuestionsView');
+                if (view) view.classList.remove('mobile-selection-active');
+            }
             updateBulkUI();
         }
         async function handleBulkAction(action) {
@@ -592,49 +1329,113 @@
 
             toggleEditMode(false); // Reset to view mode
             
-            document.getElementById('modalType').innerText = q.questionType;
+            document.getElementById('modalType').innerText = q.questionType || 'MCQ';
             document.getElementById('modalSubject').innerText = q.subject || 'General';
-            document.getElementById('modalText').innerText = q.questionText;
             document.getElementById('modalBoard').innerText = q.board || 'Not Specified';
-            document.getElementById('modalClass').innerText = q.classLevel ? `Class ${q.classLevel}` : 'N/A';
+            document.getElementById('modalClass').innerText = q.classLevel ? (String(q.classLevel).startsWith('Class') ? q.classLevel : `Class ${q.classLevel}`) : 'N/A';
             document.getElementById('modalYear').innerText = q.year || '---';
 
+            const marksBadge = document.getElementById('modalMarksBadge');
+            if (marksBadge) {
+                const marksVal = q.marks || (q.questionType === 'Comprehension' ? 4 : (q.questionType === 'Short' ? 2 : (q.questionType === 'Medium' ? 4 : 1)));
+                marksBadge.innerText = `${marksVal} ${marksVal > 1 ? 'Marks' : 'Mark'}`;
+            }
+
             const accessEl = document.getElementById('modalAccessBadge');
-            accessEl.innerHTML = q.accessType === 'Paid' 
-                ? `<span class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20"><span class="material-symbols-rounded text-sm">workspace_premium</span> Paid Content</span>`
-                : `<span class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/20"><span class="material-symbols-rounded text-sm">redeem</span> Free Access</span>`;
+            if (accessEl) {
+                accessEl.innerHTML = q.accessType === 'Paid' 
+                    ? `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-normal border border-amber-500/20"><span class="material-symbols-rounded text-sm">workspace_premium</span> Paid</span>`
+                    : `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-normal border border-emerald-500/20"><span class="material-symbols-rounded text-sm">redeem</span> Free</span>`;
+            }
 
             const authorImg = document.getElementById('modalAuthorImg');
             const authorName = document.getElementById('modalAuthorName');
             const authorRole = document.getElementById('modalAuthorRole');
             
             if (q.addedBy && typeof q.addedBy === 'object') {
-                authorName.innerText = q.addedBy.name || 'System';
-                authorRole.innerText = q.addedBy.role || 'Administrator';
-                authorImg.src = q.addedBy.profileImage || '/images/default-avatar.png';
+                if (authorName) authorName.innerText = q.addedBy.name || 'System';
+                if (authorRole) authorRole.innerText = q.addedBy.role || 'Contributor';
+                if (authorImg) authorImg.src = q.addedBy.profileImage || '/images/default-avatar.png';
             } else {
-                authorName.innerText = 'System';
-                authorRole.innerText = 'Automatic';
-                authorImg.src = '/images/default-avatar.png';
+                if (authorName) authorName.innerText = 'System';
+                if (authorRole) authorRole.innerText = 'Automatic';
+                if (authorImg) authorImg.src = '/images/default-avatar.png';
             }
 
+            const stdArea = document.getElementById('modalStandardQuestionArea');
+            const compArea = document.getElementById('modalComprehensionArea');
             const optionsContainer = document.getElementById('modalOptionsContainer');
             const optionsEl = document.getElementById('modalOptions');
-            optionsEl.innerHTML = '';
-            
-            if (q.questionType === 'MCQ' && q.options && q.options.length > 0) {
-                optionsContainer.classList.remove('hidden');
-                q.options.forEach((opt, idx) => {
-                    const isCorrect = idx === q.correctAnswerIndex;
-                    const div = document.createElement('div');
-                    div.className = `p-4 rounded-2xl border transition-all ${isCorrect ? 'border-emerald-500 bg-emerald-50/30 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 ring-2 ring-emerald-500/20' : 'border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/50 text-slate-600 dark:text-slate-400 shadow-sm'} text-[13px] font-bold flex gap-3 items-center`;
-                    div.innerHTML = `<div class="size-6 rounded-lg ${isCorrect ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'} flex items-center justify-center text-[11px] font-black shrink-0">${String.fromCharCode(65 + idx)}</div><span class="flex-1">${opt}</span>${isCorrect ? '<span class="material-symbols-rounded text-emerald-500 text-lg">check_circle</span>' : ''}`;
-                    optionsEl.appendChild(div);
-                });
-                document.getElementById('modalAnswer').innerText = q.options[q.correctAnswerIndex] || 'No answer defined';
+            const answerContainer = document.getElementById('modalAnswerContainer');
+            const explanationContainer = document.getElementById('modalExplanationContainer');
+            const explanationText = document.getElementById('modalExplanationText');
+
+            if (optionsEl) optionsEl.innerHTML = '';
+
+            if (q.questionType === 'Comprehension') {
+                if (stdArea) stdArea.classList.add('hidden');
+                if (compArea) compArea.classList.remove('hidden');
+                if (optionsContainer) optionsContainer.classList.add('hidden');
+                if (answerContainer) answerContainer.classList.add('hidden');
+
+                const ctx = q.context || q.questionText || '---';
+                document.getElementById('modalContextText').innerText = ctx;
+                document.getElementById('modalQ1Text').innerText = q.q1 || '---';
+                document.getElementById('modalA1Text').innerText = q.a1 || '---';
+
+                const s1Container = document.getElementById('modalS1Container');
+                const s1Val = q.s1 || q.solution1;
+                if (s1Val && s1Val.trim()) {
+                    document.getElementById('modalS1Text').innerText = s1Val;
+                    s1Container.classList.remove('hidden');
+                } else {
+                    s1Container.classList.add('hidden');
+                }
+
+                document.getElementById('modalQ2Text').innerText = q.q2 || '---';
+                document.getElementById('modalA2Text').innerText = q.a2 || '---';
+
+                const s2Container = document.getElementById('modalS2Container');
+                const s2Val = q.s2 || q.solution2;
+                if (s2Val && s2Val.trim()) {
+                    document.getElementById('modalS2Text').innerText = s2Val;
+                    s2Container.classList.remove('hidden');
+                } else {
+                    s2Container.classList.add('hidden');
+                }
             } else {
-                optionsContainer.classList.add('hidden');
-                document.getElementById('modalAnswer').innerText = q.correctAnswer || 'Refer to reference materials.';
+                if (stdArea) stdArea.classList.remove('hidden');
+                if (compArea) compArea.classList.add('hidden');
+                document.getElementById('modalText').innerText = q.questionText || '';
+
+                if (q.questionType === 'MCQ') {
+                    if (optionsContainer) optionsContainer.classList.remove('hidden');
+                    if (answerContainer) answerContainer.classList.remove('hidden');
+
+                    const opts = q.options || [];
+                    opts.forEach((opt, idx) => {
+                        const isCorrect = idx === q.correctAnswerIndex;
+                        const div = document.createElement('div');
+                        div.className = `p-2.5 sm:p-3 rounded-xl border transition-all ${isCorrect ? 'border-emerald-500/60 bg-emerald-50/50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-200 ring-1 ring-emerald-500/20' : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 shadow-2xs'} text-xs font-normal flex gap-2.5 items-center`;
+                        div.innerHTML = `<span class="size-6 rounded-md ${isCorrect ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'} flex items-center justify-center text-xs font-medium shrink-0">${String.fromCharCode(65 + idx)}</span><span class="flex-1">${opt}</span>${isCorrect ? '<span class="material-symbols-rounded text-emerald-500 text-base">check</span>' : ''}`;
+                        optionsEl.appendChild(div);
+                    });
+                    const cOpt = opts[q.correctAnswerIndex];
+                    document.getElementById('modalAnswer').innerText = cOpt ? `${String.fromCharCode(65 + q.correctAnswerIndex)}. ${cOpt}` : (q.correctAnswer || 'Not set');
+                } else {
+                    if (optionsContainer) optionsContainer.classList.add('hidden');
+                    if (answerContainer) answerContainer.classList.remove('hidden');
+                    document.getElementById('modalAnswer').innerText = q.correctAnswer || 'Refer to reference materials.';
+                }
+            }
+
+            // Explanation
+            const exp = String(q.explanation || q.explanationText || q.solution || '').trim();
+            if (exp) {
+                if (explanationText) explanationText.innerText = exp;
+                if (explanationContainer) explanationContainer.classList.remove('hidden');
+            } else {
+                if (explanationContainer) explanationContainer.classList.add('hidden');
             }
 
             document.getElementById('modalEditBtn').onclick = () => toggleEditMode(true, q);
@@ -642,60 +1443,119 @@
             document.body.style.overflow = 'hidden'; 
         }
 
+        function changeEditType(t) {
+            selectWizardOption('editQuestionType', t, t);
+            applyEditTypeUI(t);
+        }
+
+        function applyEditTypeUI(type) {
+            const stdArea = document.getElementById('editStandardQuestionArea');
+            const mcqArea = document.getElementById('editMcqArea');
+            const ansArea = document.getElementById('editAnswerArea');
+            const compArea = document.getElementById('editComprehensionArea');
+
+            if (type === 'MCQ') {
+                if (stdArea) stdArea.classList.remove('hidden');
+                if (mcqArea) mcqArea.classList.remove('hidden');
+                if (ansArea) ansArea.classList.add('hidden');
+                if (compArea) compArea.classList.add('hidden');
+            } else if (type === 'Comprehension') {
+                if (stdArea) stdArea.classList.add('hidden');
+                if (mcqArea) mcqArea.classList.add('hidden');
+                if (ansArea) ansArea.classList.add('hidden');
+                if (compArea) compArea.classList.remove('hidden');
+            } else {
+                // Short, Medium
+                if (stdArea) stdArea.classList.remove('hidden');
+                if (mcqArea) mcqArea.classList.add('hidden');
+                if (ansArea) ansArea.classList.remove('hidden');
+                if (compArea) compArea.classList.add('hidden');
+            }
+        }
+
         function toggleEditMode(enable, q = null) {
             const view = document.getElementById('viewModeContainer');
             const edit = document.getElementById('editModeContainer');
             const editBtn = document.getElementById('modalEditBtn');
+            const modalTitle = document.getElementById('modalTitle');
 
             if (enable && q) {
                 view.classList.add('hidden');
                 edit.classList.remove('hidden');
                 editBtn.classList.add('hidden');
+                if (modalTitle) modalTitle.innerText = 'Edit question';
 
                 document.getElementById('editQId').value = q._id;
                 document.getElementById('editBoard').value = q.board || '';
                 document.getElementById('editYear').value = q.year || '';
-                document.getElementById('editSubject').value = q.subject || '';
-                document.getElementById('editClass').value = q.classLevel || '';
-                document.getElementById('editAccessType').value = q.accessType || 'Free';
-                document.getElementById('editText').value = q.questionText || '';
-                document.getElementById('editExplanation').value = q.explanation || '';
+                
+                const qSub = q.subject || 'General';
+                selectWizardOption('editSubject', qSub, qSub);
 
-                if (q.questionType === 'MCQ') {
-                    document.getElementById('editMcqArea').classList.remove('hidden');
-                    document.getElementById('editAnswerArea').classList.add('hidden');
-                    q.options.forEach((opt, idx) => {
-                        const input = document.getElementById(`editOpt${idx}`);
-                        if (input) input.value = opt;
-                    });
-                    const radios = document.getElementsByName('editCorrectIdx');
-                    if (radios[q.correctAnswerIndex]) radios[q.correctAnswerIndex].checked = true;
-                } else {
-                    document.getElementById('editMcqArea').classList.add('hidden');
-                    document.getElementById('editAnswerArea').classList.remove('hidden');
-                    document.getElementById('editAnswer').value = q.correctAnswer || '';
-                }
+                const qCls = q.classLevel ? String(q.classLevel) : '';
+                const qClsLabel = qCls ? (qCls.startsWith('Class') ? qCls : (!isNaN(qCls) ? 'Class ' + qCls : qCls)) : 'Select class';
+                selectWizardOption('editClass', qCls, qClsLabel);
+
+                const qAccess = q.accessType || 'Free';
+                selectWizardOption('editAccessType', qAccess, qAccess);
+
+                const qType = q.questionType || 'MCQ';
+                selectWizardOption('editQuestionType', qType, qType);
+
+                const defaultMarks = q.marks || (qType === 'Comprehension' ? 4 : (qType === 'Short' ? 2 : (qType === 'Medium' ? 4 : 1)));
+                document.getElementById('editMarks').value = defaultMarks;
+
+                document.getElementById('editText').value = q.questionText || '';
+                document.getElementById('editExplanation').value = q.explanation || q.explanationText || '';
+
+                // Options for MCQ
+                (q.options || []).forEach((opt, idx) => {
+                    const input = document.getElementById(`editOpt${idx}`);
+                    if (input) input.value = opt;
+                });
+                const radios = document.getElementsByName('editCorrectIdx');
+                const cIdx = typeof q.correctAnswerIndex !== 'undefined' ? q.correctAnswerIndex : 0;
+                if (radios[cIdx]) radios[cIdx].checked = true;
+
+                // Answer for Short/Medium
+                document.getElementById('editAnswer').value = q.correctAnswer || '';
+
+                // Comprehension fields
+                document.getElementById('editContext').value = q.context || q.questionText || '';
+                document.getElementById('editQ1').value = q.q1 || '';
+                document.getElementById('editA1').value = q.a1 || '';
+                document.getElementById('editS1').value = q.s1 || q.solution1 || '';
+                document.getElementById('editQ2').value = q.q2 || '';
+                document.getElementById('editA2').value = q.a2 || '';
+                document.getElementById('editS2').value = q.s2 || q.solution2 || '';
+
+                applyEditTypeUI(qType);
             } else {
                 view.classList.remove('hidden');
                 edit.classList.add('hidden');
                 editBtn.classList.remove('hidden');
+                if (modalTitle) modalTitle.innerText = 'Question details';
             }
         }
 
         async function saveInlineEdit() {
             const qId = document.getElementById('editQId').value;
+            const qType = document.getElementById('editQuestionType').value || 'MCQ';
+            const marks = parseInt(document.getElementById('editMarks').value, 10) || (qType === 'Comprehension' ? 4 : (qType === 'Short' ? 2 : (qType === 'Medium' ? 4 : 1)));
+
             const data = {
                 board: document.getElementById('editBoard').value,
                 year: document.getElementById('editYear').value,
                 subject: document.getElementById('editSubject').value,
                 classLevel: document.getElementById('editClass').value,
                 accessType: document.getElementById('editAccessType').value,
-                questionText: document.getElementById('editText').value,
-                explanation: document.getElementById('editExplanation').value,
-                questionType: document.getElementById('editMcqArea').classList.contains('hidden') ? 'Short' : 'MCQ' 
+                questionType: qType,
+                marks: marks,
+                explanation: document.getElementById('editExplanation').value
             };
 
-            if (data.questionType === 'MCQ') {
+            if (qType === 'MCQ') {
+                data.questionText = document.getElementById('editText').value;
                 data.options = [
                     document.getElementById('editOpt0').value,
                     document.getElementById('editOpt1').value,
@@ -703,8 +1563,28 @@
                     document.getElementById('editOpt3').value
                 ];
                 const radios = document.getElementsByName('editCorrectIdx');
-                for (let i = 0; i < radios.length; i++) { if (radios[i].checked) { data.correctAnswerIndex = i; break; } }
+                data.correctAnswerIndex = 0;
+                for (let i = 0; i < radios.length; i++) { 
+                    if (radios[i].checked) { 
+                        data.correctAnswerIndex = i; 
+                        break; 
+                    } 
+                }
+                data.correctAnswer = data.options[data.correctAnswerIndex] || '';
+            } else if (qType === 'Comprehension') {
+                data.context = document.getElementById('editContext').value;
+                data.questionText = data.context;
+                data.q1 = document.getElementById('editQ1').value;
+                data.a1 = document.getElementById('editA1').value;
+                data.s1 = document.getElementById('editS1').value;
+                data.solution1 = data.s1;
+                data.q2 = document.getElementById('editQ2').value;
+                data.a2 = document.getElementById('editA2').value;
+                data.s2 = document.getElementById('editS2').value;
+                data.solution2 = data.s2;
+                data.correctAnswer = [data.a1 && `1: ${data.a1}`, data.a2 && `2: ${data.a2}`].filter(Boolean).join(' | ');
             } else {
+                data.questionText = document.getElementById('editText').value;
                 data.correctAnswer = document.getElementById('editAnswer').value;
             }
 
@@ -720,7 +1600,7 @@
                 if (response.ok) {
                     const updatedQ = await response.json();
                     
-                    // Update local data
+                    // Update local data cache
                     const idx = questionsData.findIndex(item => item._id.toString() === qId);
                     if (idx !== -1) {
                         questionsData[idx] = { ...questionsData[idx], ...data, ...updatedQ };
@@ -732,7 +1612,7 @@
                     toggleEditMode(false);
                     viewQuestion(qId);
                     
-                    // Update the table row without reload
+                    // Update desktop table row without reload
                     try {
                         const row = document.querySelector(`tr[onclick*="${qId}"]`);
                         if (row) {
@@ -741,21 +1621,30 @@
                             
                             const metadataCells = row.querySelectorAll('td');
                             if (metadataCells.length >= 7) {
-                                // Board/Year Cell
+                                // Type badge (cell index 2)
+                                const typeMap = { 'MCQ': 'blue', 'Short': 'emerald', 'Medium': 'amber', 'Comprehension': 'purple' };
+                                const col = typeMap[data.questionType] || 'slate';
+                                const typeSpan = metadataCells[2].querySelector('span');
+                                if (typeSpan) {
+                                    typeSpan.className = `inline-flex items-center px-2 py-0.5 rounded-md bg-${col}-50 dark:bg-${col}-500/10 text-${col}-600 dark:text-${col}-400 text-[9px] font-bold border border-${col}-100 dark:border-${col}-500/20`;
+                                    typeSpan.innerText = data.questionType;
+                                }
+
+                                // Board/Year Cell (cell index 3)
                                 const boardSpans = metadataCells[3].querySelectorAll('span');
                                 if (boardSpans.length >= 2) {
                                     boardSpans[0].innerText = data.board || '---';
                                     boardSpans[1].innerText = data.year || '';
                                 }
                                 
-                                // Subject Cell
+                                // Subject Cell (cell index 4)
                                 const subjectSpan = metadataCells[4].querySelector('span');
                                 if (subjectSpan) subjectSpan.innerText = data.subject || 'General';
                                 
-                                // Class Cell
+                                // Class Cell (cell index 5)
                                 metadataCells[5].innerText = `Class: ${data.classLevel}`;
                                 
-                                // Access badge update
+                                // Access badge update (cell index 6)
                                 const accessCell = metadataCells[6];
                                 if (data.accessType === 'Paid') {
                                     accessCell.innerHTML = `<span class="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-bold border border-amber-100 dark:border-amber-500/20">Paid</span>`;
@@ -766,6 +1655,25 @@
                         }
                     } catch (domErr) {
                         console.warn('Row update failed, but data was saved:', domErr);
+                    }
+
+                    // Update mobile card without reload
+                    try {
+                        const mCard = document.querySelector(`[data-question-card="${qId}"]`);
+                        if (mCard) {
+                            const contentP = mCard.querySelector('.line-clamp-3');
+                            if (contentP) contentP.innerText = data.questionText;
+
+                            const typeMap = { 'MCQ': 'blue', 'Short': 'emerald', 'Medium': 'amber', 'Comprehension': 'purple' };
+                            const col = typeMap[data.questionType] || 'slate';
+                            const topBadges = mCard.querySelectorAll('span');
+                            if (topBadges.length >= 1) {
+                                topBadges[0].className = `inline-flex items-center px-2 py-0.5 rounded-md bg-${col}-50 dark:bg-${col}-500/10 text-${col}-600 dark:text-${col}-400 text-[10px] font-medium border border-${col}-100 dark:border-${col}-500/20`;
+                                topBadges[0].innerText = data.questionType;
+                            }
+                        }
+                    } catch (mErr) {
+                        console.warn('Mobile card update failed:', mErr);
                     }
                 } else {
                     const err = await response.text();
@@ -804,6 +1712,8 @@
             }
             window.location.href = '?' + params.toString();
         }
+        window.updateFilter = updateFilter;
+        window.applyFilter = updateFilter;
     </script>
 </body>
 </html>

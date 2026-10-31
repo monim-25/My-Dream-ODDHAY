@@ -5,7 +5,7 @@
     <title>Compose Matrix | ODDHAY Command Center</title>
     <style>
         * { font-family: 'Inter', 'Hind Siliguri', sans-serif !important; }
-                :root { --admin-sidebar-width: 260px; }
+        :root { --admin-sidebar-width: 260px; }
         html, body { height: 100%; height: 100dvh; overflow: hidden; margin: 0; padding: 0; }
         .admin-main { 
             margin-left: var(--admin-sidebar-width); 
@@ -23,7 +23,7 @@
             overflow-y: auto; 
             overflow-x: hidden;
             -webkit-overflow-scrolling: touch;
-            padding: 0; 
+            touch-action: pan-y;
             position: relative; 
         }
         @media (max-width: 1024px) { 
@@ -33,12 +33,13 @@
         .admin-sidebar.active, #adminSidebar.active, .admin-sidebar.translate-x-0, #adminSidebar.translate-x-0 { 
             transform: translateX(0) !important; 
         }
-        }
-        .q-row { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .q-row, .question-row { transition: all 0.25s ease; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans antialiased">
-    <div class="flex">
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans antialiased overflow-hidden h-full h-[100dvh] flex flex-col">
+    <div class="flex h-full h-[100dvh] w-full min-h-0 overflow-hidden flex-1">
         <aside id="adminSidebar" class="admin-sidebar fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100] border-r border-slate-200 dark:border-slate-800 -translate-x-full lg:translate-x-0">
             <%- include('sidebar', { active: locals.active || 'question-details' }) %>
         </aside>
@@ -46,91 +47,105 @@
         <!-- Backdrop overlay for mobile drawer -->
         <div id="teacherSidebarBackdrop" onclick="toggleTeacherSidebar(false)" class="fixed inset-0 bg-slate-950/50 backdrop-blur-xs z-[90] lg:hidden opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-        <main class="admin-main flex-1 flex flex-col">
-            <%- include('header', { pageTitle: mode === 'archive' ? 'Archive Composition Studio' : 'History Composition Studio' }) %>
+        <main class="admin-main flex-1 flex flex-col h-full h-[100dvh] min-h-0 overflow-hidden">
+            <%- include('header', { pageTitle: 'Questions', user: user }) %>
 
-            <div class="flex-1 p-8 bg-[#F8FAFC] dark:bg-[#020617]">
-                <div class="max-w-4xl mx-auto">
-                    <form action="/teacher/add-question-full" method="POST" enctype="multipart/form-data" class="space-y-6">
+            <div class="content-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 sm:p-6 lg:p-8 bg-[#F8FAFC] dark:bg-[#020617]">
+                <div class="max-w-4xl mx-auto pb-6">
+                    <form action="/teacher/add-question-full" method="POST" enctype="multipart/form-data" class="space-y-4 sm:space-y-5">
                         
                         <!-- Global Metadata Header (Visible in Archive Mode) -->
-        <div id="archiveGlobalHeader" class="hidden animate-slide-up mb-8">
-                            <div class="bg-white dark:bg-[#0f172a] rounded-xl p-6 border border-slate-200 dark:border-white/5 shadow-sm">
-                                <div class="flex items-center gap-3 mb-5">
-                                    <div class="size-9 rounded-md bg-primary/10 flex items-center justify-center border border-primary/20">
-                                        <span class="material-symbols-rounded text-primary text-[18px]">archive</span>
+                        <div id="archiveGlobalHeader" class="hidden animate-slide-up mb-5">
+                            <div class="bg-white dark:bg-[#0f172a] rounded-xl p-4 sm:p-5 border border-slate-200 dark:border-white/5 shadow-xs">
+                                <div class="flex items-center gap-2.5 mb-3.5">
+                                    <div class="size-8 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20 shrink-0">
+                                        <span class="material-symbols-rounded text-primary text-[17px]">archive</span>
                                     </div>
-                                    <div>
-                                        <h4 class="text-[13px] font-semibold text-slate-900 dark:text-white tracking-tight">Archive metadata</h4>
-                                        <p class="text-[10px] font-semibold text-slate-400 mt-0.5">Applies to all questions in this session</p>
-                                    </div>
+                                    <h4 class="text-[13px] font-medium text-slate-900 dark:text-white">Paper details</h4>
                                 </div>
 
-                                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                                     <!-- Board -->
-                                    <div class="space-y-1.5">
-                                        <label class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 ml-0.5 block">Board</label>
-                                        <input type="text" name="board" id="globalBoard" class="w-full h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-semibold text-slate-900 dark:text-white outline-none focus:border-primary transition-all" placeholder="e.g. Dhaka Board">
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5 block">Board <span class="text-rose-500">*</span></label>
+                                        <input type="text" name="board" id="globalBoard" required class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white outline-none focus:border-primary transition-all" placeholder="e.g. Dhaka">
                                     </div>
                                     <!-- Year -->
-                                    <div class="space-y-1.5">
-                                        <label class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 ml-0.5 block">Year</label>
-                                        <input type="number" name="year" id="globalYear" class="w-full h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-semibold text-slate-900 dark:text-white outline-none focus:border-primary transition-all" placeholder="2024">
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5 block">Year <span class="text-rose-500">*</span></label>
+                                        <input type="number" name="year" id="globalYear" required class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white outline-none focus:border-primary transition-all" placeholder="2024">
                                     </div>
                                     <!-- Exam Duration (Mins) -->
-                                    <div class="space-y-1.5">
-                                        <label class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 ml-0.5 block">Time (Mins)</label>
-                                        <input type="number" name="duration" id="globalDuration" value="30" min="1" max="600" class="w-full h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-semibold text-slate-900 dark:text-white outline-none focus:border-primary transition-all" placeholder="30">
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5 block">Time (mins)</label>
+                                        <input type="number" name="duration" id="globalDuration" value="30" min="1" max="600" class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white outline-none focus:border-primary transition-all">
                                     </div>
-                                    <!-- Subject — dynamic from assigned courses -->
-                                    <div class="space-y-1.5">
-                                        <label class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 ml-0.5 block">Subject <span class="text-rose-400">*</span></label>
+                                    <!-- Subject - In-System Dropdown -->
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5 block">Subject <span class="text-rose-500">*</span></label>
                                         <% if (assignedSubjects && assignedSubjects.length > 0) { %>
-                                        <select name="subject" id="globalSubject" required class="w-full h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-semibold text-slate-900 dark:text-white outline-none focus:border-primary transition-all cursor-pointer appearance-none">
-                                            <option value="">Select subject</option>
-                                            <% assignedSubjects.forEach(s => { %>
-                                                <option value="<%= s %>"><%= s %></option>
-                                            <% }) %>
-                                        </select>
+                                        <input type="hidden" name="subject" id="globalSubject" value="<%= assignedSubjects[0] %>" required>
+                                        <div class="relative system-dropdown" id="dropdown-globalSubject">
+                                            <button type="button" onclick="toggleSystemDropdown('globalSubject', event)" 
+                                                    class="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
+                                                <span id="globalSubject-label" class="truncate"><%= assignedSubjects[0] %></span>
+                                                <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                                            </button>
+                                            <div id="dropdown-menu-globalSubject" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
+                                                <% assignedSubjects.forEach((s, idx) => { %>
+                                                    <div onclick="selectSystemOption('globalSubject', '<%= s %>', '<%= s %>')" data-val="<%= s %>"
+                                                         class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors <%= idx === 0 ? 'bg-primary/10 text-primary font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal' %>">
+                                                        <span class="truncate"><%= s %></span>
+                                                        <% if (idx === 0) { %><span class="material-symbols-rounded text-sm text-primary check-icon">check</span><% } %>
+                                                    </div>
+                                                <% }) %>
+                                            </div>
+                                        </div>
                                         <% } else { %>
-                                        <input type="text" name="subject" id="globalSubject" required class="w-full h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-semibold text-slate-900 dark:text-white outline-none focus:border-primary transition-all" placeholder="e.g. Physics">
+                                        <input type="text" name="subject" id="globalSubject" required class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white outline-none focus:border-primary transition-all" placeholder="e.g. Physics">
                                         <% } %>
                                     </div>
-                                    <!-- Class — dynamic from assigned courses -->
-                                    <div class="space-y-1.5">
-                                        <label class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 ml-0.5 block">Class <span class="text-rose-400">*</span></label>
-                                        <% if (assignedClasses && assignedClasses.length > 0) { %>
-                                        <select name="classLevel" id="globalClass" required class="w-full h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-semibold text-slate-900 dark:text-white outline-none focus:border-primary transition-all cursor-pointer appearance-none">
-                                            <option value="">Select class</option>
-                                            <% assignedClasses.forEach(c => { %>
-                                                <option value="<%= c %>">Class <%= c %></option>
-                                            <% }) %>
-                                        </select>
-                                        <% } else { %>
-                                        <select name="classLevel" id="globalClass" required class="w-full h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-semibold text-slate-900 dark:text-white outline-none focus:border-primary transition-all cursor-pointer appearance-none">
-                                            <option value="">Select class</option>
-                                            <% [6,7,8,9,10,11,12].forEach(c => { %>
-                                                <option value="<%= c %>">Class <%= c %></option>
-                                            <% }) %>
-                                        </select>
-                                        <% } %>
+                                    <!-- Class - In-System Dropdown -->
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5 block">Class <span class="text-rose-500">*</span></label>
+                                        <% const classList = (assignedClasses && assignedClasses.length > 0) ? assignedClasses : [6,7,8,9,10,11,12]; %>
+                                        <input type="hidden" name="classLevel" id="globalClass" value="<%= classList[0] %>" required>
+                                        <div class="relative system-dropdown" id="dropdown-globalClass">
+                                            <button type="button" onclick="toggleSystemDropdown('globalClass', event)" 
+                                                    class="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
+                                                <span id="globalClass-label" class="truncate">Class <%= classList[0] %></span>
+                                                <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                                            </button>
+                                            <div id="dropdown-menu-globalClass" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
+                                                <% classList.forEach((c, idx) => { %>
+                                                    <div onclick="selectSystemOption('globalClass', '<%= c %>', 'Class <%= c %>')" data-val="<%= c %>"
+                                                         class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors <%= idx === 0 ? 'bg-primary/10 text-primary font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal' %>">
+                                                        <span class="truncate">Class <%= c %></span>
+                                                        <% if (idx === 0) { %><span class="material-symbols-rounded text-sm text-primary check-icon">check</span><% } %>
+                                                    </div>
+                                                <% }) %>
+                                            </div>
+                                        </div>
                                     </div>
                                     <!-- Source PDF -->
-                                    <div class="space-y-1.5">
-                                        <label class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 ml-0.5 block">Source PDF</label>
-                                        <label class="flex items-center gap-2 h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 cursor-pointer hover:border-primary/60 hover:bg-primary/5 transition-all group overflow-hidden">
-                                            <span class="material-symbols-rounded text-slate-400 group-hover:text-primary transition-colors text-[16px] flex-shrink-0">attach_file</span>
-                                            <span id="fileNameLabel" class="text-[11px] font-semibold text-slate-400 truncate flex-1 group-hover:text-primary transition-colors">Attach paper</span>
-                                            <input type="file" name="file" class="hidden" onchange="document.getElementById('fileNameLabel').textContent = this.files[0].name; document.getElementById('fileNameLabel').classList.add('text-primary');">
+                                    <div class="space-y-1">
+                                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5 block">File</label>
+                                        <label class="flex items-center gap-1.5 h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-700 cursor-pointer hover:border-primary/60 transition-all overflow-hidden">
+                                            <span class="material-symbols-rounded text-slate-400 text-[15px] shrink-0">attach_file</span>
+                                            <span id="fileNameLabel" class="text-xs font-normal text-slate-500 dark:text-slate-400 truncate flex-1">Attach</span>
+                                            <input type="file" name="file" class="hidden" onchange="document.getElementById('fileNameLabel').textContent = this.files[0]?.name || 'Attach'; document.getElementById('fileNameLabel').classList.add('text-primary');">
                                         </label>
                                     </div>
                                 </div>
 
+                                <input type="hidden" name="accessType" id="globalAccessType" value="Free">
+                                <input type="hidden" name="fileUrl" id="globalFileUrl" value="">
+
                                 <!-- No courses assigned warning -->
                                 <% if (!assignedSubjects || assignedSubjects.length === 0) { %>
-                                <div class="mt-4 px-4 py-2.5 rounded-md bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center gap-2">
-                                    <span class="material-symbols-rounded text-amber-500 text-[16px]">warning</span>
-                                    <p class="text-[11px] font-semibold text-amber-700 dark:text-amber-400">No courses assigned yet — you can still enter subject and class manually.</p>
+                                <div class="mt-3 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex items-center gap-2">
+                                    <span class="material-symbols-rounded text-amber-500 text-[15px] shrink-0">info</span>
+                                    <p class="text-xs font-normal text-amber-700 dark:text-amber-400">No courses assigned — enter subject and class manually.</p>
                                 </div>
                                 <% } %>
                             </div>
@@ -138,60 +153,86 @@
 
                         <input type="hidden" name="mode" id="studioMode" value="standalone">
                         <div id="hiddenMetaFields">
-                            <!-- Hidden Metadata (Standalone mode only — removed in archive mode by JS) -->
                             <input type="hidden" name="classLevel" value="" id="hiddenClass">
                             <input type="hidden" name="isBoardQuestion" value="on">
                             <input type="hidden" name="bankId" value="">
-                            
-                            <!-- In Standalone mode, these are synced from wizard -->
                             <input type="hidden" name="board" value="" id="hiddenBoard">
                             <input type="hidden" name="year" value="" id="hiddenYear">
                             <input type="hidden" name="subject" value="" id="hiddenSubject">
                             <input type="hidden" name="accessType" value="Free" id="hiddenAccessType">
+                            <input type="hidden" name="fileUrl" value="" id="hiddenFileUrl">
                         </div>
 
-                        <!-- Studio Header -->
-                        <div class="flex items-center justify-between mb-8 px-4">
-                            <div class="flex items-center gap-4">
-                                <div>
-                                    <h3 class="text-xl font-black text-slate-900 dark:text-white leading-tight"><%= mode === 'archive' ? 'Archive composition' : 'History composition' %></h3>
-                                    <p class="text-[11px] font-bold text-slate-500 mt-0.5"><%= mode === 'archive' ? 'Adding questions to board papers' : 'Adding individual questions to library' %></p>
-                                </div>
+                        <!-- Question Count & Metadata Info -->
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-3 px-0.5">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span id="questionCountBadge" class="px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-2xs">
+                                    1 question
+                                </span>
+                                <!-- Metadata Badges -->
+                                <div id="studioMetaBadges" class="flex flex-wrap items-center gap-1.5"></div>
                             </div>
-                            <div id="draftStatusBadge" class="hidden text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-3.5 py-1.5 rounded-full border border-emerald-200 dark:border-emerald-500/20 flex items-center gap-2 transition-all">
-                                <span class="size-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                <span>Draft auto-saved</span>
-                            </div>
+                            <div id="draftStatusBadge" class="hidden"></div>
                         </div>
 
                         <!-- Bulk Question Container -->
-                        <div id="questionsContainer" class="space-y-6">
+                        <div id="questionsContainer" class="space-y-3.5 sm:space-y-4">
                             <!-- Question rows will be injected here -->
                         </div>
 
                         <!-- Addition Controls -->
-                        <div class="bg-white dark:bg-[#0f172a] rounded-2xl p-6 border border-slate-100 dark:border-white/5 shadow-xl shadow-slate-200/5 flex flex-wrap items-center justify-between gap-4">
-                            <div class="flex items-center gap-3">
-                                <div class="flex items-center h-11 bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden">
-                                    <input type="number" id="bulkAddCount" value="1" min="1" max="50" class="w-16 h-full pl-4 bg-transparent text-sm font-bold text-slate-700 dark:text-slate-200 outline-none">
-                                    <div class="w-px h-5 bg-slate-300 dark:bg-slate-600 mx-1 flex-shrink-0"></div>
-                                    <select id="bulkAddType" class="h-full pr-3 pl-2 bg-transparent text-[11px] font-bold text-slate-600 dark:text-slate-300 outline-none cursor-pointer">
-                                        <option value="MCQ">MCQ slots</option>
-                                        <option value="Short">Short answer</option>
-                                        <option value="Medium">Medium complexity</option>
-                                        <option value="Comprehension">Comprehension</option>
-                                    </select>
+                        <div class="bg-white dark:bg-[#0f172a] rounded-xl p-3.5 sm:p-4 border border-slate-200 dark:border-white/5 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                                <div class="flex items-center h-9 sm:h-10 bg-slate-100 dark:bg-slate-800 rounded-lg overflow-visible flex-1 sm:flex-initial border border-slate-200 dark:border-slate-700">
+                                    <input type="number" id="bulkAddCount" value="1" min="1" max="50" class="w-12 sm:w-14 h-full pl-2.5 bg-transparent text-xs font-normal text-slate-700 dark:text-slate-200 outline-none text-center">
+                                    <div class="w-px h-4 bg-slate-300 dark:bg-slate-600 mx-1 flex-shrink-0"></div>
+                                    
+                                    <!-- In-System Dropdown for Bulk Add Type -->
+                                    <input type="hidden" id="bulkAddType" value="MCQ">
+                                    <div class="relative system-dropdown h-full" id="dropdown-bulkAddType">
+                                        <button type="button" onclick="toggleSystemDropdown('bulkAddType', event)" 
+                                                class="h-full px-2.5 bg-transparent text-xs font-normal text-slate-700 dark:text-slate-200 flex items-center gap-1 transition-all cursor-pointer select-none">
+                                            <span id="bulkAddType-label" class="truncate">MCQ</span>
+                                            <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                                        </button>
+                                        <div id="dropdown-menu-bulkAddType" class="hidden absolute bottom-full mb-1 sm:mb-0 sm:bottom-auto sm:top-full left-0 w-36 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 overflow-y-auto no-scrollbar">
+                                            <div onclick="selectSystemOption('bulkAddType', 'MCQ', 'MCQ')" data-val="MCQ"
+                                                 class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors bg-primary/10 text-primary font-medium">
+                                                <span>MCQ</span>
+                                                <span class="material-symbols-rounded text-sm text-primary check-icon">check</span>
+                                            </div>
+                                            <div onclick="selectSystemOption('bulkAddType', 'Short', 'Short')" data-val="Short"
+                                                 class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                                <span>Short</span>
+                                            </div>
+                                            <div onclick="selectSystemOption('bulkAddType', 'Medium', 'Medium')" data-val="Medium"
+                                                 class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                                <span>Medium</span>
+                                            </div>
+                                            <div onclick="selectSystemOption('bulkAddType', 'Comprehension', 'Comprehension')" data-val="Comprehension"
+                                                 class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                                <span>Comprehension</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <button type="button" onclick="addQuestionRows()" class="h-11 px-5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-[11px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-2 flex-shrink-0">
-                                    <span class="material-symbols-rounded flex-shrink-0" style="font-size:18px">add_box</span> Append slots
+                                <button type="button" onclick="addQuestionRows()" class="h-9 sm:h-10 px-3 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-medium hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center gap-1 shrink-0 border border-slate-200 dark:border-slate-700 active:scale-95">
+                                    <span class="material-symbols-rounded text-[17px]">add</span>
+                                    <span>Add slot</span>
                                 </button>
                             </div>
                             
-                            <div class="flex items-center gap-4">
-                                <a href="/teacher/question-details" class="text-[11px] font-bold text-slate-400 hover:text-slate-600 transition-all">Discard studio</a>
-                                <button type="submit" class="h-12 px-10 bg-slate-900 text-white rounded-lg font-bold text-[12px] shadow-xl shadow-slate-900/10 hover:bg-black transition-all active:scale-95">Add question</button>
+                            <div class="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100 dark:border-slate-800">
+                                <a href="<%= mode === 'archive' ? '/teacher/question-bank' : '/teacher/questions' %>" class="text-xs font-normal text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-all px-2">Discard</a>
+                                <button type="submit" class="flex-1 sm:flex-initial h-9 sm:h-10 px-5 sm:px-6 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-black dark:hover:bg-slate-100 rounded-lg font-medium text-xs shadow-xs transition-all active:scale-95 flex items-center justify-center gap-1.5">
+                                    <span class="material-symbols-rounded text-[17px]">check</span>
+                                    <span>Save</span>
+                                </button>
                             </div>
                         </div>
+
+                        <!-- Mobile clearance spacer so bottom-nav never covers action bar -->
+                        <div class="h-28 lg:hidden shrink-0"></div>
                     </form>
                 </div>
             </div>
@@ -202,90 +243,198 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <template id="questionTemplate">
-        <div class="question-row bg-white dark:bg-[#0f172a] rounded-[2rem] p-8 border border-slate-100 dark:border-white/5 shadow-lg animate-slide-up relative">
+        <div class="question-row bg-white dark:bg-[#0f172a] rounded-xl sm:rounded-2xl p-3.5 sm:p-5 border border-slate-200 dark:border-white/5 shadow-xs transition-all animate-slide-up relative space-y-3.5 sm:space-y-4">
             
             <!-- Hidden Fields -->
             <input type="hidden" name="qType[]" value="MCQ">
             <input type="hidden" name="qTopic[]" value="">
 
             <!-- Row Header -->
-            <div class="flex items-center justify-between mb-6">
-                <span class="text-[14px] font-black text-slate-900 dark:text-white flex-shrink-0"><span class="q-index">1</span> • <span class="q-type-label">MCQ</span></span>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 sm:pb-3 border-b border-slate-100 dark:border-slate-800/80">
+                <div class="flex items-center justify-between sm:justify-start gap-2.5">
+                    <div class="relative system-dropdown row-type-dropdown">
+                        <button type="button" onclick="toggleRowDropdown(this, event)" 
+                                class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-xs font-normal text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all cursor-pointer">
+                            <span class="q-index font-medium">1</span>
+                            <span class="text-slate-300 dark:text-slate-600">•</span>
+                            <span class="q-type-label font-medium text-primary">MCQ</span>
+                            <span class="material-symbols-rounded text-xs text-slate-400 dropdown-arrow">expand_more</span>
+                        </button>
+                        <div class="row-dropdown-menu hidden absolute top-full left-0 mt-1 w-36 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50">
+                            <div onclick="changeRowType(this, 'MCQ')" class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 font-normal text-slate-700 dark:text-slate-300">MCQ</div>
+                            <div onclick="changeRowType(this, 'Short')" class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 font-normal text-slate-700 dark:text-slate-300">Short</div>
+                            <div onclick="changeRowType(this, 'Medium')" class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 font-normal text-slate-700 dark:text-slate-300">Medium</div>
+                            <div onclick="changeRowType(this, 'Comprehension')" class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 font-normal text-slate-700 dark:text-slate-300">Comprehension</div>
+                        </div>
+                    </div>
 
-                <div class="flex items-center gap-3">
-                    <div class="flex items-center gap-2">
-                        <span class="text-[12px] font-bold text-slate-800 dark:text-slate-200">Marks</span>
-                        <input type="number" name="qMarks[]" value="1" min="1" max="100" class="w-16 h-8 px-2.5 bg-[#F8FAFC] dark:bg-slate-900 border border-[#E2E8F0] dark:border-slate-600 rounded-md text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-white shadow-sm">
+                    <!-- Mobile Delete Button -->
+                    <button type="button" onclick="removeRow(this)" title="Delete" class="sm:hidden size-7 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all">
+                        <span class="material-symbols-rounded text-[16px]">delete</span>
+                    </button>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between sm:justify-end gap-2 sm:gap-2.5">
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-xs font-normal text-slate-500 dark:text-slate-400">Marks</span>
+                        <input type="number" name="qMarks[]" value="1" min="1" max="100" class="w-12 sm:w-14 h-7 px-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-normal text-slate-700 dark:text-slate-200 outline-none focus:border-primary transition-all text-center">
                     </div>
-                    <div class="flex items-center gap-3 individual-meta">
-                        <div class="flex items-center gap-2">
-                            <span class="text-[12px] font-bold text-slate-800 dark:text-slate-200">Board</span>
-                            <input type="text" name="qBoard[]" class="w-24 h-8 px-3 bg-[#F8FAFC] dark:bg-slate-900 border border-[#E2E8F0] dark:border-slate-600 rounded-md text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-white shadow-sm">
+                    <div class="flex items-center gap-2 individual-meta">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs font-normal text-slate-500 dark:text-slate-400">Board</span>
+                            <input type="text" name="qBoard[]" placeholder="Board" class="w-16 sm:w-20 h-7 px-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-normal text-slate-700 dark:text-slate-200 outline-none focus:border-primary transition-all">
                         </div>
-                        <div class="flex items-center gap-2">
-                            <span class="text-[12px] font-bold text-slate-800 dark:text-slate-200">Year</span>
-                            <input type="number" name="qYear[]" class="w-24 h-8 px-3 bg-[#F8FAFC] dark:bg-slate-900 border border-[#E2E8F0] dark:border-slate-600 rounded-md text-[12px] font-bold text-slate-900 dark:text-white outline-none focus:border-slate-400 dark:focus:border-white shadow-sm">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs font-normal text-slate-500 dark:text-slate-400">Year</span>
+                            <input type="number" name="qYear[]" placeholder="Year" class="w-14 sm:w-16 h-7 px-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-normal text-slate-700 dark:text-slate-200 outline-none focus:border-primary transition-all text-center">
                         </div>
                     </div>
-                    <button type="button" onclick="removeRow(this)" class="size-9 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-sm">
-                        <span class="material-symbols-rounded" style="font-size:18px">delete</span>
+                    <!-- Desktop Delete Button -->
+                    <button type="button" onclick="removeRow(this)" title="Delete" class="hidden sm:flex size-7 rounded-md bg-rose-50 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-500/20 text-rose-500 items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-xs">
+                        <span class="material-symbols-rounded text-[16px]">delete</span>
                     </button>
                 </div>
             </div>
 
-            <!-- Question Text -->
-            <div class="space-y-2 mb-5">
-                <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Question content</label>
-                <textarea name="qText[]" required placeholder="Compose question here..." class="w-full p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[14px] font-bold outline-none focus:border-slate-900 dark:focus:border-white transition-all leading-relaxed resize-none" rows="2"></textarea>
+            <!-- Standard Question Text (for MCQ, Short, Medium) -->
+            <div class="standard-question-block space-y-1">
+                <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Question</label>
+                <textarea name="qText[]" required placeholder="Question..." class="w-full p-2.5 sm:p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all leading-relaxed resize-none" rows="2"></textarea>
             </div>
 
             <!-- MCQ Options Area -->
-            <div class="mcq-area space-y-5">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="flex items-center gap-3 group">
-                        <span class="size-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-500 flex-shrink-0 group-focus-within:bg-slate-900 group-focus-within:text-white transition-all">A</span>
-                        <input type="text" name="qOptions[]" placeholder="Option A" class="flex-1 h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-slate-900 dark:focus:border-white transition-all">
+            <div class="mcq-area space-y-2.5 sm:space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                    <div class="flex items-center gap-2 group">
+                        <span class="size-7 sm:size-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-medium text-slate-500 group-focus-within:bg-primary group-focus-within:text-white transition-all shrink-0">A</span>
+                        <input type="text" name="qOptions[]" placeholder="Option A" class="flex-1 h-8 sm:h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all">
                     </div>
-                    <div class="flex items-center gap-3 group">
-                        <span class="size-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-500 flex-shrink-0 group-focus-within:bg-slate-900 group-focus-within:text-white transition-all">B</span>
-                        <input type="text" name="qOptions[]" placeholder="Option B" class="flex-1 h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-slate-900 dark:focus:border-white transition-all">
+                    <div class="flex items-center gap-2 group">
+                        <span class="size-7 sm:size-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-medium text-slate-500 group-focus-within:bg-primary group-focus-within:text-white transition-all shrink-0">B</span>
+                        <input type="text" name="qOptions[]" placeholder="Option B" class="flex-1 h-8 sm:h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all">
                     </div>
-                    <div class="flex items-center gap-3 group">
-                        <span class="size-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-500 flex-shrink-0 group-focus-within:bg-slate-900 group-focus-within:text-white transition-all">C</span>
-                        <input type="text" name="qOptions[]" placeholder="Option C" class="flex-1 h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-slate-900 dark:focus:border-white transition-all">
+                    <div class="flex items-center gap-2 group">
+                        <span class="size-7 sm:size-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-medium text-slate-500 group-focus-within:bg-primary group-focus-within:text-white transition-all shrink-0">C</span>
+                        <input type="text" name="qOptions[]" placeholder="Option C" class="flex-1 h-8 sm:h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all">
                     </div>
-                    <div class="flex items-center gap-3 group">
-                        <span class="size-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-500 flex-shrink-0 group-focus-within:bg-slate-900 group-focus-within:text-white transition-all">D</span>
-                        <input type="text" name="qOptions[]" placeholder="Option D" class="flex-1 h-11 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold outline-none focus:border-slate-900 dark:focus:border-white transition-all">
+                    <div class="flex items-center gap-2 group">
+                        <span class="size-7 sm:size-8 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-medium text-slate-500 group-focus-within:bg-primary group-focus-within:text-white transition-all shrink-0">D</span>
+                        <input type="text" name="qOptions[]" placeholder="Option D" class="flex-1 h-8 sm:h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all">
                     </div>
                 </div>
-                <div class="space-y-2">
-                    <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1 flex items-center gap-1.5">
-                        <span class="material-symbols-rounded text-emerald-500" style="font-size:16px">check_circle</span>
-                        Correct solution
-                    </label>
-                    <select name="qCorrectIndex[]" class="w-full h-11 px-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] font-bold text-slate-700 dark:text-slate-200 outline-none focus:border-emerald-400 cursor-pointer transition-all">
-                        <option value="0">Option A</option>
-                        <option value="1">Option B</option>
-                        <option value="2">Option C</option>
-                        <option value="3">Option D</option>
-                    </select>
-                </div>
-                <div class="space-y-2">
-                    <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Explanation <span class="text-slate-300">(Optional)</span></label>
-                    <textarea name="qExplanation[]" placeholder="Why is this the correct answer?" class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] text-slate-600 dark:text-slate-400 outline-none focus:border-slate-900 transition-all resize-none" rows="2"></textarea>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-0.5">
+                    <!-- In-System Dropdown for Correct Answer -->
+                    <div class="space-y-1 relative system-dropdown row-dropdown">
+                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Correct answer</label>
+                        <input type="hidden" name="qCorrectIndex[]" class="row-correct-input" value="0">
+                        <div class="relative">
+                            <button type="button" onclick="toggleRowDropdown(this, event)" 
+                                    class="w-full h-8 sm:h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-700 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
+                                <span class="row-correct-label truncate">Option A</span>
+                                <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
+                            </button>
+                            <div class="row-dropdown-menu hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
+                                <div onclick="selectRowOption(this, '0', 'Option A')" data-val="0"
+                                     class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors bg-primary/10 text-primary font-medium">
+                                    <span>Option A</span>
+                                    <span class="material-symbols-rounded text-sm text-primary check-icon">check</span>
+                                </div>
+                                <div onclick="selectRowOption(this, '1', 'Option B')" data-val="1"
+                                     class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                    <span>Option B</span>
+                                </div>
+                                <div onclick="selectRowOption(this, '2', 'Option C')" data-val="2"
+                                     class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                    <span>Option C</span>
+                                </div>
+                                <div onclick="selectRowOption(this, '3', 'Option D')" data-val="3"
+                                     class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                    <span>Option D</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-1">
+                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Explanation</label>
+                        <textarea name="qExplanation[]" placeholder="Explanation..." class="w-full h-8 sm:h-9 py-1.5 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-700 dark:text-slate-300 outline-none focus:border-primary transition-all resize-none" rows="1"></textarea>
+                    </div>
                 </div>
             </div>
 
-            <!-- Short / Medium / Comprehension Answer Area -->
-            <div class="answer-area hidden space-y-5">
-                <div class="space-y-2">
-                    <label class="text-[11px] font-bold text-emerald-600 ml-1">Model solution <span class="text-emerald-400/60">(Mandatory)</span></label>
-                    <textarea name="qAnswer[]" placeholder="Provide the model answer or solution..." class="w-full p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/10 text-[13px] font-bold outline-none focus:border-emerald-400 transition-all resize-none" rows="2"></textarea>
+            <!-- Short / Medium Answer Area -->
+            <div class="answer-area hidden space-y-2.5 sm:space-y-3">
+                <div class="space-y-1">
+                    <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Solution</label>
+                    <textarea name="qAnswer[]" placeholder="Solution..." class="w-full p-2.5 sm:p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all resize-none" rows="2"></textarea>
                 </div>
-                <div class="space-y-2">
-                    <label class="text-[11px] font-bold text-slate-900 dark:text-slate-200 ml-1">Explanation <span class="text-slate-300">(Optional)</span></label>
-                    <textarea name="qExplanation[]" placeholder="Add context, hints, or further explanation..." class="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[12px] text-slate-600 dark:text-slate-400 outline-none focus:border-slate-900 transition-all resize-none" rows="2"></textarea>
+                <div class="space-y-1">
+                    <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Explanation</label>
+                    <textarea name="qExplanation[]" placeholder="Explanation..." class="w-full p-2.5 sm:p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-700 dark:text-slate-300 outline-none focus:border-primary transition-all resize-none" rows="2"></textarea>
+                </div>
+            </div>
+
+            <!-- Comprehension Area (Context + Two Questions, Two Answers, Two Solutions) -->
+            <div class="comprehension-area hidden space-y-3 sm:space-y-3.5">
+                <!-- Context / Stimulus -->
+                <div class="space-y-1">
+                    <div class="flex items-center justify-between">
+                        <label class="flex items-center gap-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 ml-0.5">
+                            <span class="material-symbols-rounded text-sm text-primary">auto_stories</span>
+                            <span>Context (Passage / উদ্দীপক)</span>
+                        </label>
+                        <span class="text-[10px] text-slate-400 font-normal">Stimulus / reading passage</span>
+                    </div>
+                    <textarea name="qContext[]" placeholder="Enter passage / context here..." class="w-full p-2.5 sm:p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all leading-relaxed resize-none" rows="3"></textarea>
+                </div>
+
+                <!-- Two Questions Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                    <!-- Sub-Question 1 Card -->
+                    <div class="p-3 sm:p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 space-y-2.5">
+                        <div class="flex items-center gap-1.5 pb-2 border-b border-slate-200/60 dark:border-slate-800/60">
+                            <span class="size-5 rounded-md bg-primary/10 text-primary text-[11px] font-medium flex items-center justify-center">1</span>
+                            <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Question 1 &amp; Solution</span>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 ml-0.5">Question 1</label>
+                            <textarea name="qSubQ1[]" placeholder="Question 1..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all resize-none" rows="2"></textarea>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 ml-0.5">Answer 1</label>
+                            <textarea name="qSubA1[]" placeholder="Answer 1..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all resize-none" rows="2"></textarea>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 ml-0.5">Solution 1</label>
+                            <textarea name="qSubS1[]" placeholder="Solution 1..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-700 dark:text-slate-300 outline-none focus:border-primary transition-all resize-none" rows="2"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Sub-Question 2 Card -->
+                    <div class="p-3 sm:p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800/80 space-y-2.5">
+                        <div class="flex items-center gap-1.5 pb-2 border-b border-slate-200/60 dark:border-slate-800/60">
+                            <span class="size-5 rounded-md bg-primary/10 text-primary text-[11px] font-medium flex items-center justify-center">2</span>
+                            <span class="text-xs font-medium text-slate-700 dark:text-slate-300">Question 2 &amp; Solution</span>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 ml-0.5">Question 2</label>
+                            <textarea name="qSubQ2[]" placeholder="Question 2..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all resize-none" rows="2"></textarea>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 ml-0.5">Answer 2</label>
+                            <textarea name="qSubA2[]" placeholder="Answer 2..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all resize-none" rows="2"></textarea>
+                        </div>
+
+                        <div class="space-y-1">
+                            <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 ml-0.5">Solution 2</label>
+                            <textarea name="qSubS2[]" placeholder="Solution 2..." class="w-full p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-700 dark:text-slate-300 outline-none focus:border-primary transition-all resize-none" rows="2"></textarea>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -296,7 +445,7 @@
         function getDefaultMarks(type) {
             if (type === 'Medium') return 2;
             if (type === 'Comprehension') return 10;
-            return 1; // MCQ & Short
+            return 1;
         }
 
         const DRAFT_KEY_BASE = 'oddhay_question_studio_draft';
@@ -308,6 +457,122 @@
             const subject = urlParams.get('subject') || '';
             return `${DRAFT_KEY_BASE}_${mode}_${bankId}_${subject}`;
         }
+
+        // --- Custom In-System Dropdown Controls ---
+        function toggleSystemDropdown(type, e) {
+            if (e) e.stopPropagation();
+            const targetMenu = document.getElementById(`dropdown-menu-${type}`);
+            const parent = document.getElementById(`dropdown-${type}`);
+            if (!targetMenu) return;
+            const isCurrentlyHidden = targetMenu.classList.contains('hidden');
+
+            closeAllSystemDropdowns();
+
+            if (isCurrentlyHidden) {
+                targetMenu.classList.remove('hidden');
+                if (parent) {
+                    const arrow = parent.querySelector('.dropdown-arrow');
+                    if (arrow) arrow.style.transform = 'rotate(180deg)';
+                }
+            }
+        }
+        window.toggleSystemDropdown = toggleSystemDropdown;
+
+        function closeAllSystemDropdowns() {
+            document.querySelectorAll('.system-dropdown').forEach(d => {
+                const menu = d.querySelector('[id^="dropdown-menu-"], .row-dropdown-menu');
+                const arrow = d.querySelector('.dropdown-arrow');
+                if (menu) menu.classList.add('hidden');
+                if (arrow) arrow.style.removeProperty('transform');
+            });
+        }
+        window.closeAllSystemDropdowns = closeAllSystemDropdowns;
+
+        function selectSystemOption(fieldId, value, label) {
+            const input = document.getElementById(fieldId);
+            const labelEl = document.getElementById(`${fieldId}-label`);
+            if (input) input.value = value;
+            if (labelEl) labelEl.innerText = label;
+
+            const menu = document.getElementById(`dropdown-menu-${fieldId}`);
+            if (menu) {
+                menu.querySelectorAll('[data-val]').forEach(opt => {
+                    const isSelected = opt.getAttribute('data-val') === String(value);
+                    if (isSelected) {
+                        opt.className = 'px-2.5 py-1.5 text-xs font-medium text-primary bg-primary/10 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                        if (!opt.querySelector('.check-icon')) {
+                            const check = document.createElement('span');
+                            check.className = 'material-symbols-rounded text-sm text-primary check-icon';
+                            check.innerText = 'check';
+                            opt.appendChild(check);
+                        }
+                    } else {
+                        opt.className = 'px-2.5 py-1.5 text-xs font-normal text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                        const c = opt.querySelector('.check-icon');
+                        if (c) c.remove();
+                    }
+                });
+            }
+            closeAllSystemDropdowns();
+            saveStudioDraft();
+        }
+        window.selectSystemOption = selectSystemOption;
+
+        function toggleRowDropdown(btn, e) {
+            if (e) e.stopPropagation();
+            const parent = btn.closest('.row-dropdown');
+            const menu = parent ? parent.querySelector('.row-dropdown-menu') : null;
+            const arrow = btn.querySelector('.dropdown-arrow');
+            if (!menu) return;
+
+            const isHidden = menu.classList.contains('hidden');
+            closeAllSystemDropdowns();
+
+            if (isHidden) {
+                menu.classList.remove('hidden');
+                if (arrow) arrow.style.transform = 'rotate(180deg)';
+            }
+        }
+        window.toggleRowDropdown = toggleRowDropdown;
+
+        function selectRowOption(itemEl, val, label) {
+            const parent = itemEl.closest('.row-dropdown');
+            if (!parent) return;
+
+            const input = parent.querySelector('.row-correct-input');
+            const labelEl = parent.querySelector('.row-correct-label');
+            if (input) input.value = val;
+            if (labelEl) labelEl.innerText = label;
+
+            const menu = parent.querySelector('.row-dropdown-menu');
+            if (menu) {
+                menu.querySelectorAll('[data-val]').forEach(opt => {
+                    const isSelected = opt.getAttribute('data-val') === String(val);
+                    if (isSelected) {
+                        opt.className = 'px-2.5 py-1.5 text-xs font-medium text-primary bg-primary/10 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                        if (!opt.querySelector('.check-icon')) {
+                            const check = document.createElement('span');
+                            check.className = 'material-symbols-rounded text-sm text-primary check-icon';
+                            check.innerText = 'check';
+                            opt.appendChild(check);
+                        }
+                    } else {
+                        opt.className = 'px-2.5 py-1.5 text-xs font-normal text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                        const c = opt.querySelector('.check-icon');
+                        if (c) c.remove();
+                    }
+                });
+            }
+            closeAllSystemDropdowns();
+            saveStudioDraft();
+        }
+        window.selectRowOption = selectRowOption;
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.system-dropdown')) {
+                closeAllSystemDropdowns();
+            }
+        });
 
         function saveStudioDraft() {
             try {
@@ -347,6 +612,13 @@
                         correctIndex: 0,
                         answer: '',
                         explanation: '',
+                        context: '',
+                        q1: '',
+                        a1: '',
+                        s1: '',
+                        q2: '',
+                        a2: '',
+                        s2: '',
                         board: '',
                         year: ''
                     };
@@ -354,10 +626,26 @@
                     if (type === 'MCQ') {
                         const optInputs = row.querySelectorAll('.mcq-area input[name="qOptions[]"]');
                         optInputs.forEach(opt => qData.options.push(opt.value));
-                        const correctSelect = row.querySelector('.mcq-area select[name="qCorrectIndex[]"]');
-                        if (correctSelect) qData.correctIndex = correctSelect.value;
+                        const correctInput = row.querySelector('.mcq-area input[name="qCorrectIndex[]"]');
+                        if (correctInput) qData.correctIndex = correctInput.value;
                         const expText = row.querySelector('.mcq-area textarea[name="qExplanation[]"]');
                         if (expText) qData.explanation = expText.value;
+                    } else if (type === 'Comprehension') {
+                        const ctxEl = row.querySelector('.comprehension-area textarea[name="qContext[]"]');
+                        const q1El = row.querySelector('.comprehension-area textarea[name="qSubQ1[]"]');
+                        const a1El = row.querySelector('.comprehension-area textarea[name="qSubA1[]"]');
+                        const s1El = row.querySelector('.comprehension-area textarea[name="qSubS1[]"]');
+                        const q2El = row.querySelector('.comprehension-area textarea[name="qSubQ2[]"]');
+                        const a2El = row.querySelector('.comprehension-area textarea[name="qSubA2[]"]');
+                        const s2El = row.querySelector('.comprehension-area textarea[name="qSubS2[]"]');
+
+                        if (ctxEl) qData.context = ctxEl.value;
+                        if (q1El) qData.q1 = q1El.value;
+                        if (a1El) qData.a1 = a1El.value;
+                        if (s1El) qData.s1 = s1El.value;
+                        if (q2El) qData.q2 = q2El.value;
+                        if (a2El) qData.a2 = a2El.value;
+                        if (s2El) qData.s2 = s2El.value;
                     } else {
                         const ansText = row.querySelector('.answer-area textarea[name="qAnswer[]"]');
                         if (ansText) qData.answer = ansText.value;
@@ -392,19 +680,16 @@
                 const draft = JSON.parse(rawData);
                 if (!draft || !draft.questions || draft.questions.length === 0) return false;
 
-                // Restore global meta if archive
                 if (draft.globalMeta) {
                     if (draft.globalMeta.board && document.getElementById('globalBoard')) document.getElementById('globalBoard').value = draft.globalMeta.board;
                     if (draft.globalMeta.year && document.getElementById('globalYear')) document.getElementById('globalYear').value = draft.globalMeta.year;
-                    if (draft.globalMeta.subject && document.getElementById('globalSubject')) document.getElementById('globalSubject').value = draft.globalMeta.subject;
-                    if (draft.globalMeta.classLevel && document.getElementById('globalClass')) document.getElementById('globalClass').value = draft.globalMeta.classLevel;
+                    if (draft.globalMeta.subject) selectSystemOption('globalSubject', draft.globalMeta.subject, draft.globalMeta.subject);
+                    if (draft.globalMeta.classLevel) selectSystemOption('globalClass', draft.globalMeta.classLevel, `Class ${draft.globalMeta.classLevel}`);
                 }
 
-                // Clear default container
                 const container = document.getElementById('questionsContainer');
-                container.innerHTML = '';
+                if (container) container.innerHTML = '';
 
-                // Re-create each row with saved draft values
                 draft.questions.forEach(qData => {
                     addSingleQuestionFromDraft(qData);
                 });
@@ -422,16 +707,16 @@
         function addSingleQuestionFromDraft(qData) {
             const container = document.getElementById('questionsContainer');
             const template = document.getElementById('questionTemplate');
+            if (!container || !template) return;
+
             const urlParams = new URLSearchParams(window.location.search);
             const mode = urlParams.get('mode') || 'standalone';
 
             const clone = template.content.cloneNode(true);
             const row = clone.querySelector('.question-row');
 
-            // Set type without overriding custom marks
             toggleTypeUI(row, qData.type, true);
 
-            // Set values
             const textInput = row.querySelector('textarea[name="qText[]"]');
             if (textInput) textInput.value = qData.text || '';
 
@@ -443,10 +728,51 @@
                 (qData.options || []).forEach((optVal, idx) => {
                     if (optInputs[idx]) optInputs[idx].value = optVal || '';
                 });
-                const correctSelect = row.querySelector('.mcq-area select[name="qCorrectIndex[]"]');
-                if (correctSelect) correctSelect.value = qData.correctIndex || 0;
+                
+                const cVal = qData.correctIndex || '0';
+                const correctInput = row.querySelector('.mcq-area input[name="qCorrectIndex[]"]');
+                const labelEl = row.querySelector('.row-correct-label');
+                if (correctInput) correctInput.value = cVal;
+                if (labelEl) labelEl.innerText = `Option ${String.fromCharCode(65 + parseInt(cVal || 0))}`;
+
+                const menu = row.querySelector('.row-dropdown-menu');
+                if (menu) {
+                    menu.querySelectorAll('[data-val]').forEach(opt => {
+                        const isSelected = opt.getAttribute('data-val') === String(cVal);
+                        if (isSelected) {
+                            opt.className = 'px-2.5 py-1.5 text-xs font-medium text-primary bg-primary/10 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                            if (!opt.querySelector('.check-icon')) {
+                                const check = document.createElement('span');
+                                check.className = 'material-symbols-rounded text-sm text-primary check-icon';
+                                check.innerText = 'check';
+                                opt.appendChild(check);
+                            }
+                        } else {
+                            opt.className = 'px-2.5 py-1.5 text-xs font-normal text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                            const c = opt.querySelector('.check-icon');
+                            if (c) c.remove();
+                        }
+                    });
+                }
+
                 const expText = row.querySelector('.mcq-area textarea[name="qExplanation[]"]');
                 if (expText) expText.value = qData.explanation || '';
+            } else if (qData.type === 'Comprehension') {
+                const ctxEl = row.querySelector('.comprehension-area textarea[name="qContext[]"]');
+                const q1El = row.querySelector('.comprehension-area textarea[name="qSubQ1[]"]');
+                const a1El = row.querySelector('.comprehension-area textarea[name="qSubA1[]"]');
+                const s1El = row.querySelector('.comprehension-area textarea[name="qSubS1[]"]');
+                const q2El = row.querySelector('.comprehension-area textarea[name="qSubQ2[]"]');
+                const a2El = row.querySelector('.comprehension-area textarea[name="qSubA2[]"]');
+                const s2El = row.querySelector('.comprehension-area textarea[name="qSubS2[]"]');
+
+                if (ctxEl) ctxEl.value = qData.context || '';
+                if (q1El) q1El.value = qData.q1 || '';
+                if (a1El) a1El.value = qData.a1 || '';
+                if (s1El) s1El.value = qData.s1 || '';
+                if (q2El) q2El.value = qData.q2 || '';
+                if (a2El) a2El.value = qData.a2 || '';
+                if (s2El) s2El.value = qData.s2 || '';
             } else {
                 const ansText = row.querySelector('.answer-area textarea[name="qAnswer[]"]');
                 if (ansText) ansText.value = qData.answer || '';
@@ -474,11 +800,47 @@
             } catch (e) {}
         }
 
+        function renderMetadataBadges(urlParams) {
+            const badgesContainer = document.getElementById('studioMetaBadges');
+            if (!badgesContainer) return;
+
+            badgesContainer.innerHTML = '';
+
+            const items = [];
+            if (urlParams.get('subject')) items.push({ label: urlParams.get('subject'), icon: 'menu_book', color: 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/20' });
+            if (urlParams.get('class')) items.push({ label: `Class ${urlParams.get('class')}`, icon: 'school', color: 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/20' });
+            if (urlParams.get('topic')) items.push({ label: urlParams.get('topic'), icon: 'bookmark', color: 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' });
+            if (urlParams.get('board')) items.push({ label: urlParams.get('board'), icon: 'location_on', color: 'bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/20' });
+            if (urlParams.get('year')) items.push({ label: urlParams.get('year'), icon: 'calendar_today', color: 'bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-500/20' });
+            
+            if (urlParams.has('slots')) {
+                const slotsParam = urlParams.get('slots');
+                slotsParam.split(',').forEach(pair => {
+                    const [t, c] = pair.split(':');
+                    if (parseInt(c) > 0) {
+                        items.push({ label: `${c} ${t}`, icon: 'format_list_bulleted', color: 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-500/20' });
+                    }
+                });
+            } else if (urlParams.get('type')) {
+                items.push({ label: urlParams.get('type'), icon: 'format_list_bulleted', color: 'bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-500/20' });
+            }
+
+            if (urlParams.get('fileName')) {
+                items.push({ label: urlParams.get('fileName'), icon: 'attach_file', color: 'bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-200 dark:border-teal-500/20' });
+            }
+
+            items.forEach(item => {
+                const span = document.createElement('span');
+                span.className = `inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-normal border ${item.color}`;
+                span.innerHTML = `<span class="material-symbols-rounded text-[13px]">${item.icon}</span><span>${item.label}</span>`;
+                badgesContainer.appendChild(span);
+            });
+        }
+
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
             const mode = urlParams.get('mode') || 'standalone';
             
-            // Populate initial metadata
             if (urlParams.has('class')) {
                 const hiddenClass = document.querySelector('input[name="classLevel"]');
                 if (hiddenClass) hiddenClass.value = urlParams.get('class');
@@ -488,66 +850,179 @@
                 if (hiddenBank) hiddenBank.value = urlParams.get('bankId');
             }
             
+            const studioMode = document.getElementById('studioMode');
+            if (studioMode) studioMode.value = mode;
+
             if (mode === 'archive') {
-                document.getElementById('studioMode').value = 'archive';
-                document.getElementById('archiveGlobalHeader').classList.remove('hidden');
+                const archiveHeader = document.getElementById('archiveGlobalHeader');
+                if (archiveHeader) archiveHeader.classList.remove('hidden');
+
                 const hiddenMeta = document.getElementById('hiddenMetaFields');
                 if (hiddenMeta) hiddenMeta.remove(); 
                 
-                if (urlParams.has('board')) document.getElementById('globalBoard').value = urlParams.get('board');
-                if (urlParams.has('year')) document.getElementById('globalYear').value = urlParams.get('year');
-                if (urlParams.has('subject')) document.getElementById('globalSubject').value = urlParams.get('subject');
-                if (urlParams.has('class')) document.getElementById('globalClass').value = urlParams.get('class');
-                if (urlParams.has('access')) document.getElementById('globalAccessType').value = urlParams.get('access');
+                const gBoard = document.getElementById('globalBoard');
+                if (gBoard && urlParams.has('board')) gBoard.value = urlParams.get('board');
+
+                const gYear = document.getElementById('globalYear');
+                if (gYear && urlParams.has('year')) gYear.value = urlParams.get('year');
+
+                if (urlParams.has('subject')) selectSystemOption('globalSubject', urlParams.get('subject'), urlParams.get('subject'));
+                if (urlParams.has('class')) selectSystemOption('globalClass', urlParams.get('class'), `Class ${urlParams.get('class')}`);
+
+                const gAccess = document.getElementById('globalAccessType');
+                if (gAccess && urlParams.has('access')) gAccess.value = urlParams.get('access');
             } else {
-                document.getElementById('studioMode').value = 'standalone';
                 const globalHeader = document.getElementById('archiveGlobalHeader');
                 if (globalHeader) globalHeader.remove();
                 
-                if (urlParams.has('board')) document.getElementById('hiddenBoard').value = urlParams.get('board');
-                if (urlParams.has('year')) document.getElementById('hiddenYear').value = urlParams.get('year');
-                if (urlParams.has('subject')) document.getElementById('hiddenSubject').value = urlParams.get('subject');
-                if (urlParams.has('class')) document.getElementById('hiddenClass').value = urlParams.get('class');
-                if (urlParams.has('access')) document.getElementById('hiddenAccessType').value = urlParams.get('access');
+                const hBoard = document.getElementById('hiddenBoard');
+                if (hBoard && urlParams.has('board')) hBoard.value = urlParams.get('board');
+
+                const hYear = document.getElementById('hiddenYear');
+                if (hYear && urlParams.has('year')) hYear.value = urlParams.get('year');
+
+                const hSubject = document.getElementById('hiddenSubject');
+                if (hSubject && urlParams.has('subject')) hSubject.value = urlParams.get('subject');
+
+                const hClass = document.getElementById('hiddenClass');
+                if (hClass && urlParams.has('class')) hClass.value = urlParams.get('class');
+
+                const hAccess = document.getElementById('hiddenAccessType');
+                if (hAccess && urlParams.has('access')) hAccess.value = urlParams.get('access');
             }
 
-            // Attempt to restore draft from localStorage if available
-            const restored = restoreStudioDraft();
+            if (urlParams.has('type')) {
+                selectSystemOption('bulkAddType', urlParams.get('type'), urlParams.get('type'));
+            }
+
+            renderMetadataBadges(urlParams);
+
+            if (urlParams.has('fileUrl')) {
+                const fUrl = urlParams.get('fileUrl');
+                const fName = urlParams.get('fileName') || 'Paper Attachment';
+                const gFile = document.getElementById('globalFileUrl');
+                if (gFile) gFile.value = fUrl;
+                const hFile = document.getElementById('hiddenFileUrl');
+                if (hFile) hFile.value = fUrl;
+                const label = document.getElementById('fileNameLabel');
+                if (label) {
+                    label.textContent = fName;
+                    label.classList.add('text-primary');
+                }
+            }
+
+            const isFresh = urlParams.get('fresh') === 'true' || urlParams.has('count') || urlParams.has('slots');
+            let restored = false;
+            if (!isFresh) {
+                restored = restoreStudioDraft();
+            } else {
+                clearStudioDraft();
+            }
+
             if (!restored) {
-                // If no saved draft, add initial default row
-                addQuestionRows(urlParams.get('count') || 1, urlParams.get('type') || 'MCQ');
+                const slotsParam = urlParams.get('slots');
+                if (slotsParam) {
+                    const pairs = slotsParam.split(',');
+                    let totalSlotsAdded = 0;
+                    pairs.forEach(pair => {
+                        const [t, cStr] = pair.split(':');
+                        const c = parseInt(cStr) || 0;
+                        if (c > 0 && t) {
+                            addQuestionRows(c, t);
+                            totalSlotsAdded += c;
+                        }
+                    });
+                    if (totalSlotsAdded === 0) {
+                        addQuestionRows(1, 'MCQ');
+                    }
+                } else {
+                    const initialCount = parseInt(urlParams.get('count')) || 1;
+                    const initialType = urlParams.get('type') || 'MCQ';
+                    addQuestionRows(initialCount, initialType);
+                }
             }
 
-            // Attach auto-save listener to form inputs
             const form = document.querySelector('form');
             if (form) {
                 form.addEventListener('input', saveStudioDraft);
                 form.addEventListener('change', saveStudioDraft);
                 form.addEventListener('submit', () => {
+                    document.querySelectorAll('.question-row').forEach(row => {
+                        const typeHidden = row.querySelector('input[name="qType[]"]');
+                        if (typeHidden && typeHidden.value === 'Comprehension') {
+                            const ctx = row.querySelector('.comprehension-area textarea[name="qContext[]"]');
+                            const q1 = row.querySelector('.comprehension-area textarea[name="qSubQ1[]"]');
+                            const textInput = row.querySelector('.standard-question-block textarea[name="qText[]"]');
+                            if (textInput) {
+                                textInput.value = (ctx && ctx.value.trim()) || (q1 && q1.value.trim()) || 'Comprehension Stimulus';
+                            }
+                        }
+                    });
                     clearStudioDraft();
                 });
             }
         };
 
+        function changeRowType(itemEl, type) {
+            const row = itemEl.closest('.question-row');
+            if (row) {
+                toggleTypeUI(row, type);
+                closeAllSystemDropdowns();
+            }
+        }
+        window.changeRowType = changeRowType;
+
+        function setComprehensionRequired(row, isRequired) {
+            const ctx = row.querySelector('.comprehension-area textarea[name="qContext[]"]');
+            const q1 = row.querySelector('.comprehension-area textarea[name="qSubQ1[]"]');
+            const a1 = row.querySelector('.comprehension-area textarea[name="qSubA1[]"]');
+            const q2 = row.querySelector('.comprehension-area textarea[name="qSubQ2[]"]');
+            const a2 = row.querySelector('.comprehension-area textarea[name="qSubA2[]"]');
+            if (ctx) ctx.required = isRequired;
+            if (q1) q1.required = isRequired;
+            if (a1) a1.required = isRequired;
+            if (q2) q2.required = isRequired;
+            if (a2) a2.required = isRequired;
+        }
+
         function toggleTypeUI(row, type, preserveCustomMarks = false) {
             const mcq = row.querySelector('.mcq-area');
             const answer = row.querySelector('.answer-area');
+            const comp = row.querySelector('.comprehension-area');
+            const stdQ = row.querySelector('.standard-question-block');
             const typeLabel = row.querySelector('.q-type-label');
             const marksInput = row.querySelector('input[name="qMarks[]"]');
+            const textInput = row.querySelector('.standard-question-block textarea[name="qText[]"]');
             
-            typeLabel.innerText = type;
-            row.querySelector('input[name="qType[]"]').value = type;
+            if (typeLabel) typeLabel.innerText = type;
+            const qTypeHidden = row.querySelector('input[name="qType[]"]');
+            if (qTypeHidden) qTypeHidden.value = type;
 
             if (!preserveCustomMarks && marksInput) {
                 marksInput.value = getDefaultMarks(type);
             }
 
-            if(type === 'MCQ') {
-                mcq.classList.remove('hidden');
-                answer.classList.add('hidden');
+            if (type === 'MCQ') {
+                if (mcq) mcq.classList.remove('hidden');
+                if (answer) answer.classList.add('hidden');
+                if (comp) comp.classList.add('hidden');
+                if (stdQ) stdQ.classList.remove('hidden');
+                if (textInput) textInput.required = true;
+                setComprehensionRequired(row, false);
+            } else if (type === 'Comprehension') {
+                if (mcq) mcq.classList.add('hidden');
+                if (answer) answer.classList.add('hidden');
+                if (comp) comp.classList.remove('hidden');
+                if (stdQ) stdQ.classList.add('hidden');
+                if (textInput) textInput.required = false;
+                setComprehensionRequired(row, true);
             } else {
-                mcq.classList.add('hidden');
-                answer.classList.remove('hidden');
+                if (mcq) mcq.classList.add('hidden');
+                if (answer) answer.classList.remove('hidden');
+                if (comp) comp.classList.add('hidden');
+                if (stdQ) stdQ.classList.remove('hidden');
+                if (textInput) textInput.required = true;
+                setComprehensionRequired(row, false);
             }
             saveStudioDraft();
         }
@@ -555,20 +1030,35 @@
         function addQuestionRows(count = null, type = null) {
             const container = document.getElementById('questionsContainer');
             const template = document.getElementById('questionTemplate');
+            if (!container || !template) return;
+
             const urlParams = new URLSearchParams(window.location.search);
             const mode = urlParams.get('mode') || 'standalone';
 
             const num = count || parseInt(document.getElementById('bulkAddCount').value) || 1;
-            const qType = type || document.getElementById('bulkAddType').value;
+            const qType = type || (document.getElementById('bulkAddType') ? document.getElementById('bulkAddType').value : 'MCQ');
+
+            const defaultBoard = urlParams.get('board') || '';
+            const defaultYear = urlParams.get('year') || '';
+            const defaultTopic = urlParams.get('topic') || '';
 
             for (let i = 0; i < num; i++) {
                 const clone = template.content.cloneNode(true);
                 const row = clone.querySelector('.question-row');
                 
-                // Set type
                 toggleTypeUI(row, qType);
                 
-                // Handle Archive Mode specifics for individual rows
+                const topicInput = row.querySelector('input[name="qTopic[]"]');
+                if (topicInput && defaultTopic) topicInput.value = defaultTopic;
+
+                if (mode !== 'archive') {
+                    const boardInput = row.querySelector('input[name="qBoard[]"]');
+                    if (boardInput && defaultBoard && !boardInput.value) boardInput.value = defaultBoard;
+
+                    const yearInput = row.querySelector('input[name="qYear[]"]');
+                    if (yearInput && defaultYear && !yearInput.value) yearInput.value = defaultYear;
+                }
+
                 if (mode === 'archive') {
                     const indMeta = row.querySelector('.individual-meta');
                     if (indMeta) indMeta.classList.add('hidden');
@@ -581,15 +1071,25 @@
         }
 
         function removeRow(btn) {
-            btn.closest('.question-row').remove();
-            updateIndices();
-            saveStudioDraft();
+            const row = btn.closest('.question-row');
+            if (row) {
+                row.remove();
+                updateIndices();
+                saveStudioDraft();
+            }
         }
 
         function updateIndices() {
-            document.querySelectorAll('.question-row').forEach((row, i) => {
-                row.querySelector('.q-index').innerText = i + 1;
+            const rows = document.querySelectorAll('.question-row');
+            rows.forEach((row, i) => {
+                const indexSpan = row.querySelector('.q-index');
+                if (indexSpan) indexSpan.innerText = i + 1;
             });
+
+            const countBadge = document.getElementById('questionCountBadge');
+            if (countBadge) {
+                countBadge.innerText = `${rows.length} ${rows.length === 1 ? 'question' : 'questions'}`;
+            }
         }
     </script>
 </body>

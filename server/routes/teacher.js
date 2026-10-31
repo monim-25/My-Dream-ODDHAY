@@ -3090,7 +3090,7 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
             return res.status(403).send('Unauthorized');
         }
 
-        const { questionIds, texts, correctAnswers, correctIndices, answers, explanations, marks } = req.body;
+        const { questionIds, texts, correctAnswers, correctIndices, answers, explanations, marks, contexts, q1s, a1s, s1s, q2s, a2s, s2s } = req.body;
         if (!questionIds || !Array.isArray(questionIds)) {
             return res.redirect(`/teacher/edit-question-bank/${req.params.id}?error=No questions to update`);
         }
@@ -3101,6 +3101,23 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
             const updateObj = {};
 
             if (text) updateObj.questionText = text;
+
+            if (contexts && contexts[i] !== undefined) {
+                updateObj.context = contexts[i];
+                if (!updateObj.questionText) updateObj.questionText = contexts[i];
+            }
+            if (q1s && q1s[i] !== undefined) updateObj.q1 = q1s[i];
+            if (a1s && a1s[i] !== undefined) updateObj.a1 = a1s[i];
+            if (s1s && s1s[i] !== undefined) {
+                updateObj.s1 = s1s[i];
+                updateObj.solution1 = s1s[i];
+            }
+            if (q2s && q2s[i] !== undefined) updateObj.q2 = q2s[i];
+            if (a2s && a2s[i] !== undefined) updateObj.a2 = a2s[i];
+            if (s2s && s2s[i] !== undefined) {
+                updateObj.s2 = s2s[i];
+                updateObj.solution2 = s2s[i];
+            }
 
             if (explanations && explanations[i] !== undefined) {
                 updateObj.explanation = (explanations[i] || '').trim();
@@ -3299,6 +3316,21 @@ router.get('/add-question', teacherProtect, async (req, res) => {
     } catch (err) { res.status(500).send('Error loading page'); }
 });
 
+router.post('/upload-paper-file', teacherProtect, (req, res, next) => {
+    const upload = router.upload;
+    if (upload) upload.single('file')(req, res, next);
+    else next();
+}, async (req, res) => {
+    try {
+        if (!req.file) return res.json({ success: false, error: 'No file uploaded' });
+        const fileUrl = await processUploadedFile(req.file, 'questions');
+        res.json({ success: true, fileUrl, originalName: req.file.originalname });
+    } catch (err) {
+        console.error('Paper file upload error:', err);
+        res.status(500).json({ success: false, error: 'File upload failed' });
+    }
+});
+
 router.post('/add-question-full', teacherProtect, (req, res, next) => {
     const upload = router.upload;
     if (upload) upload.single('file')(req, res, next);
@@ -3317,6 +3349,15 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const qBoards    = [].concat(body['qBoard[]']    || body.qBoard    || []);
         const qYears     = [].concat(body['qYear[]']     || body.qYear     || []);
         const qMarks     = [].concat(body['qMarks[]']    || body.qMarks    || []);
+
+        // Comprehension specific fields
+        const qContexts  = [].concat(body['qContext[]']  || body.qContext  || []);
+        const qSubQ1s    = [].concat(body['qSubQ1[]']    || body.qSubQ1    || body['q1[]'] || body.q1 || []);
+        const qSubA1s    = [].concat(body['qSubA1[]']    || body.qSubA1    || body['a1[]'] || body.a1 || []);
+        const qSubS1s    = [].concat(body['qSubS1[]']    || body.qSubS1    || body['s1[]'] || body.s1 || []);
+        const qSubQ2s    = [].concat(body['qSubQ2[]']    || body.qSubQ2    || body['q2[]'] || body.q2 || []);
+        const qSubA2s    = [].concat(body['qSubA2[]']    || body.qSubA2    || body['a2[]'] || body.a2 || []);
+        const qSubS2s    = [].concat(body['qSubS2[]']    || body.qSubS2    || body['s2[]'] || body.s2 || []);
 
         // qOptions[] comes as groups of 4 per question
         const allOptions = [].concat(body['qOptions[]'] || body.qOptions || []);
@@ -3351,7 +3392,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             const boardYear = [globalBoard, globalYear].filter(Boolean).join(' ');
             const autoTitle = body.title || `${globalSubject} - ${boardYear || 'Board Exam'}`.trim();
 
-            const fileUrl = req.file ? await processUploadedFile(req.file, 'questions') : null;
+            const fileUrl = req.file ? await processUploadedFile(req.file, 'questions') : (body.fileUrl || null);
             const newBank = await new QuestionBank({
                 title: autoTitle,
                 topic: globalTopic || '',
@@ -3374,16 +3415,42 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const questions = qTexts.map((text, i) => {
             const type = qTypes[i] || 'MCQ';
             const isMCQ = type === 'MCQ';
+            const isComprehension = type === 'Comprehension';
             const opts = isMCQ ? allOptions.slice(i * optionsPerQ, i * optionsPerQ + optionsPerQ) : [];
 
+            const contextVal = (qContexts[i] || '').trim();
+            const q1Val = (qSubQ1s[i] || '').trim();
+            const a1Val = (qSubA1s[i] || '').trim();
+            const s1Val = (qSubS1s[i] || '').trim();
+            const q2Val = (qSubQ2s[i] || '').trim();
+            const a2Val = (qSubA2s[i] || '').trim();
+            const s2Val = (qSubS2s[i] || '').trim();
+
+            const questionTextFinal = isComprehension ? (contextVal || text) : text;
+            const explanationFinal = isComprehension 
+                ? ([s1Val && `1. ${s1Val}`, s2Val && `2. ${s2Val}`].filter(Boolean).join('\n') || qExplains[i] || '')
+                : (qExplains[i] || '');
+            const answerFinal = isComprehension
+                ? ([a1Val && `1. ${a1Val}`, a2Val && `2. ${a2Val}`].filter(Boolean).join('\n') || '')
+                : (qAnswers[i] || '');
+
             return {
-                questionText: text,
+                questionText: questionTextFinal,
                 questionType: type,
                 options: opts,
                 correctAnswerIndex: isMCQ ? parseInt(qCorrects[i] || 0) : undefined,
-                correctAnswer: !isMCQ ? (qAnswers[i] || '') : undefined,
-                explanation: qExplains[i] || '',
-                marks: parseInt(qMarks[i] || 1) || 1,
+                correctAnswer: isMCQ ? undefined : answerFinal,
+                explanation: explanationFinal,
+                context: isComprehension ? contextVal : '',
+                q1: isComprehension ? q1Val : '',
+                a1: isComprehension ? a1Val : '',
+                s1: isComprehension ? s1Val : '',
+                solution1: isComprehension ? s1Val : '',
+                q2: isComprehension ? q2Val : '',
+                a2: isComprehension ? a2Val : '',
+                s2: isComprehension ? s2Val : '',
+                solution2: isComprehension ? s2Val : '',
+                marks: parseInt(qMarks[i] || (isComprehension ? 10 : 1)) || (isComprehension ? 10 : 1),
                 board:    mode === 'archive' ? globalBoard  : (qBoards[i] || globalBoard || 'General Board'),
                 year:     mode === 'archive' ? globalYear   : (qYears[i]  || globalYear  || ''),
                 subject:  mode === 'archive' ? globalSubject : (body.qSubject?.[i] || globalSubject || 'General'),
@@ -3419,7 +3486,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
 router.post('/edit-question/:id', teacherProtect, async (req, res) => {
     try {
         await connectDB();
-        const { questionText, questionType, options, correctAnswerIndex, correctAnswer, explanation, board, year, subject, classLevel, accessType } = req.body;
+        const { questionText, questionType, options, correctAnswerIndex, correctAnswer, explanation, board, year, subject, classLevel, accessType, context, q1, q2, a1, a2, s1, s2, solution1, solution2 } = req.body;
         const q = await Question.findById(req.params.id);
         if (!q) return res.status(404).send('Not found');
         if (q.addedBy.toString() !== req.session.user._id.toString()) return res.status(403).send('Unauthorized');
@@ -3433,6 +3500,18 @@ router.post('/edit-question/:id', teacherProtect, async (req, res) => {
         if (questionType === 'MCQ') {
             updateData.options = options;
             updateData.correctAnswerIndex = parseInt(correctAnswerIndex) || 0;
+        } else if (questionType === 'Comprehension') {
+            if (context !== undefined) updateData.context = context;
+            if (q1 !== undefined) updateData.q1 = q1;
+            if (q2 !== undefined) updateData.q2 = q2;
+            if (a1 !== undefined) updateData.a1 = a1;
+            if (a2 !== undefined) updateData.a2 = a2;
+            const sol1 = s1 || solution1 || '';
+            const sol2 = s2 || solution2 || '';
+            updateData.s1 = sol1;
+            updateData.solution1 = sol1;
+            updateData.s2 = sol2;
+            updateData.solution2 = sol2;
         }
 
         const updated = await Question.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('addedBy', 'name profileImage');
