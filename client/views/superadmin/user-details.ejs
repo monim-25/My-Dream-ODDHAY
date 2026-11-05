@@ -179,10 +179,13 @@
                                     </div>
 
 
-                                    <% if (targetUser.teachingSubject) { %>
-                                    <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-fuchsia-200 dark:border-fuchsia-500/30 bg-fuchsia-50 dark:bg-fuchsia-500/10 text-[11px] font-semibold text-fuchsia-700 dark:text-fuchsia-300">
+                                    <% if (['teacher', 'admin', 'superadmin'].includes(targetUser.role)) { %>
+                                    <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-fuchsia-200 dark:border-fuchsia-500/30 bg-fuchsia-50 dark:bg-fuchsia-500/10 text-[11px] font-semibold text-fuchsia-700 dark:text-fuchsia-300">
                                         <span class="material-symbols-rounded text-[13px] text-fuchsia-500">menu_book</span>
-                                        Subject: <%= targetUser.teachingSubject %>
+                                        <span>Teaching: <%= targetUser.classLevel ? targetUser.classLevel + ' • ' : '' %><%= targetUser.teachingSubject || 'No Subject Assigned' %></span>
+                                        <button type="button" onclick="editTeacherAcademicScope('<%= targetUser._id %>', '<%= targetUser.classLevel || '' %>', '<%= targetUser.teachingSubject || '' %>')" class="size-5 rounded hover:bg-fuchsia-200/50 dark:hover:bg-fuchsia-900/50 flex items-center justify-center text-fuchsia-600 transition-colors ml-1" title="Assign / Edit Teacher Subject & Class">
+                                            <span class="material-symbols-rounded text-xs">edit</span>
+                                        </button>
                                     </div>
                                     <% } %>
                                 </div>
@@ -901,6 +904,55 @@
                         updateUserStatus('active', null);
                     }
                 });
+            }
+        }
+
+        async function editTeacherAcademicScope(userId, currentClass, currentSubject) {
+            const { value: formValues } = await Swal.fire({
+                title: '<p class="text-[15px] font-black tracking-tight">Assign Teacher Subject & Class</p>',
+                html: `
+                    <div class="space-y-3 text-left">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Teaching Class</label>
+                            <input id="swalClassLevel" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold outline-none focus:border-primary" value="${currentClass || ''}" placeholder="e.g. Class 9, Class 10">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1">Teaching Subject(s)</label>
+                            <input id="swalTeachingSubject" class="w-full px-3 py-2 border rounded-lg text-xs font-semibold outline-none focus:border-primary" value="${currentSubject || ''}" placeholder="e.g. Bangla, Physics (comma separated)">
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'Save Assignment',
+                confirmButtonColor: '#137fec',
+                preConfirm: () => {
+                    return {
+                        classLevel: document.getElementById('swalClassLevel').value,
+                        teachingSubject: document.getElementById('swalTeachingSubject').value
+                    };
+                }
+            });
+
+            if (formValues) {
+                try {
+                    Swal.fire({ title: 'Saving...', didOpen: () => Swal.showLoading() });
+                    const apiBase = window.location.pathname.startsWith('/admin') ? '/admin' : '/superadmin';
+                    const res = await fetch(`${apiBase}/users/${userId}/update`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formValues)
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        await Swal.fire({ icon: 'success', title: 'Saved!', text: data.message || 'Teacher scope updated successfully', timer: 1200, showConfirmButton: false });
+                        window.location.reload();
+                    } else {
+                        Swal.fire('Error', data.error || 'Failed to update', 'error');
+                    }
+                } catch(err) {
+                    Swal.fire('Error', err.message || 'Network error', 'error');
+                }
             }
         }
 

@@ -89,7 +89,7 @@
                             / স্তর</label>
                         <%
                             const defaultClassesList = [
-                                'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12', 'Admission', 'Skill Development'
+                                'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'
                             ];
                             let renderedClasses = [];
                             const sourceList = (typeof academicClasses !== 'undefined' && Array.isArray(academicClasses) && academicClasses.length > 0)
@@ -100,6 +100,8 @@
                             if (sourceList.length > 0) {
                                 renderedClasses = sourceList.map(c => typeof c === 'object' && c ? (c.name || '') : String(c)).filter(Boolean);
                             }
+                            // Filter out Admission, Job, Skill development
+                            renderedClasses = renderedClasses.filter(c => !c.toLowerCase().includes('admission') && !c.toLowerCase().includes('job') && !c.toLowerCase().includes('skill'));
                             if (renderedClasses.length === 0) {
                                 renderedClasses = defaultClassesList;
                             }
@@ -117,6 +119,24 @@
                                 <span class="material-symbols-outlined text-2xl">unfold_more</span>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Stream / Group selection for SSC (9-10) and HSC (11-12) -->
+                    <div id="stream-group" class="group transition-all duration-300">
+                        <label
+                            class="block text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2">বিভাগ / গ্রুপ</label>
+                        <div class="relative">
+                            <select name="group" id="group-select"
+                                class="w-full px-6 pr-12 h-14 rounded-2xl bg-slate-50 dark:bg-slate-900 border-2 border-slate-200/60 dark:border-slate-800 focus:border-primary focus:bg-white dark:focus:bg-slate-900 transition-all font-bold text-base text-slate-800 dark:text-slate-100 shadow-inner appearance-none cursor-pointer">
+                                <option value="Science" class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-semibold py-2">বিজ্ঞান (Science)</option>
+                                <option value="Commerce" class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-semibold py-2">ব্যবসায় শিক্ষা (Commerce)</option>
+                                <option value="Humanities" class="bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 font-semibold py-2">মানবিক (Humanities)</option>
+                            </select>
+                            <div class="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 flex items-center justify-center text-slate-400 dark:text-slate-500">
+                                <span class="material-symbols-outlined text-2xl">unfold_more</span>
+                            </div>
+                        </div>
+                    </div>
                     </div>
                 </div>
 
@@ -313,13 +333,36 @@
             const classGroup = document.getElementById('class-group');
             const classSelect = document.getElementById('class-select');
 
+            const streamGroup = document.getElementById('stream-group');
+            const groupSelect = document.getElementById('group-select');
+
+            function updateGroupVisibility() {
+                const val = (classSelect?.value || '').toLowerCase();
+                const hasGroup = val.includes('9') || val.includes('10') || val.includes('11') || val.includes('12') || val.includes('ssc') || val.includes('hsc');
+                const isParent = Array.from(roleInputs).some(r => r.checked && r.value === 'parent');
+                if (streamGroup) {
+                    streamGroup.classList.toggle('hidden', !hasGroup || isParent);
+                }
+                if (groupSelect && (!hasGroup || isParent)) {
+                    groupSelect.disabled = true;
+                } else if (groupSelect) {
+                    groupSelect.disabled = false;
+                }
+            }
+
+            if (classSelect) {
+                classSelect.addEventListener('change', updateGroupVisibility);
+            }
+
             roleInputs.forEach(input => {
                 input.onchange = () => {
                     const isParent = input.value === 'parent';
                     if (classGroup) classGroup.classList.toggle('hidden', isParent);
                     if (classSelect) classSelect.disabled = isParent;
+                    updateGroupVisibility();
                 };
             });
+            updateGroupVisibility();
 
             form.onsubmit = async (e) => {
                 e.preventDefault();

@@ -7,7 +7,12 @@ const userSchema = new mongoose.Schema({
     password: { type: String, required: true },
     role: { type: String, enum: ['student', 'parent', 'guardian', 'admin', 'teacher', 'superadmin', 'content_manager', 'support', 'moderator'], default: 'student' },
     classLevel: { type: String }, // e.g., Class 6, Class 10 (for students) or teaching class (for teachers)
+    group: { type: String, enum: ['Science', 'Commerce', 'Humanities', 'General'], default: 'General', trim: true }, // For SSC & HSC stream division
     teachingSubject: { type: String }, // Subject taught by teachers
+    teachingSubjects: [{ type: String, trim: true }], // Array of subjects taught by teachers
+    assignedClasses: [{ type: String, trim: true }], // Array of classes assigned to teachers
+    classes: [{ type: String, trim: true }], // Array of classes assigned to teachers
+    subject: { type: String, trim: true }, // Fallback subject string
     phone: { type: String, unique: true, sparse: true },
     profilePicture: { type: String },
     profileImage: { type: String },
@@ -98,7 +103,7 @@ const userSchema = new mongoose.Schema({
         ratedAt: { type: Date, default: Date.now }
     }],
     averageRating: { type: Number, default: 4.9 },
-    
+
     // Additional Detailed Info
     presentAddress: { type: String },
     permanentAddress: { type: String },

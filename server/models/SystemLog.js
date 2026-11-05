@@ -4,7 +4,8 @@ const systemLogSchema = new mongoose.Schema({
     action: {
         type: String,
         required: true,
-        enum: ['CREATE', 'UPDATE', 'DELETE', 'APPROVE', 'REJECT', 'LOGIN', 'SETTINGS_CHANGE', 'OTHER', 'FREE', 'PAID', 'SETTING']
+        uppercase: true,
+        trim: true
     },
     actionDetails: {
         type: String, // E.g., "Created course: HSC Physics"

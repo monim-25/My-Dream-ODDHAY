@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const questionSchema = new mongoose.Schema({
     subject: { type: String, required: true },
     topic: { type: String, default: '' },
-    classLevel: { type: String, required: true },
+    classLevel: { type: mongoose.Schema.Types.Mixed, required: true }, // Supports single string ('Class 10') or array (['Class 9', 'Class 10'])
     questionText: { type: String, required: true },
     options: [{ type: String }],
     correctAnswerIndex: { type: Number },

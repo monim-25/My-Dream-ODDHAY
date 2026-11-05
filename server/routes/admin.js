@@ -67,7 +67,10 @@ router.get('/quizzes', adminProtect, async (req, res) => {
             .populate('addedBy')
             .sort({ createdAt: -1 });
 
-        const subjects = [...new Set(allQuizzes.map(q => q.course ? q.course.subject : q.subject))].filter(s => s && s !== '---');
+        const subjects = [...new Set(allQuizzes.flatMap(q => {
+            const s = q.course ? q.course.subject : q.subject;
+            return Array.isArray(s) ? s : (s ? [s] : []);
+        }).filter(Boolean))].filter(s => s !== '---').sort();
 
         allQuizzes = allQuizzes.filter(quiz => {
             const isModelTest = !quiz.course;
@@ -80,17 +83,18 @@ router.get('/quizzes', adminProtect, async (req, res) => {
                 return false;
             }
 
-            const quizSubject = quiz.course ? quiz.course.subject : quiz.subject;
-            if (subjectFilter !== 'all' && quizSubject !== subjectFilter) {
+            const rawQuizSubject = quiz.course ? quiz.course.subject : quiz.subject;
+            const quizSubs = Array.isArray(rawQuizSubject) ? rawQuizSubject : (rawQuizSubject ? [rawQuizSubject] : []);
+            if (subjectFilter !== 'all' && !quizSubs.includes(subjectFilter)) {
                 return false;
             }
 
             let matchesClass = classFilter === 'all';
             if (!matchesClass) {
-                const quizClass = quiz.course ? quiz.course.classLevel : quiz.classLevel;
-                if (quizClass) {
-                    matchesClass = quizClass.includes('Class ' + classFilter) || quizClass.includes(classFilter);
-                }
+                const rawQuizClass = quiz.course ? quiz.course.classLevel : quiz.classLevel;
+                const quizClasses = Array.isArray(rawQuizClass) ? rawQuizClass : (rawQuizClass ? [rawQuizClass] : []);
+                const cfClean = classFilter.toLowerCase().replace(/^class\s*/i, '');
+                matchesClass = quizClasses.some(c => String(c).toLowerCase().replace(/^class\s*/i, '') === cfClean);
             }
             if (!matchesClass) return false;
 
@@ -501,7 +505,10 @@ router.get('/courses', adminProtect, async (req, res) => {
             ];
         }
         
-        if (classLevel && classLevel !== 'all') query.classLevel = classLevel;
+        if (classLevel && classLevel !== 'all') {
+            const cleanClass = classLevel.replace(/^class\s*/i, '').trim();
+            query.classLevel = { $in: [classLevel, `Class ${cleanClass}`, cleanClass] };
+        }
         if (subject && subject !== 'all') query.subject = subject;
         if (accessType && accessType !== 'all') query.accessType = accessType;
         if (instructor) {
@@ -533,8 +540,8 @@ router.get('/courses', adminProtect, async (req, res) => {
             totalStudents: courses.reduce((acc, c) => acc + (c.studentCount || 0), 0) // Approximation
         };
 
-        const classLevels = [...new Set(allCourses.map(c => c.classLevel).filter(Boolean))];
-        const subjects = [...new Set(allCourses.map(c => c.subject).filter(Boolean))];
+        const classLevels = [...new Set(allCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean))].sort();
+        const subjects = [...new Set(allCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean))].sort();
 
         // If filtering by instructor, fetch their info for the banner
         let filterTeacher = null;
@@ -713,7 +720,15 @@ router.post('/add-course', adminProtect, (req, res, next) => {
 }, async (req, res) => {
     try {
         await connectDB();
-        const { title, subject, category, classLevel, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, chapters, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
+        const { title, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, chapters, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
+
+        const rawClassLevel = req.body.classLevel || req.body['classLevel[]'];
+        const rawSubject = req.body.subject || req.body['subject[]'];
+        const rawCategory = req.body.category || req.body['category[]'];
+
+        const classLevelArray = Array.isArray(rawClassLevel) ? rawClassLevel.filter(Boolean) : (rawClassLevel ? [rawClassLevel] : []);
+        const subjectArray = Array.isArray(rawSubject) ? rawSubject.filter(Boolean) : (rawSubject ? [rawSubject] : []);
+        const categoryArray = Array.isArray(rawCategory) ? rawCategory.filter(Boolean) : (rawCategory ? [rawCategory] : ['Academic']);
 
         // Handle images
         const thumbnail = req.files && req.files.thumbnail ? await processUploadedFile(req.files.thumbnail[0], 'thumbnails') : null;
@@ -726,9 +741,9 @@ router.post('/add-course', adminProtect, (req, res, next) => {
 
         const newCourse = new Course({
             title,
-            subject,
-            category: category || 'Academic',
-            classLevel,
+            subject: subjectArray,
+            category: categoryArray.length ? categoryArray : ['Academic'],
+            classLevel: classLevelArray,
             accessType: accessType || 'free',
             price: price || 0,
             discountPrice: discountPrice || 0,
@@ -794,8 +809,12 @@ router.post('/edit-course/:id', adminProtect, (req, res, next) => {
 }, async (req, res) => {
     try {
         await connectDB();
-        const { title, subject, category, classLevel, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, chapters, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
+        const { title, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, chapters, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
         
+        const rawClassLevel = req.body.classLevel || req.body['classLevel[]'];
+        const rawSubject = req.body.subject || req.body['subject[]'];
+        const rawCategory = req.body.category || req.body['category[]'];
+
         const course = await Course.findById(req.params.id);
         if (!course) return res.status(404).send('Course not found');
 
@@ -816,9 +835,15 @@ router.post('/edit-course/:id', adminProtect, (req, res, next) => {
 
         // Update fields
         course.title = title;
-        course.subject = Array.isArray(subject) ? subject : (subject ? [subject] : []);
-        course.category = Array.isArray(category) ? category : (category ? [category] : []);
-        course.classLevel = Array.isArray(classLevel) ? classLevel : (classLevel ? [classLevel] : []);
+        if (rawSubject !== undefined) {
+            course.subject = Array.isArray(rawSubject) ? rawSubject.filter(Boolean) : (rawSubject ? [rawSubject] : []);
+        }
+        if (rawCategory !== undefined) {
+            course.category = Array.isArray(rawCategory) ? rawCategory.filter(Boolean) : (rawCategory ? [rawCategory] : []);
+        }
+        if (rawClassLevel !== undefined) {
+            course.classLevel = Array.isArray(rawClassLevel) ? rawClassLevel.filter(Boolean) : (rawClassLevel ? [rawClassLevel] : []);
+        }
         course.accessType = accessType || 'free';
         course.price = price || 0;
         course.discountPrice = discountPrice || 0;
@@ -2495,22 +2520,29 @@ router.get('/notes', adminProtect, async (req, res) => {
             ];
         }
         if (subjectFilter !== 'all') query.subject = subjectFilter;
-        if (classFilter !== 'all') query.classLevel = classFilter;
+        if (classFilter !== 'all') {
+            const cleanClass = classFilter.replace(/^class\s*/i, '').trim();
+            query.classLevel = { $in: [classFilter, `Class ${cleanClass}`, cleanClass] };
+        }
         if (accessFilter !== 'all') query.accessType = accessFilter;
 
         // Fetch courses for the Add Note modal dropdown
         const userCourses = await Course.find({}).select('title _id accessType subject classLevel').sort({ title: 1 }).lean();
 
-        const [notes, totalCount, statsData, totalPaidStudents] = await Promise.all([
+        const [notes, totalCount, statsData, paidCount, freeCount, totalPaidStudents] = await Promise.all([
             Note.find(query).populate('addedBy', 'name profileImage profilePicture').populate('course', 'title').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
             Note.countDocuments(query),
             Note.aggregate([
-                { $group: { _id: null, subjects: { $addToSet: '$subject' }, classes: { $addToSet: '$classLevel' }, lastUpdated: { $max: '$createdAt' }, paidCount: { $sum: { $cond: [{ $eq: ['$accessType', 'Paid'] }, 1, 0] } }, freeCount: { $sum: { $cond: [{ $eq: ['$accessType', 'Free'] }, 1, { $cond: [{ $eq: ['$accessType', 'Paid'] }, 0, 1] }] } } } }
+                { $group: { _id: null, subjects: { $addToSet: '$subject' }, rawClasses: { $addToSet: '$classLevel' }, lastUpdated: { $max: '$createdAt' } } }
             ]),
+            Note.countDocuments({ accessType: 'Paid' }),
+            Note.countDocuments({ accessType: { $ne: 'Paid' } }),
             User.countDocuments({ role: 'student', 'enrolledCourses.0': { $exists: true } })
         ]);
 
-        const stats = statsData[0] || { subjects: [], classes: [], lastUpdated: null, paidCount: 0, freeCount: 0 };
+        const rawClasses = statsData[0]?.rawClasses || [];
+        const flatClasses = [...new Set(rawClasses.flatMap(c => Array.isArray(c) ? c : [c]).filter(Boolean))].sort();
+        const flatSubjects = (statsData[0]?.subjects || []).filter(Boolean).sort();
 
         // If filtering by author, fetch their info for banner
         let filterTeacher = null;
@@ -2529,8 +2561,8 @@ router.get('/notes', adminProtect, async (req, res) => {
             userCourses: userCourses || [],
             stats: {
                 totalNotes: totalCount,
-                paidNotesCount: stats.paidCount || 0,
-                freeNotesCount: stats.freeCount || 0,
+                paidNotesCount: paidCount || 0,
+                freeNotesCount: freeCount || 0,
                 totalPaidStudents: totalPaidStudents || 0
             },
             filters: {
@@ -2543,8 +2575,8 @@ router.get('/notes', adminProtect, async (req, res) => {
                 author: authorFilter || '',
                 totalNotes: totalCount
             },
-            subjects: (stats.subjects || []).filter(Boolean).sort(),
-            classes: (stats.classes || []).filter(Boolean).sort()
+            subjects: flatSubjects,
+            classes: flatClasses
         });
     } catch (err) {
         console.error('Notes Route Error:', err);
@@ -2559,11 +2591,13 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
 }, async (req, res) => {
     await connectDB();
     if (req.session.user.role === 'superadmin') return res.status(403).send('সুপার অ্যাডমিন কন্টেন্ট যোগ করতে পারবেন না।');
-    const { title, subject, classLevel, chapter, description, accessType, course } = req.body;
+    const { title, subject, chapter, description, accessType, course } = req.body;
+    const rawClassLevel = req.body.classLevel || req.body['classLevel[]'];
+    const classLevelArray = Array.isArray(rawClassLevel) ? rawClassLevel.filter(Boolean) : (rawClassLevel ? [rawClassLevel] : []);
     const fileUrl = req.file ? await processUploadedFile(req.file, 'notes') : null;
     const mongoose = require('mongoose');
     await new Note({
-        title, subject, classLevel, chapter, description,
+        title, subject, classLevel: classLevelArray, chapter, description,
         accessType: accessType || 'Free',
         fileUrl,
         course: course && mongoose.Types.ObjectId.isValid(course) ? course : undefined,
@@ -2581,18 +2615,21 @@ router.post('/note/:id/edit', contentAdminProtect, async (req, res) => {
         if (note.addedBy.toString() !== req.session.user._id.toString() && req.session.user.role !== 'superadmin') {
             return res.status(403).send('Not authorized to edit this note');
         }
-        const { title, subject, classLevel, chapter, description, accessType, course } = req.body;
+        const { title, subject, chapter, description, accessType, course } = req.body;
+        const rawClassLevel = req.body.classLevel || req.body['classLevel[]'];
         const mongoose = require('mongoose');
         note.title = title || note.title;
         note.subject = subject || note.subject;
-        note.classLevel = classLevel || note.classLevel;
+        if (rawClassLevel !== undefined) {
+            note.classLevel = Array.isArray(rawClassLevel) ? rawClassLevel.filter(Boolean) : (rawClassLevel ? [rawClassLevel] : []);
+        }
         note.chapter = chapter || '';
         note.description = description || '';
         note.accessType = accessType || note.accessType;
         note.course = course && mongoose.Types.ObjectId.isValid(course) ? course : note.course;
         note.updatedAt = new Date();
         await note.save();
-        res.redirect(`/superadmin/note-details/${note._id}?success=Note updated`);
+        res.redirect(`/admin/note-details/${note._id}?success=Note updated`);
     } catch (err) {
         console.error('Edit Note Error:', err);
         res.status(500).send('Error editing note: ' + err.message);
@@ -2750,7 +2787,7 @@ router.get('/question-bank-approvals', contentAdminProtect, async (req, res) => 
         res.render('admin/question-bank-approvals', {
             questions: questions || [],
             user: req.session.user,
-            active: 'questions',
+            active: 'question-bank-approvals',
             stats: { pendingCount, approvedCount, rejectedCount },
             academicClasses: academicClasses || [],
             filters: {
@@ -3202,9 +3239,12 @@ router.get('/video-classes', adminProtect, async (req, res) => {
                     const matchesSearch = !search || 
                         video.title.toLowerCase().includes(search.toLowerCase()) || 
                         (course.instructor?.name || '').toLowerCase().includes(search.toLowerCase());
-                    const matchesSubject = subjectFilter === 'all' || course.subject === subjectFilter;
+                    const courseSubjects = Array.isArray(course.subject) ? course.subject : (course.subject ? [course.subject] : []);
+                    const matchesSubject = subjectFilter === 'all' || courseSubjects.includes(subjectFilter);
+                    const courseClasses = Array.isArray(course.classLevel) ? course.classLevel : (course.classLevel ? [course.classLevel] : []);
+                    const cleanClass = classFilter.replace(/^class\s*/i, '').trim();
                     const matchesClass = classFilter === 'all' || 
-                        (course.classLevel && (course.classLevel.includes('Class ' + classFilter) || course.classLevel.includes(classFilter)));
+                        courseClasses.some(cl => cl === classFilter || cl === `Class ${cleanClass}` || cl === cleanClass || (typeof cl === 'string' && cl.toLowerCase().includes(classFilter.toLowerCase())));
                     const matchesAccess = accessFilter === 'all' || course.accessType === accessFilter.toLowerCase();
                     const matchesCourse = courseFilter === 'all' || course._id.toString() === courseFilter;
 
@@ -3304,8 +3344,8 @@ router.get('/video-classes', adminProtect, async (req, res) => {
         };
 
         // Unique subjects and classes for filters
-        const subjects = [...new Set(allCourses.map(c => c.subject))].filter(Boolean).sort();
-        const classes = [...new Set(allCourses.map(c => c.classLevel))].filter(Boolean).sort();
+        const subjects = [...new Set(allCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean))].sort();
+        const classes = [...new Set(allCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean))].sort();
 
         res.render('admin/classes', {
             classes: paginatedVideos,
@@ -3899,9 +3939,13 @@ router.post('/create-role', adminOnlyProtect, async (req, res) => {
         // Validation
         if (!name || !email || !password || !role) {
             console.warn('Create Role Validation Failed:', { name: !!name, email: !!email, password: !!password, role: !!role });
+            const errMsg = 'Please fill all required fields. (Missing: ' + [!name?'Name':'', !email?'Email':'', !password?'Password':'', !role?'Role':''].filter(Boolean).join(', ') + ')';
+            if (req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+                return res.status(400).json({ success: false, error: errMsg });
+            }
             return res.render('admin/create-role', { 
                 user: req.session.user, 
-                error: 'Please fill all required fields. (Missing: ' + [!name?'Name':'', !email?'Email':'', !password?'Password':'', !role?'Role':''].filter(Boolean).join(', ') + ')', 
+                error: errMsg, 
                 success: null, 
                 active: 'create-role',
                 name, email, phone, role, status, subjects
@@ -3910,22 +3954,36 @@ router.post('/create-role', adminOnlyProtect, async (req, res) => {
 
         const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
         if (existingUser) {
+            const errMsg = 'This email is already registered.';
+            if (req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+                return res.status(400).json({ success: false, error: errMsg });
+            }
             return res.render('admin/create-role', { 
                 user: req.session.user, 
-                error: 'This email is already registered.', 
+                error: errMsg, 
                 success: null, 
                 active: 'create-role',
                 name, email, phone, role, status, subjects
             });
         }
 
-        // Format classes if multiple are selected
+        // Format classes & subjects for teacher
         let classLevelString = undefined;
+        let assignedClassesArray = [];
         if (role === 'teacher' && classes) {
-            if (Array.isArray(classes)) {
-                classLevelString = classes.map(c => 'Class ' + c).join(', ');
+            const rawClasses = Array.isArray(classes) ? classes : [classes];
+            assignedClassesArray = rawClasses.map(c => String(c).startsWith('Class') ? c : 'Class ' + c).filter(Boolean);
+            classLevelString = assignedClassesArray.join(', ');
+        }
+        let subjectsArray = [];
+        let teachingSubjectStr = '';
+        if (role === 'teacher' && subjects) {
+            if (Array.isArray(subjects)) {
+                subjectsArray = subjects.map(s => String(s || '').trim()).filter(Boolean);
+                teachingSubjectStr = subjectsArray.join(', ');
             } else {
-                classLevelString = 'Class ' + classes;
+                teachingSubjectStr = String(subjects).trim();
+                subjectsArray = teachingSubjectStr.split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
             }
         }
 
@@ -3938,11 +3996,15 @@ router.post('/create-role', adminOnlyProtect, async (req, res) => {
             status: status || 'active',
             passwordResetRequired: forcePasswordChange === 'on',
             classLevel: classLevelString,
-            subject: role === 'teacher' ? subjects : undefined
+            assignedClasses: assignedClassesArray,
+            classes: assignedClassesArray,
+            teachingSubject: teachingSubjectStr,
+            teachingSubjects: subjectsArray,
+            subject: teachingSubjectStr
         });
 
         await newUser.save();
-        await logActivity(req, 'CREATE_STAFF', `Created staff account: ${name} (${role}) with classes: ${classLevelString || 'N/A'} and subjects: ${subjects || 'N/A'}`, 'User', newUser._id);
+        await logActivity(req, 'CREATE', `Created staff account: ${name} (${role}) with classes: ${classLevelString || 'N/A'} and subjects: ${teachingSubjectStr || 'N/A'}`, 'User', newUser._id);
 
         // Send invite email if requested (Non-blocking)
         if (sendInviteEmail === 'on') {
@@ -4188,12 +4250,26 @@ router.post('/users/:id/password', userManagementProtect, async (req, res) => {
     }
 });
 
-// POST /users/:id/update - Unified update route for role, status, and password
-router.post('/users/:id/update', userManagementProtect, async (req, res) => {
+// POST /users/:id/update & /user/:id/update - Unified update route for role, status, teacher scope, and password
+const handleAdminUserUpdate = async (req, res) => {
     try {
         await connectDB();
-        const { role, status, action } = req.body;
+        const { role, status, action, classLevel, teachingSubject } = req.body;
         const updates = {};
+        if (classLevel !== undefined) {
+            const cleanCls = String(classLevel).replace(/\bclass\s+class\b/gi, 'Class').trim();
+            updates.classLevel = cleanCls;
+            const clsArray = cleanCls.split(/[,;/]+/).map(s => s.trim().replace(/\bclass\s+class\b/gi, 'Class')).filter(Boolean);
+            updates.assignedClasses = clsArray;
+            updates.classes = clsArray;
+        }
+        if (teachingSubject !== undefined) {
+            const cleanSub = String(teachingSubject).trim();
+            updates.teachingSubject = cleanSub;
+            const subArray = cleanSub.split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
+            updates.teachingSubjects = subArray;
+            updates.subject = cleanSub;
+        }
         
         const currentUser = req.session.user;
         const isMaster = currentUser.email && currentUser.email === process.env.SUPER_ADMIN_EMAIL;
@@ -4221,7 +4297,7 @@ router.post('/users/:id/update', userManagementProtect, async (req, res) => {
             user.password = newPassword;
             user.passwordResetRequired = true;
             await user.save();
-            await logActivity(req, 'RESET_PASSWORD', `Reset password for user ID: ${req.params.id}`, 'User', req.params.id);
+            await logActivity(req, 'UPDATE', `Reset password for user ID: ${req.params.id}`, 'User', req.params.id);
             
             // Send Automated Email Notification (Non-blocking)
             sendPasswordResetNotificationEmail(user.email, user.name, newPassword)
@@ -4232,17 +4308,18 @@ router.post('/users/:id/update', userManagementProtect, async (req, res) => {
 
         if (Object.keys(updates).length > 0) {
             await User.findByIdAndUpdate(req.params.id, updates);
-            const changeType = role ? 'ROLE' : 'STATUS';
-            const newValue = role || status;
-            await logActivity(req, `CHANGE_${changeType}`, `Updated ${changeType.toLowerCase()} to ${newValue} for user ID: ${req.params.id}`, 'User', req.params.id);
+            await logActivity(req, 'UPDATE', `Updated user ID: ${req.params.id} attributes (${Object.keys(updates).join(', ')})`, 'User', req.params.id);
         }
 
-        res.json({ success: true });
+        res.json({ success: true, message: 'User updated successfully' });
     } catch (err) {
         console.error('Update User Error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
-});
+};
+
+router.post('/users/:id/update', userManagementProtect, handleAdminUserUpdate);
+router.post('/user/:id/update', userManagementProtect, handleAdminUserUpdate);
 
 // POST /users/bulk - Alternative bulk action route to match frontend
 router.post('/users/bulk', userManagementProtect, async (req, res) => {
@@ -4290,105 +4367,7 @@ router.post('/users/bulk-action', userManagementProtect, async (req, res) => {
     }
 });
 
-// --- VIDEO HUB MANAGEMENT ---
 
-// Video Hub - GET
-router.get('/video-classes', adminProtect, async (req, res) => {
-    try {
-        await connectDB();
-        const { q, courseId, subject, class: classLevel, access, page = 1 } = req.query;
-        const limit = 30;
-        const skip = (parseInt(page) - 1) * limit;
-
-        // Fetch all courses
-        const courses = await Course.find({}).lean();
-
-        // Flatten all videos with context
-        let allVideos = [];
-        courses.forEach(course => {
-            if (course.chapters) {
-                course.chapters.forEach(chapter => {
-                    if (chapter.recordedClasses) {
-                        chapter.recordedClasses.forEach(video => {
-                            allVideos.push({
-                                ...video,
-                                courseId: course._id,
-                                courseTitle: course.title,
-                                chapterId: chapter._id,
-                                chapterTitle: chapter.title,
-                                subject: course.subject,
-                                classLevel: course.classLevel
-                            });
-                        });
-                    }
-                });
-            }
-        });
-
-        // Search/Filter
-        if (q) {
-            const search = q.toLowerCase().trim();
-            allVideos = allVideos.filter(v => 
-                v.title.toLowerCase().includes(search) || 
-                (v.instructor && v.instructor.toLowerCase().includes(search)) ||
-                (v.courseTitle && v.courseTitle.toLowerCase().includes(search))
-            );
-        }
-
-        if (courseId && courseId !== 'all') {
-            allVideos = allVideos.filter(v => v.courseId.toString() === courseId);
-        }
-
-        if (subject && subject !== 'all') {
-            allVideos = allVideos.filter(v => v.subject === subject);
-        }
-
-        if (classLevel && classLevel !== 'all') {
-            allVideos = allVideos.filter(v => v.classLevel == classLevel);
-        }
-
-        if (access && access !== 'all') {
-            allVideos = allVideos.filter(v => v.accessType === access);
-        }
-
-        // Stats
-        const hubStats = {
-            totalVideos: allVideos.length,
-            totalDuration: allVideos.reduce((acc, v) => {
-                const parts = (v.duration || '0:0').split(':');
-                return acc + (parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0);
-            }, 0),
-            freeCount: allVideos.filter(v => v.accessType === 'free').length,
-            premiumCount: allVideos.filter(v => v.accessType === 'paid').length
-        };
-
-        const totalMatching = allVideos.length;
-        const paginatedVideos = allVideos.slice(skip, skip + limit);
-        const subjects = [...new Set(courses.map(c => c.subject).filter(Boolean))];
-
-        res.render('admin/classes', {
-            user: req.session.user,
-            classes: paginatedVideos,
-            courses,
-            subjects,
-            hubStats,
-            filters: {
-                q: q || '',
-                courseId: courseId || 'all',
-                subject: subject || 'all',
-                class: classLevel || 'all',
-                access: access || 'all',
-                page: parseInt(page),
-                totalPages: Math.ceil(totalMatching / limit) || 1,
-                totalMatching
-            },
-            active: 'classes'
-        });
-    } catch (err) {
-        console.error('Error loading video hub:', err);
-        res.status(500).send('Error loading video hub: ' + err.message);
-    }
-});
 router.get('/deploy-video', adminProtect, async (req, res) => {
     try {
         await connectDB();
@@ -5045,5 +5024,244 @@ router.post('/ai-knowledge/:id/toggle', adminProtect, async (req, res) => {
     }
 });
 
+// ==========================================
+// ACADEMIC SETUP ROUTE (Admin & Superadmin)
+// ==========================================
+// Soft delete / archive helper
+const handleAdminAcademicArchive = async (req, res) => {
+    try {
+        await connectDB();
+        const AcademicClass = require('../models/AcademicClass');
+        const mongoose = require('mongoose');
+        const rawParam = (req.params && req.params.id) ? decodeURIComponent(req.params.id).trim() : '';
+        const bodyId = (req.body && req.body.id) ? String(req.body.id).trim() : '';
+        const bodyName = (req.body && req.body.name) ? String(req.body.name).trim() : '';
+        const queryName = req.query && req.query.name ? String(req.query.name).trim() : '';
+        const targetId = bodyId || (mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+        const targetName = bodyName || queryName || (!mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+
+        let updated = null;
+
+        if (targetId && mongoose.Types.ObjectId.isValid(targetId)) {
+            updated = await AcademicClass.findByIdAndUpdate(targetId, { $set: { isArchived: true } }, { new: true });
+        }
+
+        if (!updated && targetName) {
+            const escaped = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            updated = await AcademicClass.findOneAndUpdate(
+                { name: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+                { $set: { isArchived: true } },
+                { new: true }
+            );
+        }
+
+        if (req.app.get('clearAcademicCache')) req.app.get('clearAcademicCache')();
+
+        if (!updated) {
+            return res.status(404).json({ success: false, error: 'Class not found to archive' });
+        }
+
+        res.json({ success: true, message: `"${updated.name}" moved to History Bucket (Archived) successfully`, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Restore helper
+const handleAdminAcademicRestore = async (req, res) => {
+    try {
+        await connectDB();
+        const AcademicClass = require('../models/AcademicClass');
+        const mongoose = require('mongoose');
+        const rawParam = (req.params && req.params.id) ? decodeURIComponent(req.params.id).trim() : '';
+        const bodyId = (req.body && req.body.id) ? String(req.body.id).trim() : '';
+        const bodyName = (req.body && req.body.name) ? String(req.body.name).trim() : '';
+        const queryName = req.query && req.query.name ? String(req.query.name).trim() : '';
+        const targetId = bodyId || (mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+        const targetName = bodyName || queryName || (!mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+
+        let updated = null;
+
+        if (targetId && mongoose.Types.ObjectId.isValid(targetId)) {
+            updated = await AcademicClass.findByIdAndUpdate(targetId, { $set: { isArchived: false } }, { new: true });
+        }
+
+        if (!updated && targetName) {
+            const escaped = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            updated = await AcademicClass.findOneAndUpdate(
+                { name: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+                { $set: { isArchived: false } },
+                { new: true }
+            );
+        }
+
+        if (req.app.get('clearAcademicCache')) req.app.get('clearAcademicCache')();
+
+        if (!updated) {
+            return res.status(404).json({ success: false, error: 'Class not found to restore' });
+        }
+
+        res.json({ success: true, message: `"${updated.name}" restored from history bucket successfully`, data: updated });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Permanent delete helper
+const handleAdminAcademicPermanent = async (req, res) => {
+    try {
+        await connectDB();
+        const AcademicClass = require('../models/AcademicClass');
+        const mongoose = require('mongoose');
+        const rawParam = (req.params && req.params.id) ? decodeURIComponent(req.params.id).trim() : '';
+        const bodyId = (req.body && req.body.id) ? String(req.body.id).trim() : '';
+        const bodyName = (req.body && req.body.name) ? String(req.body.name).trim() : '';
+        const queryName = req.query && req.query.name ? String(req.query.name).trim() : '';
+        const targetId = bodyId || (mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+        const targetName = bodyName || queryName || (!mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+
+        let deleted = null;
+        if (targetId && mongoose.Types.ObjectId.isValid(targetId)) {
+            deleted = await AcademicClass.findByIdAndDelete(targetId);
+        }
+        if (!deleted && targetName) {
+            const escaped = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            deleted = await AcademicClass.findOneAndDelete({ name: { $regex: new RegExp(`^${escaped}$`, 'i') } });
+        }
+
+        if (req.app.get('clearAcademicCache')) req.app.get('clearAcademicCache')();
+        res.json({ success: true, message: 'Class permanently deleted from database' });
+    } catch (error) {
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+router.get('/academic-setup', adminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AcademicClass = require('../models/AcademicClass');
+        const activeClasses = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
+        const archivedClasses = await AcademicClass.find({ isArchived: { $in: [true, 'true', 1] } }).sort({ updatedAt: -1, order: 1 }).lean();
+        res.render('superadmin/academic-setup', { 
+            active: 'academic-setup',
+            classes: activeClasses || [],
+            archivedClasses: archivedClasses || [],
+            user: req.session.user || { name: 'Admin', role: 'admin' }
+        });
+    } catch (error) {
+        console.error('Academic setup render error:', error);
+        res.status(500).send('Server Error');
+    }
+});
+
+router.post('/academic-setup', adminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AcademicClass = require('../models/AcademicClass');
+
+        if (req.body && (req.body.action === 'archive' || req.query.action === 'archive' || req.body.isArchived === true || req.body.archiveId)) {
+            return handleAdminAcademicArchive(req, res);
+        }
+        if (req.body && (req.body.action === 'restore' || req.query.action === 'restore' || req.body.restoreId)) {
+            return handleAdminAcademicRestore(req, res);
+        }
+        if (req.body && (req.body.action === 'permanent' || req.query.action === 'permanent' || req.body.deleteId)) {
+            return handleAdminAcademicPermanent(req, res);
+        }
+
+        const { classData } = req.body;
+        if (!classData || !Array.isArray(classData)) return res.status(400).json({ error: 'Invalid data' });
+        
+        const splitTokens = (val) => {
+            if (!val) return [];
+            if (Array.isArray(val)) return val.map(s => String(s || '').trim()).filter(Boolean);
+            return String(val).split(',').map(s => s.trim()).filter(Boolean);
+        };
+
+        for (const cls of classData) {
+            if (!cls.name || !cls.name.trim()) continue;
+            const name = cls.name.trim();
+            const order = parseInt(cls.order, 10) || 0;
+            const hasGroups = Boolean(cls.hasGroups);
+            const commonSubjects = splitTokens(cls.commonSubjects);
+
+            let groups = [];
+            if (hasGroups && Array.isArray(cls.groups)) {
+                groups = cls.groups.map(g => ({
+                    name: String(g.name || '').trim(),
+                    subjects: splitTokens(g.subjects)
+                })).filter(g => g.name);
+            }
+
+            let subjectsArray = splitTokens(cls.subjects);
+            if (hasGroups && groups.length > 0) {
+                const allGroupSubs = groups.flatMap(g => g.subjects);
+                subjectsArray = Array.from(new Set([...commonSubjects, ...subjectsArray, ...allGroupSubs]));
+            }
+
+            const updatePayload = {
+                name,
+                hasGroups,
+                commonSubjects,
+                groups,
+                subjects: subjectsArray,
+                isArchived: false,
+                order
+            };
+
+            const mongoose = require('mongoose');
+            if (cls._id && mongoose.Types.ObjectId.isValid(cls._id)) {
+                await AcademicClass.findByIdAndUpdate(cls._id, updatePayload);
+            } else {
+                await AcademicClass.findOneAndUpdate({ name }, { $set: updatePayload }, { upsert: true, new: true });
+            }
+        }
+        if (req.app.get('clearAcademicCache')) req.app.get('clearAcademicCache')();
+        res.json({ message: 'Academic setup updated successfully' });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+router.post('/academic-setup/archive', adminProtect, handleAdminAcademicArchive);
+router.post('/academic-setup/:id/archive', adminProtect, handleAdminAcademicArchive);
+router.delete('/academic-setup/:id', adminProtect, handleAdminAcademicArchive);
+router.delete('/academic-setup/:id/archive', adminProtect, handleAdminAcademicArchive);
+
+router.post('/academic-setup/restore', adminProtect, handleAdminAcademicRestore);
+router.post('/academic-setup/:id/restore', adminProtect, handleAdminAcademicRestore);
+
+router.post('/academic-setup/permanent', adminProtect, handleAdminAcademicPermanent);
+router.post('/academic-setup/:id/permanent', adminProtect, handleAdminAcademicPermanent);
+router.delete('/academic-setup/:id/permanent', adminProtect, handleAdminAcademicPermanent);
+
+// ==========================================
+// SYLLABUS & TOPIC SYSTEM - ADMIN ROUTES
+// ==========================================
+const topicController = require('../controllers/topicController');
+
+router.get('/topics', adminProtect, topicController.getTopicsPage);
+router.get('/api/topics', adminProtect, topicController.getTopicsApi);
+router.get('/api/chapters', adminProtect, topicController.getChaptersApi);
+router.post('/topics', adminProtect, topicController.createTopic);
+router.post('/topics/bulk', adminProtect, topicController.bulkCreateTopics);
+router.post('/topics/chapter/delete', adminProtect, topicController.deleteChapter);
+router.post('/topics/bulk-action', adminProtect, topicController.bulkActionTopics);
+router.post('/topics/archive', adminProtect, topicController.archiveTopic);
+router.post('/topics/restore', adminProtect, topicController.restoreTopic);
+router.post('/topics/approve', adminProtect, topicController.approveTopic);
+router.post('/topics/bulk-approve', adminProtect, topicController.bulkApproveTopics);
+router.post('/topics/reject', adminProtect, topicController.rejectTopic);
+router.post('/topics/bulk-reject', adminProtect, topicController.bulkRejectTopics);
+router.post('/topics/permanent', adminProtect, topicController.permanentDeleteTopic);
+router.post('/topics/:id/edit', adminProtect, topicController.updateTopic);
+router.put('/topics/:id', adminProtect, topicController.updateTopic);
+router.post('/topics/:id/archive', adminProtect, topicController.archiveTopic);
+router.post('/topics/:id/restore', adminProtect, topicController.restoreTopic);
+router.post('/topics/:id/permanent', adminProtect, topicController.permanentDeleteTopic);
+router.delete('/topics/:id', adminProtect, topicController.permanentDeleteTopic);
+
+
 module.exports = router;
+
 

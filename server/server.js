@@ -206,23 +206,76 @@ app.use(async (req, res, next) => {
             // Academic Classes Cache & Injection
             if (!cachedAcademicClasses || (Date.now() - lastAcademicCacheTime > ACADEMIC_CACHE_TTL)) {
                 const AcademicClass = require('./models/AcademicClass');
-                cachedAcademicClasses = await AcademicClass.find().sort({ order: 1 }).lean();
+                cachedAcademicClasses = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
                 
-                // Auto-seed if empty
-                if (cachedAcademicClasses.length === 0) {
+                // Auto-seed if database has no academic classes at all
+                const totalClassesCount = await AcademicClass.countDocuments();
+                if (totalClassesCount === 0) {
+                    const sscCommon = ['Bangla', 'English', 'General Mathematics', 'ICT', 'Religion & Moral Education', 'Bangladesh & Global Studies'];
+                    const sscScience = ['Physics', 'Chemistry', 'Biology', 'Higher Mathematics'];
+                    const sscCommerce = ['Accounting', 'Business Entrepreneurship', 'Finance & Banking'];
+                    const sscHumanities = ['Geography & Environment', 'Civics & Citizenship', 'Economics', 'History of Bangladesh & World Civilization'];
+
+                    const hscCommon = ['Bangla', 'English', 'ICT'];
+                    const hscScience = ['Physics', 'Chemistry', 'Biology', 'Higher Mathematics'];
+                    const hscCommerce = ['Accounting', 'Business Organization & Management', 'Finance, Banking & Insurance', 'Production Management & Marketing'];
+                    const hscHumanities = ['Economics', 'Civics & Good Governance', 'History', 'Islamic History & Culture', 'Logic', 'Sociology'];
+
                     const defaultClasses = [
-                        { name: 'Class 6', subjects: ['Bangla', 'English', 'Math', 'Science', 'Religion', 'ICT'], order: 1 },
-                        { name: 'Class 7', subjects: ['Bangla', 'English', 'Math', 'Science', 'Religion', 'ICT'], order: 2 },
-                        { name: 'Class 8', subjects: ['Bangla', 'English', 'Math', 'Science', 'Religion', 'ICT'], order: 3 },
-                        { name: 'Class 9', subjects: ['Bangla', 'English', 'Math', 'Physics', 'Chemistry', 'Biology', 'Bangladesh & Global Studies', 'Religion', 'ICT'], order: 4 },
-                        { name: 'Class 10', subjects: ['Bangla', 'English', 'Math', 'Physics', 'Chemistry', 'Biology', 'Bangladesh & Global Studies', 'Religion', 'ICT'], order: 5 },
-                        { name: 'Class 11', subjects: ['Bangla', 'English', 'Physics', 'Chemistry', 'Biology', 'Higher Math', 'Logic', 'ICT', 'Economics', 'Accounting', 'Business Organization', 'Finance & Banking', 'Management', 'Marketing'], order: 6 },
-                        { name: 'Class 12', subjects: ['Bangla', 'English', 'Physics', 'Chemistry', 'Biology', 'Higher Math', 'Logic', 'ICT', 'Economics', 'Accounting', 'Business Organization', 'Finance & Banking', 'Management', 'Marketing'], order: 7 },
-                        { name: 'Admission', subjects: ['Bangla', 'English', 'General Knowledge', 'Physics', 'Chemistry', 'Math', 'Biology'], order: 8 },
-                        { name: 'Skill Development', subjects: ['Spoken English', 'Freelancing', 'Graphic Design', 'Web Development'], order: 9 }
+                        { name: 'Class 6', hasGroups: false, subjects: ['Bangla', 'English', 'Mathematics', 'General Science', 'Religion', 'ICT'], order: 1 },
+                        { name: 'Class 7', hasGroups: false, subjects: ['Bangla', 'English', 'Mathematics', 'General Science', 'Religion', 'ICT'], order: 2 },
+                        { name: 'Class 8', hasGroups: false, subjects: ['Bangla', 'English', 'Mathematics', 'General Science', 'Religion', 'ICT'], order: 3 },
+                        {
+                            name: 'Class 9',
+                            hasGroups: true,
+                            commonSubjects: sscCommon,
+                            groups: [
+                                { name: 'Science', subjects: sscScience },
+                                { name: 'Commerce', subjects: sscCommerce },
+                                { name: 'Humanities', subjects: sscHumanities }
+                            ],
+                            subjects: Array.from(new Set([...sscCommon, ...sscScience, ...sscCommerce, ...sscHumanities])),
+                            order: 4
+                        },
+                        {
+                            name: 'Class 10',
+                            hasGroups: true,
+                            commonSubjects: sscCommon,
+                            groups: [
+                                { name: 'Science', subjects: sscScience },
+                                { name: 'Commerce', subjects: sscCommerce },
+                                { name: 'Humanities', subjects: sscHumanities }
+                            ],
+                            subjects: Array.from(new Set([...sscCommon, ...sscScience, ...sscCommerce, ...sscHumanities])),
+                            order: 5
+                        },
+                        {
+                            name: 'Class 11',
+                            hasGroups: true,
+                            commonSubjects: hscCommon,
+                            groups: [
+                                { name: 'Science', subjects: hscScience },
+                                { name: 'Commerce', subjects: hscCommerce },
+                                { name: 'Humanities', subjects: hscHumanities }
+                            ],
+                            subjects: Array.from(new Set([...hscCommon, ...hscScience, ...hscCommerce, ...hscHumanities])),
+                            order: 6
+                        },
+                        {
+                            name: 'Class 12',
+                            hasGroups: true,
+                            commonSubjects: hscCommon,
+                            groups: [
+                                { name: 'Science', subjects: hscScience },
+                                { name: 'Commerce', subjects: hscCommerce },
+                                { name: 'Humanities', subjects: hscHumanities }
+                            ],
+                            subjects: Array.from(new Set([...hscCommon, ...hscScience, ...hscCommerce, ...hscHumanities])),
+                            order: 7
+                        }
                     ];
                     await AcademicClass.insertMany(defaultClasses);
-                    cachedAcademicClasses = await AcademicClass.find().sort({ order: 1 }).lean();
+                    cachedAcademicClasses = await AcademicClass.find({ isArchived: { $ne: true } }).sort({ order: 1 }).lean();
                 }
                 lastAcademicCacheTime = Date.now();
             }
@@ -255,7 +308,10 @@ app.use(async (req, res, next) => {
 });
 
 // Provide a way to bust cache from routes
-app.set('clearAcademicCache', () => { lastAcademicCacheTime = 0; });
+app.set('clearAcademicCache', () => { 
+    lastAcademicCacheTime = 0; 
+    cachedAcademicClasses = null; 
+});
 
 
 // ---- ROUTES ----

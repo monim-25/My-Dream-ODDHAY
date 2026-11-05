@@ -1,3 +1,4 @@
+const { normalizeClass, normalizeGroup, isClassWithGroups, getLinkedClasses, buildClassQuery, extractSubjectsForStudent, getStudentSubjects } = require('../utils/academicHelper');
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
@@ -1144,23 +1145,8 @@ router.get('/dashboard', protect, async (req, res) => {
                     classConditions.push({ classLevel: `Class ${numericClass}` });
                 }
 
-                // Superadmin assigned subjects for this class from AcademicClass
-                let assignedClassSubjects = [];
-                if (userClassRaw) {
-                    const matchedCls = await AcademicClass.findOne({
-                        $or: [
-                            { name: userClassRaw },
-                            { name: new RegExp(`^${userClassRaw}$`, 'i') },
-                            ...(numericClass ? [
-                                { name: `Class ${numericClass}` },
-                                { name: new RegExp(`Class\\s*${numericClass}`, 'i') }
-                            ] : [])
-                        ]
-                    }).lean();
-                    if (matchedCls && Array.isArray(matchedCls.subjects)) {
-                        assignedClassSubjects = matchedCls.subjects.map(s => (s || '').trim()).filter(Boolean);
-                    }
-                }
+                // Superadmin assigned subjects for this class & group via academicHelper
+                let assignedClassSubjects = await getStudentSubjects(dbUser);
 
                 // Priority A: Questions from student's identified weak areas
                 let weakTopicNames = [];
@@ -1268,6 +1254,7 @@ router.get('/profile', protect, async (req, res) => {
     try {
         const user = await User.findById(req.session.userId).populate('quizResults.quiz');
         if (!user) return res.redirect('/login');
+        if (user.role === 'teacher') return res.redirect('/teacher/profile');
 
         // Calculate Average Score
         let avgScore = 0;
@@ -1342,7 +1329,7 @@ router.post('/profile/update', protect, (req, res, next) => {
     uploadAvatarMulter.single('profilePicture')(req, res, () => next());
 }, async (req, res) => {
     try {
-        const { name, oldPassword, password, email, phone, classLevel, rollNumber, schoolName, collegeName, presentAddress, permanentAddress } = req.body;
+        const { name, oldPassword, password, email, phone, classLevel, group, rollNumber, schoolName, collegeName, presentAddress, permanentAddress, teachingSubject } = req.body;
         const user = await User.findById(req.session.userId);
 
         if (req.file) {
@@ -1359,12 +1346,39 @@ router.post('/profile/update', protect, (req, res, next) => {
         if (name) user.name = name;
         if (email && !user.email) user.email = email;
         if (phone !== undefined) user.phone = phone;
-        if (classLevel) user.classLevel = classLevel;
+        if (classLevel) {
+            user.classLevel = normalizeClass(classLevel);
+            if (isClassWithGroups(user.classLevel)) {
+                user.group = normalizeGroup(group || user.group || 'General');
+            } else {
+                user.group = 'General';
+            }
+        } else if (group) {
+            user.group = normalizeGroup(group);
+        }
         if (rollNumber !== undefined) user.rollNumber = rollNumber;
         if (schoolName !== undefined) user.schoolName = schoolName;
         if (collegeName !== undefined) user.collegeName = collegeName;
         if (presentAddress !== undefined) user.presentAddress = presentAddress;
         if (permanentAddress !== undefined) user.permanentAddress = permanentAddress;
+        if (teachingSubject !== undefined) {
+            user.teachingSubject = teachingSubject.trim();
+            user.teachingSubjects = user.teachingSubject.split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
+            user.subject = user.teachingSubject;
+            if (req.session.user) {
+                req.session.user.teachingSubject = user.teachingSubject;
+                req.session.user.teachingSubjects = user.teachingSubjects;
+            }
+        }
+        if (classLevel !== undefined && user.role === 'teacher') {
+            user.classLevel = classLevel.trim().replace(/\bclass\s+class\b/gi, 'Class');
+            user.assignedClasses = user.classLevel.split(/[,;/]+/).map(s => s.trim().replace(/\bclass\s+class\b/gi, 'Class')).filter(Boolean);
+            user.classes = user.assignedClasses;
+            if (req.session.user) {
+                req.session.user.classLevel = user.classLevel;
+                req.session.user.assignedClasses = user.assignedClasses;
+            }
+        }
 
         if (password && password.trim() !== '') {
             if (!oldPassword) return res.redirect('/profile/edit?error=old_password_required');
@@ -1375,6 +1389,7 @@ router.post('/profile/update', protect, (req, res, next) => {
         await user.save();
         req.session.user.name = user.name;
         req.session.user.classLevel = user.classLevel;
+        req.session.user.group = user.group;
         res.redirect('/profile?success=true');
     } catch (err) { res.redirect('/profile/edit?error=update_failed'); }
 });
@@ -2237,6 +2252,10 @@ router.get('/courses', protect, async (req, res) => {
             return null;
         }).filter(Boolean);
 
+        // Robust subject extraction: strictly use superadmin assigned subjects for THIS student's class & group
+        let classSubjects = await getStudentSubjects(user);
+        const subjects = Array.from(new Set(classSubjects));
+
         // --- Fetch Courses to Explore ---
         let exploreQuery = {
             _id: { $nin: enrolledCourseIds }
@@ -2250,7 +2269,11 @@ router.get('/courses', protect, async (req, res) => {
             ];
         }
         if (search) exploreQuery.title = { $regex: search, $options: 'i' };
-        if (subject && subject !== 'all') exploreQuery.subject = subject;
+        if (subject && subject !== 'all') {
+            exploreQuery.subject = subject;
+        } else if (classSubjects && classSubjects.length > 0) {
+            exploreQuery.subject = { $in: classSubjects };
+        }
 
         let exploreCourses = await Course.find(exploreQuery).sort({ createdAt: -1 }).populate('instructor', 'name').lean();
 
@@ -2258,7 +2281,11 @@ router.get('/courses', protect, async (req, res) => {
         if (!exploreCourses || exploreCourses.length === 0) {
             let fallbackQuery = {};
             if (search) fallbackQuery.title = { $regex: search, $options: 'i' };
-            if (subject && subject !== 'all') fallbackQuery.subject = subject;
+            if (subject && subject !== 'all') {
+                fallbackQuery.subject = subject;
+            } else if (classSubjects && classSubjects.length > 0) {
+                fallbackQuery.subject = { $in: classSubjects };
+            }
             exploreCourses = await Course.find(fallbackQuery).sort({ createdAt: -1 }).limit(10).populate('instructor', 'name').lean();
         }
 
@@ -2272,28 +2299,14 @@ router.get('/courses', protect, async (req, res) => {
                 { classLevel: { $exists: false } }
             ];
         }
+        if (classSubjects && classSubjects.length > 0) {
+            freeQuery.subject = { $in: classSubjects };
+        }
         const freeCourses = await Course.find(freeQuery).populate('instructor', 'name').lean();
 
         // --- Extract Live Classes & Subjects ---
         const liveClasses = [];
         const AcademicClass = require('../models/AcademicClass');
-
-        // Robust subject extraction: strictly use superadmin assigned subjects for THIS class from AcademicClass
-        const classRegex = new RegExp(userClass.replace(/[^a-zA-Z0-9]/g, '.*'), 'i');
-        const ac = await AcademicClass.findOne({ name: classRegex }).lean();
-
-        let classSubjects = [];
-        if (ac && Array.isArray(ac.subjects) && ac.subjects.length > 0) {
-            classSubjects = ac.subjects.map(s => s ? s.trim() : '').filter(Boolean);
-        } else {
-            const allAc = await AcademicClass.find().lean();
-            const matchedAc = allAc.find(c => isClassMatch(c.name, userClass));
-            if (matchedAc && Array.isArray(matchedAc.subjects)) {
-                classSubjects = matchedAc.subjects.map(s => s ? s.trim() : '').filter(Boolean);
-            }
-        }
-
-        const subjects = Array.from(new Set(classSubjects));
 
         user.enrolledCourses.forEach(ec => {
             if (!ec.course) return;
@@ -2556,14 +2569,11 @@ router.get('/notes', protect, async (req, res) => {
             });
         });
 
-        // 3. Extract superadmin subjects strictly for THIS student's class from AcademicClass
-        const allAcademicClasses = await AcademicClass.find({}).lean();
-        const classRegex = new RegExp(userClassClean.replace(/[^a-zA-Z0-9]/g, '.*'), 'i');
-        let matchedAc = allAcademicClasses.find(c => classRegex.test(c.name)) || allAcademicClasses.find(c => isClassMatch(c.name, userClassClean));
-
-        let assignedSubjects = (matchedAc && Array.isArray(matchedAc.subjects) && matchedAc.subjects.length > 0)
-            ? matchedAc.subjects.map(s => s ? s.trim() : '').filter(Boolean)
-            : ['Bangla', 'English', 'Math', 'Physics', 'Chemistry', 'Biology', 'ICT'];
+        // 3. Extract superadmin subjects strictly for THIS student's class & group
+        let assignedSubjects = await getStudentSubjects(user);
+        if (!assignedSubjects || assignedSubjects.length === 0) {
+            assignedSubjects = ['Bangla', 'English', 'Math', 'Physics', 'Chemistry', 'Biology', 'ICT'];
+        }
 
         const subjects = Array.from(new Set(assignedSubjects)).sort();
 
@@ -2910,13 +2920,8 @@ router.get('/question-bank', async (req, res) => {
             };
         });
 
-        // 1. DYNAMIC SUBJECTS: Strictly use superadmin assigned class subjects for THIS class from AcademicClass
-        const classRegex = new RegExp(userClass.replace(/[^a-zA-Z0-9]/g, '.*'), 'i');
-        let matchedClassDoc = academicClasses.find(c => classRegex.test(c.name)) || academicClasses.find(c => isClassMatch(c.name, userClass));
-
-        let assignedSubjects = (matchedClassDoc && Array.isArray(matchedClassDoc.subjects) && matchedClassDoc.subjects.length > 0) 
-            ? matchedClassDoc.subjects.map(s => s ? s.trim() : '').filter(Boolean) 
-            : [];
+        // 1. DYNAMIC SUBJECTS: Strictly use superadmin assigned class & group subjects
+        let assignedSubjects = await getStudentSubjects(dbUser);
 
         if (assignedSubjects.length === 0) {
             const subSet = new Set();
@@ -4978,10 +4983,8 @@ router.get('/exams/mock-tests', protect, async (req, res) => {
         const userClassLevel = (user && user.classLevel) ? user.classLevel : 'Class 10';
 
         // 1. Fetch class config to get superadmin assigned subjects
-        const classConfig = await AcademicClass.findOne({ name: userClassLevel }).lean();
-        const assignedSubjects = (classConfig && classConfig.subjects && classConfig.subjects.length > 0)
-            ? classConfig.subjects
-            : await Question.distinct('subject');
+        const studentSubs = await getStudentSubjects(user);
+        const assignedSubjects = (studentSubs && studentSubs.length > 0) ? studentSubs : await Question.distinct('subject');
 
         // 2. Fetch only proper Mock Tests (isMockTest: true)
         const allMockTests = await Quiz.find({ isMockTest: true })
@@ -5015,10 +5018,8 @@ router.get('/exams/model-tests', protect, async (req, res) => {
         const userClassLevel = (user && user.classLevel) ? user.classLevel : 'Class 10';
 
         // 1. Fetch class config to get superadmin assigned subjects
-        const classConfig = await AcademicClass.findOne({ name: userClassLevel }).lean();
-        const assignedSubjects = (classConfig && classConfig.subjects && classConfig.subjects.length > 0)
-            ? classConfig.subjects
-            : await Question.distinct('subject');
+        const studentSubs = await getStudentSubjects(user);
+        const assignedSubjects = (studentSubs && studentSubs.length > 0) ? studentSubs : await Question.distinct('subject');
 
         // 2. Fetch all approved official Model Tests (QuestionBanks)
         const allModelTests = await QuestionBank.find({
@@ -5312,10 +5313,8 @@ router.get('/exams', protect, async (req, res) => {
         const qbSubjects = await QuestionBank.distinct('subject');
         const rawAllSubjects = Array.from(new Set([...(qSubjects || []), ...(qbSubjects || [])])).filter(Boolean);
 
-        const classConfig = await AcademicClass.findOne({ name: userClassLevel }).lean();
-        const assignedSubjects = (classConfig && classConfig.subjects && classConfig.subjects.length > 0)
-            ? classConfig.subjects
-            : rawAllSubjects;
+        const studentSubs = await getStudentSubjects(user);
+        const assignedSubjects = (studentSubs && studentSubs.length > 0) ? studentSubs : rawAllSubjects;
 
         // 3. Fetch Subject & Topic Breakdown with Question Counts
         const subjectBreakdown = await Question.aggregate([
@@ -6430,24 +6429,35 @@ router.post('/api/ai/chat', protect, async (req, res) => {
             const subRegex = new RegExp(`^${targetSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
             const classRegex = new RegExp(`^(${targetClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|All Classes)$`, 'i');
 
-            // Find matching active authority knowledge
-            const orConditions = [
-                { subject: subRegex },
-                { classLevel: classRegex }
-            ];
+            // Build precise scoped query: MUST match Subject & Class AND relevant Keywords/Topic
+            const authorityFilter = {
+                isActive: true
+            };
 
-            if (queryWords.length > 0) {
-                const keywordRegex = queryWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-                orConditions.push({ keywords: { $in: queryWords } });
-                orConditions.push({ keywords: { $regex: keywordRegex, $options: 'i' } });
-                orConditions.push({ title: { $regex: keywordRegex, $options: 'i' } });
-                orConditions.push({ topic: { $regex: keywordRegex, $options: 'i' } });
+            if (targetSubject && targetSubject !== 'General') {
+                authorityFilter.subject = subRegex;
             }
 
-            const matchedAuthorityRules = await AIKnowledge.find({
-                isActive: true,
-                $or: orConditions
-            }).sort({ priority: -1, createdAt: -1 }).limit(3).lean();
+            if (targetClass) {
+                authorityFilter.classLevel = classRegex;
+            }
+
+            // Only retrieve rules whose keywords, title, topic or content actually match the query
+            if (queryWords.length > 0) {
+                const keywordRegex = queryWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+                authorityFilter.$or = [
+                    { keywords: { $in: queryWords } },
+                    { keywords: { $regex: keywordRegex, $options: 'i' } },
+                    { title: { $regex: keywordRegex, $options: 'i' } },
+                    { topic: { $regex: keywordRegex, $options: 'i' } },
+                    { content: { $regex: keywordRegex, $options: 'i' } }
+                ];
+            }
+
+            const matchedAuthorityRules = await AIKnowledge.find(authorityFilter)
+                .sort({ priority: -1, createdAt: -1 })
+                .limit(3)
+                .lean();
 
             if (matchedAuthorityRules && matchedAuthorityRules.length > 0) {
                 hasAuthorityKnowledge = true;

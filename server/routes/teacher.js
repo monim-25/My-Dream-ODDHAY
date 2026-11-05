@@ -1,3 +1,4 @@
+const { normalizeClass, normalizeGroup, isClassWithGroups, getLinkedClasses, buildClassQuery } = require('../utils/academicHelper');
 const express = require('express');
 const router = express.Router();
 const path = require('path');
@@ -55,6 +56,32 @@ router.param('qid', validateObjectId);
 
 // Helper to validate ObjectId
 const validateId = (id) => mongoose.Types.ObjectId.isValid(id);
+
+// Router-level middleware to sync teacher profile academic scope on every request
+router.use(async (req, res, next) => {
+    if (req.session && req.session.user && req.session.user._id) {
+        try {
+            await connectDB();
+            const context = await getTeacherAssignedContext(req.session.user._id);
+            res.locals.teacherAssignedContext = context;
+            res.locals.assignedSubjects = context.rawAssignedSubjects;
+            res.locals.assignedClasses = context.rawAssignedClasses;
+
+            // Sync session user so req.session.user consistently has array and string representations
+            if (context.rawAssignedSubjects.length > 0) {
+                req.session.user.teachingSubject = context.rawAssignedSubjects.join(', ');
+                req.session.user.teachingSubjects = context.rawAssignedSubjects;
+            }
+            if (context.rawAssignedClasses.length > 0) {
+                req.session.user.classLevel = context.rawAssignedClasses.join(', ');
+                req.session.user.assignedClasses = context.rawAssignedClasses;
+            }
+        } catch (e) {
+            // non-fatal
+        }
+    }
+    next();
+});
 
 // Teacher Dashboard
 router.get('/', teacherProtect, async (req, res) => {
@@ -278,8 +305,10 @@ router.get('/courses', teacherProtect, async (req, res) => {
             { $project: { enrolledStudents: 0 } }
         ]);
 
-        // Extract assigned classes
-        const assignedClasses = [...new Set(courses.flatMap(c => c.classLevel || []))].filter(Boolean).sort();
+        // Extract assigned classes combining courses and teacher profile assignments
+        const context = await getTeacherAssignedContext(teacherId);
+        const courseClasses = courses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
+        const assignedClasses = [...new Set([...courseClasses, ...context.rawAssignedClasses])].sort();
 
         // Get filter selections
         const selectedClass = req.query.class || 'all';
@@ -1140,9 +1169,12 @@ router.get('/qa', teacherProtect, async (req, res) => {
             $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }]
         }).select('_id classLevel subject title');
 
-        // Extract filters (Course schema defines classLevel and subject as Arrays of strings)
-        const assignedClasses = [...new Set(myCourses.flatMap(c => c.classLevel || []))].filter(Boolean).sort();
-        const assignedSubjects = [...new Set(myCourses.flatMap(c => c.subject || []))].filter(Boolean).sort();
+        // Extract filters combining courses and teacher profile assignments
+        const context = await getTeacherAssignedContext(teacherId);
+        const courseClasses = myCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
+        const courseSubjects = myCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
+        const assignedClasses = [...new Set([...courseClasses, ...context.rawAssignedClasses])].sort();
+        const assignedSubjects = [...new Set([...courseSubjects, ...context.rawAssignedSubjects])].sort();
         const assignedCourses = myCourses.map(c => ({ id: c._id.toString(), title: c.title }));
 
         // Get filter selections
@@ -1301,18 +1333,58 @@ router.get('/profile', teacherProtect, async (req, res) => {
     try {
         await connectDB();
         const user = await User.findById(req.session.user._id);
+        if (!user) return res.redirect('/login');
         
         // Find assigned courses and group by class
         const assignedCourses = await Course.find({
             $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
-        }).select('classLevel subject');
+        }).select('classLevel subject').lean();
         
         const expertiseMap = {};
-        assignedCourses.forEach(c => {
+        (assignedCourses || []).forEach(c => {
             if (!c.classLevel || !c.subject) return;
-            if (!expertiseMap[c.classLevel]) expertiseMap[c.classLevel] = new Set();
-            expertiseMap[c.classLevel].add(c.subject);
+            const cls = String(c.classLevel).trim();
+            const sub = String(c.subject).trim();
+            if (!expertiseMap[cls]) expertiseMap[cls] = new Set();
+            expertiseMap[cls].add(sub);
         });
+
+        // Add direct teacher academic assignments from User document
+        const userClasses = [];
+        if (user.classLevel) {
+            userClasses.push(...String(user.classLevel).split(/[,;/]+/).map(s => s.trim().replace(/\bclass\s+class\b/gi, 'Class')).filter(Boolean));
+        }
+        if (Array.isArray(user.assignedClasses)) {
+            userClasses.push(...user.assignedClasses.map(s => String(s || '').trim().replace(/\bclass\s+class\b/gi, 'Class')).filter(Boolean));
+        }
+        if (Array.isArray(user.classes)) {
+            userClasses.push(...user.classes.map(s => String(s || '').trim().replace(/\bclass\s+class\b/gi, 'Class')).filter(Boolean));
+        }
+        const assignedClasses = Array.from(new Set(userClasses));
+
+        const userSubjects = [];
+        if (user.teachingSubject) {
+            userSubjects.push(...String(user.teachingSubject).split(/[,;/]+/).map(s => s.trim()).filter(Boolean));
+        }
+        if (Array.isArray(user.teachingSubjects)) {
+            userSubjects.push(...user.teachingSubjects.map(s => String(s || '').trim()).filter(Boolean));
+        }
+        if (user.subject) {
+            userSubjects.push(...String(user.subject).split(/[,;/]+/).map(s => s.trim()).filter(Boolean));
+        }
+        const assignedSubjects = Array.from(new Set(userSubjects));
+
+        // Incorporate direct assignments into expertiseMap
+        if (assignedClasses.length > 0 && assignedSubjects.length > 0) {
+            assignedClasses.forEach(cls => {
+                if (!expertiseMap[cls]) expertiseMap[cls] = new Set();
+                assignedSubjects.forEach(sub => expertiseMap[cls].add(sub));
+            });
+        } else if (assignedSubjects.length > 0) {
+            const cls = assignedClasses[0] || user.classLevel || 'General Curriculum';
+            if (!expertiseMap[cls]) expertiseMap[cls] = new Set();
+            assignedSubjects.forEach(sub => expertiseMap[cls].add(sub));
+        }
 
         const expertise = Object.keys(expertiseMap).map(cls => ({
             classLevel: cls,
@@ -1322,9 +1394,14 @@ router.get('/profile', teacherProtect, async (req, res) => {
         res.render('teacher/profile', {
             user,
             expertise,
+            assignedClasses,
+            assignedSubjects,
+            teachingSubjectDisplay: assignedSubjects.join(', ') || user.teachingSubject || 'Not Assigned',
+            teachingClassesDisplay: assignedClasses.join(', ') || user.classLevel || 'Not Assigned',
             active: 'profile'
         });
     } catch (err) {
+        console.error('Error loading teacher profile:', err);
         res.status(500).send('Error loading profile');
     }
 });
@@ -1630,30 +1707,12 @@ router.get('/notes', teacherProtect, async (req, res) => {
         const authorFilter = req.query.author || '';
 
         // 1. Get user courses where teacher is instructor or permitted, or matching subjects/classes or specified courseLink
-        // 1. Get user profile assigned subjects & classes (set by authority/admin)
-        const teacherProfile = await User.findById(user._id).select('teachingSubject teachingSubjects classLevel assignedClasses').lean();
-        
-        const rawUserSubjects = [
-            teacherProfile?.teachingSubject,
-            ...(Array.isArray(teacherProfile?.teachingSubjects) ? teacherProfile.teachingSubjects : [])
-        ].filter(Boolean);
-
-        const rawUserClasses = [
-            teacherProfile?.classLevel,
-            ...(Array.isArray(teacherProfile?.assignedClasses) ? teacherProfile.assignedClasses : [])
-        ].filter(Boolean);
-
-        // Find courses explicitly assigned to THIS teacher by authority (instructor or permitted)
-        const teacherAssignedCourses = await Course.find({
-            $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
-        }).select('subject classLevel').lean();
-
-        const teacherAssignedCourseSubjects = teacherAssignedCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
-        const teacherAssignedCourseClasses = teacherAssignedCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
-
-        // Strictly assigned subjects & classes for THIS specific teacher
-        const assignedSubjects = [...new Set([...rawUserSubjects, ...teacherAssignedCourseSubjects])].filter(Boolean).sort();
-        const assignedClasses = [...new Set([...rawUserClasses, ...teacherAssignedCourseClasses])].filter(Boolean).sort();
+        // 1. Get teacher's strictly assigned subjects & classes
+        const teacherContext = await getTeacherAssignedContext(user._id);
+        const rawUserSubjects = teacherContext.rawAssignedSubjects;
+        const rawUserClasses = teacherContext.rawAssignedClasses;
+        const assignedSubjects = teacherContext.assignedSubjects;
+        const assignedClasses = teacherContext.hasStrictClass ? teacherContext.rawAssignedClasses : [];
 
         const userCourses = await Course.find({})
             .select('title _id accessType subject classLevel curriculumNodes chapters thumbnail instructor permittedTeachers')
@@ -2170,9 +2229,12 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
             QuestionBank.distinct('year', { addedBy: user._id })
         ]);
 
-        // Only show classes/subjects from teacher's assigned courses
-        const allSubjects = [...new Set(userCourses.flatMap(c => c.subject || []))].filter(Boolean).sort();
-        const allClasses = [...new Set(userCourses.flatMap(c => c.classLevel || []))].filter(Boolean).sort();
+        // Combine classes/subjects from teacher's assigned profile and courses
+        const teacherContext = await getTeacherAssignedContext(user._id);
+        const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
+        const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
+        const allSubjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].filter(Boolean).sort();
+        const allClasses = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].filter(Boolean).sort();
         const yearList = Array.from(new Set((dynamicYears || []).map(y => String(y || '').trim()).filter(Boolean))).sort().reverse();
 
         // Calculate actual question counts from Question collection
@@ -2337,8 +2399,11 @@ router.get('/quizzes', teacherProtect, async (req, res) => {
             $or: [{ instructor: user._id }, { permittedTeachers: user._id }] 
         }).select('title _id accessType subject classLevel');
         
-        const assignedSubjects = [...new Set(userCourses.map(c => c.subject).filter(Boolean))];
-        const assignedClasses = [...new Set(userCourses.map(c => c.classLevel).filter(Boolean))];
+        const teacherContext = await getTeacherAssignedContext(user._id);
+        const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
+        const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
+        const assignedSubjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].sort();
+        const assignedClasses = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].sort();
         
         const { subject, classLevel, type, q } = req.query;
         
@@ -2416,8 +2481,11 @@ router.get('/make-quiz', teacherProtect, async (req, res) => {
             $or: [{ instructor: user._id }, { permittedTeachers: user._id }] 
         }).select('title _id subject classLevel accessType');
         
-        const subjects = [...new Set(userCourses.flatMap(c => c.subject || []))].filter(Boolean);
-        const classes = [...new Set(userCourses.flatMap(c => c.classLevel || []))].filter(Boolean);
+        const teacherContext = await getTeacherAssignedContext(user._id);
+        const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
+        const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
+        const subjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].filter(Boolean).sort();
+        const classes = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].filter(Boolean).sort();
         
         const questionBanks = await QuestionBank.find({ addedBy: user._id }).select('subject classLevel board year _id');
         
@@ -2458,8 +2526,11 @@ router.get('/course/:id/edit/make-quiz', teacherProtect, async (req, res) => {
             $or: [{ instructor: user._id }, { permittedTeachers: user._id }] 
         }).select('title _id subject classLevel accessType');
         
-        const subjects = [...new Set(userCourses.flatMap(c => c.subject || []))].filter(Boolean);
-        const classes = [...new Set(userCourses.flatMap(c => c.classLevel || []))].filter(Boolean);
+        const teacherContext = await getTeacherAssignedContext(user._id);
+        const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
+        const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
+        const subjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].filter(Boolean).sort();
+        const classes = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].filter(Boolean).sort();
         
         const questionBanks = await QuestionBank.find({ addedBy: user._id }).select('subject classLevel board year _id');
         
@@ -2951,7 +3022,17 @@ router.post('/add-question-bank', teacherProtect, (req, res, next) => {
         
         let classLevelArray = classLevel;
         if (typeof classLevel === 'string') {
-            classLevelArray = [classLevel];
+            if (classLevel.includes(',')) {
+                classLevelArray = classLevel.split(',').map(c => normalizeClass(c)).filter(Boolean);
+            } else if (classLevel.toLowerCase() === 'ssc' || classLevel.toLowerCase() === 'class 9-10') {
+                classLevelArray = ['Class 9', 'Class 10'];
+            } else if (classLevel.toLowerCase() === 'hsc' || classLevel.toLowerCase() === 'class 11-12') {
+                classLevelArray = ['Class 11', 'Class 12'];
+            } else {
+                classLevelArray = [normalizeClass(classLevel)];
+            }
+        } else if (Array.isArray(classLevel)) {
+            classLevelArray = classLevel.map(c => normalizeClass(c)).filter(Boolean);
         }
 
         const newBank = new QuestionBank({
@@ -3008,8 +3089,11 @@ router.get('/edit-question-bank/:id', teacherProtect, async (req, res) => {
         ]);
         if (!bank) return res.status(404).send('Bank not found');
 
-        const assignedSubjects = [...new Set(userCourses.map(c => c.subject).filter(Boolean))].sort();
-        const assignedClasses = [...new Set(userCourses.map(c => c.classLevel).filter(Boolean))].sort();
+        const teacherContext = await getTeacherAssignedContext(req.session.user._id);
+        const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
+        const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
+        const assignedSubjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].sort();
+        const assignedClasses = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].sort();
 
         res.render('teacher/edit-question-bank', { 
             bank, 
@@ -3294,9 +3378,10 @@ router.get('/add-question', teacherProtect, async (req, res) => {
                   .select('title _id accessType subject classLevel')
         ]);
 
-        // Build deduplicated subject and class lists from assigned courses
-        const subjectSet = new Set();
-        const classSet = new Set();
+        // Build deduplicated subject and class lists from assigned profile & courses
+        const teacherContext = await getTeacherAssignedContext(user._id);
+        const subjectSet = new Set(teacherContext.rawAssignedSubjects);
+        const classSet = new Set(teacherContext.rawAssignedClasses);
         userCourses.forEach(c => {
             if (Array.isArray(c.subject)) c.subject.forEach(s => subjectSet.add(s));
             else if (c.subject) subjectSet.add(c.subject);
@@ -3369,9 +3454,25 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const globalBoard    = (body.board || '').trim();
         const globalYear     = (body.year || '').trim();
         const globalSubject  = (body.subject || 'General').trim();
-        let globalClass      = body.classLevel || 'General';
-        if (Array.isArray(globalClass)) globalClass = globalClass[0] || 'General';
-        globalClass = String(globalClass).trim();
+        let globalClass = body.classLevel || 'General';
+        let parsedClassLevels = [];
+        if (Array.isArray(globalClass)) {
+            parsedClassLevels = globalClass.map(c => normalizeClass(c)).filter(Boolean);
+        } else if (typeof globalClass === 'string') {
+            const raw = globalClass.trim();
+            if (raw.toLowerCase() === 'ssc' || raw.toLowerCase() === 'class 9-10' || raw.toLowerCase() === '9-10') {
+                parsedClassLevels = ['Class 9', 'Class 10'];
+            } else if (raw.toLowerCase() === 'hsc' || raw.toLowerCase() === 'class 11-12' || raw.toLowerCase() === '11-12') {
+                parsedClassLevels = ['Class 11', 'Class 12'];
+            } else if (raw.includes(',')) {
+                parsedClassLevels = raw.split(',').map(c => normalizeClass(c)).filter(Boolean);
+            } else {
+                parsedClassLevels = [normalizeClass(raw)];
+            }
+        }
+        if (parsedClassLevels.length === 0) parsedClassLevels = ['Class 10'];
+        const questionClassLevel = parsedClassLevels.length === 1 ? parsedClassLevels[0] : parsedClassLevels;
+        globalClass = Array.isArray(questionClassLevel) ? questionClassLevel[0] : questionClassLevel;
         const globalTopic    = (body.topic || '').trim();
         const globalAccess   = 'Free';
 
@@ -3399,7 +3500,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 board: globalBoard || 'General Board',
                 year: globalYear || new Date().getFullYear().toString(),
                 subject: globalSubject,
-                classLevel: [globalClass], // Store as array
+                classLevel: parsedClassLevels, // Store as array
                 accessType: 'Free',
                 price: 0,
                 duration: parseInt(body.duration) || 30,
@@ -3454,7 +3555,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 board:    mode === 'archive' ? globalBoard  : (qBoards[i] || globalBoard || 'General Board'),
                 year:     mode === 'archive' ? globalYear   : (qYears[i]  || globalYear  || ''),
                 subject:  mode === 'archive' ? globalSubject : (body.qSubject?.[i] || globalSubject || 'General'),
-                classLevel: mode === 'archive' ? globalClass : (body.qClass?.[i] || globalClass || 'General'),
+                classLevel: mode === 'archive' ? questionClassLevel : (body.qClass?.[i] ? (Array.isArray(body.qClass[i]) ? body.qClass[i] : (body.qClass[i].includes(',') ? body.qClass[i].split(',').map(c => normalizeClass(c)).filter(Boolean) : normalizeClass(body.qClass[i]))) : questionClassLevel),
                 accessType: 'Free',
                 isBoardQuestion: true,
                 addedBy:  req.session.user._id,
@@ -3556,21 +3657,25 @@ async function getTeacherAssignedContext(teacherId) {
     const User = require('../models/User');
     const Course = require('../models/Course');
 
-    const teacherProfile = await User.findById(teacherId).select('teachingSubject teachingSubjects classLevel assignedClasses role').lean();
+    const teacherProfile = await User.findById(teacherId).select('teachingSubject teachingSubjects classLevel assignedClasses classes subject subjects department role').lean();
     
     const splitTokens = (val) => {
         if (!val) return [];
         if (Array.isArray(val)) return val.flatMap(v => splitTokens(v));
-        return String(val).split(',').map(s => s.trim()).filter(Boolean);
+        return String(val).split(/[,;/]+/).map(s => s.trim().replace(/\bclass\s+class\b/gi, 'Class')).filter(Boolean);
     };
 
     const rawUserSubjects = [
         ...splitTokens(teacherProfile?.teachingSubject),
-        ...splitTokens(teacherProfile?.teachingSubjects)
+        ...splitTokens(teacherProfile?.teachingSubjects),
+        ...splitTokens(teacherProfile?.subject),
+        ...splitTokens(teacherProfile?.subjects),
+        ...splitTokens(teacherProfile?.department)
     ];
     const rawUserClasses = [
         ...splitTokens(teacherProfile?.classLevel),
-        ...splitTokens(teacherProfile?.assignedClasses)
+        ...splitTokens(teacherProfile?.assignedClasses),
+        ...splitTokens(teacherProfile?.classes)
     ];
 
     const teacherAssignedCourses = await Course.find({
@@ -4337,13 +4442,19 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
         // Send notification to student
         try {
             const bankTitle = attempt.bank.title || attempt.bank.subject || 'Written Exam';
-            await Notification.create({
+            const evalNotif = await Notification.create({
                 user: attempt.user,
                 title: 'Written Exam Evaluated',
                 message: `Your written submission for "${bankTitle}" has been evaluated by ${user.name}. Your written score: ${totalWrittenEarned}/${totalWrittenMax}.`,
                 type: 'exam',
                 link: `/question-bank/written-evaluation/${attempt._id}`
             });
+
+            // Deliver live real-time notification via Socket.IO if connected
+            const io = req.app.get('io') || global.io;
+            if (io && attempt.user) {
+                io.to(String(attempt.user)).emit('notification:new', evalNotif);
+            }
         } catch (notifErr) {
             console.warn('Failed to send evaluation notification:', notifErr);
         }
@@ -4364,6 +4475,19 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
         res.redirect(`/teacher/written-evaluations/${req.params.attemptId}?error=Failed+to+save+evaluation`);
     }
 });
+
+// ==========================================
+// SYLLABUS & TOPIC SYSTEM - TEACHER ROUTES
+// ==========================================
+const topicController = require('../controllers/topicController');
+
+router.get('/topics', teacherProtect, topicController.getTeacherTopicsPage);
+router.get('/api/chapters', teacherProtect, topicController.getChaptersApi);
+router.get('/api/topics', teacherProtect, topicController.getTopicsApi);
+router.post('/topics', teacherProtect, topicController.createTopic);
+router.post('/topics/bulk', teacherProtect, topicController.bulkCreateTopics);
+router.delete('/topics/:id/pending', teacherProtect, topicController.deletePendingTeacherTopic);
+router.post('/topics/:id/delete-pending', teacherProtect, topicController.deletePendingTeacherTopic);
 
 module.exports = router;
 

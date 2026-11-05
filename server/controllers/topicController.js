@@ -1,0 +1,1147 @@
+const mongoose = require('mongoose');
+const Topic = require('../models/Topic');
+const AcademicClass = require('../models/AcademicClass');
+const User = require('../models/User');
+const Course = require('../models/Course');
+const { connectDB } = require('../config');
+
+// Default initial sample topics seed for rich initial UX if collection is empty
+const seedDefaultTopicsIfEmpty = async () => {
+    try {
+        const count = await Topic.countDocuments();
+        if (count > 0) return;
+
+        const defaultTopics = [
+            // Class 9 / 10 - Physics
+            {
+                name: 'স্কেলার ও ভেক্টর রাশি (Scalar & Vector Quantities)',
+                code: 'PHY-C2-T01',
+                classLevel: 'Class 9',
+                group: 'Science',
+                subject: 'Physics',
+                chapter: { number: 2, name: 'অধ্যায় ২: গতি (Motion)' },
+                difficulty: 'Easy',
+                keywords: ['scalar', 'vector', 'magnitude', 'direction'],
+                description: 'স্কেলার ও ভেক্টর রাশির মৌলিক ধারণা ও পার্থক্য',
+                order: 1
+            },
+            {
+                name: 'দূরত্ব ও সরণ (Distance & Displacement)',
+                code: 'PHY-C2-T02',
+                classLevel: 'Class 9',
+                group: 'Science',
+                subject: 'Physics',
+                chapter: { number: 2, name: 'অধ্যায় ২: গতি (Motion)' },
+                difficulty: 'Easy',
+                keywords: ['distance', 'displacement', 'motion'],
+                description: 'দূরত্ব ও সরণের পার্থক্য ও গাণিতিক প্রয়োগ',
+                order: 2
+            },
+            {
+                name: 'দ্রুতি ও বেগ (Speed & Velocity)',
+                code: 'PHY-C2-T03',
+                classLevel: 'Class 9',
+                group: 'Science',
+                subject: 'Physics',
+                chapter: { number: 2, name: 'অধ্যায় ২: গতি (Motion)' },
+                difficulty: 'Medium',
+                keywords: ['speed', 'velocity', 'instantaneous velocity'],
+                description: 'গড় দ্রুতি, গড় বেগ ও তাৎক্ষণিক বেগ নির্ণয়',
+                order: 3
+            },
+            {
+                name: 'ত্বরণ ও মন্দন (Acceleration & Deceleration)',
+                code: 'PHY-C2-T04',
+                classLevel: 'Class 9',
+                group: 'Science',
+                subject: 'Physics',
+                chapter: { number: 2, name: 'অধ্যায় ২: গতি (Motion)' },
+                difficulty: 'Medium',
+                keywords: ['acceleration', 'deceleration', 'uniform acceleration'],
+                description: 'সুষম ও অসম ত্বরণ এবং গতির সমীকরণ প্রতিপাদন',
+                order: 4
+            },
+            {
+                name: 'পড়ন্ত বস্তুর সূত্রাবলী (Laws of Falling Bodies)',
+                code: 'PHY-C2-T05',
+                classLevel: 'Class 9',
+                group: 'Science',
+                subject: 'Physics',
+                chapter: { number: 2, name: 'অধ্যায় ২: গতি (Motion)' },
+                difficulty: 'Hard',
+                keywords: ['gravity', 'free fall', 'galileo'],
+                description: 'গ্যালিলিওর সূত্র ও অভিকর্ষজ ত্বরণ সংক্রান্ত সমস্যা',
+                order: 5
+            },
+
+            // Chapter 3: বল (Force)
+            {
+                name: 'জড়তা ও নিউটনের ১ম সূত্র (Inertia & Newton\'s 1st Law)',
+                code: 'PHY-C3-T01',
+                classLevel: 'Class 9',
+                group: 'Science',
+                subject: 'Physics',
+                chapter: { number: 3, name: 'অধ্যায় ৩: বল (Force)' },
+                difficulty: 'Easy',
+                keywords: ['inertia', 'newton first law', 'mass'],
+                description: 'স্থিতিজড়তা ও গতিজড়তা সংক্রান্ত বাস্তব উদাহরণ',
+                order: 1
+            },
+            {
+                name: 'ভরবেগ ও নিউটনের ২য় সূত্র (Momentum & Newton\'s 2nd Law)',
+                code: 'PHY-C3-T02',
+                classLevel: 'Class 9',
+                group: 'Science',
+                subject: 'Physics',
+                chapter: { number: 3, name: 'অধ্যায় ৩: বল (Force)' },
+                difficulty: 'Medium',
+                keywords: ['momentum', 'f=ma', 'newton second law'],
+                description: 'F = ma সমীকরণ ও ভরবেগের পরিবর্তনের হার',
+                order: 2
+            },
+            {
+                name: 'নিউটনের ৩য় সূত্র ও ঘর্ষণ বল (Newton\'s 3rd Law & Friction)',
+                code: 'PHY-C3-T03',
+                classLevel: 'Class 9',
+                group: 'Science',
+                subject: 'Physics',
+                chapter: { number: 3, name: 'অধ্যায় ৩: বল (Force)' },
+                difficulty: 'Hard',
+                keywords: ['action reaction', 'friction', 'coefficient'],
+                description: 'ক্রিয়া-প্রতিক্রিয়া এবং ঘর্ষণ বলের প্রকারভেদ',
+                order: 3
+            }
+        ];
+
+        await Topic.insertMany(defaultTopics);
+        console.log('✅ Seeded default NCTB topics for ODDHAY');
+    } catch (e) {
+        console.warn('Topic seed warning:', e.message);
+    }
+};
+
+// Render Main Topics & Syllabus Page
+const getTopicsPage = async (req, res) => {
+    try {
+        await connectDB();
+        await seedDefaultTopicsIfEmpty();
+
+        const classes = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
+        
+        let selectedClass = (req.query.classLevel || '').trim();
+        let selectedGroup = (req.query.group || 'all').trim();
+        let selectedSubject = (req.query.subject || '').trim();
+
+        // Default to first active class if not specified
+        if (!selectedClass && classes.length > 0) {
+            selectedClass = classes[0].name;
+        }
+
+        const currentClassObj = classes.find(c => c.name.toLowerCase() === selectedClass.toLowerCase()) || classes[0] || null;
+
+        // Resolve available subjects for current class
+        let availableSubjects = [];
+        if (currentClassObj) {
+            if (currentClassObj.hasGroups && currentClassObj.groups && currentClassObj.groups.length > 0) {
+                if (selectedGroup && selectedGroup !== 'all') {
+                    const grp = currentClassObj.groups.find(g => g.name.toLowerCase() === selectedGroup.toLowerCase());
+                    const grpSubs = grp ? grp.subjects : [];
+                    availableSubjects = Array.from(new Set([...(currentClassObj.commonSubjects || []), ...grpSubs]));
+                } else {
+                    const allGrpSubs = currentClassObj.groups.flatMap(g => g.subjects || []);
+                    availableSubjects = Array.from(new Set([...(currentClassObj.commonSubjects || []), ...(currentClassObj.subjects || []), ...allGrpSubs]));
+                }
+            } else {
+                availableSubjects = currentClassObj.subjects || [];
+            }
+        }
+
+        // Default subject
+        if (!selectedSubject && availableSubjects.length > 0) {
+            selectedSubject = availableSubjects[0];
+        }
+
+        // Active Topics Query (Only Approved topics go to Live Syllabus)
+        const activeFilter = { isArchived: { $nin: [true, 'true', 1] }, status: { $nin: ['pending', 'rejected'] } };
+        if (selectedClass) {
+            activeFilter.classLevel = new RegExp(`^${selectedClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        }
+        if (selectedSubject) {
+            activeFilter.subject = new RegExp(`^${selectedSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        }
+        if (selectedGroup && selectedGroup !== 'all') {
+            activeFilter.group = { $in: [selectedGroup, 'all', 'None', null] };
+        }
+
+        const activeTopics = await Topic.find(activeFilter).sort({ 'chapter.number': 1, order: 1, createdAt: 1 }).lean();
+
+        // Group Active Topics by Chapter
+        const chaptersMap = new Map();
+        activeTopics.forEach(top => {
+            const chName = (top.chapter && top.chapter.name) ? top.chapter.name.trim() : 'General / অধ্যায়হীন';
+            const chNum = (top.chapter && typeof top.chapter.number === 'number') ? top.chapter.number : 1;
+            if (!chaptersMap.has(chName)) {
+                chaptersMap.set(chName, {
+                    name: chName,
+                    number: chNum,
+                    topics: []
+                });
+            }
+            chaptersMap.get(chName).topics.push(top);
+        });
+
+        const chapters = Array.from(chaptersMap.values()).sort((a, b) => a.number - b.number);
+
+        // Archived Topics (History Bucket)
+        const archivedTopics = await Topic.find({ isArchived: { $in: [true, 'true', 1] } }).sort({ updatedAt: -1 }).lean();
+
+        // Pending Submissions Query (Awaiting Admin Review)
+        const pendingTopics = await Topic.find({ 
+            status: 'pending', 
+            isArchived: { $nin: [true, 'true', 1] } 
+        }).populate('submittedBy', 'name email profilePicture profileImage').populate('createdBy', 'name email profilePicture profileImage').sort({ createdAt: -1 }).lean();
+        const pendingTopicCount = await Topic.countDocuments({ status: 'pending', isArchived: { $nin: [true, 'true', 1] } });
+
+        // Overall Global Counts
+        const totalTopicCount = await Topic.countDocuments({ isArchived: { $nin: [true, 'true', 1] }, status: { $nin: ['pending', 'rejected'] } });
+        const archivedTopicCount = archivedTopics.length;
+
+        const apiBase = req.baseUrl || (req.path.startsWith('/admin') ? '/admin' : '/superadmin');
+
+        res.render('superadmin/topics', {
+            active: 'topics',
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin', theme: 'light' },
+            classes: classes || [],
+            currentClassObj,
+            selectedClass,
+            selectedGroup,
+            selectedSubject,
+            availableSubjects,
+            chapters,
+            activeTopics,
+            archivedTopics,
+            totalTopicCount,
+            archivedTopicCount,
+            pendingTopics,
+            pendingTopicCount,
+            apiBase
+        });
+    } catch (error) {
+        console.error('getTopicsPage Error:', error);
+        res.status(500).send('Server Error loading topics: ' + error.message);
+    }
+};
+
+// API: Filtered Topics lookup for Question Bank / Quizzes / Modals
+const getTopicsApi = async (req, res) => {
+    try {
+        await connectDB();
+        const { classLevel, subject, chapter, group } = req.query;
+
+        const filter = { isArchived: { $nin: [true, 'true', 1] }, status: { $nin: ['pending', 'rejected'] } };
+        if (classLevel && classLevel !== 'all') {
+            filter.classLevel = new RegExp(`^${classLevel.trim()}$`, 'i');
+        }
+        if (subject && subject !== 'all') {
+            filter.subject = new RegExp(`^${subject.trim()}$`, 'i');
+        }
+        if (chapter && chapter !== 'all') {
+            filter['chapter.name'] = new RegExp(`^${chapter.trim()}$`, 'i');
+        }
+        if (group && group !== 'all') {
+            filter.group = { $in: [group, 'all', 'None', null] };
+        }
+
+        const topics = await Topic.find(filter).sort({ 'chapter.number': 1, order: 1, name: 1 }).lean();
+        const chapterList = Array.from(new Set(topics.map(t => t.chapter?.name).filter(Boolean)));
+
+        res.json({
+            success: true,
+            count: topics.length,
+            topics,
+            chapters: chapterList
+        });
+    } catch (error) {
+        console.error('getTopicsApi Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// API: Get existing chapters for a class and subject to check for duplicates
+const getChaptersApi = async (req, res) => {
+    try {
+        await connectDB();
+        const { classLevel, subject } = req.query;
+        if (!classLevel || !subject) {
+            return res.json({ success: true, chapters: [] });
+        }
+
+        const escClass = classLevel.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escSub = subject.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        const filter = {
+            isArchived: { $nin: [true, 'true', 1] },
+            status: { $nin: ['rejected'] },
+            classLevel: new RegExp(`^${escClass}$`, 'i'),
+            subject: new RegExp(`^${escSub}$`, 'i')
+        };
+
+        const topics = await Topic.find(filter).select('chapter status').lean();
+        const chaptersMap = new Map();
+
+        topics.forEach(t => {
+            if (t.chapter && t.chapter.name) {
+                const name = t.chapter.name.trim();
+                const num = (typeof t.chapter.number === 'number') ? t.chapter.number : (parseInt(t.chapter.number, 10) || 1);
+                const key = `${num}_${name.toLowerCase()}`;
+                if (!chaptersMap.has(key)) {
+                    chaptersMap.set(key, {
+                        number: num,
+                        name: name,
+                        status: t.status || 'approved'
+                    });
+                }
+            }
+        });
+
+        const chapters = Array.from(chaptersMap.values()).sort((a, b) => a.number - b.number);
+        res.json({ success: true, chapters });
+    } catch (error) {
+        console.error('getChaptersApi Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Create Single Topic
+const createTopic = async (req, res) => {
+    try {
+        await connectDB();
+        const { name, code, classLevel, group, subject, chapterName, chapterNumber, difficulty, keywords, description, order } = req.body;
+
+        if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Topic name is required' });
+        if (!classLevel || !classLevel.trim()) return res.status(400).json({ success: false, error: 'Class level is required' });
+        if (!subject || !subject.trim()) return res.status(400).json({ success: false, error: 'Subject is required' });
+        if (!chapterName || !chapterName.trim()) return res.status(400).json({ success: false, error: 'Chapter name is required' });
+
+        const keywordsArray = Array.isArray(keywords) 
+            ? keywords.map(s => String(s || '').trim()).filter(Boolean)
+            : String(keywords || '').split(',').map(s => s.trim()).filter(Boolean);
+
+        const isTeacher = req.session && req.session.user && req.session.user.role === 'teacher';
+        const topicStatus = isTeacher ? 'pending' : 'approved';
+
+        if (isTeacher) {
+            const { assignedClasses, assignedSubjects } = await getTeacherAssignments(req.session.user._id);
+            if (assignedClasses.length > 0 && !matchesClass(classLevel, assignedClasses)) {
+                return res.status(403).json({ success: false, error: `You are not assigned to class "${classLevel}"` });
+            }
+            if (assignedSubjects.length > 0 && !matchesSubject(subject, assignedSubjects)) {
+                return res.status(403).json({ success: false, error: `You are not assigned to subject "${subject}"` });
+            }
+        }
+
+        // Support editing/resubmitting an existing submission
+        const editingTopicId = req.body.topicId || req.body.id || req.body.editId;
+        if (editingTopicId && mongoose.Types.ObjectId.isValid(editingTopicId)) {
+            const existingTopic = await Topic.findById(editingTopicId);
+            if (existingTopic) {
+                if (isTeacher && existingTopic.submittedBy && existingTopic.submittedBy.toString() !== req.session.user._id.toString()) {
+                    return res.status(403).json({ success: false, error: 'Unauthorized to edit this topic.' });
+                }
+
+                existingTopic.name = name.trim();
+                existingTopic.code = code ? code.trim() : (existingTopic.code || '');
+                existingTopic.classLevel = classLevel.trim();
+                existingTopic.group = group || 'None';
+                existingTopic.subject = subject.trim();
+                existingTopic.chapter = {
+                    number: parseInt(chapterNumber, 10) || 1,
+                    name: chapterName.trim()
+                };
+                existingTopic.difficulty = ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : (existingTopic.difficulty || 'Medium');
+                existingTopic.keywords = keywordsArray;
+                existingTopic.description = description ? description.trim() : '';
+                existingTopic.order = parseInt(order, 10) || 0;
+                existingTopic.status = topicStatus;
+                existingTopic.rejectionReason = '';
+                existingTopic.updatedAt = new Date();
+                await existingTopic.save();
+
+                return res.json({
+                    success: true,
+                    message: isTeacher ? `Topic "${existingTopic.name}" updated and resubmitted for Admin review!` : `Topic "${existingTopic.name}" updated successfully!`,
+                    topic: existingTopic
+                });
+            }
+        }
+
+        const newTopic = await Topic.create({
+            name: name.trim(),
+            code: code ? code.trim() : '',
+            classLevel: classLevel.trim(),
+            group: group || 'None',
+            subject: subject.trim(),
+            chapter: {
+                number: parseInt(chapterNumber, 10) || 1,
+                name: chapterName.trim()
+            },
+            difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
+            keywords: keywordsArray,
+            description: description ? description.trim() : '',
+            order: parseInt(order, 10) || 0,
+            status: topicStatus,
+            submittedBy: isTeacher ? req.session.user._id : null,
+            createdBy: req.session && req.session.user ? req.session.user._id : null
+        });
+
+        const successMsg = isTeacher 
+            ? `Topic "${newTopic.name}" submitted for Admin review and approval`
+            : `Topic "${newTopic.name}" created successfully`;
+
+        res.json({
+            success: true,
+            message: successMsg,
+            isPending: isTeacher,
+            topic: newTopic
+        });
+    } catch (error) {
+        console.error('createTopic Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Bulk Create Topics under a Chapter
+const bulkCreateTopics = async (req, res) => {
+    try {
+        await connectDB();
+        const { classLevel, group, subject, chapterName, chapterNumber, topicList, difficulty } = req.body;
+
+        if (!classLevel || !subject || !chapterName) {
+            return res.status(400).json({ success: false, error: 'Class, Subject, and Chapter are required' });
+        }
+
+        let names = [];
+        if (Array.isArray(topicList)) {
+            names = topicList.map(s => String(s || '').trim()).filter(Boolean);
+        } else if (typeof topicList === 'string') {
+            names = topicList.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+        }
+
+        if (names.length === 0) {
+            return res.status(400).json({ success: false, error: 'Please enter at least one topic name' });
+        }
+
+        const chNum = parseInt(chapterNumber, 10) || 1;
+        const isTeacher = req.session && req.session.user && req.session.user.role === 'teacher';
+        const topicStatus = isTeacher ? 'pending' : 'approved';
+
+        if (isTeacher) {
+            const { assignedClasses, assignedSubjects } = await getTeacherAssignments(req.session.user._id);
+            if (assignedClasses.length > 0 && !matchesClass(classLevel, assignedClasses)) {
+                return res.status(403).json({ success: false, error: `You are not assigned to class "${classLevel}"` });
+            }
+            if (assignedSubjects.length > 0 && !matchesSubject(subject, assignedSubjects)) {
+                return res.status(403).json({ success: false, error: `You are not assigned to subject "${subject}"` });
+            }
+        }
+        const createdTopics = [];
+
+        for (let i = 0; i < names.length; i++) {
+            const name = names[i];
+            const topic = await Topic.create({
+                name,
+                classLevel: classLevel.trim(),
+                group: group || 'None',
+                subject: subject.trim(),
+                chapter: {
+                    number: chNum,
+                    name: chapterName.trim()
+                },
+                difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
+                order: i + 1,
+                status: topicStatus,
+                submittedBy: isTeacher ? req.session.user._id : null,
+                createdBy: req.session && req.session.user ? req.session.user._id : null
+            });
+            createdTopics.push(topic);
+        }
+
+        const successMsg = isTeacher 
+            ? `${createdTopics.length} topics submitted for Admin review and approval`
+            : `${createdTopics.length} topics added to "${chapterName}" successfully`;
+
+        res.json({
+            success: true,
+            message: successMsg,
+            isPending: isTeacher,
+            count: createdTopics.length,
+            topics: createdTopics
+        });
+    } catch (error) {
+        console.error('bulkCreateTopics Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Update Topic
+const updateTopic = async (req, res) => {
+    try {
+        await connectDB();
+        const { id } = req.params;
+        const { name, code, classLevel, group, subject, chapterName, chapterNumber, difficulty, keywords, description, order } = req.body;
+
+        const updatePayload = {};
+        if (name) updatePayload.name = name.trim();
+        if (code !== undefined) updatePayload.code = String(code).trim();
+        if (classLevel) updatePayload.classLevel = classLevel.trim();
+        if (group) updatePayload.group = group;
+        if (subject) updatePayload.subject = subject.trim();
+        if (chapterName) {
+            updatePayload['chapter.name'] = chapterName.trim();
+        }
+        if (chapterNumber !== undefined) {
+            updatePayload['chapter.number'] = parseInt(chapterNumber, 10) || 1;
+        }
+        if (difficulty) updatePayload.difficulty = difficulty;
+        if (description !== undefined) updatePayload.description = description.trim();
+        if (order !== undefined) updatePayload.order = parseInt(order, 10) || 0;
+        if (keywords) {
+            updatePayload.keywords = Array.isArray(keywords) 
+                ? keywords.map(s => String(s || '').trim()).filter(Boolean)
+                : String(keywords || '').split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        const updated = await Topic.findByIdAndUpdate(id, { $set: updatePayload }, { new: true });
+        if (!updated) return res.status(404).json({ success: false, error: 'Topic not found' });
+
+        res.json({
+            success: true,
+            message: `Topic "${updated.name}" updated successfully`,
+            topic: updated
+        });
+    } catch (error) {
+        console.error('updateTopic Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Archive Topic (Move to History Bucket)
+const archiveTopic = async (req, res) => {
+    try {
+        await connectDB();
+        const rawId = req.params.id || req.body.id;
+        const name = req.body && req.body.name ? req.body.name.trim() : '';
+
+        let updated = null;
+        if (rawId && mongoose.Types.ObjectId.isValid(rawId)) {
+            updated = await Topic.findByIdAndUpdate(rawId, { $set: { isArchived: true } }, { new: true });
+        }
+        if (!updated && name) {
+            updated = await Topic.findOneAndUpdate(
+                { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                { $set: { isArchived: true } },
+                { new: true }
+            );
+        }
+
+        if (!updated) return res.status(404).json({ success: false, error: 'Topic not found to archive' });
+
+        res.json({
+            success: true,
+            message: `Topic "${updated.name}" moved to History Bucket`,
+            topic: updated
+        });
+    } catch (error) {
+        console.error('archiveTopic Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Restore Topic from History Bucket
+const restoreTopic = async (req, res) => {
+    try {
+        await connectDB();
+        const rawId = req.params.id || req.body.id;
+        const name = req.body && req.body.name ? req.body.name.trim() : '';
+
+        let updated = null;
+        if (rawId && mongoose.Types.ObjectId.isValid(rawId)) {
+            updated = await Topic.findByIdAndUpdate(rawId, { $set: { isArchived: false } }, { new: true });
+        }
+        if (!updated && name) {
+            updated = await Topic.findOneAndUpdate(
+                { name: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+                { $set: { isArchived: false } },
+                { new: true }
+            );
+        }
+
+        if (!updated) return res.status(404).json({ success: false, error: 'Topic not found to restore' });
+
+        res.json({
+            success: true,
+            message: `Topic "${updated.name}" restored to live syllabus`,
+            topic: updated
+        });
+    } catch (error) {
+        console.error('restoreTopic Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Permanently Delete Topic
+const permanentDeleteTopic = async (req, res) => {
+    try {
+        await connectDB();
+        const id = req.params.id || req.body.id;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, error: 'Valid topic ID required' });
+        }
+
+        const deleted = await Topic.findByIdAndDelete(id);
+        if (!deleted) return res.status(404).json({ success: false, error: 'Topic not found' });
+
+        res.json({
+            success: true,
+            message: 'Topic permanently deleted from database'
+        });
+    } catch (error) {
+        console.error('permanentDeleteTopic Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Delete Whole Chapter (Move all topics in chapter to History Bucket)
+const deleteChapter = async (req, res) => {
+    try {
+        await connectDB();
+        const { classLevel, subject, chapterName } = req.body;
+
+        if (!classLevel || !subject || !chapterName) {
+            return res.status(400).json({ success: false, error: 'Class, Subject, and Chapter name are required' });
+        }
+
+        const escapedClass = classLevel.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escapedSubject = subject.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escapedChapter = chapterName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        const filter = {
+            classLevel: new RegExp(`^${escapedClass}$`, 'i'),
+            subject: new RegExp(`^${escapedSubject}$`, 'i'),
+            $or: [
+                { 'chapter.name': chapterName.trim() },
+                { 'chapter.name': new RegExp(`^${escapedChapter}$`, 'i') }
+            ]
+        };
+
+        const result = await Topic.updateMany(filter, { $set: { isArchived: true } });
+        return res.json({
+            success: true,
+            message: `Chapter "${chapterName}" and ${result.modifiedCount} topic(s) moved to History Bucket`,
+            count: result.modifiedCount
+        });
+    } catch (error) {
+        console.error('deleteChapter Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Bulk Action on Multiple Selected Topics (Archive or Restore to/from History Bucket)
+const bulkActionTopics = async (req, res) => {
+    try {
+        await connectDB();
+        const { topicIds, action } = req.body;
+
+        if (!topicIds || !Array.isArray(topicIds) || topicIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'Please select at least one topic' });
+        }
+
+        const validIds = topicIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+        if (validIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'No valid topic IDs provided' });
+        }
+
+        if (action === 'restore') {
+            const result = await Topic.updateMany({ _id: { $in: validIds } }, { $set: { isArchived: false } });
+            return res.json({
+                success: true,
+                message: `${result.modifiedCount} topic(s) restored to live syllabus`,
+                count: result.modifiedCount
+            });
+        } else {
+            // Default: archive (move to History Bucket)
+            const result = await Topic.updateMany({ _id: { $in: validIds } }, { $set: { isArchived: true } });
+            return res.json({
+                success: true,
+                message: `${result.modifiedCount} topic(s) moved to History Bucket`,
+                count: result.modifiedCount
+            });
+        }
+    } catch (error) {
+        console.error('bulkActionTopics Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// ==========================================
+// ADMIN APPROVAL ENDPOINTS FOR TOPICS
+// ==========================================
+
+// Approve single topic
+const approveTopic = async (req, res) => {
+    try {
+        await connectDB();
+        const id = req.body.id || req.body.topicId;
+        if (!id) return res.status(400).json({ success: false, error: 'Topic ID is required' });
+
+        const topic = await Topic.findByIdAndUpdate(id, {
+            status: 'approved',
+            reviewedBy: req.session.user ? req.session.user._id : null,
+            reviewedAt: new Date(),
+            rejectionReason: ''
+        }, { new: true });
+
+        if (!topic) return res.status(404).json({ success: false, error: 'Topic not found' });
+
+        res.json({
+            success: true,
+            message: `Topic "${topic.name}" approved and published live`,
+            topic
+        });
+    } catch (error) {
+        console.error('approveTopic Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Bulk Approve multiple topics
+const bulkApproveTopics = async (req, res) => {
+    try {
+        await connectDB();
+        const topicIds = req.body.topicIds || req.body.ids || req.body.selectedTopicIds;
+        if (!Array.isArray(topicIds) || topicIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'No topics selected for approval' });
+        }
+
+        const validIds = topicIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+        const result = await Topic.updateMany(
+            { _id: { $in: validIds } },
+            { 
+                $set: { 
+                    status: 'approved',
+                    reviewedBy: req.session.user ? req.session.user._id : null,
+                    reviewedAt: new Date(),
+                    rejectionReason: ''
+                } 
+            }
+        );
+
+        res.json({
+            success: true,
+            message: `${result.modifiedCount} topic(s) approved and published live`,
+            count: result.modifiedCount
+        });
+    } catch (error) {
+        console.error('bulkApproveTopics Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Reject single topic with feedback
+const rejectTopic = async (req, res) => {
+    try {
+        await connectDB();
+        const id = req.body.id || req.body.topicId;
+        const reason = req.body.reason;
+        if (!id) return res.status(400).json({ success: false, error: 'Topic ID is required' });
+
+        const topic = await Topic.findByIdAndUpdate(id, {
+            status: 'rejected',
+            rejectionReason: (reason || 'Revisions required by admin').trim(),
+            reviewedBy: req.session.user ? req.session.user._id : null,
+            reviewedAt: new Date()
+        }, { new: true });
+
+        if (!topic) return res.status(404).json({ success: false, error: 'Topic not found' });
+
+        res.json({
+            success: true,
+            message: 'Topic returned to teacher with feedback',
+            topic
+        });
+    } catch (error) {
+        console.error('rejectTopic Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// Bulk Reject multiple topics
+const bulkRejectTopics = async (req, res) => {
+    try {
+        await connectDB();
+        const topicIds = req.body.topicIds || req.body.ids || req.body.selectedTopicIds;
+        const reason = req.body.reason;
+        if (!Array.isArray(topicIds) || topicIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'No topics selected' });
+        }
+
+        const validIds = topicIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+        const result = await Topic.updateMany(
+            { _id: { $in: validIds } },
+            { 
+                $set: { 
+                    status: 'rejected',
+                    rejectionReason: (reason || 'Revisions required by admin').trim(),
+                    reviewedBy: req.session.user ? req.session.user._id : null,
+                    reviewedAt: new Date()
+                } 
+            }
+        );
+
+        res.json({
+            success: true,
+            message: `${result.modifiedCount} topic(s) marked as rejected with feedback`,
+            count: result.modifiedCount
+        });
+    } catch (error) {
+        console.error('bulkRejectTopics Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+// ==========================================
+// TEACHER ASSIGNMENT & SCOPE HELPERS
+// ==========================================
+const matchesClass = (targetClass, allowedList) => {
+    if (!targetClass || !allowedList || allowedList.length === 0) return false;
+    const t = String(targetClass).toLowerCase().replace(/\bclass\b/gi, '').trim();
+    const tNum = t.replace(/[^0-9]/g, '');
+    return allowedList.some(raw => {
+        const a = String(raw).toLowerCase().replace(/\bclass\b/gi, '').trim();
+        const aNum = a.replace(/[^0-9]/g, '');
+        if (t === a) return true;
+        if (t.replace(/\s+/g, '') === a.replace(/\s+/g, '')) return true;
+        if (tNum && aNum && tNum === aNum) return true;
+        if (t && a && (t.includes(a) || a.includes(t))) return true;
+        return false;
+    });
+};
+
+const matchesSubject = (targetSubject, allowedList) => {
+    if (!targetSubject || !allowedList || allowedList.length === 0) return false;
+    const cleanSub = (s) => String(s || '').toLowerCase().trim()
+        .replace(/\bmathematics\b/g, 'math')
+        .replace(/\b1st\s+paper\b/g, '')
+        .replace(/\b2nd\s+paper\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const t = cleanSub(targetSubject);
+    return allowedList.some(raw => {
+        const a = cleanSub(raw);
+        if (!a) return false;
+        if (t === a) return true;
+        if (t.replace(/\s+/g, '') === a.replace(/\s+/g, '')) return true;
+
+        const checkWordMatch = (container, needle) => {
+            const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp('(^|[^a-z0-9])' + escaped + '([^a-z0-9]|$)', 'i');
+            if (regex.test(container)) {
+                if (needle === 'bangla' && container.includes('bangladesh') && !container.includes('bangla ')) {
+                    return false;
+                }
+                return true;
+            }
+            return false;
+        };
+
+        if (checkWordMatch(t, a)) return true;
+        if (checkWordMatch(a, t)) return true;
+
+        return false;
+    });
+};
+
+const getTeacherAssignments = async (userId) => {
+    const user = await User.findById(userId).lean();
+    let assignedClasses = [];
+    let assignedSubjects = [];
+
+    if (user) {
+        if (user.classLevel) {
+            const cleaned = String(user.classLevel).replace(/\bclass\s+class\b/gi, 'Class').trim();
+            const parts = cleaned.split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
+            assignedClasses.push(...parts);
+        }
+        if (Array.isArray(user.classes)) {
+            assignedClasses.push(...user.classes.map(s => String(s || '').trim()).filter(Boolean));
+        }
+        if (Array.isArray(user.assignedClasses)) {
+            assignedClasses.push(...user.assignedClasses.map(s => String(s || '').trim()).filter(Boolean));
+        }
+        if (user.teachingSubject) {
+            const parts = String(user.teachingSubject).split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
+            assignedSubjects.push(...parts);
+        }
+        if (Array.isArray(user.teachingSubjects)) {
+            assignedSubjects.push(...user.teachingSubjects.map(s => String(s || '').trim()).filter(Boolean));
+        }
+        if (user.subject) {
+            const parts = String(user.subject).split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
+            assignedSubjects.push(...parts);
+        }
+        if (Array.isArray(user.subjects)) {
+            assignedSubjects.push(...user.subjects.map(s => String(s || '').trim()).filter(Boolean));
+        }
+        if (user.department) {
+            const parts = String(user.department).split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
+            assignedSubjects.push(...parts);
+        }
+        const courses = await Course.find({
+            $or: [{ instructor: userId }, { permittedTeachers: userId }]
+        }).select('classLevel subject').lean();
+        courses.forEach(c => {
+            if (c.classLevel) {
+                const parts = String(c.classLevel).split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
+                assignedClasses.push(...parts);
+            }
+            if (c.subject) {
+                const parts = String(c.subject).split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
+                assignedSubjects.push(...parts);
+            }
+        });
+    }
+
+    return {
+        user,
+        assignedClasses: Array.from(new Set(assignedClasses.filter(Boolean))),
+        assignedSubjects: Array.from(new Set(assignedSubjects.filter(Boolean)))
+    };
+};
+
+// ==========================================
+// TEACHER PORTAL TOPICS CONTROLLER (STRICT SCOPED)
+// ==========================================
+
+const getTeacherTopicsPage = async (req, res) => {
+    try {
+        await connectDB();
+        await seedDefaultTopicsIfEmpty();
+
+        const { user: teacherUser, assignedClasses, assignedSubjects } = await getTeacherAssignments(req.session.user._id);
+        const isSuperOrAdmin = ['admin', 'superadmin'].includes(teacherUser?.role || req.session.user?.role);
+        const allClasses = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
+
+        // STRICT FILTERING: Teacher ONLY sees classes they are assigned to.
+        // Superadmin/Admin or unconstrained teachers see all active classes.
+        let classes = [];
+        if (!isSuperOrAdmin && assignedClasses.length > 0) {
+            classes = allClasses.filter(c => matchesClass(c.name, assignedClasses));
+            if (classes.length === 0) {
+                classes = allClasses;
+            }
+        } else {
+            classes = allClasses;
+        }
+
+        let selectedClass = (req.query.classLevel || '').trim();
+        let selectedGroup = (req.query.group || 'all').trim();
+        let selectedSubject = (req.query.subject || '').trim();
+
+        // Default to first assigned class
+        if (classes.length > 0) {
+            const hasSel = classes.some(c => c.name.toLowerCase() === selectedClass.toLowerCase());
+            if (!hasSel) {
+                selectedClass = classes[0].name;
+            }
+        } else {
+            selectedClass = '';
+        }
+
+        const currentClassObj = classes.find(c => c.name.toLowerCase() === selectedClass.toLowerCase()) || classes[0] || null;
+
+        // Resolve class subjects
+        let classSubjects = [];
+        if (currentClassObj) {
+            if (currentClassObj.hasGroups && currentClassObj.groups && currentClassObj.groups.length > 0) {
+                if (selectedGroup && selectedGroup !== 'all') {
+                    const grp = currentClassObj.groups.find(g => g.name.toLowerCase() === selectedGroup.toLowerCase());
+                    const grpSubs = grp ? grp.subjects : [];
+                    classSubjects = Array.from(new Set([...(currentClassObj.commonSubjects || []), ...grpSubs]));
+                } else {
+                    const allGrpSubs = currentClassObj.groups.flatMap(g => g.subjects || []);
+                    classSubjects = Array.from(new Set([...(currentClassObj.commonSubjects || []), ...(currentClassObj.subjects || []), ...allGrpSubs]));
+                }
+            } else {
+                classSubjects = currentClassObj.subjects || [];
+            }
+        }
+
+        // STRICT FILTERING: Teacher ONLY sees subjects they are explicitly assigned to!
+        let availableSubjects = [];
+        if (assignedSubjects.length > 0) {
+            availableSubjects = classSubjects.filter(sub => matchesSubject(sub, assignedSubjects));
+            // If the assigned subject is not explicitly in the class subjects list yet, include the assigned subjects
+            if (availableSubjects.length === 0) {
+                availableSubjects = assignedSubjects;
+            }
+        } else if (isSuperOrAdmin) {
+            // Admin or Superadmin testing/previewing teacher portal sees full class subjects
+            availableSubjects = classSubjects;
+        } else {
+            // Strictly NO subjects if a teacher is not specifically assigned any subjects
+            availableSubjects = [];
+        }
+
+        // Default to first assigned subject
+        if (availableSubjects.length > 0) {
+            const hasSub = availableSubjects.some(s => s.toLowerCase() === selectedSubject.toLowerCase());
+            if (!hasSub) {
+                selectedSubject = availableSubjects[0];
+            }
+        } else {
+            selectedSubject = '';
+        }
+
+        // 2. Query Live Approved Topics (Only for assigned class & subject)
+        let activeTopics = [];
+        let chapters = [];
+
+        if (selectedClass && selectedSubject) {
+            const escClass = selectedClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const escSub = selectedSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const activeFilter = { 
+                isArchived: { $nin: [true, 'true', 1] }, 
+                status: { $nin: ['pending', 'rejected'] },
+                classLevel: new RegExp('^' + escClass + '$', 'i'),
+                subject: new RegExp('^' + escSub + '$', 'i')
+            };
+            if (selectedGroup && selectedGroup !== 'all') {
+                activeFilter.group = { $in: [selectedGroup, 'all', 'None', null] };
+            }
+
+            activeTopics = await Topic.find(activeFilter).sort({ 'chapter.number': 1, order: 1, createdAt: 1 }).lean();
+
+            const chaptersMap = new Map();
+            activeTopics.forEach(top => {
+                const chName = (top.chapter && top.chapter.name) ? top.chapter.name.trim() : 'General / অধ্যায়হীন';
+                const chNum = (top.chapter && typeof top.chapter.number === 'number') ? top.chapter.number : 1;
+                if (!chaptersMap.has(chName)) {
+                    chaptersMap.set(chName, {
+                        name: chName,
+                        number: chNum,
+                        topics: []
+                    });
+                }
+                chaptersMap.get(chName).topics.push(top);
+            });
+            chapters = Array.from(chaptersMap.values()).sort((a, b) => a.number - b.number);
+        }
+
+        // 3. Query Teacher's Own Submitted Topics
+        const subFilter = isSuperOrAdmin 
+            ? { isArchived: { $nin: [true, 'true', 1] }, $or: [{ submittedBy: req.session.user._id }, { createdBy: req.session.user._id }, { status: 'pending' }] }
+            : { isArchived: { $nin: [true, 'true', 1] }, $or: [{ submittedBy: req.session.user._id }, { createdBy: req.session.user._id }] };
+
+        const mySubmissions = await Topic.find(subFilter).sort({ 'chapter.number': 1, order: 1, createdAt: -1 }).lean();
+
+        if (req.session && req.session.user && teacherUser) {
+            req.session.user.classLevel = teacherUser.classLevel;
+            req.session.user.teachingSubject = teacherUser.teachingSubject;
+            req.session.user.teachingSubjects = teacherUser.teachingSubjects;
+        }
+
+        const myPendingTopics = mySubmissions.filter(t => t.status === 'pending');
+        const myRejectedTopics = mySubmissions.filter(t => t.status === 'rejected');
+        const myApprovedTopics = mySubmissions.filter(t => t.status === 'approved');
+
+        // Group Teacher Submissions Chapter-wise
+        const submissionChaptersMap = new Map();
+        mySubmissions.forEach(top => {
+            const chName = (top.chapter && top.chapter.name) ? top.chapter.name.trim() : 'General / অধ্যায়হীন';
+            const chNum = (top.chapter && typeof top.chapter.number === 'number') ? top.chapter.number : 1;
+            const key = `${top.classLevel || ''}_${top.subject || ''}_${chName}`;
+            if (!submissionChaptersMap.has(key)) {
+                submissionChaptersMap.set(key, {
+                    key,
+                    name: chName,
+                    number: chNum,
+                    classLevel: top.classLevel,
+                    group: top.group,
+                    subject: top.subject,
+                    topics: []
+                });
+            }
+            submissionChaptersMap.get(key).topics.push(top);
+        });
+        const mySubmissionChapters = Array.from(submissionChaptersMap.values()).sort((a, b) => a.number - b.number);
+
+        res.render('teacher/topics', {
+            active: 'topics',
+            user: teacherUser || req.session.user,
+            classes,
+            currentClassObj,
+            selectedClass,
+            selectedGroup,
+            selectedSubject,
+            availableSubjects,
+            assignedClasses,
+            assignedSubjects,
+            chapters,
+            activeTopics,
+            mySubmissions,
+            mySubmissionChapters,
+            myPendingTopics,
+            myRejectedTopics,
+            myApprovedTopics,
+            totalActiveCount: activeTopics.length,
+            pendingCount: myPendingTopics.length,
+            apiBase: '/teacher'
+        });
+    } catch (error) {
+        console.error('getTeacherTopicsPage Error:', error);
+        res.status(500).send('Server Error loading teacher syllabus: ' + error.message);
+    }
+};
+
+// Teacher can delete their own pending or rejected topic submission
+const deletePendingTeacherTopic = async (req, res) => {
+    try {
+        await connectDB();
+        const { id } = req.params;
+        const topic = await Topic.findOneAndDelete({
+            _id: id,
+            $or: [{ submittedBy: req.session.user._id }, { createdBy: req.session.user._id }],
+            status: { $in: ['pending', 'rejected'] }
+        });
+
+        if (!topic) {
+            return res.status(404).json({ success: false, error: 'Topic submission not found or already live' });
+        }
+
+        res.json({ success: true, message: 'Submission removed successfully' });
+    } catch (error) {
+        console.error('deletePendingTeacherTopic Error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+module.exports = {
+    getTopicsPage,
+    getTopicsApi,
+    getChaptersApi,
+    createTopic,
+    bulkCreateTopics,
+    updateTopic,
+    archiveTopic,
+    restoreTopic,
+    permanentDeleteTopic,
+    deleteChapter,
+    bulkActionTopics,
+    approveTopic,
+    bulkApproveTopics,
+    rejectTopic,
+    bulkRejectTopics,
+    getTeacherTopicsPage,
+    deletePendingTeacherTopic
+};

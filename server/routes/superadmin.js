@@ -120,7 +120,7 @@ router.get('/quizzes', superAdminProtect, async (req, res) => {
             quizzes: paginatedQuizzes,
             courses: allCourses,
             subjects: subjects,
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'quizzes',
             stats: { modelTestCount, courseExamCount, totalQuestions },
             totalQuizzes,
@@ -153,7 +153,7 @@ router.get('/compose-quiz', adminProtect, async (req, res) => {
         res.render('superadmin/compose-quiz', {
             courses: allCourses,
             subjects: subjects,
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'quizzes'
         });
     } catch (err) {
@@ -499,7 +499,10 @@ router.get('/courses', superAdminProtect, async (req, res) => {
             ];
         }
         
-        if (classLevel && classLevel !== 'all') query.classLevel = classLevel;
+        if (classLevel && classLevel !== 'all') {
+            const cleanClass = classLevel.replace(/^class\s*/i, '').trim();
+            query.classLevel = { $in: [classLevel, `Class ${cleanClass}`, cleanClass] };
+        }
         if (subject && subject !== 'all') query.subject = subject;
         if (accessType && accessType !== 'all') query.accessType = accessType;
         if (instructor) {
@@ -531,8 +534,8 @@ router.get('/courses', superAdminProtect, async (req, res) => {
             totalStudents: courses.reduce((acc, c) => acc + (c.studentCount || 0), 0) // Approximation
         };
 
-        const classLevels = [...new Set(allCourses.map(c => c.classLevel).filter(Boolean))];
-        const subjects = [...new Set(allCourses.map(c => c.subject).filter(Boolean))];
+        const classLevels = [...new Set(allCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean))].sort();
+        const subjects = [...new Set(allCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean))].sort();
 
         // If filtering by instructor, fetch their info for the banner
         let filterTeacher = null;
@@ -544,7 +547,7 @@ router.get('/courses', superAdminProtect, async (req, res) => {
         }
 
         res.render('superadmin/courses', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'courses',
             courses,
             stats,
@@ -622,7 +625,7 @@ router.get('/my-courses', superAdminProtect, async (req, res) => {
         const subjects = [...new Set(allCourses.map(c => c.subject).filter(Boolean))];
 
         res.render('superadmin/my-courses', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'courses',
             courses,
             stats,
@@ -693,7 +696,7 @@ router.get('/compose-course', superAdminProtect, async (req, res) => {
         await connectDB();
         const teachers = await User.find({ role: 'teacher' }).select('name email profileImage profilePicture').lean();
         res.render('superadmin/compose-course', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'courses',
             teachers
         });
@@ -711,7 +714,15 @@ router.post('/add-course', superAdminProtect, (req, res, next) => {
 }, async (req, res) => {
     try {
         await connectDB();
-        const { title, subject, category, classLevel, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
+        const { title, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
+
+        const rawClassLevel = req.body.classLevel || req.body['classLevel[]'];
+        const rawSubject = req.body.subject || req.body['subject[]'];
+        const rawCategory = req.body.category || req.body['category[]'];
+
+        const classLevelArray = Array.isArray(rawClassLevel) ? rawClassLevel.filter(Boolean) : (rawClassLevel ? [rawClassLevel] : []);
+        const subjectArray = Array.isArray(rawSubject) ? rawSubject.filter(Boolean) : (rawSubject ? [rawSubject] : []);
+        const categoryArray = Array.isArray(rawCategory) ? rawCategory.filter(Boolean) : (rawCategory ? [rawCategory] : ['Academic']);
 
         // Handle images
         const { processUploadedFile } = require('../services/cloudinaryService');
@@ -725,9 +736,9 @@ router.post('/add-course', superAdminProtect, (req, res, next) => {
 
         const newCourse = new Course({
             title,
-            subject,
-            category: category || 'Academic',
-            classLevel,
+            subject: subjectArray,
+            category: categoryArray.length ? categoryArray : ['Academic'],
+            classLevel: classLevelArray,
             accessType: accessType || 'free',
             price: price || 0,
             discountPrice: discountPrice || 0,
@@ -775,7 +786,7 @@ router.get('/course/:id/edit', superAdminProtect, async (req, res) => {
         if (!course) return res.status(404).send('Course not found');
         
         res.render('superadmin/edit-course', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'courses',
             course
         });
@@ -793,8 +804,12 @@ router.post('/course/:id/edit', superAdminProtect, (req, res, next) => {
 }, async (req, res) => {
     try {
         await connectDB();
-        const { title, subject, category, classLevel, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
+        const { title, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
         
+        const rawClassLevel = req.body.classLevel || req.body['classLevel[]'];
+        const rawSubject = req.body.subject || req.body['subject[]'];
+        const rawCategory = req.body.category || req.body['category[]'];
+
         const course = await Course.findById(req.params.id);
         if (!course) return res.status(404).send('Course not found');
 
@@ -816,9 +831,15 @@ router.post('/course/:id/edit', superAdminProtect, (req, res, next) => {
 
         // Update fields
         course.title = title;
-        course.subject = Array.isArray(subject) ? subject : (subject ? [subject] : []);
-        course.category = Array.isArray(category) ? category : (category ? [category] : []);
-        course.classLevel = Array.isArray(classLevel) ? classLevel : (classLevel ? [classLevel] : []);
+        if (rawSubject !== undefined) {
+            course.subject = Array.isArray(rawSubject) ? rawSubject.filter(Boolean) : (rawSubject ? [rawSubject] : []);
+        }
+        if (rawCategory !== undefined) {
+            course.category = Array.isArray(rawCategory) ? rawCategory.filter(Boolean) : (rawCategory ? [rawCategory] : []);
+        }
+        if (rawClassLevel !== undefined) {
+            course.classLevel = Array.isArray(rawClassLevel) ? rawClassLevel.filter(Boolean) : (rawClassLevel ? [rawClassLevel] : []);
+        }
         course.accessType = accessType || 'free';
         course.price = price || 0;
         course.discountPrice = discountPrice || 0;
@@ -957,7 +978,7 @@ router.get('/course/:id', superAdminProtect, async (req, res) => {
         });
 
         res.render('superadmin/course-details', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'courses',
             course,
             students: formattedStudents,
@@ -1144,7 +1165,7 @@ router.get('/logs', superAdminProtect, async (req, res) => {
 
         res.render('superadmin/system-logs', {
             logs,
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'logs',
             stats: logStats,
             activityChart,
@@ -1418,7 +1439,7 @@ router.get('/academic', superAdminProtect, async (req, res) => {
         }
 
         res.render('superadmin/academic-overview', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             stats: stats,
             atRiskStudents: atRiskStudents,
             recentActivity: formattedActivity,
@@ -1503,7 +1524,7 @@ router.get('/instructors', superAdminProtect, async (req, res) => {
         }
 
         res.render('superadmin/teachers', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             teachers: teacherPerformance,
             active: 'academic'
         });
@@ -1570,7 +1591,7 @@ router.get('/notifications', superAdminProtect, async (req, res) => {
         ]);
 
         res.render('superadmin/notifications', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             stats,
             courses,
             history,
@@ -1764,7 +1785,7 @@ router.get('/notifications/history', superAdminProtect, async (req, res) => {
         const logStats = stats[0] || { total: 0, sent: 0, failed: 0, scheduled: 0, totalSent: 0, totalFailed: 0 };
 
         res.render('superadmin/notification-history', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             logs,
             stats: logStats,
             filters: {
@@ -1800,7 +1821,7 @@ router.get('/notifications/:id', superAdminProtect, async (req, res) => {
         if (!log) return res.status(404).send('Notification not found');
 
         res.render('superadmin/notification-details', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             log,
             active: 'notifications'
         });
@@ -2232,7 +2253,7 @@ router.get('/question-details', adminProtect, async (req, res) => {
             compCount: compCount || 0,
             totalQuestions,
             questions: questions || [],
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'question-details',
             filterTeacher,
             filters: {
@@ -2351,7 +2372,7 @@ router.get('/exam-attempts', adminProtect, async (req, res) => {
         res.render('superadmin/exam-attempts', {
             attempts: filteredAttempts.slice(0, 50),
             subjects: subjects,
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'exam-attempts',
             stats: {
                 totalStudents: students.length,
@@ -2408,22 +2429,29 @@ router.get('/notes', adminProtect, async (req, res) => {
             ];
         }
         if (subjectFilter !== 'all') query.subject = subjectFilter;
-        if (classFilter !== 'all') query.classLevel = classFilter;
+        if (classFilter !== 'all') {
+            const cleanClass = classFilter.replace(/^class\s*/i, '').trim();
+            query.classLevel = { $in: [classFilter, `Class ${cleanClass}`, cleanClass] };
+        }
         if (accessFilter !== 'all') query.accessType = accessFilter;
 
         // Fetch courses for the Add Note modal dropdown
         const userCourses = await Course.find({}).select('title _id accessType subject classLevel').sort({ title: 1 }).lean();
 
-        const [notes, totalCount, statsData, totalPaidStudents] = await Promise.all([
+        const [notes, totalCount, statsData, paidCount, freeCount, totalPaidStudents] = await Promise.all([
             Note.find(query).populate('addedBy', 'name profileImage profilePicture').populate('course', 'title').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
             Note.countDocuments(query),
             Note.aggregate([
-                { $group: { _id: null, subjects: { $addToSet: '$subject' }, classes: { $addToSet: '$classLevel' }, lastUpdated: { $max: '$createdAt' }, paidCount: { $sum: { $cond: [{ $eq: ['$accessType', 'Paid'] }, 1, 0] } }, freeCount: { $sum: { $cond: [{ $eq: ['$accessType', 'Free'] }, 1, { $cond: [{ $eq: ['$accessType', 'Paid'] }, 0, 1] }] } } } }
+                { $group: { _id: null, subjects: { $addToSet: '$subject' }, rawClasses: { $addToSet: '$classLevel' }, lastUpdated: { $max: '$createdAt' } } }
             ]),
+            Note.countDocuments({ accessType: 'Paid' }),
+            Note.countDocuments({ accessType: { $ne: 'Paid' } }),
             User.countDocuments({ role: 'student', 'enrolledCourses.0': { $exists: true } })
         ]);
 
-        const stats = statsData[0] || { subjects: [], classes: [], lastUpdated: null, paidCount: 0, freeCount: 0 };
+        const rawClasses = statsData[0]?.rawClasses || [];
+        const flatClasses = [...new Set(rawClasses.flatMap(c => Array.isArray(c) ? c : [c]).filter(Boolean))].sort();
+        const flatSubjects = (statsData[0]?.subjects || []).filter(Boolean).sort();
 
         // If filtering by author, fetch their info for banner
         let filterTeacher = null;
@@ -2436,14 +2464,14 @@ router.get('/notes', adminProtect, async (req, res) => {
 
         res.render('superadmin/notes', {
             notes: notes || [],
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'notes',
             filterTeacher,
             userCourses: userCourses || [],
             stats: {
                 totalNotes: totalCount,
-                paidNotesCount: stats.paidCount || 0,
-                freeNotesCount: stats.freeCount || 0,
+                paidNotesCount: paidCount || 0,
+                freeNotesCount: freeCount || 0,
                 totalPaidStudents: totalPaidStudents || 0
             },
             filters: {
@@ -2456,8 +2484,8 @@ router.get('/notes', adminProtect, async (req, res) => {
                 author: authorFilter || '',
                 totalNotes: totalCount
             },
-            subjects: (stats.subjects || []).filter(Boolean).sort(),
-            classes: (stats.classes || []).filter(Boolean).sort()
+            subjects: flatSubjects,
+            classes: flatClasses
         });
     } catch (err) {
         console.error('Notes Route Error:', err);
@@ -2472,12 +2500,14 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
 }, async (req, res) => {
     await connectDB();
     if (req.session.user.role === 'superadmin') return res.status(403).send('সুপার অ্যাডমিন কন্টেন্ট যোগ করতে পারবেন না।');
-    const { title, subject, classLevel, chapter, description, accessType, course } = req.body;
+    const { title, subject, chapter, description, accessType, course } = req.body;
+    const rawClassLevel = req.body.classLevel || req.body['classLevel[]'];
+    const classLevelArray = Array.isArray(rawClassLevel) ? rawClassLevel.filter(Boolean) : (rawClassLevel ? [rawClassLevel] : []);
     const { processUploadedFile } = require('../services/cloudinaryService');
     const fileUrl = req.file ? await processUploadedFile(req.file, 'notes') : null;
     const mongoose = require('mongoose');
     await new Note({
-        title, subject, classLevel, chapter, description,
+        title, subject, classLevel: classLevelArray, chapter, description,
         accessType: accessType || 'Free',
         fileUrl,
         course: course && mongoose.Types.ObjectId.isValid(course) ? course : undefined,
@@ -2495,11 +2525,14 @@ router.post('/note/:id/edit', contentAdminProtect, async (req, res) => {
         if (note.addedBy.toString() !== req.session.user._id.toString() && req.session.user.role !== 'superadmin') {
             return res.status(403).send('Not authorized to edit this note');
         }
-        const { title, subject, classLevel, chapter, description, accessType, course } = req.body;
+        const { title, subject, chapter, description, accessType, course } = req.body;
+        const rawClassLevel = req.body.classLevel || req.body['classLevel[]'];
         const mongoose = require('mongoose');
         note.title = title || note.title;
         note.subject = subject || note.subject;
-        note.classLevel = classLevel || note.classLevel;
+        if (rawClassLevel !== undefined) {
+            note.classLevel = Array.isArray(rawClassLevel) ? rawClassLevel.filter(Boolean) : (rawClassLevel ? [rawClassLevel] : []);
+        }
         note.chapter = chapter || '';
         note.description = description || '';
         note.accessType = accessType || note.accessType;
@@ -2603,7 +2636,7 @@ router.get('/question-bank', adminProtect, async (req, res) => {
 
         res.render('superadmin/question-bank', {
             questions: questions || [],
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             isSuperAdmin: true,
             active: 'questions',
             stats: {
@@ -2662,11 +2695,11 @@ router.get('/question-bank-approvals', superAdminProtect, async (req, res) => {
             AcademicClass.find().sort({ order: 1 }).lean()
         ]);
 
-        res.render('admin/question-bank-approvals', {
+        res.render('superadmin/question-bank-approvals', {
             questions: questions || [],
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             isSuperAdmin: true,
-            active: 'questions',
+            active: 'question-bank-approvals',
             stats: { pendingCount, approvedCount, rejectedCount },
             academicClasses: academicClasses || [],
             filters: {
@@ -3005,7 +3038,7 @@ router.get('/question-bank/:id', adminProtect, async (req, res) => {
         };
 
         res.render('superadmin/question-bank-details', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             bank,
             questions: combinedQuestions,
             stats: combinedStats,
@@ -3123,9 +3156,12 @@ router.get('/video-classes', adminProtect, async (req, res) => {
                     const matchesSearch = !search || 
                         video.title.toLowerCase().includes(search.toLowerCase()) || 
                         (course.instructor?.name || '').toLowerCase().includes(search.toLowerCase());
-                    const matchesSubject = subjectFilter === 'all' || course.subject === subjectFilter;
+                    const courseSubjects = Array.isArray(course.subject) ? course.subject : (course.subject ? [course.subject] : []);
+                    const matchesSubject = subjectFilter === 'all' || courseSubjects.includes(subjectFilter);
+                    const courseClasses = Array.isArray(course.classLevel) ? course.classLevel : (course.classLevel ? [course.classLevel] : []);
+                    const cleanClass = classFilter.replace(/^class\s*/i, '').trim();
                     const matchesClass = classFilter === 'all' || 
-                        (course.classLevel && (course.classLevel.includes('Class ' + classFilter) || course.classLevel.includes(classFilter)));
+                        courseClasses.some(cl => cl === classFilter || cl === `Class ${cleanClass}` || cl === cleanClass || (typeof cl === 'string' && cl.toLowerCase().includes(classFilter.toLowerCase())));
                     const matchesAccess = accessFilter === 'all' || course.accessType === accessFilter.toLowerCase();
                     const matchesCourse = courseFilter === 'all' || course._id.toString() === courseFilter;
 
@@ -3181,8 +3217,8 @@ router.get('/video-classes', adminProtect, async (req, res) => {
         };
 
         // Unique subjects and classes for filters
-        const subjects = [...new Set(allCourses.map(c => c.subject))].filter(Boolean).sort();
-        const classes = [...new Set(allCourses.map(c => c.classLevel))].filter(Boolean).sort();
+        const subjects = [...new Set(allCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean))].sort();
+        const classes = [...new Set(allCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean))].sort();
 
         res.render('superadmin/classes', {
             classes: paginatedVideos,
@@ -3292,7 +3328,7 @@ router.get('/qas', adminProtect, async (req, res) => {
             allQas: combinedAllStats,
             currentPage: parseInt(page),
             totalPages: Math.ceil(finalTotal / limit),
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'qas',
             filters: { q, status, answeredBy },
             filterTeacher: answeredBy ? await User.findById(answeredBy).select('name teachingSubject') : null
@@ -3348,7 +3384,7 @@ router.get('/settings', superAdminProtect, async (req, res) => {
         if (!settings) settings = await Setting.create({});
 
         res.render('superadmin/settings', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             settings,
             active: 'settings',
             stats: {
@@ -3640,7 +3676,7 @@ router.get('/payments', superAdminProtect, async (req, res) => {
         // --- END FAKE DATA ---
 
         res.render('superadmin/payments', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             payments,
             stats: {
                 total: statsResult.total,
@@ -3784,9 +3820,13 @@ router.post('/create-role', superAdminProtect, async (req, res) => {
         // Validation
         if (!name || !email || !password || !role) {
             console.warn('Create Role Validation Failed:', { name: !!name, email: !!email, password: !!password, role: !!role });
+            const errMsg = 'Please fill all required fields. (Missing: ' + [!name?'Name':'', !email?'Email':'', !password?'Password':'', !role?'Role':''].filter(Boolean).join(', ') + ')';
+            if (req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+                return res.status(400).json({ success: false, error: errMsg });
+            }
             return res.render('superadmin/create-role', { 
-                user: req.session.user, 
-                error: 'Please fill all required fields. (Missing: ' + [!name?'Name':'', !email?'Email':'', !password?'Password':'', !role?'Role':''].filter(Boolean).join(', ') + ')', 
+                user: req.session.user || { name: 'Super Admin', role: 'superadmin' }, 
+                error: errMsg, 
                 success: null, 
                 active: 'create-role',
                 name, email, phone, role, status, subjects
@@ -3795,22 +3835,36 @@ router.post('/create-role', superAdminProtect, async (req, res) => {
 
         const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
         if (existingUser) {
+            const errMsg = 'This email is already registered.';
+            if (req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+                return res.status(400).json({ success: false, error: errMsg });
+            }
             return res.render('superadmin/create-role', { 
-                user: req.session.user, 
-                error: 'This email is already registered.', 
+                user: req.session.user || { name: 'Super Admin', role: 'superadmin' }, 
+                error: errMsg, 
                 success: null, 
                 active: 'create-role',
                 name, email, phone, role, status, subjects
             });
         }
 
-        // Format classes if multiple are selected
+        // Format classes & subjects for teacher
         let classLevelString = undefined;
+        let assignedClassesArray = [];
         if (role === 'teacher' && classes) {
-            if (Array.isArray(classes)) {
-                classLevelString = classes.map(c => 'Class ' + c).join(', ');
+            const rawClasses = Array.isArray(classes) ? classes : [classes];
+            assignedClassesArray = rawClasses.map(c => String(c).startsWith('Class') ? c : 'Class ' + c).filter(Boolean);
+            classLevelString = assignedClassesArray.join(', ');
+        }
+        let subjectsArray = [];
+        let teachingSubjectStr = '';
+        if (role === 'teacher' && subjects) {
+            if (Array.isArray(subjects)) {
+                subjectsArray = subjects.map(s => String(s || '').trim()).filter(Boolean);
+                teachingSubjectStr = subjectsArray.join(', ');
             } else {
-                classLevelString = 'Class ' + classes;
+                teachingSubjectStr = String(subjects).trim();
+                subjectsArray = teachingSubjectStr.split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
             }
         }
 
@@ -3823,11 +3877,15 @@ router.post('/create-role', superAdminProtect, async (req, res) => {
             status: status || 'active',
             passwordResetRequired: forcePasswordChange === 'on',
             classLevel: classLevelString,
-            subject: role === 'teacher' ? subjects : undefined
+            assignedClasses: assignedClassesArray,
+            classes: assignedClassesArray,
+            teachingSubject: teachingSubjectStr,
+            teachingSubjects: subjectsArray,
+            subject: teachingSubjectStr
         });
 
         await newUser.save();
-        await logActivity(req, 'CREATE_STAFF', `Created staff account: ${name} (${role}) with classes: ${classLevelString || 'N/A'} and subjects: ${subjects || 'N/A'}`, 'User', newUser._id);
+        await logActivity(req, 'CREATE', `Created staff account: ${name} (${role}) with classes: ${classLevelString || 'N/A'} and subjects: ${teachingSubjectStr || 'N/A'}`, 'User', newUser._id);
 
         // Send invite email if requested (Non-blocking)
         if (sendInviteEmail === 'on') {
@@ -3846,7 +3904,7 @@ router.post('/create-role', superAdminProtect, async (req, res) => {
             return res.status(500).json({ success: false, error: err.message });
         }
         res.render('superadmin/create-role', { 
-            user: req.session.user, 
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' }, 
             error: 'Failed to create account: ' + err.message, 
             success: null, 
             active: 'create-role',
@@ -3956,7 +4014,7 @@ router.get('/users', superAdminProtect, async (req, res) => {
         statsResult.newToday = newTodayCount;
 
         res.render('superadmin/users', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             users,
             stats: statsResult,
             guardiansCount: statsResult.guardians,
@@ -4054,15 +4112,29 @@ router.post('/users/:id/password', superAdminProtect, async (req, res) => {
     }
 });
 
-// POST /users/:id/update - Unified update route for role, status, and password
-router.post('/users/:id/update', superAdminProtect, async (req, res) => {
+// POST /users/:id/update & /user/:id/update - Unified update route for role, status, teacher scope, and password
+const handleUserUpdate = async (req, res) => {
     try {
         await connectDB();
-        const { role, status, action } = req.body;
+        const { role, status, action, classLevel, teachingSubject } = req.body;
         const updates = {};
         
         if (role) updates.role = role;
         if (status) updates.status = status;
+        if (classLevel !== undefined) {
+            const cleanCls = String(classLevel).replace(/\bclass\s+class\b/gi, 'Class').trim();
+            updates.classLevel = cleanCls;
+            const clsArray = cleanCls.split(/[,;/]+/).map(s => s.trim().replace(/\bclass\s+class\b/gi, 'Class')).filter(Boolean);
+            updates.assignedClasses = clsArray;
+            updates.classes = clsArray;
+        }
+        if (teachingSubject !== undefined) {
+            const cleanSub = String(teachingSubject).trim();
+            updates.teachingSubject = cleanSub;
+            const subArray = cleanSub.split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
+            updates.teachingSubjects = subArray;
+            updates.subject = cleanSub;
+        }
         
         if (action === 'reset_password') {
             const newPassword = Math.random().toString(36).slice(-8);
@@ -4071,7 +4143,7 @@ router.post('/users/:id/update', superAdminProtect, async (req, res) => {
             user.password = newPassword;
             user.passwordResetRequired = true;
             await user.save();
-            await logActivity(req, 'RESET_PASSWORD', `Reset password for user ID: ${req.params.id}`, 'User', req.params.id);
+            await logActivity(req, 'UPDATE', `Reset password for user ID: ${req.params.id}`, 'User', req.params.id);
             
             // Send Automated Email Notification (Non-blocking)
             sendPasswordResetNotificationEmail(user.email, user.name, newPassword)
@@ -4082,17 +4154,18 @@ router.post('/users/:id/update', superAdminProtect, async (req, res) => {
 
         if (Object.keys(updates).length > 0) {
             await User.findByIdAndUpdate(req.params.id, updates);
-            const changeType = role ? 'ROLE' : 'STATUS';
-            const newValue = role || status;
-            await logActivity(req, `CHANGE_${changeType}`, `Updated ${changeType.toLowerCase()} to ${newValue} for user ID: ${req.params.id}`, 'User', req.params.id);
+            await logActivity(req, 'UPDATE', `Updated user ID: ${req.params.id} attributes (${Object.keys(updates).join(', ')})`, 'User', req.params.id);
         }
 
-        res.json({ success: true });
+        res.json({ success: true, message: 'User updated successfully' });
     } catch (err) {
         console.error('Update User Error:', err);
         res.status(500).json({ success: false, error: err.message });
     }
-});
+};
+
+router.post('/users/:id/update', superAdminProtect, handleUserUpdate);
+router.post('/user/:id/update', superAdminProtect, handleUserUpdate);
 
 // POST /users/bulk - Alternative bulk action route to match frontend
 router.post('/users/bulk', superAdminProtect, async (req, res) => {
@@ -4140,105 +4213,7 @@ router.post('/users/bulk-action', superAdminProtect, async (req, res) => {
     }
 });
 
-// --- VIDEO HUB MANAGEMENT ---
 
-// Video Hub - GET
-router.get('/video-classes', adminProtect, async (req, res) => {
-    try {
-        await connectDB();
-        const { q, courseId, subject, class: classLevel, access, page = 1 } = req.query;
-        const limit = 30;
-        const skip = (parseInt(page) - 1) * limit;
-
-        // Fetch all courses
-        const courses = await Course.find({}).lean();
-
-        // Flatten all videos with context
-        let allVideos = [];
-        courses.forEach(course => {
-            if (course.chapters) {
-                course.chapters.forEach(chapter => {
-                    if (chapter.recordedClasses) {
-                        chapter.recordedClasses.forEach(video => {
-                            allVideos.push({
-                                ...video,
-                                courseId: course._id,
-                                courseTitle: course.title,
-                                chapterId: chapter._id,
-                                chapterTitle: chapter.title,
-                                subject: course.subject,
-                                classLevel: course.classLevel
-                            });
-                        });
-                    }
-                });
-            }
-        });
-
-        // Search/Filter
-        if (q) {
-            const search = q.toLowerCase().trim();
-            allVideos = allVideos.filter(v => 
-                v.title.toLowerCase().includes(search) || 
-                (v.instructor && v.instructor.toLowerCase().includes(search)) ||
-                (v.courseTitle && v.courseTitle.toLowerCase().includes(search))
-            );
-        }
-
-        if (courseId && courseId !== 'all') {
-            allVideos = allVideos.filter(v => v.courseId.toString() === courseId);
-        }
-
-        if (subject && subject !== 'all') {
-            allVideos = allVideos.filter(v => v.subject === subject);
-        }
-
-        if (classLevel && classLevel !== 'all') {
-            allVideos = allVideos.filter(v => v.classLevel == classLevel);
-        }
-
-        if (access && access !== 'all') {
-            allVideos = allVideos.filter(v => v.accessType === access);
-        }
-
-        // Stats
-        const hubStats = {
-            totalVideos: allVideos.length,
-            totalDuration: allVideos.reduce((acc, v) => {
-                const parts = (v.duration || '0:0').split(':');
-                return acc + (parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0);
-            }, 0),
-            freeCount: allVideos.filter(v => v.accessType === 'free').length,
-            premiumCount: allVideos.filter(v => v.accessType === 'paid').length
-        };
-
-        const totalMatching = allVideos.length;
-        const paginatedVideos = allVideos.slice(skip, skip + limit);
-        const subjects = [...new Set(courses.map(c => c.subject).filter(Boolean))];
-
-        res.render('superadmin/classes', {
-            user: req.session.user,
-            classes: paginatedVideos,
-            courses,
-            subjects,
-            hubStats,
-            filters: {
-                q: q || '',
-                courseId: courseId || 'all',
-                subject: subject || 'all',
-                class: classLevel || 'all',
-                access: access || 'all',
-                page: parseInt(page),
-                totalPages: Math.ceil(totalMatching / limit) || 1,
-                totalMatching
-            },
-            active: 'classes'
-        });
-    } catch (err) {
-        console.error('Error loading video hub:', err);
-        res.status(500).send('Error loading video hub: ' + err.message);
-    }
-});
 
 // POST /add-class
 router.post('/add-class', adminProtect, async (req, res) => {
@@ -4537,7 +4512,7 @@ router.get('/user/:id', superAdminProtect, async (req, res) => {
         // --- END FAKE DATA ---
 
         res.render('superadmin/user-details', {
-            user: req.session.user, // Current logged-in admin
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' }, // Current logged-in admin
             targetUser,
             payments,
             logs,
@@ -4589,14 +4564,7 @@ router.post('/user/:id/teacher-info', superAdminProtect, async (req, res) => {
         });
 
         // Log the action
-        await Log.create({
-            action: 'UPDATE',
-            actionDetails: 'Updated teacher profile information',
-            user: req.session.userId,
-            targetUser: req.params.id,
-            entityType: 'user',
-            entityId: req.params.id
-        });
+        await logActivity(req, 'UPDATE', 'Updated teacher profile information', 'User', req.params.id);
 
         res.redirect(`/superadmin/user/${req.params.id}`);
     } catch (err) {
@@ -4644,52 +4612,199 @@ router.post('/user/:id/status', superAdminProtect, async (req, res) => {
 // ==========================================
 // ACADEMIC SETUP
 // ==========================================
+// Helper for soft delete / archive
+const handleAcademicArchive = async (req, res) => {
+    try {
+        await connectDB();
+        const AcademicClass = require('../models/AcademicClass');
+        const rawParam = (req.params && req.params.id) ? decodeURIComponent(req.params.id).trim() : '';
+        const bodyId = (req.body && req.body.id) ? String(req.body.id).trim() : '';
+        const bodyName = (req.body && req.body.name) ? String(req.body.name).trim() : '';
+        const queryName = req.query && req.query.name ? String(req.query.name).trim() : '';
+        const targetId = bodyId || (mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+        const targetName = bodyName || queryName || (!mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+
+        let updated = null;
+
+        // 1. Try finding by ObjectId if valid
+        if (targetId && mongoose.Types.ObjectId.isValid(targetId)) {
+            updated = await AcademicClass.findByIdAndUpdate(targetId, { $set: { isArchived: true } }, { new: true });
+        }
+
+        // 2. If not found by ID or no ID provided, try finding by name
+        if (!updated && targetName) {
+            const escaped = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            updated = await AcademicClass.findOneAndUpdate(
+                { name: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+                { $set: { isArchived: true } },
+                { new: true }
+            );
+        }
+
+        if (req.app.get('clearAcademicCache')) req.app.get('clearAcademicCache')();
+
+        if (!updated) {
+            return res.status(404).json({ success: false, error: 'Class not found to archive' });
+        }
+
+        res.json({ success: true, message: `"${updated.name}" moved to History Bucket (Archived) successfully`, data: updated });
+    } catch (error) {
+        console.error('Delete AcademicClass error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Helper for restore
+const handleAcademicRestore = async (req, res) => {
+    try {
+        await connectDB();
+        const AcademicClass = require('../models/AcademicClass');
+        const rawParam = (req.params && req.params.id) ? decodeURIComponent(req.params.id).trim() : '';
+        const bodyId = (req.body && req.body.id) ? String(req.body.id).trim() : '';
+        const bodyName = (req.body && req.body.name) ? String(req.body.name).trim() : '';
+        const queryName = req.query && req.query.name ? String(req.query.name).trim() : '';
+        const targetId = bodyId || (mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+        const targetName = bodyName || queryName || (!mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+
+        let updated = null;
+
+        if (targetId && mongoose.Types.ObjectId.isValid(targetId)) {
+            updated = await AcademicClass.findByIdAndUpdate(targetId, { $set: { isArchived: false } }, { new: true });
+        }
+
+        if (!updated && targetName) {
+            const escaped = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            updated = await AcademicClass.findOneAndUpdate(
+                { name: { $regex: new RegExp(`^${escaped}$`, 'i') } },
+                { $set: { isArchived: false } },
+                { new: true }
+            );
+        }
+
+        if (req.app.get('clearAcademicCache')) req.app.get('clearAcademicCache')();
+
+        if (!updated) {
+            return res.status(404).json({ success: false, error: 'Class not found to restore' });
+        }
+
+        res.json({ success: true, message: `"${updated.name}" restored from history bucket successfully`, data: updated });
+    } catch (error) {
+        console.error('Restore AcademicClass error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Helper for permanent delete
+const handleAcademicPermanent = async (req, res) => {
+    try {
+        await connectDB();
+        const AcademicClass = require('../models/AcademicClass');
+        const rawParam = (req.params && req.params.id) ? decodeURIComponent(req.params.id).trim() : '';
+        const bodyId = (req.body && req.body.id) ? String(req.body.id).trim() : '';
+        const bodyName = (req.body && req.body.name) ? String(req.body.name).trim() : '';
+        const queryName = req.query && req.query.name ? String(req.query.name).trim() : '';
+        const targetId = bodyId || (mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+        const targetName = bodyName || queryName || (!mongoose.Types.ObjectId.isValid(rawParam) ? rawParam : '');
+
+        let deleted = null;
+        if (targetId && mongoose.Types.ObjectId.isValid(targetId)) {
+            deleted = await AcademicClass.findByIdAndDelete(targetId);
+        }
+        if (!deleted && targetName) {
+            const escaped = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            deleted = await AcademicClass.findOneAndDelete({ name: { $regex: new RegExp(`^${escaped}$`, 'i') } });
+        }
+
+        if (req.app.get('clearAcademicCache')) req.app.get('clearAcademicCache')();
+        res.json({ success: true, message: 'Class permanently deleted from database' });
+    } catch (error) {
+        console.error('Permanent delete error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
 router.get('/academic-setup', superAdminProtect, async (req, res) => {
     try {
+        await connectDB();
         const AcademicClass = require('../models/AcademicClass');
-        const classes = await AcademicClass.find().sort({ order: 1 });
+        const activeClasses = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
+        const archivedClasses = await AcademicClass.find({ isArchived: { $in: [true, 'true', 1] } }).sort({ updatedAt: -1, order: 1 }).lean();
         res.render('superadmin/academic-setup', { 
             active: 'academic-setup',
-            classes,
-            user: req.session.user
+            classes: activeClasses || [],
+            archivedClasses: archivedClasses || [],
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' }
         });
     } catch (error) {
-        console.error(error);
+        console.error('Academic setup GET error:', error);
         res.status(500).send('Server Error');
     }
 });
 
 router.post('/academic-setup', superAdminProtect, async (req, res) => {
     try {
+        await connectDB();
         const AcademicClass = require('../models/AcademicClass');
+
+        // Direct action support within /academic-setup
+        if (req.body && (req.body.action === 'archive' || req.query.action === 'archive' || req.body.isArchived === true || req.body.archiveId)) {
+            return handleAcademicArchive(req, res);
+        }
+        if (req.body && (req.body.action === 'restore' || req.query.action === 'restore' || req.body.restoreId)) {
+            return handleAcademicRestore(req, res);
+        }
+        if (req.body && (req.body.action === 'permanent' || req.query.action === 'permanent' || req.body.deleteId)) {
+            return handleAcademicPermanent(req, res);
+        }
+
         const { classData } = req.body;
         
         if (!classData || !Array.isArray(classData)) {
             return res.status(400).json({ error: 'Invalid data' });
         }
         
+        const splitTokens = (val) => {
+            if (!val) return [];
+            if (Array.isArray(val)) return val.map(s => String(s || '').trim()).filter(Boolean);
+            return String(val).split(',').map(s => s.trim()).filter(Boolean);
+        };
+
         for (const cls of classData) {
-            let subjectsArray = [];
-            if (cls.subjects) {
-                // If it's a string, split it. If it's an array, keep it.
-                if (typeof cls.subjects === 'string') {
-                    subjectsArray = cls.subjects.split(',').map(s => s.trim()).filter(s => s !== '');
-                } else if (Array.isArray(cls.subjects)) {
-                    subjectsArray = cls.subjects.map(s => s.trim()).filter(s => s !== '');
-                }
+            if (!cls.name || !cls.name.trim()) continue;
+
+            const name = cls.name.trim();
+            const order = parseInt(cls.order, 10) || 0;
+            const hasGroups = Boolean(cls.hasGroups);
+            const commonSubjects = splitTokens(cls.commonSubjects);
+
+            let groups = [];
+            if (hasGroups && Array.isArray(cls.groups)) {
+                groups = cls.groups.map(g => ({
+                    name: String(g.name || '').trim(),
+                    subjects: splitTokens(g.subjects)
+                })).filter(g => g.name);
             }
+
+            let subjectsArray = splitTokens(cls.subjects);
+            if (hasGroups && groups.length > 0) {
+                const allGroupSubs = groups.flatMap(g => g.subjects);
+                subjectsArray = Array.from(new Set([...commonSubjects, ...subjectsArray, ...allGroupSubs]));
+            }
+
+            const updatePayload = {
+                name,
+                hasGroups,
+                commonSubjects,
+                groups,
+                subjects: subjectsArray,
+                isArchived: false,
+                order
+            };
+
             if (cls._id && mongoose.Types.ObjectId.isValid(cls._id)) {
-                await AcademicClass.findByIdAndUpdate(cls._id, {
-                    name: cls.name,
-                    subjects: subjectsArray,
-                    order: parseInt(cls.order) || 0
-                });
-            } else if (cls.name) {
-                await AcademicClass.create({
-                    name: cls.name,
-                    subjects: subjectsArray,
-                    order: parseInt(cls.order) || 0
-                });
+                await AcademicClass.findByIdAndUpdate(cls._id, updatePayload);
+            } else {
+                await AcademicClass.findOneAndUpdate({ name }, { $set: updatePayload }, { upsert: true, new: true });
             }
         }
         if (req.app.get('clearAcademicCache')) req.app.get('clearAcademicCache')();
@@ -4700,16 +4815,45 @@ router.post('/academic-setup', superAdminProtect, async (req, res) => {
     }
 });
 
-router.delete('/academic-setup/:id', superAdminProtect, async (req, res) => {
-    try {
-        const AcademicClass = require('../models/AcademicClass');
-        await AcademicClass.findByIdAndDelete(req.params.id);
-        if (req.app.get('clearAcademicCache')) req.app.get('clearAcademicCache')();
-        res.json({ message: 'Class deleted successfully' });
-    } catch (error) {
-        res.status(500).json({ error: 'Server error' });
-    }
-});
+// Dedicated endpoints (archive, restore, permanent)
+router.post('/academic-setup/archive', superAdminProtect, handleAcademicArchive);
+router.post('/academic-setup/:id/archive', superAdminProtect, handleAcademicArchive);
+router.delete('/academic-setup/:id', superAdminProtect, handleAcademicArchive);
+router.delete('/academic-setup/:id/archive', superAdminProtect, handleAcademicArchive);
+
+router.post('/academic-setup/restore', superAdminProtect, handleAcademicRestore);
+router.post('/academic-setup/:id/restore', superAdminProtect, handleAcademicRestore);
+
+router.post('/academic-setup/permanent', superAdminProtect, handleAcademicPermanent);
+router.post('/academic-setup/:id/permanent', superAdminProtect, handleAcademicPermanent);
+router.delete('/academic-setup/:id/permanent', superAdminProtect, handleAcademicPermanent);
+
+// ==========================================
+// SYLLABUS & TOPIC SYSTEM - SUPERADMIN ROUTES
+// ==========================================
+const topicController = require('../controllers/topicController');
+
+router.get('/topics', superAdminProtect, topicController.getTopicsPage);
+router.get('/api/topics', superAdminProtect, topicController.getTopicsApi);
+router.get('/api/chapters', superAdminProtect, topicController.getChaptersApi);
+router.post('/topics', superAdminProtect, topicController.createTopic);
+router.post('/topics/bulk', superAdminProtect, topicController.bulkCreateTopics);
+router.post('/topics/chapter/delete', superAdminProtect, topicController.deleteChapter);
+router.post('/topics/bulk-action', superAdminProtect, topicController.bulkActionTopics);
+router.post('/topics/archive', superAdminProtect, topicController.archiveTopic);
+router.post('/topics/restore', superAdminProtect, topicController.restoreTopic);
+router.post('/topics/approve', superAdminProtect, topicController.approveTopic);
+router.post('/topics/bulk-approve', superAdminProtect, topicController.bulkApproveTopics);
+router.post('/topics/reject', superAdminProtect, topicController.rejectTopic);
+router.post('/topics/bulk-reject', superAdminProtect, topicController.bulkRejectTopics);
+router.post('/topics/permanent', superAdminProtect, topicController.permanentDeleteTopic);
+router.post('/topics/:id/edit', superAdminProtect, topicController.updateTopic);
+router.put('/topics/:id', superAdminProtect, topicController.updateTopic);
+router.post('/topics/:id/archive', superAdminProtect, topicController.archiveTopic);
+router.post('/topics/:id/restore', superAdminProtect, topicController.restoreTopic);
+router.post('/topics/:id/permanent', superAdminProtect, topicController.permanentDeleteTopic);
+router.delete('/topics/:id', superAdminProtect, topicController.permanentDeleteTopic);
+
 
 // ==========================================
 // AI KNOWLEDGE HUB - SUPERADMIN ROUTES
@@ -4762,7 +4906,7 @@ router.get('/ai-knowledge', superAdminProtect, async (req, res) => {
         const distinctSubjectsCount = (await AIKnowledge.distinct('subject')).length;
 
         res.render('superadmin/ai-knowledge', {
-            user: req.session.user,
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             isSuperAdmin: true,
             active: 'ai-knowledge',
             knowledgeList: knowledgeList || [],

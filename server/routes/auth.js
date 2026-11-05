@@ -1,3 +1,4 @@
+const { normalizeClass, normalizeGroup, isClassWithGroups } = require('../utils/academicHelper');
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
@@ -60,7 +61,7 @@ async function getAcademicClasses() {
     try {
         const AcademicClass = require('../models/AcademicClass');
         await connectDB();
-        const classes = await AcademicClass.find().sort({ order: 1 }).lean();
+        const classes = await AcademicClass.find({ isArchived: { $ne: true } }).sort({ order: 1 }).lean();
         return (classes && classes.length > 0) ? classes : defaultClasses;
     } catch (e) {
         return defaultClasses;
@@ -241,7 +242,7 @@ router.post('/login', authLimiter, async (req, res) => {
 router.post('/register', authLimiter, async (req, res) => {
     try {
         await connectDB();
-        const { name, identifier, password, confirmPassword, role, classLevel } = req.body;
+        const { name, identifier, password, confirmPassword, role, classLevel, group } = req.body;
         if (!name || !identifier || !password || !confirmPassword) {
             return res.status(400).json({ error: 'দয়া করে সবগুলো প্রয়োজনীয় তথ্য প্রদান করুন।' });
         }

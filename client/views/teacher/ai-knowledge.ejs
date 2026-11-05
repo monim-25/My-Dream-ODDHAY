@@ -11,8 +11,14 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
 
     <style>
-                :root { --admin-sidebar-width: 260px; }
-        html, body { height: 100%; height: 100dvh; overflow: hidden; margin: 0; padding: 0; }
+        :root { --admin-sidebar-width: 260px; }
+        html, body { 
+            height: 100%; 
+            height: 100dvh; 
+            overflow: hidden; 
+            margin: 0; 
+            padding: 0; 
+        }
         .admin-main { 
             margin-left: var(--admin-sidebar-width); 
             height: 100%; 
@@ -39,12 +45,26 @@
         .admin-sidebar.active, #adminSidebar.active, .admin-sidebar.translate-x-0, #adminSidebar.translate-x-0 { 
             transform: translateX(0) !important; 
         }
-        .form-label { display: block; font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 5px; }
+
+        /* Form elements */
+        .form-label { display: block; font-size: 12px; font-weight: 500; color: #475569; margin-bottom: 5px; }
         .dark .form-label { color: #94a3b8; }
-        .form-input { height: 42px; width: 100%; padding: 0 14px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; font-size: 13px; font-weight: 600; color: #1e293b; outline: none; transition: border-color 0.2s; }
+        .form-input { 
+            height: 40px; 
+            width: 100%; 
+            padding: 0 12px; 
+            border-radius: 8px; 
+            background: #f8fafc; 
+            border: 1px solid #e2e8f0; 
+            font-size: 13px; 
+            font-weight: 400; 
+            color: #1e293b; 
+            outline: none; 
+            transition: border-color 0.15s ease, box-shadow 0.15s ease; 
+        }
         .dark .form-input { background: #0f172a; border-color: rgba(255,255,255,0.08); color: #e2e8f0; }
-        .form-input:focus { border-color: #6366f1; }
-        .form-input::placeholder { font-size: 11px; font-weight: 500; color: #94a3b8; }
+        .form-input:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12); }
+        .form-input::placeholder { font-size: 12px; font-weight: 400; color: #94a3b8; }
         
         .material-symbols-rounded {
             display: inline-flex;
@@ -53,11 +73,49 @@
             vertical-align: middle;
             line-height: 1;
         }
+
+        /* Math formula horizontal scroll containment for mobile screens */
+        .math-renderable {
+            word-break: break-word;
+        }
+        .math-renderable .katex-display {
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding: 6px 0;
+            margin: 6px 0;
+            -webkit-overflow-scrolling: touch;
+        }
+        .math-renderable .katex {
+            font-size: 1.05em;
+        }
+
+        /* Custom scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 4px; }
+        .dark .custom-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); }
+
+        /* Animation classes */
+        @keyframes slideUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-slide-up {
+            animation: slideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.2s ease-out forwards;
+        }
     </style>
 </head>
 
-<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden select-none sm:select-auto">
     <div class="flex h-full h-[100dvh] w-full overflow-hidden">
+        <!-- Sidebar -->
         <aside id="adminSidebar" class="admin-sidebar fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100] border-r border-slate-200 dark:border-slate-800 -translate-x-full lg:translate-x-0">
             <%- include('sidebar', { active: 'ai-knowledge' }) %>
         </aside>
@@ -65,182 +123,234 @@
         <!-- Backdrop overlay for mobile drawer -->
         <div id="teacherSidebarBackdrop" onclick="toggleTeacherSidebar(false)" class="fixed inset-0 bg-slate-950/50 backdrop-blur-xs z-[90] lg:hidden opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617]">
-            <%- include('header', { pageTitle: 'AI Knowledge Hub' }) %>
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617] min-w-0">
+            <!-- Header with responsive title and quick add button on desktop -->
+            <%- include('header', { 
+                pageTitle: '<div class="flex items-center gap-2"><span class="material-symbols-rounded text-indigo-500 text-lg sm:text-xl">auto_awesome</span><span class="truncate">AI Knowledge Hub</span></div>',
+                extraContent: '<button type="button" onclick="openCreateModal()" class="h-9 px-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer"><span class="material-symbols-rounded text-base">add_circle</span><span>Add Rule</span></button>'
+            }) %>
 
-            <div class="content-scroll flex flex-col gap-0 p-0 border-l-0 lg:border-l border-slate-200 dark:border-white/5 pb-20 sm:pb-24 lg:pb-0">
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l-0 lg:border-l border-slate-200 dark:border-white/5 pb-24 sm:pb-20 lg:pb-8">
                 
-                <!-- Teacher Assigned Subject Scope Banner -->
-                <div class="bg-indigo-50/70 dark:bg-indigo-950/40 border-b border-indigo-100 dark:border-indigo-900/40 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2">
-                    <div class="flex items-center gap-2">
-                        <span class="material-symbols-rounded text-indigo-600 dark:text-indigo-400 text-lg leading-none">verified_user</span>
-                        <span class="text-xs font-bold text-slate-700 dark:text-slate-200">
-                            Your Assigned Teaching Subjects:
-                        </span>
-                        <div class="flex flex-wrap items-center gap-1.5 ml-1">
-                            <% subjectList.forEach(sub => { %>
-                                <span class="px-2 py-0.5 rounded-md bg-indigo-600 text-white font-bold text-[10.5px]">
-                                    <%= sub %>
-                                </span>
-                            <% }) %>
-                        </div>
-                    </div>
-                    <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                        Oddhay AI prioritizes your rules when answering students in these subjects.
-                    </span>
-                </div>
+                <!-- Toast Notification Container (Automatic for ?success= & ?error=) -->
+                <div id="toastContainer" class="fixed top-16 right-3 sm:right-6 z-[250] flex flex-col gap-2 pointer-events-none max-w-sm w-full"></div>
 
-                <!-- Stats Overview Bar -->
-                <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/50 p-3 sm:p-4">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div class="bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-xl p-3 flex items-center justify-between">
-                            <div>
-                                <p class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Rules in My Subjects</p>
-                                <h3 class="text-2xl font-black text-slate-900 dark:text-white mt-0.5"><%= stats.total %></h3>
+                <!-- Stats Overview Bar (3 Compact Cards in 1 Row on Mobile) -->
+                <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/80 p-2.5 sm:p-4">
+                    <div class="grid grid-cols-3 gap-2 sm:gap-3">
+                        <!-- Stat 1: Total Rules -->
+                        <div class="bg-indigo-50/60 dark:bg-indigo-950/25 border border-indigo-100 dark:border-indigo-900/30 rounded-xl p-2 sm:p-3.5 flex flex-col sm:flex-row items-center sm:justify-between text-center sm:text-left transition-all">
+                            <div class="min-w-0 order-2 sm:order-1">
+                                <p class="text-[9px] sm:text-[11px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-tight sm:tracking-wider truncate">Total Rules</p>
+                                <h3 class="text-base sm:text-2xl font-black text-slate-900 dark:text-white leading-tight mt-0.5"><%= stats.total %></h3>
                             </div>
-                            <div class="size-10 rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                                <span class="material-symbols-rounded text-xl leading-none">smart_toy</span>
+                            <div class="size-7 sm:size-10 rounded-lg sm:rounded-xl bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 mb-1 sm:mb-0 order-1 sm:order-2">
+                                <span class="material-symbols-rounded text-base sm:text-xl leading-none">smart_toy</span>
                             </div>
                         </div>
 
-                        <div class="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-3 flex items-center justify-between">
-                            <div>
-                                <p class="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Active In Production</p>
-                                <h3 class="text-2xl font-black text-slate-900 dark:text-white mt-0.5"><%= stats.active %></h3>
+                        <!-- Stat 2: Active Rules -->
+                        <div class="bg-emerald-50/60 dark:bg-emerald-950/25 border border-emerald-100 dark:border-emerald-900/30 rounded-xl p-2 sm:p-3.5 flex flex-col sm:flex-row items-center sm:justify-between text-center sm:text-left transition-all">
+                            <div class="min-w-0 order-2 sm:order-1">
+                                <p class="text-[9px] sm:text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-tight sm:tracking-wider truncate">Active</p>
+                                <h3 class="text-base sm:text-2xl font-black text-slate-900 dark:text-white leading-tight mt-0.5"><%= stats.active %></h3>
                             </div>
-                            <div class="size-10 rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                                <span class="material-symbols-rounded text-xl leading-none">verified</span>
+                            <div class="size-7 sm:size-10 rounded-lg sm:rounded-xl bg-emerald-600/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mb-1 sm:mb-0 order-1 sm:order-2">
+                                <span class="material-symbols-rounded text-base sm:text-xl leading-none">verified</span>
                             </div>
                         </div>
 
-                        <div class="bg-purple-50/50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30 rounded-xl p-3 flex items-center justify-between">
-                            <div>
-                                <p class="text-[11px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">Created By Me</p>
-                                <h3 class="text-2xl font-black text-slate-900 dark:text-white mt-0.5"><%= stats.myCreated %></h3>
+                        <!-- Stat 3: Created By Me -->
+                        <div class="bg-purple-50/60 dark:bg-purple-950/25 border border-purple-100 dark:border-purple-900/30 rounded-xl p-2 sm:p-3.5 flex flex-col sm:flex-row items-center sm:justify-between text-center sm:text-left transition-all">
+                            <div class="min-w-0 order-2 sm:order-1">
+                                <p class="text-[9px] sm:text-[11px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-tight sm:tracking-wider truncate">By Me</p>
+                                <h3 class="text-base sm:text-2xl font-black text-slate-900 dark:text-white leading-tight mt-0.5"><%= stats.myCreated %></h3>
                             </div>
-                            <div class="size-10 rounded-xl bg-purple-600/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-                                <span class="material-symbols-rounded text-xl leading-none">edit_note</span>
+                            <div class="size-7 sm:size-10 rounded-lg sm:rounded-xl bg-purple-600/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 mb-1 sm:mb-0 order-1 sm:order-2">
+                                <span class="material-symbols-rounded text-base sm:text-xl leading-none">edit_note</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Action & Filter Bar -->
-                <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/80 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
-                    <form method="GET" action="/teacher/ai-knowledge" class="flex flex-wrap items-center gap-2 flex-1">
-                        <!-- Search Box -->
-                        <div class="relative min-w-[200px] flex-1 max-w-sm">
-                            <input type="text" name="search" value="<%= searchQuery %>" placeholder="Search keywords, formulas, topics..." class="form-input !h-9 !text-xs !pl-8">
-                            <span class="material-symbols-rounded text-slate-400 text-sm absolute left-2.5 top-1/2 -translate-y-1/2">search</span>
+                <!-- Action & Filter Bar (Mobile-Optimized Sticky Layout) -->
+                <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/80 p-3 sm:px-6 sm:py-3.5 sticky top-0 z-20 shadow-xs">
+                    <form method="GET" action="/teacher/ai-knowledge" id="filterForm" class="flex flex-col gap-2.5">
+                        <!-- Top Row: Search Box + Quick Action Button on Mobile -->
+                        <div class="flex items-center gap-2">
+                            <div class="relative flex-1 min-w-0">
+                                <input type="text" name="search" value="<%= searchQuery %>" placeholder="Search keywords, formulas, topics..." 
+                                    class="form-input !h-10 !text-xs !pl-9 !pr-8 rounded-xl bg-slate-50 dark:bg-slate-900/80 border-slate-200 dark:border-slate-800 focus:bg-white dark:focus:bg-slate-900">
+                                <span class="material-symbols-rounded text-slate-400 text-base absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">search</span>
+                                <% if (searchQuery) { %>
+                                    <button type="button" onclick="clearSearchField()" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded-full" title="Clear search">
+                                        <span class="material-symbols-rounded text-sm">cancel</span>
+                                    </button>
+                                <% } %>
+                            </div>
+
+                            <!-- Mobile Quick Create Button -->
+                            <button type="button" onclick="openCreateModal()" class="sm:hidden h-10 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs flex items-center justify-center gap-1 shrink-0 shadow-sm transition-all" title="Add Rule">
+                                <span class="material-symbols-rounded text-lg">add</span>
+                                <span class="text-[11px]">Rule</span>
+                            </button>
+
+                            <!-- Desktop Create Button -->
+                            <button type="button" onclick="openCreateModal()" class="hidden sm:flex h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold items-center gap-1.5 shadow-sm transition-all shrink-0 active:scale-95 cursor-pointer">
+                                <span class="material-symbols-rounded text-base">add_circle</span>
+                                <span>Add Knowledge Rule</span>
+                            </button>
                         </div>
 
-                        <!-- Class Level Filter -->
-                        <select name="classLevel" onchange="this.form.submit()" class="h-9 px-3 rounded-lg text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-indigo-500 cursor-pointer">
-                            <option value="all">All Classes</option>
-                            <% classList.forEach(cls => { %>
-                                <option value="<%= cls %>" <%= selectedClass === cls ? 'selected' : '' %>><%= cls %></option>
-                            <% }) %>
-                        </select>
+                        <!-- Bottom Row: Filter Dropdowns -->
+                        <div class="flex items-center gap-2">
+                            <!-- Class Level Filter -->
+                            <div class="flex-1 min-w-0">
+                                <div class="relative">
+                                    <select name="classLevel" onchange="this.form.submit()" class="h-9 w-full pl-2.5 pr-7 rounded-lg text-xs font-semibold bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none truncate">
+                                        <option value="all">All Classes</option>
+                                        <% classList.forEach(cls => { %>
+                                            <option value="<%= cls %>" <%= selectedClass === cls ? 'selected' : '' %>><%= cls %></option>
+                                        <% }) %>
+                                    </select>
+                                    <span class="material-symbols-rounded text-slate-400 text-sm absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">expand_more</span>
+                                </div>
+                            </div>
 
-                        <!-- Subject Filter (Restricted to Teacher's Assigned Subjects) -->
-                        <select name="subject" onchange="this.form.submit()" class="h-9 px-3 rounded-lg text-xs font-bold bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-indigo-500 cursor-pointer">
-                            <option value="all">All My Subjects</option>
-                            <% subjectList.forEach(sub => { %>
-                                <option value="<%= sub %>" <%= selectedSubject === sub ? 'selected' : '' %>><%= sub %></option>
-                            <% }) %>
-                        </select>
+                            <!-- Subject Filter -->
+                            <div class="flex-1 min-w-0">
+                                <div class="relative">
+                                    <select name="subject" onchange="this.form.submit()" class="h-9 w-full pl-2.5 pr-7 rounded-lg text-xs font-semibold bg-slate-50 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 focus:ring-1 focus:ring-indigo-500 cursor-pointer appearance-none truncate">
+                                        <option value="all">All Subjects</option>
+                                        <% subjectList.forEach(sub => { %>
+                                            <option value="<%= sub %>" <%= selectedSubject === sub ? 'selected' : '' %>><%= sub %></option>
+                                        <% }) %>
+                                    </select>
+                                    <span class="material-symbols-rounded text-slate-400 text-sm absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">expand_more</span>
+                                </div>
+                            </div>
 
-                        <% if (selectedSubject !== 'all' || selectedClass !== 'all' || searchQuery) { %>
-                            <a href="/teacher/ai-knowledge" class="h-9 px-3 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-rose-500 flex items-center gap-1 transition-colors">
-                                <span class="material-symbols-rounded text-sm">close</span> Clear
-                            </a>
-                        <% } %>
+                            <!-- Clear Filters Button -->
+                            <% if (selectedSubject !== 'all' || selectedClass !== 'all' || searchQuery) { %>
+                                <a href="/teacher/ai-knowledge" class="h-9 px-3 rounded-lg text-xs font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/60 hover:bg-rose-100 flex items-center justify-center gap-1 transition-colors shrink-0" title="Reset all filters">
+                                    <span class="material-symbols-rounded text-sm">close</span>
+                                    <span class="hidden sm:inline">Reset</span>
+                                </a>
+                            <% } %>
+                        </div>
                     </form>
-
-                    <!-- Add Knowledge Button -->
-                    <button type="button" onclick="openCreateModal()" class="h-9 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all">
-                        <span class="material-symbols-rounded text-base">add_circle</span>
-                        <span>Add Knowledge Rule</span>
-                    </button>
                 </div>
 
                 <!-- Knowledge Items Feed -->
-                <div class="p-4 sm:p-6 space-y-4">
+                <div class="p-3 sm:p-6 space-y-3 sm:space-y-4">
                     <% if (knowledgeList && knowledgeList.length > 0) { %>
-                        <div class="grid grid-cols-1 gap-4">
-                            <% knowledgeList.forEach((item, idx) => { %>
-                                <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-4 sm:p-5 shadow-xs transition-all hover:border-indigo-300 dark:hover:border-indigo-800 flex flex-col gap-3">
-                                    
-                                    <!-- Header Row -->
-                                    <div class="flex flex-wrap items-start justify-between gap-2">
-                                        <div class="space-y-1">
-                                            <div class="flex flex-wrap items-center gap-2">
-                                                <span class="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold text-[10.5px] border border-indigo-200/60 dark:border-indigo-800">
-                                                    <%= item.subject %>
-                                                </span>
-                                                <span class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[10.5px]">
-                                                    <%= item.classLevel %>
-                                                </span>
-                                                <% if (item.topic) { %>
-                                                    <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                                                        • <%= item.topic %>
-                                                    </span>
-                                                <% } %>
-                                            </div>
-                                            <h4 class="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug">
-                                                <%= item.title %>
-                                            </h4>
-                                        </div>
+                        <div class="flex items-center justify-between px-1">
+                            <span class="text-xs font-bold text-slate-500 dark:text-slate-400">
+                                Showing <%= knowledgeList.length %> <%= knowledgeList.length === 1 ? 'Rule' : 'Rules' %>
+                            </span>
+                            <span class="text-[11px] text-slate-400 dark:text-slate-500 hidden sm:inline">
+                                Sorted by highest priority
+                            </span>
+                        </div>
 
-                                        <!-- Actions -->
-                                        <div class="flex items-center gap-2">
-                                            <!-- Priority Badge -->
-                                            <span class="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900 text-[10px] font-bold" title="Higher number = higher override priority">
-                                                Priority: <%= item.priority %>
+                        <div class="grid grid-cols-1 gap-3 sm:gap-4">
+                            <% knowledgeList.forEach((item) => { 
+                                const isMyRule = item.createdBy && item.createdBy._id && (item.createdBy._id.toString() === user._id.toString());
+                            %>
+                                <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-3.5 sm:p-5 shadow-2xs hover:shadow-sm transition-all hover:border-indigo-300 dark:hover:border-indigo-800/80 flex flex-col gap-3">
+                                    
+                                    <!-- Header Row: Badges & Status Toggle -->
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="flex flex-wrap items-center gap-1.5 min-w-0">
+                                            <!-- Subject Badge -->
+                                            <span class="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] sm:text-[10.5px] border border-indigo-200/60 dark:border-indigo-800/60 shrink-0">
+                                                <%= item.subject %>
                                             </span>
 
-                                            <!-- Toggle Active -->
-                                            <button type="button" onclick="toggleStatus('<%= item._id %>', this)" class="px-2.5 py-1 rounded-lg text-xs font-bold transition-all <%= item.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800' %>">
-                                                <%= item.isActive ? 'Active' : 'Disabled' %>
-                                            </button>
+                                            <!-- Class Badge -->
+                                            <span class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[10px] sm:text-[10.5px] shrink-0">
+                                                <%= item.classLevel %>
+                                            </span>
 
-                                            <!-- Edit -->
-                                            <button type="button" onclick="openEditModal(<%= JSON.stringify(item) %>)" class="size-8 rounded-lg bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/40 text-slate-600 hover:text-indigo-600 dark:text-slate-300 flex items-center justify-center transition-colors" title="Edit">
-                                                <span class="material-symbols-rounded text-base">edit</span>
-                                            </button>
+                                            <!-- Topic Badge (if exists) -->
+                                            <% if (item.topic) { %>
+                                                <span class="px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] sm:text-[11px] font-medium truncate max-w-[150px] sm:max-w-xs">
+                                                    <%= item.topic %>
+                                                </span>
+                                            <% } %>
 
-                                            <!-- Delete -->
-                                            <form method="POST" action="/teacher/ai-knowledge/<%= item._id %>/delete" onsubmit="return confirm('Are you sure you want to delete this knowledge rule?');">
-                                                <button type="submit" class="size-8 rounded-lg bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/40 text-slate-600 hover:text-rose-600 dark:text-slate-300 flex items-center justify-center transition-colors" title="Delete">
-                                                    <span class="material-symbols-rounded text-base">delete</span>
-                                                </button>
-                                            </form>
+                                            <!-- Ownership Badge -->
+                                            <% if (isMyRule) { %>
+                                                <span class="px-1.5 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/60 text-[9.5px] font-bold">
+                                                    Mine
+                                                </span>
+                                            <% } %>
+                                        </div>
+
+                                        <!-- Priority & Quick Status Toggle -->
+                                        <div class="flex items-center gap-1.5 shrink-0">
+                                            <span class="px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-900/60 text-[10px] font-bold" title="Override priority rank">
+                                                P: <%= item.priority %>
+                                            </span>
+
+                                            <button type="button" onclick="toggleStatus('<%= item._id %>', this)" 
+                                                class="px-2 py-0.5 rounded-md text-[10.5px] font-bold transition-all flex items-center gap-1 cursor-pointer <%= item.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60' : 'bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400' %>"
+                                                title="Tap to toggle rule active in AI answers">
+                                                <span class="size-1.5 rounded-full <%= item.isActive ? 'bg-emerald-500' : 'bg-slate-400' %>"></span>
+                                                <span><%= item.isActive ? 'Active' : 'Disabled' %></span>
+                                            </button>
                                         </div>
                                     </div>
 
-                                    <!-- Keywords Chips -->
+                                    <!-- Rule Title -->
+                                    <h4 class="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug break-words">
+                                        <%= item.title %>
+                                    </h4>
+
+                                    <!-- Keywords / Trigger Chips -->
                                     <% if (item.keywords && item.keywords.length > 0) { %>
-                                        <div class="flex flex-wrap items-center gap-1.5 pt-1">
-                                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Triggers:</span>
+                                        <div class="flex flex-wrap items-center gap-1 pt-0.5">
+                                            <span class="text-[9.5px] font-bold text-slate-400 uppercase tracking-wider shrink-0 mr-1">Triggers:</span>
                                             <% item.keywords.forEach(k => { %>
-                                                <span class="px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-mono">
+                                                <button type="button" onclick="filterByKeyword('<%= k %>')" class="px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:border-indigo-300 text-[10.5px] font-mono transition-colors cursor-pointer" title="Click to filter by keyword">
                                                     #<%= k %>
-                                                </span>
+                                                </button>
                                             <% }) %>
                                         </div>
                                     <% } %>
 
-                                    <!-- Content Body / LaTeX Preview -->
-                                    <div class="bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200/60 dark:border-slate-800/80 rounded-xl p-3.5 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-normal whitespace-pre-wrap math-renderable">
+                                    <!-- Content Body with KaTeX & LaTeX Formula Support -->
+                                    <div class="relative bg-slate-50/90 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-3 sm:p-4 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-normal whitespace-pre-wrap math-renderable overflow-x-auto">
 <%= item.content %>
                                     </div>
 
-                                    <!-- Footer info -->
-                                    <div class="flex items-center justify-between text-[10.5px] text-slate-400 pt-1">
-                                        <span>Added <%= new Date(item.createdAt).toLocaleDateString('en-GB') %></span>
-                                        <% if (item.createdBy && item.createdBy.name) { %>
-                                            <span>By <%= item.createdBy.name %></span>
-                                        <% } %>
+                                    <!-- Footer Info & Actions -->
+                                    <div class="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800/60 text-[10.5px] text-slate-400">
+                                        <div class="flex items-center gap-1.5 min-w-0 truncate">
+                                            <span><%= new Date(item.createdAt).toLocaleDateString('en-GB') %></span>
+                                            <% if (item.createdBy && item.createdBy.name) { %>
+                                                <span class="truncate">• <%= item.createdBy.name %></span>
+                                            <% } %>
+                                        </div>
+
+                                        <!-- Card Action Buttons -->
+                                        <div class="flex items-center gap-1 shrink-0">
+                                            <!-- Edit Rule -->
+                                            <button type="button" onclick="openEditModal(<%= JSON.stringify(item) %>)" 
+                                                class="size-8 rounded-lg bg-slate-100 hover:bg-indigo-50 dark:bg-slate-800 dark:hover:bg-indigo-950/50 text-slate-600 hover:text-indigo-600 dark:text-slate-300 dark:hover:text-indigo-400 flex items-center justify-center transition-colors active:scale-95 cursor-pointer" 
+                                                title="Edit Knowledge Rule">
+                                                <span class="material-symbols-rounded text-[17px]">edit</span>
+                                            </button>
+
+                                            <!-- Delete Rule -->
+                                            <form method="POST" action="/teacher/ai-knowledge/<%= item._id %>/delete" onsubmit="return confirm('Are you sure you want to delete this AI knowledge rule?');">
+                                                <button type="submit" 
+                                                    class="size-8 rounded-lg bg-slate-100 hover:bg-rose-50 dark:bg-slate-800 dark:hover:bg-rose-950/50 text-slate-600 hover:text-rose-600 dark:text-slate-300 dark:hover:text-rose-400 flex items-center justify-center transition-colors active:scale-95 cursor-pointer" 
+                                                    title="Delete Knowledge Rule">
+                                                    <span class="material-symbols-rounded text-[17px]">delete</span>
+                                                </button>
+                                            </form>
+                                        </div>
                                     </div>
 
                                 </div>
@@ -248,53 +358,93 @@
                         </div>
                     <% } else { %>
                         <!-- Empty State -->
-                        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl p-10 text-center max-w-lg mx-auto flex flex-col items-center justify-center space-y-4">
-                            <div class="size-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-12 text-center max-w-lg mx-auto flex flex-col items-center justify-center space-y-4 shadow-xs mt-4">
+                            <div class="size-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-xs">
                                 <span class="material-symbols-rounded text-3xl">smart_toy</span>
                             </div>
-                            <div class="space-y-1">
-                                <h3 class="text-base font-bold text-slate-900 dark:text-white">No Rules for Your Subjects Yet</h3>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">
-                                    Add your verified teaching formulas, shortcut methods, and board answer patterns. Oddhay AI will prioritize them when answering your students.
+                            <div class="space-y-1.5">
+                                <h3 class="text-base font-bold text-slate-900 dark:text-white">
+                                    <% if (searchQuery || selectedSubject !== 'all' || selectedClass !== 'all') { %>
+                                        No Matching Rules Found
+                                    <% } else { %>
+                                        No Rules for Your Subjects Yet
+                                    <% } %>
+                                </h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-xs mx-auto">
+                                    <% if (searchQuery || selectedSubject !== 'all' || selectedClass !== 'all') { %>
+                                        Try adjusting your search keywords or clear filters to see all available rules.
+                                    <% } else { %>
+                                        Add your verified formulas, shortcut techniques, and board answer patterns. Oddhay AI will prioritize them when answering your students.
+                                    <% } %>
                                 </p>
                             </div>
-                            <button type="button" onclick="openCreateModal()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm">
-                                Create First Knowledge Rule
-                            </button>
+                            
+                            <div class="flex flex-wrap items-center justify-center gap-2 pt-1">
+                                <% if (searchQuery || selectedSubject !== 'all' || selectedClass !== 'all') { %>
+                                    <a href="/teacher/ai-knowledge" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all">
+                                        Clear All Filters
+                                    </a>
+                                <% } %>
+                                <button type="button" onclick="openCreateModal()" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-all active:scale-95 cursor-pointer flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-base">add_circle</span>
+                                    <span>Create Knowledge Rule</span>
+                                </button>
+                            </div>
                         </div>
                     <% } %>
                 </div>
 
             </div>
-            <%- include('bottom-nav', { activePage: 'dashboard' }) %>
+
+            <!-- Mobile Floating Action Button (FAB) for Instant Rule Creation -->
+            <button type="button" onclick="openCreateModal()" 
+                class="lg:hidden fixed right-4 bottom-20 z-40 size-12 rounded-full bg-indigo-600 hover:bg-indigo-700 active:scale-90 text-white shadow-lg flex items-center justify-center cursor-pointer transition-transform" 
+                title="Create Knowledge Rule" aria-label="Add Knowledge Rule">
+                <span class="material-symbols-rounded text-2xl">add</span>
+            </button>
+
+            <!-- Bottom Navigation Bar with courses active mapping -->
+            <%- include('bottom-nav', { activePage: 'ai-knowledge' }) %>
         </main>
     </div>
 
-    <!-- Create / Edit Knowledge Modal -->
-    <div id="knowledgeModal" class="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-xs hidden items-center justify-center p-4">
-        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <!-- Create / Edit Knowledge Modal (Mobile Bottom-Sheet & Desktop Centered Modal) -->
+    <div id="knowledgeModal" class="fixed inset-0 z-[200] bg-slate-950/60 backdrop-blur-xs hidden items-end sm:items-center justify-center p-0 sm:p-4">
+        
+        <!-- Backdrop close area -->
+        <div class="absolute inset-0" onclick="closeModal()"></div>
+
+        <!-- Modal Card Container -->
+        <div class="relative bg-white dark:bg-[#0f172a] border-t sm:border border-slate-200 dark:border-slate-800 rounded-t-3xl sm:rounded-2xl w-full max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col shadow-2xl overflow-hidden z-10 animate-slide-up sm:animate-fade-in">
             
-            <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <h3 id="modalTitle" class="text-sm sm:text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <span class="material-symbols-rounded text-indigo-500">add_circle</span>
-                    <span>Add Custom Knowledge Rule</span>
+            <!-- Mobile Drag Handle indicator -->
+            <div class="sm:hidden w-12 h-1 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mt-2.5 mb-1 shrink-0"></div>
+
+            <!-- Modal Header -->
+            <div class="px-4 sm:px-6 py-3.5 border-b border-slate-100 dark:border-slate-800/80 flex items-center justify-between shrink-0">
+                <h3 id="modalTitle" class="text-sm sm:text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span class="material-symbols-rounded text-indigo-500 text-lg">add_circle</span>
+                    <span>Add Rule</span>
                 </h3>
-                <button type="button" onclick="closeModal()" class="size-8 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center">
+                <button type="button" onclick="closeModal()" class="size-8 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer transition-colors" title="Close">
                     <span class="material-symbols-rounded text-lg">close</span>
                 </button>
             </div>
 
-            <form id="modalForm" method="POST" action="/teacher/ai-knowledge/create" class="flex-1 overflow-y-auto p-5 space-y-4">
+            <!-- Modal Form -->
+            <form id="modalForm" method="POST" action="/teacher/ai-knowledge/create" class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 custom-scroll">
                 
+                <!-- Title -->
                 <div>
-                    <label class="form-label">Rule / Topic Title *</label>
-                    <input type="text" name="title" id="formTitle" required placeholder="e.g., অধ্যায় ২: গতির সমীকরণ ও বিশেষ শর্টকাট" class="form-input">
+                    <label class="form-label">Title</label>
+                    <input type="text" name="title" id="formTitle" required placeholder="Rule title or topic" class="form-input">
                 </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <!-- Subject & Class Grid -->
+                <div class="grid grid-cols-2 gap-2.5 sm:gap-3">
                     <div>
-                        <label class="form-label">Subject (Restricted to Your Teaching Assignment) *</label>
-                        <select name="subject" id="formSubject" required class="form-input">
+                        <label class="form-label">Subject</label>
+                        <select name="subject" id="formSubject" required class="form-input cursor-pointer">
                             <% subjectList.forEach(sub => { %>
                                 <option value="<%= sub %>"><%= sub %></option>
                             <% }) %>
@@ -302,8 +452,8 @@
                     </div>
 
                     <div>
-                        <label class="form-label">Target Class *</label>
-                        <select name="classLevel" id="formClassLevel" required class="form-input">
+                        <label class="form-label">Class</label>
+                        <select name="classLevel" id="formClassLevel" required class="form-input cursor-pointer">
                             <option value="All Classes">All Classes</option>
                             <% classList.forEach(cls => { %>
                                 <option value="<%= cls %>"><%= cls %></option>
@@ -312,38 +462,78 @@
                     </div>
                 </div>
 
-                <div>
-                    <label class="form-label">Topic / Sub-Topic (Optional)</label>
-                    <input type="text" name="topic" id="formTopic" placeholder="e.g., Kinetic Energy & Potential Energy" class="form-input">
-                </div>
-
-                <div>
-                    <label class="form-label">Keywords / Trigger Terms (Comma Separated) *</label>
-                    <input type="text" name="keywords" id="formKeywords" placeholder="e.g., গতিশক্তি, বিভবশক্তি, E_k, E_p, 1/2mv^2" class="form-input">
-                    <p class="text-[10px] text-slate-400 mt-1">When students mention any of these keywords in their question, this authority rule will be injected directly into the AI's prompt.</p>
-                </div>
-
-                <div>
-                    <label class="form-label">Exact Knowledge / Formula Content (Markdown & LaTeX Supported) *</label>
-                    <textarea name="content" id="formContent" rows="6" required placeholder="Write the exact definition, formula ($...$), derivation steps, or marking rules..." class="form-input !h-auto !py-2.5 font-normal leading-relaxed"></textarea>
-                </div>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <!-- Topic & Priority Grid -->
+                <div class="grid grid-cols-2 gap-2.5 sm:gap-3">
                     <div>
-                        <label class="form-label">Priority (1 - 1000)</label>
-                        <input type="number" name="priority" id="formPriority" value="100" min="1" max="1000" class="form-input">
-                        <p class="text-[10px] text-slate-400 mt-1">Higher priority rules take precedence over lower priority rules.</p>
+                        <label class="form-label">Topic (Optional)</label>
+                        <input type="text" name="topic" id="formTopic" placeholder="e.g. Kinetic Energy" class="form-input">
                     </div>
 
-                    <div class="flex items-center gap-2 pt-6">
-                        <input type="checkbox" name="isActive" id="formIsActive" checked class="size-4 text-indigo-600 rounded">
-                        <label for="formIsActive" class="text-xs font-bold text-slate-700 dark:text-slate-200">Active in Production</label>
+                    <div>
+                        <label class="form-label">Priority</label>
+                        <input type="number" name="priority" id="formPriority" value="100" min="1" max="1000" class="form-input">
                     </div>
                 </div>
 
-                <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
-                    <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold">Cancel</button>
-                    <button type="submit" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm">Save Rule</button>
+                <!-- Keywords -->
+                <div>
+                    <label class="form-label">Keywords</label>
+                    <input type="text" name="keywords" id="formKeywords" required placeholder="e.g. গতিশক্তি, বিভবশক্তি, E_k, 1/2mv^2" class="form-input">
+                </div>
+
+                <!-- Content Area with Live Preview Tabs -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="form-label !mb-0">Content</label>
+                        
+                        <!-- Write / Live Preview Tab Switcher -->
+                        <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
+                            <button type="button" id="tabWriteBtn" onclick="switchContentTab('write')" class="px-2.5 py-0.5 text-xs font-medium rounded-md bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs transition-all">
+                                Write
+                            </button>
+                            <button type="button" id="tabPreviewBtn" onclick="switchContentTab('preview')" class="px-2.5 py-0.5 text-xs font-medium rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-all">
+                                Preview
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Quick Formula Insertion Toolbar -->
+                    <div id="quickMathToolbar" class="flex items-center gap-1.5 overflow-x-auto py-1 mb-1.5 no-scrollbar custom-scroll">
+                        <button type="button" onclick="insertSyntax('$...$')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[11px] shrink-0">$x$</button>
+                        <button type="button" onclick="insertSyntax('$$\\frac{a}{b}$$')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[11px] shrink-0">$$\frac{a}{b}$$</button>
+                        <button type="button" onclick="insertSyntax('x^2')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[11px] shrink-0">x²</button>
+                        <button type="button" onclick="insertSyntax('\\sqrt{x}')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[11px] shrink-0">√x</button>
+                        <button type="button" onclick="insertSyntax('**bold**')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[11px] shrink-0">B</button>
+                    </div>
+
+                    <!-- Textarea Editor -->
+                    <div id="editorWriteContainer">
+                        <textarea name="content" id="formContent" rows="5" required 
+                            placeholder="Write rule, definitions, formulas ($...$), or notes..." 
+                            class="form-input !h-auto !py-2.5 font-normal leading-relaxed text-xs sm:text-sm"
+                            oninput="updatePreviewIfActive()"></textarea>
+                    </div>
+
+                    <!-- Live Rendered Preview Container -->
+                    <div id="editorPreviewContainer" class="hidden min-h-[120px] max-h-[200px] overflow-y-auto bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs sm:text-sm text-slate-700 dark:text-slate-300 math-renderable custom-scroll">
+                        <div id="previewOutput" class="leading-relaxed"></div>
+                    </div>
+                </div>
+
+                <!-- Active Status -->
+                <div class="flex items-center gap-2 pt-0.5">
+                    <input type="checkbox" name="isActive" id="formIsActive" checked class="size-4 text-indigo-600 rounded cursor-pointer">
+                    <label for="formIsActive" class="text-xs font-normal text-slate-700 dark:text-slate-300 cursor-pointer">Active</label>
+                </div>
+
+                <!-- Modal Actions Footer -->
+                <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2 shrink-0">
+                    <button type="button" onclick="closeModal()" class="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium transition-colors cursor-pointer">
+                        Cancel
+                    </button>
+                    <button type="submit" class="flex-1 sm:flex-none px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium shadow-sm transition-all active:scale-95 cursor-pointer">
+                        Save Rule
+                    </button>
                 </div>
 
             </form>
@@ -351,19 +541,50 @@
         </div>
     </div>
 
+    <!-- Scripts for Math rendering, Modals, Tab toggling, and Toast notifications -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            renderMathInElement(document.body, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false}
-                ],
-                throwOnError: false
-            });
+            // Render Math in all feed items on page load
+            renderAllMath(document.body);
+
+            // Handle URL query feedback toasts
+            checkUrlFeedback();
         });
 
+        // Function to render KaTeX math safely
+        function renderAllMath(element) {
+            if (typeof renderMathInElement === 'function' && element) {
+                renderMathInElement(element, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false }
+                    ],
+                    throwOnError: false
+                });
+            }
+        }
+
+        // Search clear helper
+        function clearSearchField() {
+            const input = document.querySelector('input[name="search"]');
+            if (input) {
+                input.value = '';
+                document.getElementById('filterForm').submit();
+            }
+        }
+
+        // Quick filter by clicking a keyword chip
+        function filterByKeyword(keyword) {
+            const input = document.querySelector('input[name="search"]');
+            if (input) {
+                input.value = keyword;
+                document.getElementById('filterForm').submit();
+            }
+        }
+
+        // Modal opening & editing handlers
         function openCreateModal() {
-            document.getElementById('modalTitle').innerHTML = '<span class="material-symbols-rounded text-indigo-500">add_circle</span><span>Add Custom Knowledge Rule</span>';
+            document.getElementById('modalTitle').innerHTML = '<span class="material-symbols-rounded text-indigo-500 text-lg">add_circle</span><span>Add Rule</span>';
             document.getElementById('modalForm').action = '/teacher/ai-knowledge/create';
             document.getElementById('formTitle').value = '';
             document.getElementById('formTopic').value = '';
@@ -371,12 +592,18 @@
             document.getElementById('formContent').value = '';
             document.getElementById('formPriority').value = '100';
             document.getElementById('formIsActive').checked = true;
-            document.getElementById('knowledgeModal').classList.remove('hidden');
-            document.getElementById('knowledgeModal').classList.add('flex');
+            
+            // Default to Write tab
+            switchContentTab('write');
+
+            const modal = document.getElementById('knowledgeModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
         }
 
         function openEditModal(item) {
-            document.getElementById('modalTitle').innerHTML = '<span class="material-symbols-rounded text-indigo-500">edit</span><span>Edit Knowledge Rule</span>';
+            document.getElementById('modalTitle').innerHTML = '<span class="material-symbols-rounded text-indigo-500 text-lg">edit</span><span>Edit Rule</span>';
             document.getElementById('modalForm').action = '/teacher/ai-knowledge/' + item._id + '/edit';
             document.getElementById('formTitle').value = item.title || '';
             document.getElementById('formSubject').value = item.subject || '';
@@ -386,26 +613,167 @@
             document.getElementById('formContent').value = item.content || '';
             document.getElementById('formPriority').value = item.priority || 100;
             document.getElementById('formIsActive').checked = item.isActive !== false;
-            document.getElementById('knowledgeModal').classList.remove('hidden');
-            document.getElementById('knowledgeModal').classList.add('flex');
+            
+            // Default to Write tab
+            switchContentTab('write');
+
+            const modal = document.getElementById('knowledgeModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
         }
 
         function closeModal() {
-            document.getElementById('knowledgeModal').classList.add('hidden');
-            document.getElementById('knowledgeModal').classList.remove('flex');
+            const modal = document.getElementById('knowledgeModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            document.body.style.overflow = '';
         }
 
+        // Tab switcher: Write vs Live Preview
+        let currentTab = 'write';
+        function switchContentTab(tab) {
+            currentTab = tab;
+            const writeBtn = document.getElementById('tabWriteBtn');
+            const previewBtn = document.getElementById('tabPreviewBtn');
+            const writeContainer = document.getElementById('editorWriteContainer');
+            const previewContainer = document.getElementById('editorPreviewContainer');
+            const quickToolbar = document.getElementById('quickMathToolbar');
+
+            if (tab === 'write') {
+                writeBtn.className = 'px-2.5 py-0.5 text-xs font-medium rounded-md bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs transition-all';
+                previewBtn.className = 'px-2.5 py-0.5 text-xs font-medium rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-all';
+                writeContainer.classList.remove('hidden');
+                previewContainer.classList.add('hidden');
+                quickToolbar.classList.remove('hidden');
+            } else {
+                previewBtn.className = 'px-2.5 py-0.5 text-xs font-medium rounded-md bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs transition-all';
+                writeBtn.className = 'px-2.5 py-0.5 text-xs font-medium rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-all';
+                writeContainer.classList.add('hidden');
+                previewContainer.classList.remove('hidden');
+                quickToolbar.classList.add('hidden');
+
+                renderLivePreview();
+            }
+        }
+
+        function updatePreviewIfActive() {
+            if (currentTab === 'preview') {
+                renderLivePreview();
+            }
+        }
+
+        function renderLivePreview() {
+            const content = document.getElementById('formContent').value.trim();
+            const output = document.getElementById('previewOutput');
+            if (!content) {
+                output.innerHTML = '<span class="text-slate-400 italic">No content to preview yet. Switch to Write to enter text and formulas.</span>';
+                return;
+            }
+
+            // Convert markdown using marked if available
+            if (typeof marked !== 'undefined') {
+                output.innerHTML = marked.parse(content);
+            } else {
+                output.textContent = content;
+            }
+
+            // Render math formulas
+            renderAllMath(output);
+        }
+
+        // Quick syntax insertion into content textarea
+        function insertSyntax(snippet) {
+            const textarea = document.getElementById('formContent');
+            if (!textarea) return;
+
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+
+            textarea.value = text.substring(0, start) + snippet + text.substring(end);
+            textarea.focus();
+            textarea.selectionStart = textarea.selectionEnd = start + snippet.length;
+        }
+
+        // Toggle active status via fetch API
         async function toggleStatus(id, btn) {
+            const originalContent = btn.innerHTML;
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+
             try {
                 const res = await fetch('/teacher/ai-knowledge/' + id + '/toggle', { method: 'POST' });
                 const data = await res.json();
                 if (data.success) {
-                    btn.textContent = data.isActive ? 'Active' : 'Disabled';
-                    btn.className = 'px-2.5 py-1 rounded-lg text-xs font-bold transition-all ' + 
-                        (data.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800');
+                    const isActive = data.isActive;
+                    btn.className = 'px-2 py-0.5 rounded-md text-[10.5px] font-bold transition-all flex items-center gap-1 cursor-pointer ' + 
+                        (isActive 
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800/60' 
+                            : 'bg-slate-100 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400');
+                    btn.innerHTML = `<span class="size-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-slate-400'}"></span><span>${isActive ? 'Active' : 'Disabled'}</span>`;
+                    showToast(isActive ? 'Rule is now Active' : 'Rule disabled', 'success');
+                } else {
+                    btn.innerHTML = originalContent;
+                    showToast('Failed to toggle status', 'error');
                 }
             } catch (e) {
                 console.error(e);
+                btn.innerHTML = originalContent;
+                showToast('Network error while toggling status', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }
+        }
+
+        // Toast notification system
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            const isSuccess = type === 'success';
+            const isError = type === 'error';
+
+            toast.className = `p-3 rounded-xl shadow-lg border text-xs font-bold flex items-center gap-2 pointer-events-auto transition-all animate-slide-up ${
+                isSuccess ? 'bg-emerald-600 text-white border-emerald-500' :
+                isError ? 'bg-rose-600 text-white border-rose-500' :
+                'bg-indigo-600 text-white border-indigo-500'
+            }`;
+
+            const iconName = isSuccess ? 'check_circle' : isError ? 'error' : 'info';
+            toast.innerHTML = `<span class="material-symbols-rounded text-base">${iconName}</span><span class="flex-1">${message}</span>`;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-10px)';
+                setTimeout(() => toast.remove(), 250);
+            }, 3500);
+        }
+
+        // Check URL parameters for feedback alerts
+        function checkUrlFeedback() {
+            const params = new URLSearchParams(window.location.search);
+            const success = params.get('success');
+            const error = params.get('error');
+
+            if (success) {
+                if (success === 'created') showToast('Knowledge rule created successfully!', 'success');
+                else if (success === 'updated') showToast('Knowledge rule updated successfully!', 'success');
+                else if (success === 'deleted') showToast('Knowledge rule deleted successfully!', 'success');
+                else showToast('Operation completed successfully!', 'success');
+                
+                // Clean URL query without page reload
+                params.delete('success');
+                const newQuery = params.toString() ? '?' + params.toString() : window.location.pathname;
+                window.history.replaceState({}, document.title, newQuery);
+            } else if (error) {
+                showToast('Action failed. Please try again.', 'error');
+                params.delete('error');
+                const newQuery = params.toString() ? '?' + params.toString() : window.location.pathname;
+                window.history.replaceState({}, document.title, newQuery);
             }
         }
     </script>

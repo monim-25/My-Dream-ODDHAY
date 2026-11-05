@@ -1,80 +1,191 @@
+<%
+    const safeUser = (typeof user !== 'undefined' && user) ? user : { name: 'Super Admin', theme: 'light' };
+    const safeClasses = (typeof classes !== 'undefined' && Array.isArray(classes)) ? classes : [];
+    const safeArchived = (typeof archivedClasses !== 'undefined' && Array.isArray(archivedClasses)) ? archivedClasses : [];
+    const groupCount = safeClasses.filter(c => c.hasGroups).length;
+%>
 <!DOCTYPE html>
-<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+<html lang="en" class="<%= (safeUser.theme === 'dark') ? 'dark' : '' %>">
 
 <head>
     <%- include('../partials/head') %>
     <title>Academic Setup | ODDHAY Command Center</title>
     <style>
-        .admin-main {
-            margin-left: 260px;
-            min-height: 100vh;
-            transition: all 0.3s ease;
-        }
-
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); min-height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+        .content-scroll { flex: 1; overflow-y: auto; padding: 0; position: relative; }
         @media (max-width: 1024px) {
-            #adminSidebar {
-                transform: translateX(-100%);
-            }
-
-            #adminSidebar.active {
-                transform: translateX(0);
-            }
-
-            .admin-main {
-                margin-left: 0;
-            }
+            #adminSidebar { transform: translateX(-100%); }
+            #adminSidebar.active { transform: translateX(0); }
+            .admin-main { margin-left: 0; }
         }
         
         .drag-handle { cursor: grab; }
         .drag-handle:active { cursor: grabbing; }
+
+        /* Custom toggle switch matching SuperAdmin Primary */
+        .toggle-switch-checkbox:checked + .toggle-switch-label {
+            background-color: #137fec;
+        }
+        .toggle-switch-checkbox:checked + .toggle-switch-label .toggle-switch-dot {
+            transform: translateX(18px);
+        }
     </style>
 </head>
 
-<body class="bg-[#F8F8FF] text-slate-800 dark:text-slate-200 font-sans min-h-screen">
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans antialiased min-h-screen">
 
     <div class="flex">
         <!-- Sidebar -->
         <aside id="adminSidebar"
             class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100] border-r border-slate-200 dark:border-white/5">
-            <%- include('sidebar_content', { active: 'academic-setup' }) %>
+            <%- include('sidebar_content', { active: 'academic-setup', user: safeUser }) %>
         </aside>
 
         <!-- Main Content -->
-        <main class="admin-main flex-1 bg-[#F8F8FF] flex flex-col min-h-screen relative w-full">
-            <%- include('header_v2', { pageTitle: 'Academic Setup' }) %>
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617] flex flex-col min-h-screen relative w-full">
+            <%- include('header_v2', { pageTitle: 'Academic Setup', user: safeUser }) %>
 
-            <section class="p-0.5 flex flex-col gap-0.5 w-full flex-1 border-l border-slate-900/10 dark:border-white/5">
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5 flex-1">
                 
-                <div class="bg-white dark:bg-[#0b1120] p-4 flex flex-col gap-1 border-b border-slate-200 dark:border-slate-700/50">
-                    <div class="flex items-center gap-2">
-                        <div class="size-2 rounded-sm bg-blue-500 shadow-sm shadow-blue-500/50"></div>
-                        <h3 class="text-[15px] font-bold text-slate-900 dark:text-white tracking-tight leading-none">Class List</h3>
+                <!-- Action & Filter Bar (Sticky Header matching Command Center) -->
+                <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/80 px-3 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-30 shadow-xs">
+                    <!-- Tab Switcher -->
+                    <div class="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-md border border-slate-200 dark:border-slate-700/60">
+                        <button type="button" id="tabActiveBtn" onclick="switchAcademicTab('active')"
+                                class="px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs">
+                            <span class="material-symbols-rounded text-[17px]">domain</span>
+                            <span>Live Classes</span>
+                            <span id="tabBadgeActive" class="px-1.5 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary font-black leading-none"><%= safeClasses.length %></span>
+                        </button>
+                        <button type="button" id="tabArchiveBtn" onclick="switchAcademicTab('archive')"
+                                class="px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white">
+                            <span class="material-symbols-rounded text-[17px]">inventory_2</span>
+                            <span>History Bucket</span>
+                            <span id="tabBadgeArchive" class="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-black leading-none"><%= safeArchived.length %></span>
+                        </button>
                     </div>
-                    <p class="text-[12px] text-slate-500 pl-4">Drag to reorder. Define classes and their subjects here.</p>
+
+                    <!-- Right Action Buttons -->
+                    <div class="flex items-center gap-2">
+                        <button type="button" id="addClassBtn"
+                                class="h-9 px-3.5 rounded-md bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 transition-all border border-slate-200 dark:border-slate-700 shadow-xs">
+                            <span class="material-symbols-rounded text-[18px] text-primary">add_circle</span>
+                            <span>Add New Class</span>
+                        </button>
+                        <button type="button" id="saveBtn"
+                                class="h-9 px-4 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-primary/20 transition-all">
+                            <span class="material-symbols-rounded text-[18px]">save</span>
+                            <span>Save Changes</span>
+                        </button>
+                        <div id="archiveViewNotice" class="hidden items-center gap-1 px-3 py-1 rounded-md bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 text-xs font-semibold border border-amber-200/80 dark:border-amber-800/40">
+                            <span class="material-symbols-rounded text-sm">info</span>
+                            <span>History Bucket (Archived Classes)</span>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="bg-white dark:bg-[#0b1120] flex-1 p-2">
-                    <div id="classesContainer" class="flex flex-col divide-y divide-slate-200 dark:divide-slate-700/50 border border-slate-200 dark:border-slate-700/50 rounded-md overflow-hidden">
-                        <% classes.forEach((cls, index) => { %>
-                            <div class="class-item bg-white dark:bg-slate-900/50 p-2 relative group transition-all" data-id="<%= cls._id %>">
-                                <div class="flex items-start gap-2">
-                                    <div class="drag-handle text-slate-400 hover:text-slate-600 dark:hover:text-white mt-2.5 px-1 cursor-grab active:cursor-grabbing">
-                                        <span class="material-symbols-rounded text-lg">drag_indicator</span>
+                <!-- 3. Active Classes Content View -->
+                <div id="activeClassesView" class="p-3 sm:p-4 space-y-3">
+                    <div id="classesContainer" class="grid grid-cols-1 gap-3">
+                        <% safeClasses.forEach((cls, index) => { %>
+                            <div class="class-item bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-md p-3.5 sm:p-4 shadow-xs transition-all hover:border-primary/40" data-id="<%= cls._id %>">
+                                <div class="flex items-start gap-3">
+                                    <!-- Drag Handle -->
+                                    <div class="drag-handle text-slate-300 hover:text-primary dark:hover:text-primary mt-2 px-1 cursor-grab active:cursor-grabbing transition-colors shrink-0" title="Drag to reorder sequence">
+                                        <span class="material-symbols-rounded text-2xl">drag_indicator</span>
                                     </div>
-                                    <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
-                                        <div class="space-y-1">
-                                            <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 pl-1">Class Name</label>
-                                            <input type="text" class="class-name-input w-full h-10 bg-[#FBFCFD] dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-[12px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all" value="<%= cls.name %>" placeholder="e.g. Class 10">
-                                        </div>
-                                        <div class="space-y-1 flex gap-1.5">
-                                            <div class="flex-1 space-y-1">
-                                                <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 pl-1">Subjects (Comma separated)</label>
-                                                <textarea rows="2" class="class-subjects-input w-full bg-[#FBFCFD] dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-[12px] p-2 focus:outline-none focus:border-blue-500 transition-all resize-y min-h-[40px]"><%= cls.subjects ? cls.subjects.join(', ') : '' %></textarea>
+
+                                    <div class="flex-1 space-y-3">
+                                        <!-- Top Row: Class Name, Stream Toggle, Action -->
+                                        <div class="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-slate-100 dark:border-slate-800/60">
+                                            <div class="flex items-center gap-2 flex-1 min-w-[220px] max-w-sm">
+                                                <div class="size-7 rounded-md bg-primary/10 text-primary font-black text-xs flex items-center justify-center shrink-0 border border-primary/20">
+                                                    <%= index + 1 %>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <input type="text" class="class-name-input w-full h-9 px-3 rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-primary transition-all" value="<%= cls.name %>" placeholder="e.g. Class 10">
+                                                </div>
                                             </div>
-                                            <div class="pt-5">
-                                                <button type="button" class="delete-class-btn p-1 bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-100 dark:border-red-500/20 h-10 w-10 flex items-center justify-center" title="Delete Class" data-id="<%= cls._id %>">
-                                                    <span class="material-symbols-rounded text-[18px]">delete</span>
+
+                                            <div class="flex items-center gap-3">
+                                                <!-- Stream / Group Toggle Pill -->
+                                                <label class="flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 rounded-md bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700/80 transition-colors">
+                                                    <div class="relative inline-block w-9 h-5 align-middle select-none">
+                                                        <input type="checkbox" class="class-has-groups-input toggle-switch-checkbox sr-only" <%= cls.hasGroups ? 'checked' : '' %>>
+                                                        <div class="toggle-switch-label block overflow-hidden h-5 rounded-full bg-slate-300 dark:bg-slate-700 cursor-pointer transition-colors duration-200">
+                                                            <span class="toggle-switch-dot absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 shadow-xs"></span>
+                                                        </div>
+                                                    </div>
+                                                    <span class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                                                        <span class="material-symbols-rounded text-sm text-primary">account_tree</span>
+                                                        <span>বিভাগ/গ্রুপ আছে (Science / Commerce / Humanities)</span>
+                                                    </span>
+                                                </label>
+
+                                                <!-- Move to History Bucket (Soft Delete) -->
+                                                <button type="button" 
+                                                        onclick="moveToBucket(this.getAttribute('data-id'), this.getAttribute('data-name'))"
+                                                        class="delete-class-btn h-8 px-2.5 rounded-md bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-400 font-bold text-xs flex items-center gap-1 transition-all border border-amber-200/80 dark:border-amber-800/40" 
+                                                        title="Move to History Bucket" 
+                                                        data-id="<%= cls._id %>" 
+                                                        data-name="<%= cls.name %>">
+                                                    <span class="material-symbols-rounded text-base">inventory_2</span>
+                                                    <span class="hidden sm:inline">Move to Bucket</span>
                                                 </button>
+                                            </div>
+                                        </div>
+
+                                        <!-- Standard Flat Subjects (shown if hasGroups is false) -->
+                                        <div class="standard-subjects-block <%= cls.hasGroups ? 'hidden' : '' %> space-y-1.5">
+                                            <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 pl-0.5 block">
+                                                Class Curriculum Subjects (Comma separated)
+                                            </label>
+                                            <textarea rows="2" class="class-subjects-input w-full bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-xs font-medium p-2.5 rounded-md focus:border-primary outline-none transition-all resize-y min-h-[44px]" placeholder="Bangla, English, Mathematics, General Science, Religion, ICT..."><%= cls.subjects ? cls.subjects.join(', ') : '' %></textarea>
+                                        </div>
+
+                                        <!-- Stream / Group Subjects (shown if hasGroups is true) -->
+                                        <div class="groups-block space-y-3 <%= cls.hasGroups ? '' : 'hidden' %> bg-slate-50/50 dark:bg-slate-900/40 p-3 rounded-md border border-slate-200 dark:border-slate-700/60">
+                                            <div>
+                                                <label class="text-[11px] font-bold text-primary dark:text-blue-400 pl-0.5 flex items-center gap-1 mb-1">
+                                                    <span class="material-symbols-rounded text-sm">menu_book</span>
+                                                    <span>Common / আবশ্যিক বিষয় (সকল গ্রুপের সাধারণ শিক্ষার্থীদের জন্য)</span>
+                                                </label>
+                                                <input type="text" class="class-common-subjects-input w-full h-9 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-xs font-semibold px-3 rounded-md focus:border-primary outline-none transition-all" value="<%= (cls.commonSubjects || []).join(', ') %>" placeholder="Bangla, English, ICT, General Mathematics, Religion & Moral Education">
+                                            </div>
+
+                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                                                <%
+                                                    const scienceGroup = (cls.groups || []).find(g => (g.name || '').toLowerCase() === 'science') || {};
+                                                    const commerceGroup = (cls.groups || []).find(g => (g.name || '').toLowerCase() === 'commerce') || {};
+                                                    const humanitiesGroup = (cls.groups || []).find(g => (g.name || '').toLowerCase() === 'humanities') || {};
+                                                %>
+                                                <!-- Science Group -->
+                                                <div class="p-2.5 bg-white dark:bg-[#0f172a] rounded-md border border-emerald-200/80 dark:border-emerald-900/40 space-y-1.5 shadow-xs">
+                                                    <label class="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                                                        <span class="material-symbols-rounded text-sm">biotech</span>
+                                                        <span>বিজ্ঞান (Science Group)</span>
+                                                    </label>
+                                                    <textarea rows="2" class="group-science-input w-full text-[11.5px] font-medium p-2 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50/50 dark:bg-slate-900/50 focus:border-emerald-500 outline-none resize-y" placeholder="Physics, Chemistry, Biology, Higher Mathematics"><%= (scienceGroup.subjects || []).join(', ') %></textarea>
+                                                </div>
+
+                                                <!-- Commerce Group -->
+                                                <div class="p-2.5 bg-white dark:bg-[#0f172a] rounded-md border border-amber-200/80 dark:border-amber-900/40 space-y-1.5 shadow-xs">
+                                                    <label class="text-[11px] font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                                                        <span class="material-symbols-rounded text-sm">bar_chart</span>
+                                                        <span>ব্যবসায় শিক্ষা (Commerce)</span>
+                                                    </label>
+                                                    <textarea rows="2" class="group-commerce-input w-full text-[11.5px] font-medium p-2 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50/50 dark:bg-slate-900/50 focus:border-amber-500 outline-none resize-y" placeholder="Accounting, Business Entrepreneurship, Finance & Banking"><%= (commerceGroup.subjects || []).join(', ') %></textarea>
+                                                </div>
+
+                                                <!-- Humanities Group -->
+                                                <div class="p-2.5 bg-white dark:bg-[#0f172a] rounded-md border border-purple-200/80 dark:border-purple-900/40 space-y-1.5 shadow-xs">
+                                                    <label class="text-[11px] font-bold text-purple-700 dark:text-purple-400 flex items-center gap-1">
+                                                        <span class="material-symbols-rounded text-sm">history_edu</span>
+                                                        <span>মানবিক (Humanities)</span>
+                                                    </label>
+                                                    <textarea rows="2" class="group-humanities-input w-full text-[11.5px] font-medium p-2 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50/50 dark:bg-slate-900/50 focus:border-purple-500 outline-none resize-y" placeholder="Geography & Environment, Civics, Economics, History"><%= (humanitiesGroup.subjects || []).join(', ') %></textarea>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -82,54 +193,164 @@
                             </div>
                         <% }) %>
                     </div>
-                    
-                    <% if (classes.length === 0) { %>
-                        <div id="emptyState" class="p-8 text-center border border-dashed border-slate-300 dark:border-slate-700 mt-2 bg-[#F8FAFC] dark:bg-slate-900/50">
-                            <div class="size-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center mx-auto mb-2">
-                                <span class="material-symbols-rounded text-xl text-slate-400">school</span>
+
+                    <% if (safeClasses.length === 0) { %>
+                        <div id="emptyState" class="p-10 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] rounded-md">
+                            <div class="size-11 rounded-md bg-primary/10 text-primary flex items-center justify-center mx-auto mb-2">
+                                <span class="material-symbols-rounded text-2xl">school</span>
                             </div>
-                            <h3 class="text-[12px] font-bold mb-1">No Classes Found</h3>
-                            <p class="text-[10px] text-slate-500 max-w-sm mx-auto">You haven't defined any academic classes yet.</p>
+                            <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-1">No Active Academic Classes</h3>
+                            <p class="text-xs text-slate-500 max-w-sm mx-auto mb-3">You haven't defined any active classes yet. Click the button below to add your first class.</p>
+                            <button type="button" onclick="document.getElementById('addClassBtn').click()" class="h-8 px-3.5 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-xs">
+                                <span class="material-symbols-rounded text-base">add_circle</span> Add Class
+                            </button>
                         </div>
                     <% } %>
-                    
-                    <!-- Action Buttons -->
-                    <div class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700/50 flex justify-end gap-2 bg-white dark:bg-[#0b1120]">
-                        <button id="addClassBtn" class="h-9 px-4 bg-[#F8FAFC] dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded font-bold text-[11px] hover:border-blue-500 hover:text-blue-500 transition-all flex items-center gap-1 shadow-sm">
-                            <span class="material-symbols-rounded text-[14px]">add</span>
-                            Add Class
-                        </button>
-                        <button id="saveBtn" class="h-9 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded font-bold text-[11px] transition-all flex items-center gap-1 shadow-sm">
-                            <span class="material-symbols-rounded text-[14px]">save</span>
-                            Save Changes
-                        </button>
+                </div>
+
+                <!-- 4. History Bucket (Archived Classes View) -->
+                <div id="archivedClassesView" class="hidden p-3 sm:p-4 space-y-3">
+                    <div class="p-3 bg-amber-50/60 dark:bg-amber-950/20 rounded-md border border-amber-200/80 dark:border-amber-900/40 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                        <span class="material-symbols-rounded text-lg text-amber-600 shrink-0">inventory_2</span>
+                        <span>These classes are safely archived and hidden from live registration, student dashboards, and teacher portals. All historic questions, student records, and exam results remain 100% intact.</span>
+                    </div>
+
+                    <div id="archivedContainer" class="grid grid-cols-1 gap-2.5">
+                        <% safeArchived.forEach(ac => { %>
+                            <div class="archived-item bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-md p-3.5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3" data-id="<%= ac._id %>">
+                                <div class="space-y-1">
+                                    <div class="flex items-center gap-2">
+                                        <h4 class="text-sm font-bold text-slate-900 dark:text-white"><%= ac.name %></h4>
+                                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/60 dark:border-amber-900/60">
+                                            Archived in Bucket
+                                        </span>
+                                        <% if (ac.hasGroups) { %>
+                                            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border border-purple-200/60 dark:border-purple-900/60">
+                                                Streams Enabled
+                                            </span>
+                                        <% } %>
+                                    </div>
+                                    <% if (ac.hasGroups) { %>
+                                        <p class="text-[11px] text-slate-500">
+                                            Common: <span class="font-medium text-slate-700 dark:text-slate-300"><%= (ac.commonSubjects || []).join(', ') || 'None' %></span>
+                                        </p>
+                                    <% } %>
+                                    <p class="text-[11px] text-slate-500">
+                                        Subjects: <span class="font-medium text-slate-700 dark:text-slate-300"><%= (ac.subjects || []).join(', ') || 'None' %></span>
+                                    </p>
+                                </div>
+                                <div class="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                                    <button type="button" 
+                                            onclick="restoreClass(this.getAttribute('data-id'), this.getAttribute('data-name'))"
+                                            data-id="<%= ac._id %>" 
+                                            data-name="<%= ac.name %>"
+                                            class="h-8 px-3 rounded-md bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800 font-bold text-xs flex items-center gap-1 transition-all">
+                                        <span class="material-symbols-rounded text-sm">settings_backup_restore</span>
+                                        <span>Restore to Live</span>
+                                    </button>
+                                    <button type="button" 
+                                            onclick="permanentDeleteClass(this.getAttribute('data-id'), this.getAttribute('data-name'))"
+                                            data-id="<%= ac._id %>" 
+                                            data-name="<%= ac.name %>"
+                                            class="h-8 px-2.5 rounded-md bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-600 dark:text-rose-400 border border-rose-200/80 dark:border-rose-900/60 font-bold text-xs flex items-center gap-1 transition-all" title="Permanently delete from database">
+                                        <span class="material-symbols-rounded text-sm">delete_forever</span>
+                                    </button>
+                                </div>
+                            </div>
+                        <% }) %>
+
+                        <% if (safeArchived.length === 0) { %>
+                            <div id="archivedEmptyState" class="p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] rounded-md">
+                                <span class="material-symbols-rounded text-3xl text-slate-400 mb-1">inventory_2</span>
+                                <h4 class="text-xs font-bold text-slate-700 dark:text-slate-300">History Bucket is Empty</h4>
+                                <p class="text-[11px] text-slate-500">When you remove any class from the live list, it will safely appear here.</p>
+                            </div>
+                        <% } %>
                     </div>
                 </div>
-            </section>
+
+            </div>
         </main>
     </div>
 
     <!-- Template for new class -->
     <template id="newClassTemplate">
-        <div class="class-item bg-white dark:bg-slate-900/50 p-2 relative group transition-all" data-id="">
-            <div class="flex items-start gap-2">
-                <div class="drag-handle text-slate-400 hover:text-slate-600 dark:hover:text-white mt-2.5 px-1 cursor-grab active:cursor-grabbing">
-                    <span class="material-symbols-rounded text-lg">drag_indicator</span>
+        <div class="class-item bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-md p-3.5 sm:p-4 shadow-xs transition-all hover:border-primary/40" data-id="">
+            <div class="flex items-start gap-3">
+                <div class="drag-handle text-slate-300 hover:text-primary dark:hover:text-primary mt-2 px-1 cursor-grab active:cursor-grabbing transition-colors shrink-0" title="Drag to reorder sequence">
+                    <span class="material-symbols-rounded text-2xl">drag_indicator</span>
                 </div>
-                <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <div class="space-y-1">
-                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 pl-1">Class Name</label>
-                        <input type="text" class="class-name-input w-full h-10 bg-[#FBFCFD] dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-[12px] font-bold px-3 focus:outline-none focus:border-blue-500 transition-all" value="" placeholder="e.g. Class 10">
-                    </div>
-                    <div class="space-y-1 flex gap-1.5">
-                        <div class="flex-1 space-y-1">
-                            <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 pl-1">Subjects (Comma separated)</label>
-                            <textarea rows="2" class="class-subjects-input w-full bg-[#FBFCFD] dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-[12px] p-2 focus:outline-none focus:border-blue-500 transition-all resize-y min-h-[40px]" placeholder="Bangla, English, Math, Physics..."></textarea>
+
+                <div class="flex-1 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-3 pb-2.5 border-b border-slate-100 dark:border-slate-800/60">
+                        <div class="flex items-center gap-2 flex-1 min-w-[220px] max-w-sm">
+                            <div class="size-7 rounded-md bg-primary/10 text-primary font-black text-xs flex items-center justify-center shrink-0 border border-primary/20">
+                                +
+                            </div>
+                            <div class="flex-1">
+                                <input type="text" class="class-name-input w-full h-9 px-3 rounded-md bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-900 dark:text-white outline-none focus:border-primary transition-all" value="" placeholder="e.g. Class 5">
+                            </div>
                         </div>
-                        <div class="pt-5">
-                            <button type="button" class="delete-class-btn p-1 bg-red-50 dark:bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all border border-red-100 dark:border-red-500/20 h-10 w-10 flex items-center justify-center" title="Delete Class" data-id="">
-                                <span class="material-symbols-rounded text-[18px]">delete</span>
+
+                        <div class="flex items-center gap-3">
+                            <label class="flex items-center gap-2 cursor-pointer select-none px-3 py-1.5 rounded-md bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700/80 transition-colors">
+                                <div class="relative inline-block w-9 h-5 align-middle select-none">
+                                    <input type="checkbox" class="class-has-groups-input toggle-switch-checkbox sr-only">
+                                    <div class="toggle-switch-label block overflow-hidden h-5 rounded-full bg-slate-300 dark:bg-slate-700 cursor-pointer transition-colors duration-200">
+                                        <span class="toggle-switch-dot absolute left-0.5 top-0.5 bg-white w-4 h-4 rounded-full transition-transform duration-200 shadow-xs"></span>
+                                    </div>
+                                </div>
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-sm text-primary">account_tree</span>
+                                    <span>বিভাগ/গ্রুপ আছে (Science / Commerce / Humanities)</span>
+                                </span>
+                            </label>
+
+                            <button type="button" class="delete-class-btn h-8 px-2.5 rounded-md bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-400 font-bold text-xs flex items-center gap-1 transition-all border border-amber-200/80 dark:border-amber-800/40" title="Move to History Bucket" data-id="" data-name="">
+                                <span class="material-symbols-rounded text-base">inventory_2</span>
+                                <span class="hidden sm:inline">Move to Bucket</span>
                             </button>
+                        </div>
+                    </div>
+
+                    <div class="standard-subjects-block space-y-1.5">
+                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 pl-0.5 block">
+                            Class Curriculum Subjects (Comma separated)
+                        </label>
+                        <textarea rows="2" class="class-subjects-input w-full bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-xs font-medium p-2.5 rounded-md focus:border-primary outline-none transition-all resize-y min-h-[44px]" placeholder="Bangla, English, Mathematics, General Science, Religion, ICT..."></textarea>
+                    </div>
+
+                    <div class="groups-block space-y-3 hidden bg-slate-50/50 dark:bg-slate-900/40 p-3 rounded-md border border-slate-200 dark:border-slate-700/60">
+                        <div>
+                            <label class="text-[11px] font-bold text-primary dark:text-blue-400 pl-0.5 flex items-center gap-1 mb-1">
+                                <span class="material-symbols-rounded text-sm">menu_book</span>
+                                <span>Common / আবশ্যিক বিষয় (সকল গ্রুপের সাধারণ শিক্ষার্থীদের জন্য)</span>
+                            </label>
+                            <input type="text" class="class-common-subjects-input w-full h-9 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-xs font-semibold px-3 rounded-md focus:border-primary outline-none transition-all" placeholder="Bangla, English, ICT, General Mathematics, Religion & Moral Education">
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                            <div class="p-2.5 bg-white dark:bg-[#0f172a] rounded-md border border-emerald-200/80 dark:border-emerald-900/40 space-y-1.5 shadow-xs">
+                                <label class="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-sm">biotech</span>
+                                    <span>বিজ্ঞান (Science Group)</span>
+                                </label>
+                                <textarea rows="2" class="group-science-input w-full text-[11.5px] font-medium p-2 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50/50 dark:bg-slate-900/50 focus:border-emerald-500 outline-none resize-y" placeholder="Physics, Chemistry, Biology, Higher Mathematics"></textarea>
+                            </div>
+                            <div class="p-2.5 bg-white dark:bg-[#0f172a] rounded-md border border-amber-200/80 dark:border-amber-900/40 space-y-1.5 shadow-xs">
+                                <label class="text-[11px] font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-sm">bar_chart</span>
+                                    <span>ব্যবসায় শিক্ষা (Commerce)</span>
+                                </label>
+                                <textarea rows="2" class="group-commerce-input w-full text-[11.5px] font-medium p-2 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50/50 dark:bg-slate-900/50 focus:border-amber-500 outline-none resize-y" placeholder="Accounting, Business Entrepreneurship, Finance & Banking"></textarea>
+                            </div>
+                            <div class="p-2.5 bg-white dark:bg-[#0f172a] rounded-md border border-purple-200/80 dark:border-purple-900/40 space-y-1.5 shadow-xs">
+                                <label class="text-[11px] font-bold text-purple-700 dark:text-purple-400 flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-sm">history_edu</span>
+                                    <span>মানবিক (Humanities)</span>
+                                </label>
+                                <textarea rows="2" class="group-humanities-input w-full text-[11.5px] font-medium p-2 border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50/50 dark:bg-slate-900/50 focus:border-purple-500 outline-none resize-y" placeholder="Geography & Environment, Civics, Economics, History"></textarea>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -140,8 +361,353 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        const apiBase = window.location.pathname.startsWith('/admin') ? '/admin' : '/superadmin';
+
         function toggleAdminSidebar() {
-            document.getElementById('adminSidebar').classList.toggle('active');
+            const sidebar = document.getElementById('adminSidebar');
+            if (sidebar) sidebar.classList.toggle('active');
+        }
+
+        function switchAcademicTab(tab) {
+            const activeView = document.getElementById('activeClassesView');
+            const archiveView = document.getElementById('archivedClassesView');
+            const tabActiveBtn = document.getElementById('tabActiveBtn');
+            const tabArchiveBtn = document.getElementById('tabArchiveBtn');
+            const addClassBtn = document.getElementById('addClassBtn');
+            const saveBtn = document.getElementById('saveBtn');
+            const notice = document.getElementById('archiveViewNotice');
+
+            if (!activeView || !archiveView) return;
+
+            if (tab === 'active') {
+                activeView.classList.remove('hidden');
+                archiveView.classList.add('hidden');
+                if (tabActiveBtn) tabActiveBtn.className = 'px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs';
+                if (tabArchiveBtn) tabArchiveBtn.className = 'px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white';
+                if (addClassBtn) addClassBtn.classList.remove('hidden');
+                if (saveBtn) saveBtn.classList.remove('hidden');
+                if (notice) notice.classList.add('hidden');
+                if (window.history.replaceState) {
+                    window.history.replaceState(null, '', window.location.pathname + '?tab=active');
+                }
+            } else {
+                activeView.classList.add('hidden');
+                archiveView.classList.remove('hidden');
+                if (tabArchiveBtn) tabArchiveBtn.className = 'px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs';
+                if (tabActiveBtn) tabActiveBtn.className = 'px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white';
+                if (addClassBtn) addClassBtn.classList.add('hidden');
+                if (saveBtn) saveBtn.classList.add('hidden');
+                if (notice) notice.classList.remove('hidden');
+                if (window.history.replaceState) {
+                    window.history.replaceState(null, '', window.location.pathname + '?tab=archive');
+                }
+            }
+        }
+
+        // Global Move to Bucket (Soft Delete)
+        async function moveToBucket(id, name) {
+            name = (name || '').trim();
+            id = (id || '').trim();
+
+            // If unsaved draft
+            if (!id) {
+                if (name) {
+                    const unsavedChoice = await Swal.fire({
+                        title: 'Discard or Archive to Bucket?',
+                        text: `"${name}" has not been saved yet. Do you want to discard it or save it directly to the History Bucket?`,
+                        icon: 'question',
+                        showCancelButton: true,
+                        showDenyButton: true,
+                        confirmButtonColor: '#137fec',
+                        denyButtonColor: '#d97706',
+                        cancelButtonColor: '#64748b',
+                        confirmButtonText: 'Discard Draft',
+                        denyButtonText: 'Archive to Bucket'
+                    });
+
+                    if (unsavedChoice.isConfirmed) {
+                        const items = document.querySelectorAll('.class-item');
+                        items.forEach(it => {
+                            const inp = it.querySelector('.class-name-input');
+                            if (inp && inp.value.trim() === name && !it.getAttribute('data-id')) {
+                                it.remove();
+                            }
+                        });
+                        return;
+                    } else if (unsavedChoice.isDenied) {
+                        try {
+                            const res = await fetch(`${apiBase}/academic-setup/archive`, {
+                                method: 'POST',
+                                headers: { 
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                },
+                                body: JSON.stringify({ name })
+                            });
+                            const text = await res.text();
+                            let data = {};
+                            try { data = JSON.parse(text); } catch(e) { data = { error: text }; }
+
+                            if (res.ok && data.success !== false) {
+                                window.location.href = window.location.pathname + '?tab=archive';
+                            } else {
+                                Swal.fire('Error', (data && data.error) || 'Failed to archive class', 'error');
+                            }
+                        } catch (err) {
+                            Swal.fire('Error', 'Connection error: ' + (err.message || err), 'error');
+                        }
+                        return;
+                    } else {
+                        return;
+                    }
+                } else {
+                    const emptyItems = document.querySelectorAll('.class-item:not([data-id])');
+                    if (emptyItems.length > 0) emptyItems[0].remove();
+                    return;
+                }
+            }
+
+            // Existing class in database
+            const result = await Swal.fire({
+                title: 'Move to History Bucket?',
+                text: `"${name}" will be safely removed from the live platform (registration, student dashboard, teacher assignment), and preserved in the History Bucket.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#d97706',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Move to History Bucket'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    Swal.fire({
+                        title: 'Archiving...',
+                        text: `Moving "${name}" to History Bucket...`,
+                        allowOutsideClick: false,
+                        didOpen: () => Swal.showLoading()
+                    });
+
+                    const target = id || name;
+                    let res = await fetch(`${apiBase}/academic-setup/archive`, { 
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({ id: target, name, action: 'archive' })
+                    });
+
+                    if (!res.ok) {
+                        res = await fetch(`${apiBase}/academic-setup?action=archive`, { 
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({ id: target, name, action: 'archive' })
+                        });
+                    }
+
+                    const text = await res.text();
+                    let data = {};
+                    try { 
+                        data = JSON.parse(text); 
+                    } catch(e) { 
+                        const clean = text.replace(/<[^>]*>?/gm, '').trim();
+                        data = { error: clean || 'Server returned invalid response' }; 
+                    }
+
+                    if (res.ok && data.success !== false) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'Moved to History Bucket!',
+                            text: `"${name}" is now safely archived in the History Bucket.`,
+                            timer: 1400,
+                            showConfirmButton: false
+                        });
+                        window.location.href = window.location.pathname + '?tab=archive';
+                    } else {
+                        // Helpful diagnosis if node process is still running old routes in memory
+                        if (res.status === 404 || (data && (data.error === 'Invalid data' || data.error.includes('Cannot POST')))) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Server Restart Required',
+                                html: `সার্ভারটি মেমোরিতে আগের কোড ধরে রেখেছে।<br><br>দয়া করে আপনার টার্মিনালে Node.js সার্ভারটি একবার রিস্টার্ট করুন (<kbd class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs text-rose-600 font-bold">Ctrl + C</kbd> দিয়ে বন্ধ করে <kbd class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs text-blue-600 font-bold">node server/server.js</kbd> বা <kbd class="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs text-blue-600 font-bold">npm run dev</kbd> চালান)।<br><br>এরপর রিলোড দিয়ে Move to Bucket এ ক্লিক করলে কাজ করবে।`
+                            });
+                        } else {
+                            Swal.fire('Error', (data && data.error) || 'Failed to move to History Bucket', 'error');
+                        }
+                    }
+                } catch (err) {
+                    console.error('Move to bucket error:', err);
+                    Swal.fire('Error', 'Connection error: ' + (err.message || err), 'error');
+                }
+            }
+        }
+
+        async function restoreClass(id, name) {
+            const result = await Swal.fire({
+                title: 'Restore Class to Live?',
+                text: `"${name}" will be restored back to live registration, student dashboards, and teacher portals.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#137fec',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Restore Now'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    Swal.fire({
+                        title: 'Restoring...',
+                        text: `Restoring "${name}" to live platform...`,
+                        allowOutsideClick: false,
+                        didOpen: () => Swal.showLoading()
+                    });
+
+                    const target = id || name;
+                    let res = await fetch(`${apiBase}/academic-setup/restore`, { 
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({ id: target, name, action: 'restore' })
+                    });
+
+                    if (!res.ok) {
+                        res = await fetch(`${apiBase}/academic-setup/${encodeURIComponent(target)}/restore`, { 
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({ name, action: 'restore' })
+                        });
+                    }
+
+                    if (!res.ok) {
+                        res = await fetch(`${apiBase}/academic-setup?action=restore`, { 
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({ id: target, name, action: 'restore' })
+                        });
+                    }
+
+                    const text = await res.text();
+                    let data = {};
+                    try { 
+                        data = JSON.parse(text); 
+                    } catch(e) { 
+                        const clean = text.replace(/<[^>]*>?/gm, '').trim();
+                        data = { error: clean || 'Server returned invalid response' }; 
+                    }
+
+                    if (res.ok && data.success !== false) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'Restored to Live!',
+                            text: `"${name}" is now active across the platform.`,
+                            timer: 1400,
+                            showConfirmButton: false
+                        });
+                        window.location.href = window.location.pathname + '?tab=active';
+                    } else {
+                        Swal.fire('Error', (data && data.error) || 'Failed to restore class', 'error');
+                    }
+                } catch (e) {
+                    Swal.fire('Error', 'Connection error: ' + (e.message || e), 'error');
+                }
+            }
+        }
+
+        async function permanentDeleteClass(id, name) {
+            const result = await Swal.fire({
+                title: 'Permanent Delete?',
+                text: `Warning: This will permanently delete "${name}" from the database. All historic links to this class may be broken!`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Delete Permanently'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    Swal.fire({
+                        title: 'Deleting...',
+                        allowOutsideClick: false,
+                        didOpen: () => Swal.showLoading()
+                    });
+
+                    const target = id || name;
+                    let res = await fetch(`${apiBase}/academic-setup/permanent`, { 
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({ id: target, name, action: 'permanent' })
+                    });
+
+                    if (!res.ok) {
+                        res = await fetch(`${apiBase}/academic-setup/${encodeURIComponent(target)}/permanent`, { 
+                            method: 'DELETE',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({ name, action: 'permanent' })
+                        });
+                    }
+
+                    if (!res.ok) {
+                        res = await fetch(`${apiBase}/academic-setup?action=permanent`, { 
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({ id: target, name, action: 'permanent' })
+                        });
+                    }
+
+                    const text = await res.text();
+                    let data = {};
+                    try { 
+                        data = JSON.parse(text); 
+                    } catch(e) { 
+                        const clean = text.replace(/<[^>]*>?/gm, '').trim();
+                        data = { error: clean || 'Server returned invalid response' }; 
+                    }
+
+                    if (res.ok && data.success !== false) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'Deleted Forever!',
+                            timer: 1400,
+                            showConfirmButton: false
+                        });
+                        window.location.href = window.location.pathname + '?tab=archive';
+                    } else {
+                        Swal.fire('Error', (data && data.error) || 'Failed to delete permanently', 'error');
+                    }
+                } catch (e) {
+                    Swal.fire('Error', 'Connection error: ' + (e.message || e), 'error');
+                }
+            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -151,127 +717,173 @@
             const template = document.getElementById('newClassTemplate');
             const emptyState = document.getElementById('emptyState');
 
-            // Initialize Sortable for drag and drop
-            new Sortable(container, {
-                animation: 150,
-                handle: '.drag-handle',
-                ghostClass: 'opacity-50'
-            });
+            // Auto-detect Tab from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('tab') === 'archive' || window.location.hash === '#archive' || window.location.hash === '#history') {
+                switchAcademicTab('archive');
+            } else {
+                switchAcademicTab('active');
+            }
+
+            // Initialize Sortable safely
+            if (container && typeof Sortable !== 'undefined') {
+                try {
+                    new Sortable(container, {
+                        animation: 150,
+                        handle: '.drag-handle',
+                        ghostClass: 'opacity-50'
+                    });
+                } catch (e) {
+                    console.warn('Sortable init warning:', e);
+                }
+            }
+
+            // Toggle Groups Display
+            if (container) {
+                container.addEventListener('change', (e) => {
+                    if (e.target.classList.contains('class-has-groups-input')) {
+                        const item = e.target.closest('.class-item');
+                        if (!item) return;
+                        const standardBlock = item.querySelector('.standard-subjects-block');
+                        const groupsBlock = item.querySelector('.groups-block');
+                        if (e.target.checked) {
+                            if (standardBlock) standardBlock.classList.add('hidden');
+                            if (groupsBlock) groupsBlock.classList.remove('hidden');
+                        } else {
+                            if (standardBlock) standardBlock.classList.remove('hidden');
+                            if (groupsBlock) groupsBlock.classList.add('hidden');
+                        }
+                    }
+                });
+            }
 
             // Add new class
-            addBtn.addEventListener('click', () => {
-                if (emptyState) emptyState.style.display = 'none';
-                const clone = template.content.cloneNode(true);
-                container.appendChild(clone);
-                // focus the new input
-                const newInputs = container.querySelectorAll('.class-name-input');
-                if (newInputs.length > 0) newInputs[newInputs.length - 1].focus();
-            });
-
-            // Delete class
-            container.addEventListener('click', async (e) => {
-                const btn = e.target.closest('.delete-class-btn');
-                if (!btn) return;
-                
-                const id = btn.getAttribute('data-id');
-                const item = btn.closest('.class-item');
-
-                const result = await Swal.fire({
-                    title: 'Delete Class?',
-                    text: "Are you sure you want to remove this class?",
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#ef4444',
-                    cancelButtonColor: '#64748b',
-                    confirmButtonText: 'Yes, delete it!'
+            if (addBtn && template && container) {
+                addBtn.addEventListener('click', () => {
+                    if (emptyState) emptyState.style.display = 'none';
+                    const clone = template.content.cloneNode(true);
+                    container.prepend(clone);
+                    const newInputs = container.querySelectorAll('.class-name-input');
+                    if (newInputs.length > 0) newInputs[0].focus();
                 });
+            }
 
-                if (result.isConfirmed) {
-                    if (id) {
-                        try {
-                            const res = await fetch(`/superadmin/academic-setup/${id}`, { method: 'DELETE' });
-                            if (res.ok) {
-                                item.remove();
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: 'Deleted!',
-                                    text: 'Class has been deleted.',
-                                    timer: 1500,
-                                    showConfirmButton: false
-                                });
-                            } else {
-                                Swal.fire('Error', 'Failed to delete class', 'error');
-                            }
-                        } catch (err) {
-                            Swal.fire('Error', 'Network error', 'error');
-                        }
-                    } else {
-                        item.remove();
-                    }
-                }
-            });
-
-            // Save all
-            saveBtn.addEventListener('click', async () => {
-                const items = container.querySelectorAll('.class-item');
-                const classData = [];
-                let hasError = false;
-
-                items.forEach((item, index) => {
-                    const id = item.getAttribute('data-id');
-                    const name = item.querySelector('.class-name-input').value.trim();
-                    const subjects = item.querySelector('.class-subjects-input').value.trim();
-
-                    if (!name) {
-                        item.querySelector('.class-name-input').classList.add('border-red-500');
-                        hasError = true;
-                    } else {
-                        item.querySelector('.class-name-input').classList.remove('border-red-500');
-                        classData.push({ _id: id || null, name, subjects, order: index });
-                    }
-                });
-
-                if (hasError) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Validation Error',
-                        text: 'Please fill out all class names.'
-                    });
-                    return;
-                }
-                
-                const origText = saveBtn.innerHTML;
-                saveBtn.innerHTML = '<span class="material-symbols-rounded animate-spin text-[14px]">refresh</span> Saving...';
-                saveBtn.disabled = true;
-
-                try {
-                    const res = await fetch('/superadmin/academic-setup', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ classData })
-                    });
+            // Move to History Bucket click listener delegation (fallback)
+            if (container) {
+                container.addEventListener('click', async (e) => {
+                    const btn = e.target.closest('.delete-class-btn');
+                    if (!btn) return;
                     
-                    if (res.ok) {
+                    // If button already has inline onclick, let it handle
+                    const inlineClick = btn.getAttribute('onclick');
+                    if (inlineClick && inlineClick.includes('moveToBucket')) return;
+
+                    const item = btn.closest('.class-item');
+                    const id = btn.getAttribute('data-id') || (item ? item.getAttribute('data-id') : null);
+                    const nameInput = item ? item.querySelector('.class-name-input') : null;
+                    const name = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : (btn.getAttribute('data-name') || '');
+
+                    moveToBucket(id, name);
+                });
+            }
+
+            // Save all active classes
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async () => {
+                    const items = container.querySelectorAll('.class-item');
+                    const classData = [];
+                    let hasError = false;
+
+                    items.forEach((item, index) => {
+                        const id = item.getAttribute('data-id');
+                        const name = item.querySelector('.class-name-input').value.trim();
+                        const hasGroups = item.querySelector('.class-has-groups-input').checked;
+
+                        if (!name) {
+                            item.querySelector('.class-name-input').classList.add('border-rose-500');
+                            hasError = true;
+                            return;
+                        } else {
+                            item.querySelector('.class-name-input').classList.remove('border-rose-500');
+                        }
+
+                        if (hasGroups) {
+                            const commonSubjects = item.querySelector('.class-common-subjects-input').value.trim();
+                            const scienceSubs = item.querySelector('.group-science-input').value.trim();
+                            const commerceSubs = item.querySelector('.group-commerce-input').value.trim();
+                            const humanitiesSubs = item.querySelector('.group-humanities-input').value.trim();
+
+                            const groups = [
+                                { name: 'Science', subjects: scienceSubs },
+                                { name: 'Commerce', subjects: commerceSubs },
+                                { name: 'Humanities', subjects: humanitiesSubs }
+                            ];
+
+                            classData.push({
+                                _id: id || null,
+                                name,
+                                hasGroups: true,
+                                commonSubjects,
+                                groups,
+                                subjects: '',
+                                order: index
+                            });
+                        } else {
+                            const subjects = item.querySelector('.class-subjects-input').value.trim();
+                            classData.push({
+                                _id: id || null,
+                                name,
+                                hasGroups: false,
+                                commonSubjects: '',
+                                groups: [],
+                                subjects,
+                                order: index
+                            });
+                        }
+                    });
+
+                    if (hasError) {
                         Swal.fire({
-                            icon: 'success',
-                            title: 'Success!',
-                            text: 'Academic setup saved successfully.',
-                            timer: 1500,
-                            showConfirmButton: false
-                        }).then(() => {
-                            window.location.reload();
+                            icon: 'error',
+                            title: 'Validation Error',
+                            text: 'Please fill out all class names before saving.'
                         });
-                    } else {
-                        Swal.fire('Error', 'Failed to save data', 'error');
+                        return;
+                    }
+                    
+                    const origText = saveBtn.innerHTML;
+                    saveBtn.innerHTML = '<span class="material-symbols-rounded animate-spin text-base">progress_activity</span> Saving...';
+                    saveBtn.disabled = true;
+
+                    try {
+                        const res = await fetch(`${apiBase}/academic-setup`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ classData })
+                        });
+                        
+                        if (res.ok) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Success!',
+                                text: 'Academic setup saved successfully.',
+                                timer: 1400,
+                                showConfirmButton: false
+                            }).then(() => {
+                                window.location.href = window.location.pathname + '?tab=active';
+                            });
+                        } else {
+                            Swal.fire('Error', 'Failed to save data', 'error');
+                            saveBtn.innerHTML = origText;
+                            saveBtn.disabled = false;
+                        }
+                    } catch (err) {
+                        Swal.fire('Error', 'Network error', 'error');
                         saveBtn.innerHTML = origText;
                         saveBtn.disabled = false;
                     }
-                } catch (err) {
-                    Swal.fire('Error', 'Network error', 'error');
-                    saveBtn.innerHTML = origText;
-                    saveBtn.disabled = false;
-                }
-            });
+                });
+            }
         });
     </script>
 </body>

@@ -1,0 +1,1827 @@
+<%
+    const safeUser = (typeof user !== 'undefined' && user) ? user : { name: 'Super Admin', theme: 'light' };
+    const safeClasses = (typeof classes !== 'undefined' && Array.isArray(classes)) ? classes : [];
+    const safeChapters = (typeof chapters !== 'undefined' && Array.isArray(chapters)) ? chapters : [];
+    const safeArchived = (typeof archivedTopics !== 'undefined' && Array.isArray(archivedTopics)) ? archivedTopics : [];
+    const selClass = (typeof selectedClass !== 'undefined') ? selectedClass : '';
+    const selGroup = (typeof selectedGroup !== 'undefined') ? selectedGroup : 'all';
+    const selSubject = (typeof selectedSubject !== 'undefined') ? selectedSubject : '';
+    const availSubjects = (typeof availableSubjects !== 'undefined' && Array.isArray(availableSubjects)) ? availableSubjects : [];
+    const totalCount = (typeof totalTopicCount !== 'undefined') ? totalTopicCount : 0;
+    const archivedCount = (typeof archivedTopicCount !== 'undefined') ? archivedTopicCount : safeArchived.length;
+    const baseUrl = (typeof apiBase !== 'undefined') ? apiBase : '/superadmin';
+    const safeCurrentClass = (typeof currentClassObj !== 'undefined' && currentClassObj) ? currentClassObj : (safeClasses.find(c => c.name.toLowerCase() === selClass.toLowerCase()) || null);
+    const safeActiveTopics = (typeof activeTopics !== 'undefined' && Array.isArray(activeTopics)) ? activeTopics : [];
+    const safePending = (typeof pendingTopics !== 'undefined' && Array.isArray(pendingTopics)) ? pendingTopics : [];
+    const safePendingCount = (typeof pendingTopicCount !== 'undefined') ? pendingTopicCount : safePending.length;
+%>
+<!DOCTYPE html>
+<html lang="en" class="<%= (safeUser.theme === 'dark') ? 'dark' : '' %>">
+
+<head>
+    <%- include('../partials/head') %>
+    <title>Syllabus & Topics | ODDHAY Command Center</title>
+    <style>
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); min-height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+        .content-scroll { flex: 1; overflow-y: auto; padding: 0; position: relative; }
+        @media (max-width: 1024px) {
+            #adminSidebar { transform: translateX(-100%); }
+            #adminSidebar.active { transform: translateX(0); }
+            .admin-main { margin-left: 0; }
+        }
+        .chapter-accordion-content { transition: max-height 0.25s ease-out, opacity 0.2s ease-out; }
+        
+        /* Selection System Styles */
+        .selection-checkbox-wrap { display: none; }
+        body.selection-mode-active .selection-checkbox-wrap { display: inline-flex; align-items: center; }
+        body.selection-mode-active .chapter-card { cursor: pointer; }
+        body.selection-mode-active .topic-item { cursor: pointer; }
+        body.selection-mode-active .topic-item:hover { border-color: rgba(99, 102, 241, 0.4); }
+    </style>
+</head>
+
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans antialiased min-h-screen">
+
+    <div class="flex">
+        <!-- Sidebar -->
+        <aside id="adminSidebar"
+            class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100] border-r border-slate-200 dark:border-white/5">
+            <%- include(baseUrl === '/admin' ? '../admin/sidebar_content' : 'sidebar_content', { active: 'topics', user: safeUser, isSuperAdmin: (safeUser.role === 'superadmin') }) %>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617] flex flex-col min-h-screen relative w-full">
+            <%- include(baseUrl === '/admin' ? '../admin/header_v2' : 'header_v2', { pageTitle: 'Syllabus & Topics Hub', user: safeUser }) %>
+
+            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5 flex-1">
+                
+                <!-- 1. Sticky Action Bar -->
+                <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/80 px-2.5 sm:px-4 py-2 sm:py-2.5 flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-3 sticky top-0 z-30 shadow-xs">
+                    <!-- Tab Switcher (Swipeable on mobile) -->
+                    <div class="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-md border border-slate-200 dark:border-slate-700/60 overflow-x-auto no-scrollbar max-w-full shrink-0">
+                        <button type="button" id="tabActiveBtn" onclick="switchTopicTab('active')"
+                                class="px-2.5 sm:px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs shrink-0 whitespace-nowrap">
+                            <span class="material-symbols-rounded text-[17px]">account_tree</span>
+                            <span>Live Syllabus</span>
+                            <span id="badgeActiveTopics" class="px-1.5 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary font-bold leading-none"><%= totalCount %></span>
+                        </button>
+                        <button type="button" id="tabPendingBtn" onclick="switchTopicTab('pending')"
+                                class="px-2.5 sm:px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white shrink-0 whitespace-nowrap">
+                            <span class="material-symbols-rounded text-[17px]">rate_review</span>
+                            <span>Pending Approvals</span>
+                            <span id="badgePendingTopics" class="px-1.5 py-0.5 rounded-full text-[10px] <%= safePendingCount > 0 ? 'bg-amber-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300' %> font-bold leading-none"><%= safePendingCount %></span>
+                        </button>
+                        <button type="button" id="tabArchiveBtn" onclick="switchTopicTab('archive')"
+                                class="px-2.5 sm:px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white shrink-0 whitespace-nowrap">
+                            <span class="material-symbols-rounded text-[17px]">inventory_2</span>
+                            <span>History Bucket</span>
+                            <span id="badgeArchiveTopics" class="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 font-bold leading-none"><%= archivedCount %></span>
+                        </button>
+                    </div>
+
+                    <!-- Right Action Buttons: Selection System & Add Topics -->
+                    <div class="flex items-center gap-2 justify-end w-full md:w-auto shrink-0">
+                        <!-- Selection System Button (Beside Add Button) -->
+                        <button type="button" id="btnToggleSelection" onclick="toggleSelectionMode()"
+                                class="h-8 sm:h-9 px-2.5 sm:px-3 rounded-md bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all shrink-0"
+                                title="Open selection mode to select multiple topics and move to bucket">
+                            <span id="btnSelectionIcon" class="material-symbols-rounded text-[17px] sm:text-[18px] text-slate-500">checklist</span>
+                            <span id="btnSelectionLabel">Select Topics</span>
+                        </button>
+
+                        <!-- Add Topics Button -->
+                        <button type="button" id="unifiedModalOpenBtn" onclick="openUnifiedModal()"
+                                class="h-8 sm:h-9 px-3 sm:px-3.5 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all shrink-0">
+                            <span class="material-symbols-rounded text-[17px] sm:text-[18px]">add</span>
+                            <span>Add Topics</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Selection System Toolbar (Opens when Select button is clicked) -->
+                <div id="selectionToolbar" class="bg-primary/5 dark:bg-primary/10 border-b border-primary/20 px-2.5 sm:px-4 py-2 hidden transition-all sticky top-[49px] sm:top-[53px] z-20 backdrop-blur-xs">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-2.5">
+                        <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                            <div class="flex items-center gap-1.5 text-xs font-medium text-primary shrink-0">
+                                <span class="material-symbols-rounded text-base">checklist_rtl</span>
+                                <span>Selection Mode</span>
+                                <span id="toolbarSelectedCountBadge" class="px-2 py-0.5 rounded-full text-[10px] bg-primary text-white font-semibold ml-0.5">0 Selected</span>
+                            </div>
+                            <div class="h-3.5 w-px bg-primary/20 hidden sm:block"></div>
+                            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                                <button type="button" onclick="selectAllLiveTopics()"
+                                        class="h-7 px-2 sm:px-2.5 rounded bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-all shrink-0 whitespace-nowrap">
+                                    <span class="material-symbols-rounded text-sm">select_all</span>
+                                    <span>Select All (<%= safeActiveTopics.length %>)</span>
+                                </button>
+                                <button type="button" onclick="deselectAllLive()"
+                                        class="h-7 px-2 rounded bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-all shrink-0 whitespace-nowrap">
+                                    <span class="material-symbols-rounded text-sm">deselect</span>
+                                    <span>Deselect</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <button type="button" id="btnToolbarMoveBucket" onclick="bulkActionLive()" disabled
+                                    class="h-7 px-2.5 sm:px-3 rounded bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-medium flex items-center gap-1 transition-all shadow-xs shrink-0">
+                                <span class="material-symbols-rounded text-sm">inventory_2</span>
+                                <span id="btnToolbarMoveBucketText">Move to History Bucket</span>
+                            </button>
+                            <button type="button" onclick="exitSelectionMode()"
+                                    class="h-7 px-2.5 rounded bg-slate-200/80 hover:bg-slate-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium flex items-center gap-1 transition-all shrink-0">
+                                <span class="material-symbols-rounded text-sm">close</span>
+                                <span>Done</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. LIVE SYLLABUS DUAL-PANE VIEW -->
+                <div id="liveTopicsView" class="p-3 sm:p-4 flex-1">
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                        
+                        <!-- Left Rail: Academic Class & Subject Filter Rail -->
+                        <div class="lg:col-span-4 xl:col-span-3 space-y-3">
+                            <div class="bg-white dark:bg-[#0f172a] rounded-md border border-slate-200 dark:border-slate-800/80 p-3.5 shadow-xs space-y-3">
+                                <div>
+                                    <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 block mb-1">
+                                        Academic Class
+                                    </label>
+                                    <select id="classSelector" onchange="onClassChange(this.value)" class="w-full h-9 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-white outline-none focus:border-primary">
+                                        <% safeClasses.forEach(c => { %>
+                                            <option value="<%= c.name %>" <%= c.name.toLowerCase() === selClass.toLowerCase() ? 'selected' : '' %>>
+                                                <%= c.name %> <%= c.hasGroups ? '(Grouped)' : '' %>
+                                            </option>
+                                        <% }) %>
+                                    </select>
+                                </div>
+
+                                <!-- Stream / Group Filter if class has groups -->
+                                <% if (safeCurrentClass && safeCurrentClass.hasGroups) { %>
+                                    <div>
+                                        <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 block mb-1">
+                                            Stream / Group
+                                        </label>
+                                        <div class="grid grid-cols-2 gap-1.5">
+                                            <button type="button" onclick="onGroupChange('all')"
+                                                    class="px-2.5 py-1.5 rounded text-[11px] font-medium transition-all border <%= selGroup === 'all' ? 'bg-primary/10 text-primary border-primary/30 font-semibold' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800' %>">
+                                                All Groups
+                                            </button>
+                                            <button type="button" onclick="onGroupChange('Science')"
+                                                    class="px-2.5 py-1.5 rounded text-[11px] font-medium transition-all border <%= selGroup === 'Science' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-semibold' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800' %>">
+                                                Science
+                                            </button>
+                                            <button type="button" onclick="onGroupChange('Commerce')"
+                                                    class="px-2.5 py-1.5 rounded text-[11px] font-medium transition-all border <%= selGroup === 'Commerce' ? 'bg-amber-500/10 text-amber-600 border-amber-500/30 font-semibold' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800' %>">
+                                                Commerce
+                                            </button>
+                                            <button type="button" onclick="onGroupChange('Humanities')"
+                                                    class="px-2.5 py-1.5 rounded text-[11px] font-medium transition-all border <%= selGroup === 'Humanities' ? 'bg-purple-500/10 text-purple-600 border-purple-500/30 font-semibold' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800' %>">
+                                                Humanities
+                                            </button>
+                                        </div>
+                                    </div>
+                                <% } %>
+
+                                <!-- Subject Rail -->
+                                <div>
+                                    <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 block mb-1">
+                                        Assigned Subjects (<%= availSubjects.length %>)
+                                    </label>
+                                    
+                                    <!-- Mobile Subject Select (< lg) -->
+                                    <div class="block lg:hidden">
+                                        <select id="mobileSubjectSelector" onchange="onSubjectChange(this.value)" class="w-full h-9 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-white outline-none focus:border-primary cursor-pointer">
+                                            <% if (availSubjects.length === 0) { %>
+                                                <option value="">No subjects configured</option>
+                                            <% } else { %>
+                                                <% availSubjects.forEach(sub => { %>
+                                                    <option value="<%= sub %>" <%= sub.toLowerCase() === selSubject.toLowerCase() ? 'selected' : '' %>><%= sub %></option>
+                                                <% }) %>
+                                            <% } %>
+                                        </select>
+                                    </div>
+
+                                    <!-- Desktop Subject Rail (lg+) -->
+                                    <div class="hidden lg:block space-y-1 max-h-[380px] overflow-y-auto pr-1">
+                                        <% if (availSubjects.length === 0) { %>
+                                            <p class="text-xs text-slate-400 py-2 italic">No subjects configured for this class.</p>
+                                        <% } else { %>
+                                            <% availSubjects.forEach(sub => { 
+                                                const isCurrent = sub.toLowerCase() === selSubject.toLowerCase();
+                                            %>
+                                                <button type="button" onclick="onSubjectChange('<%= sub %>')"
+                                                        class="w-full text-left px-3 py-2 rounded-md text-xs transition-all flex items-center justify-between border <%= isCurrent ? 'bg-primary text-white border-primary shadow-xs font-semibold' : 'bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-800 font-medium' %>">
+                                                    <span class="truncate"><%= sub %></span>
+                                                    <span class="material-symbols-rounded text-sm <%= isCurrent ? 'text-white' : 'text-slate-400' %>">chevron_right</span>
+                                                </button>
+                                            <% }) %>
+                                        <% } %>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Info Card -->
+                            <div class="bg-blue-50/50 dark:bg-blue-950/20 rounded-md border border-blue-200/50 dark:border-blue-900/40 p-3 space-y-1 text-xs text-blue-900 dark:text-blue-300">
+                                <div class="font-medium flex items-center gap-1 text-primary">
+                                    <span class="material-symbols-rounded text-base">info</span>
+                                    <span>NCTB Curriculum Sync</span>
+                                </div>
+                                <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed font-normal">
+                                    এখানে নির্ধারিত প্রতিটি টপিক স্বয়ংক্রিয়ভাবে প্রশ্নব্যাংক, মডেল টেস্ট এবং এআই টিউটরে সংযুক্ত হয়।
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Right Column: Chapters & Topics Canvas -->
+                        <div class="lg:col-span-8 xl:col-span-9 space-y-3">
+                            
+                            <!-- Context Banner -->
+                            <div class="bg-white dark:bg-[#0f172a] rounded-md border border-slate-200 dark:border-slate-800/80 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-semibold"><%= selClass || 'All Classes' %></span>
+                                        <% if (selGroup && selGroup !== 'all') { %>
+                                            <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 text-[11px] font-medium"><%= selGroup %></span>
+                                        <% } %>
+                                        <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                                            <%= selSubject || 'Select Subject' %>
+                                        </h3>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 mt-0.5 font-normal">
+                                        মোট <%= safeChapters.length %> টি অধ্যায় এবং <%= safeActiveTopics.length %> টি সক্রিয় টপিক রয়েছে।
+                                    </p>
+                                </div>
+
+                                <!-- Quick Search Inside Subject -->
+                                <div class="relative min-w-[220px]">
+                                    <span class="material-symbols-rounded absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+                                    <input type="text" id="topicSearchInput" onkeyup="filterTopicsClientSide(this.value)" placeholder="Search topics in subject..." class="w-full h-8 pl-8 pr-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                                </div>
+                            </div>
+
+                            <!-- Chapters Accordion List -->
+                            <div id="chaptersContainer" class="space-y-3">
+                                <% if (safeChapters.length === 0) { %>
+                                    <div class="p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] rounded-md">
+                                        <span class="material-symbols-rounded text-3xl text-slate-400 mb-1">menu_book</span>
+                                        <h4 class="text-xs font-semibold text-slate-700 dark:text-slate-300">No Chapters or Topics Found</h4>
+                                        <p class="text-[11px] text-slate-500 mt-1 font-normal">Click "Add Topics" above to populate syllabus for <%= selSubject %>.</p>
+                                    </div>
+                                <% } else { %>
+                                    <% safeChapters.forEach((ch, chIdx) => { %>
+                                        <div class="chapter-card bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-md shadow-xs overflow-hidden" data-chapter-name="<%= ch.name %>">
+                                            <!-- Chapter Header -->
+                                            <div class="px-3 sm:px-3.5 py-2.5 bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-800/60 flex items-center justify-between gap-2 cursor-pointer select-none" onclick="onChapterHeaderClick(event, '<%= chIdx %>')">
+                                                <div class="flex items-center gap-2 sm:gap-2.5 flex-1 min-w-0">
+                                                    <!-- Multi-select checkbox for whole chapter (Visible in Selection Mode) -->
+                                                    <div class="selection-checkbox-wrap shrink-0" onclick="event.stopPropagation()">
+                                                        <input type="checkbox" id="chapter_cb_<%= chIdx %>" class="chapter-checkbox size-3.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer" onchange="toggleSelectChapterTopics('<%= chIdx %>', this.checked)">
+                                                    </div>
+                                                    <span class="size-6 rounded bg-primary/10 text-primary font-semibold text-xs flex items-center justify-center shrink-0">
+                                                        <%= ch.number %>
+                                                    </span>
+                                                    <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+                                                        <h4 class="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-tight truncate">
+                                                            <%= ch.name %>
+                                                        </h4>
+                                                        <span class="text-[10px] text-slate-500 dark:text-slate-400 font-normal leading-tight shrink-0">
+                                                            (<%= ch.topics.length %> Topics)
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="flex items-center gap-1 sm:gap-1.5 shrink-0" onclick="event.stopPropagation()">
+                                                    <!-- Add Topic to Chapter -->
+                                                    <button type="button" onclick="openUnifiedModal('<%= ch.name %>', <%= ch.number %>)"
+                                                            class="h-7 px-2 rounded bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-primary text-[11px] font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-all" title="Add topic to this chapter">
+                                                        <span class="material-symbols-rounded text-sm">add</span>
+                                                        <span class="hidden sm:inline">Add Topic</span>
+                                                        <span class="sm:hidden">Add</span>
+                                                    </button>
+                                                    
+                                                    <!-- Move Whole Chapter to History Bucket -->
+                                                    <button type="button" onclick="deleteChapter('<%= ch.name %>', <%= ch.topics.length %>)"
+                                                            class="size-7 rounded hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 flex items-center justify-center transition-colors" title="Move Chapter to History Bucket">
+                                                        <span class="material-symbols-rounded text-base">inventory_2</span>
+                                                    </button>
+
+                                                    <!-- Accordion Chevron -->
+                                                    <button type="button" onclick="toggleChapterAccordion('ch_<%= chIdx %>')" class="size-7 rounded hover:bg-slate-200/50 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400">
+                                                        <span id="icon_ch_<%= chIdx %>" class="material-symbols-rounded text-base transition-transform">expand_more</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <!-- Chapter Topics List -->
+                                            <div id="content_ch_<%= chIdx %>" class="p-2.5 sm:p-3 space-y-2">
+                                                <% ch.topics.forEach((t, tIdx) => { %>
+                                                    <div class="topic-item p-2 sm:p-2.5 rounded-md bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200/70 dark:border-slate-800/60 flex items-center justify-between gap-2 hover:border-primary/40 transition-all select-none" data-topic-name="<%= t.name %>" onclick="onTopicItemClick(event, '<%= t._id %>', '<%= chIdx %>')">
+                                                        <div class="flex items-start gap-2 sm:gap-2.5 flex-1 min-w-0">
+                                                            <!-- Multi-select checkbox (Visible in Selection Mode) -->
+                                                            <div class="selection-checkbox-wrap shrink-0">
+                                                                <input type="checkbox" class="topic-checkbox ch-topic-<%= chIdx %> size-3.5 mt-1 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer" data-id="<%= t._id %>" onchange="updateSelectedTopicsCount()">
+                                                            </div>
+                                                            <span class="text-slate-400 font-medium text-xs mt-0.5 shrink-0">#<%= t.order || (tIdx + 1) %></span>
+                                                            <div class="min-w-0 flex-1">
+                                                                <div class="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                                                                    <span class="text-xs font-medium text-slate-800 dark:text-slate-100 break-words"><%= t.name %></span>
+                                                                    <% if (t.code) { %>
+                                                                        <span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-normal"><%= t.code %></span>
+                                                                    <% } %>
+                                                                    <% 
+                                                                        let diffClass = 'bg-amber-500/10 text-amber-600 border-amber-500/20';
+                                                                        if (t.difficulty === 'Easy') diffClass = 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
+                                                                        if (t.difficulty === 'Hard') diffClass = 'bg-rose-500/10 text-rose-600 border-rose-500/20';
+                                                                    %>
+                                                                    <span class="text-[9px] font-medium px-1.5 py-0.2 rounded border <%= diffClass %>"><%= t.difficulty || 'Medium' %></span>
+                                                                </div>
+                                                                <% if (t.description) { %>
+                                                                    <p class="text-[11px] text-slate-500 mt-0.5 line-clamp-1 font-normal"><%= t.description %></p>
+                                                                <% } %>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- Topic Action Buttons: Edit and Move to Bucket -->
+                                                        <div class="flex items-center gap-1.5 shrink-0">
+                                                            <button type="button" 
+                                                                    onclick="openEditTopicModal('<%= t._id %>', <%= JSON.stringify(t.name) %>, <%= JSON.stringify(t.code || '') %>, <%= JSON.stringify(t.difficulty || 'Medium') %>, <%= JSON.stringify((t.keywords || []).join(', ')) %>, <%= JSON.stringify(t.description || '') %>, <%= t.order || 0 %>)"
+                                                                    class="size-7 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center justify-center transition-all" title="Edit Topic">
+                                                                <span class="material-symbols-rounded text-sm">edit</span>
+                                                            </button>
+                                                            <button type="button" 
+                                                                    onclick="archiveTopic('<%= t._id %>', <%= JSON.stringify(t.name) %>)"
+                                                                    class="size-7 rounded bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/30 dark:hover:bg-amber-900/50 text-amber-700 dark:text-amber-400 border border-amber-200/80 dark:border-amber-800/40 flex items-center justify-center transition-all" title="Move to History Bucket">
+                                                                <span class="material-symbols-rounded text-sm">inventory_2</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                <% }) %>
+                                            </div>
+                                        </div>
+                                    <% }) %>
+                                <% } %>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                                <!-- 2.5 PENDING APPROVALS VIEW (TEACHER SUBMISSIONS QUEUE) -->
+                <div id="pendingTopicsView" class="p-3 sm:p-4 hidden space-y-3">
+                    <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-lg px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                        <div class="flex items-center gap-2.5">
+                            <div class="size-8 rounded-md bg-primary/10 dark:bg-primary/20 text-primary flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-[18px]">rate_review</span>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h4 class="text-xs font-semibold text-slate-800 dark:text-slate-100">Submissions Queue</h4>
+                                    <span class="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"><%= safePendingCount %> pending</span>
+                                </div>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Review and approve teacher topics for live syllabus.</p>
+                            </div>
+                        </div>
+
+                        <!-- Bulk Approval Actions -->
+                        <div class="flex items-center gap-2">
+                            <button type="button" id="btnBulkApprovePending" onclick="bulkApproveSelectedPending()" disabled
+                                    class="h-8 px-3 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-medium flex items-center gap-1.5 shadow-xs transition-all">
+                                <span class="material-symbols-rounded text-base">check_circle</span>
+                                <span id="btnBulkApproveText">Approve Selected</span>
+                            </button>
+                            <button type="button" id="btnBulkRejectPending" onclick="bulkRejectSelectedPending()" disabled
+                                    class="h-8 px-3 rounded-md bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 disabled:opacity-40 disabled:pointer-events-none text-xs font-medium flex items-center gap-1.5 transition-all">
+                                <span class="material-symbols-rounded text-base">cancel</span>
+                                <span>Reject Selected</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-[#0f172a] rounded-md border border-slate-200 dark:border-slate-800/80 overflow-hidden shadow-xs">
+                        <div class="overflow-x-auto">
+                            <table class="w-full min-w-[720px] text-left text-xs">
+                                <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-500 font-medium border-b border-slate-200 dark:border-slate-800">
+                                    <tr>
+                                        <th class="p-3 w-8">
+                                            <input type="checkbox" id="selectAllPending" onchange="toggleSelectAllPending(this.checked)" class="size-3.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer">
+                                        </th>
+                                        <th class="p-3">Topic & Chapter</th>
+                                        <th class="p-3">Class & Subject</th>
+                                        <th class="p-3">Submitted By (Teacher)</th>
+                                        <th class="p-3">Difficulty</th>
+                                        <th class="p-3">Submission Date</th>
+                                        <th class="p-3 text-right">Review Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                                    <% if (safePending.length === 0) { %>
+                                        <tr>
+                                            <td colspan="7" class="p-10 text-center text-slate-400">
+                                                <span class="material-symbols-rounded text-3xl text-emerald-500 mb-1">task_alt</span>
+                                                <p class="text-xs font-medium text-slate-600 dark:text-slate-400">No pending submissions!</p>
+                                                <p class="text-[11px] text-slate-400 mt-0.5">All topics submitted by teachers have been reviewed and processed.</p>
+                                            </td>
+                                        </tr>
+                                    <% } else { %>
+                                        <% safePending.forEach(pt => { %>
+                                            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/40 transition-colors">
+                                                <td class="p-3 w-8">
+                                                    <input type="checkbox" class="pending-topic-checkbox size-3.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer" data-id="<%= pt._id %>" onchange="updateSelectedPendingCount()">
+                                                </td>
+                                                <td class="p-3">
+                                                    <div class="font-medium text-slate-800 dark:text-slate-100">
+                                                        <%= pt.name %>
+                                                        <% if (pt.code) { %>
+                                                            <span class="text-[9px] font-mono px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 ml-1"><%= pt.code %></span>
+                                                        <% } %>
+                                                    </div>
+                                                    <p class="text-[10px] text-slate-500 mt-0.5">
+                                                        Ch <%= pt.chapter?.number || 1 %>: <%= pt.chapter?.name || 'General' %>
+                                                    </p>
+                                                    <% if (pt.description) { %>
+                                                        <p class="text-[10px] text-slate-400 line-clamp-1 italic mt-0.5"><%= pt.description %></p>
+                                                    <% } %>
+                                                </td>
+                                                <td class="p-3">
+                                                    <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium"><%= pt.classLevel %></span>
+                                                    <% if (pt.group && pt.group !== 'None') { %>
+                                                        <span class="text-[10px] text-slate-400 ml-0.5">(<%= pt.group %>)</span>
+                                                    <% } %>
+                                                    <p class="text-[11px] font-medium text-primary mt-1"><%= pt.subject %></p>
+                                                </td>
+                                                <td class="p-3">
+                                                    <div class="flex items-center gap-2">
+                                                        <% const author = pt.submittedBy || pt.createdBy; %>
+                                                        <% if (author && (author.profilePicture || author.profileImage)) { %>
+                                                            <img src="<%= author.profilePicture || author.profileImage %>" class="size-6 rounded-full object-cover">
+                                                        <% } else { %>
+                                                            <div class="size-6 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-[10px]">
+                                                                <%= author ? (author.name || 'T')[0] : 'T' %>
+                                                            </div>
+                                                        <% } %>
+                                                        <div>
+                                                            <p class="text-xs font-medium text-slate-800 dark:text-slate-200"><%= author ? author.name : 'Teacher' %></p>
+                                                            <p class="text-[10px] text-slate-400"><%= author ? author.email : '' %></p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td class="p-3">
+                                                    <% 
+                                                        let diffClass = 'bg-amber-500/10 text-amber-600 border-amber-500/20';
+                                                        if (pt.difficulty === 'Easy') diffClass = 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20';
+                                                        if (pt.difficulty === 'Hard') diffClass = 'bg-rose-500/10 text-rose-600 border-rose-500/20';
+                                                    %>
+                                                    <span class="text-[9px] font-medium px-1.5 py-0.5 rounded border <%= diffClass %>"><%= pt.difficulty || 'Medium' %></span>
+                                                </td>
+                                                <td class="p-3 text-slate-400 text-[11px]">
+                                                    <%= new Date(pt.createdAt).toLocaleDateString() %>
+                                                    <span class="text-[10px] block text-slate-400/80"><%= new Date(pt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) %></span>
+                                                </td>
+                                                <td class="p-3 text-right">
+                                                    <div class="inline-flex items-center gap-1.5">
+                                                        <!-- 1-Click Approve -->
+                                                        <button type="button" onclick="approveSingleTopic('<%= pt._id %>', <%= JSON.stringify(pt.name) %>)"
+                                                                class="h-7 px-2.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs flex items-center gap-1 shadow-xs transition-all" title="Approve and make live">
+                                                            <span class="material-symbols-rounded text-sm">check</span>
+                                                            <span>Approve</span>
+                                                        </button>
+
+                                                        <!-- Reject with Feedback -->
+                                                        <button type="button" onclick="rejectSingleTopic('<%= pt._id %>', <%= JSON.stringify(pt.name) %>)"
+                                                                class="h-7 px-2 rounded bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-medium flex items-center gap-1 transition-all" title="Reject with feedback">
+                                                            <span class="material-symbols-rounded text-sm">close</span>
+                                                            <span>Reject</span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. HISTORY BUCKET VIEW (ARCHIVED TOPICS) -->
+                <div id="archivedTopicsView" class="p-3 sm:p-4 hidden space-y-3">
+                    <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-lg px-3.5 py-2.5 flex items-center justify-between gap-3 shadow-xs">
+                        <div class="flex items-center gap-2.5">
+                            <div class="size-8 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-[18px]">inventory_2</span>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h4 class="text-xs font-semibold text-slate-800 dark:text-slate-100">Topic History Bucket</h4>
+                                    <span class="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"><%= archivedCount %> archived</span>
+                                </div>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Archived topics hidden from syllabus while keeping historic attempts intact.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-[#0f172a] rounded-md border border-slate-200 dark:border-slate-800/80 overflow-hidden shadow-xs">
+                        <div class="overflow-x-auto">
+                            <table class="w-full min-w-[720px] text-left text-xs">
+                                <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-500 font-medium border-b border-slate-200 dark:border-slate-800">
+                                    <tr>
+                                        <th class="p-3 w-8">
+                                            <input type="checkbox" id="selectAllArchive" onchange="toggleSelectAllArchive(this.checked)" class="size-3.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer">
+                                        </th>
+                                        <th class="p-3">Topic Name</th>
+                                        <th class="p-3">Class & Stream</th>
+                                        <th class="p-3">Subject & Chapter</th>
+                                        <th class="p-3">Archived On</th>
+                                        <th class="p-3 text-right">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                                    <% if (safeArchived.length === 0) { %>
+                                        <tr>
+                                            <td colspan="6" class="p-8 text-center text-slate-400 italic">
+                                                History Bucket is currently empty.
+                                            </td>
+                                        </tr>
+                                    <% } else { %>
+                                        <% safeArchived.forEach(at => { %>
+                                            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/40 transition-colors">
+                                                <td class="p-3 w-8">
+                                                    <input type="checkbox" class="archive-topic-checkbox size-3.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer" data-id="<%= at._id %>" onchange="updateSelectedArchiveCount()">
+                                                </td>
+                                                <td class="p-3 font-medium text-slate-800 dark:text-slate-100">
+                                                    <%= at.name %>
+                                                    <% if (at.code) { %>
+                                                        <span class="text-[9px] font-mono px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 ml-1"><%= at.code %></span>
+                                                    <% } %>
+                                                </td>
+                                                <td class="p-3">
+                                                    <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium"><%= at.classLevel %></span>
+                                                    <% if (at.group && at.group !== 'None') { %>
+                                                        <span class="text-[10px] text-slate-400 ml-1">(<%= at.group %>)</span>
+                                                    <% } %>
+                                                </td>
+                                                <td class="p-3">
+                                                    <span class="font-medium text-primary"><%= at.subject %></span>
+                                                    <p class="text-[10px] text-slate-400"><%= at.chapter?.name || 'General' %></p>
+                                                </td>
+                                                <td class="p-3 text-slate-400 text-[11px]">
+                                                    <%= new Date(at.updatedAt || at.createdAt).toLocaleDateString() %>
+                                                </td>
+                                                <td class="p-3 text-right space-x-1.5">
+                                                    <button type="button" onclick="restoreTopic('<%= at._id %>', <%= JSON.stringify(at.name) %>)"
+                                                            class="h-7 px-2.5 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-medium text-xs border border-emerald-200/80 dark:border-emerald-800 inline-flex items-center gap-1 transition-all">
+                                                        <span class="material-symbols-rounded text-sm">settings_backup_restore</span>
+                                                        <span>Restore to Live</span>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- FLOATING BULK ACTION BAR (LIVE TOPICS MULTI-SELECT - ONLY MOVE TO BUCKET) -->
+    <div id="liveBulkBar" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 dark:bg-slate-800/95 text-white px-4 py-2.5 rounded-lg shadow-xl border border-slate-700 flex items-center gap-3 backdrop-blur-xs transition-all duration-200 hidden">
+        <div class="flex items-center gap-2">
+            <span class="size-5 rounded-full bg-primary flex items-center justify-center text-[10px] font-bold text-white" id="liveSelectedCount">0</span>
+            <span class="text-xs font-medium text-slate-200">Selected</span>
+        </div>
+        <div class="h-4 w-px bg-slate-700"></div>
+        <button type="button" onclick="bulkActionLive()" class="h-7 px-3 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium flex items-center gap-1 transition-colors">
+            <span class="material-symbols-rounded text-sm">inventory_2</span>
+            <span>Move to History Bucket</span>
+        </button>
+        <button type="button" onclick="deselectAllLive()" class="size-6 rounded hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center ml-1" title="Deselect All">
+            <span class="material-symbols-rounded text-sm">close</span>
+        </button>
+    </div>
+
+    <!-- FLOATING BULK ACTION BAR (ARCHIVE MULTI-SELECT - ONLY RESTORE SELECTED) -->
+    <div id="archiveBulkBar" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 dark:bg-slate-800/95 text-white px-4 py-2.5 rounded-lg shadow-xl border border-slate-700 flex items-center gap-3 backdrop-blur-xs transition-all duration-200 hidden">
+        <div class="flex items-center gap-2">
+            <span class="size-5 rounded-full bg-emerald-600 flex items-center justify-center text-[10px] font-bold text-white" id="archiveSelectedCount">0</span>
+            <span class="text-xs font-medium text-slate-200">Archived Selected</span>
+        </div>
+        <div class="h-4 w-px bg-slate-700"></div>
+        <button type="button" onclick="bulkActionArchive()" class="h-7 px-3 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1 transition-colors">
+            <span class="material-symbols-rounded text-sm">settings_backup_restore</span>
+            <span>Restore Selected to Live</span>
+        </button>
+        <button type="button" onclick="deselectAllArchive()" class="size-6 rounded hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center ml-1" title="Deselect All">
+            <span class="material-symbols-rounded text-sm">close</span>
+        </button>
+    </div>
+
+    <!-- Datalist for Existing Chapters Suggestion -->
+    <datalist id="existingChaptersList">
+        <% safeChapters.forEach(ch => { %>
+            <option value="<%= ch.name %>">
+        <% }) %>
+    </datalist>
+
+    <!-- UNIFIED MODAL: ADD TOPICS (SINGLE & BULK IN ONE FORM) -->
+    <div id="unifiedTopicModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-[#0f172a] rounded-lg border border-slate-200 dark:border-slate-800 max-w-lg w-full max-h-[92vh] overflow-y-auto p-4 sm:p-5 space-y-4 shadow-xl">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-rounded text-primary text-xl">account_tree</span>
+                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Add Topics</h3>
+                </div>
+                <button type="button" onclick="closeModal('unifiedTopicModal')" class="size-7 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 flex items-center justify-center">
+                    <span class="material-symbols-rounded text-base">close</span>
+                </button>
+            </div>
+
+            <!-- Mode Switcher (Single Topic vs Bulk Topics in one unified form) -->
+            <div class="flex items-center p-1 rounded-md bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60">
+                <button type="button" id="tabModeSingle" onclick="setTopicMode('single')"
+                        class="flex-1 py-1 px-3 rounded text-xs font-medium transition-all text-center bg-white dark:bg-slate-900 text-primary shadow-xs">
+                    Single Topic
+                </button>
+                <button type="button" id="tabModeBulk" onclick="setTopicMode('bulk')"
+                        class="flex-1 py-1 px-3 rounded text-xs font-medium transition-all text-center text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
+                    Bulk Topics
+                </button>
+            </div>
+
+            <!-- Unified Form -->
+            <form id="unifiedTopicForm" onsubmit="submitUnifiedForm(event)" class="space-y-3">
+                <input type="hidden" name="classLevel" value="<%= selClass %>">
+                <input type="hidden" name="group" value="<%= selGroup %>">
+                <input type="hidden" name="subject" value="<%= selSubject %>">
+
+                <!-- Chapter Details (Shared for both Single & Bulk) -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div class="sm:col-span-2">
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Chapter Name *</label>
+                        <input type="text" id="unifiedChapterName" name="chapterName" list="existingChaptersList" required placeholder="Chapter name" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Chapter #</label>
+                        <input type="number" id="unifiedChapterNumber" name="chapterNumber" value="1" min="1" placeholder="Chapter #" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                    </div>
+                </div>
+
+                <!-- SINGLE TOPIC INPUT FIELDS -->
+                <div id="singleTopicBlock" class="space-y-3">
+                    <div>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Topic Name *</label>
+                        <input type="text" id="singleTopicName" name="name" placeholder="Topic name" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Topic Code</label>
+                            <input type="text" id="singleTopicCode" name="code" placeholder="Topic code (optional)" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Difficulty</label>
+                            <select name="difficulty" id="singleTopicDifficulty" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                                <option value="Easy">Easy</option>
+                                <option value="Medium" selected>Medium</option>
+                                <option value="Hard">Hard</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Keywords</label>
+                        <input type="text" id="singleTopicKeywords" name="keywords" placeholder="Keywords (comma separated)" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                    </div>
+
+                    <div>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Description</label>
+                        <textarea id="singleTopicDesc" name="description" rows="2" placeholder="Topic description (optional)" class="w-full p-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y"></textarea>
+                    </div>
+                </div>
+
+                <!-- BULK TOPICS INPUT FIELDS -->
+                <div id="bulkTopicBlock" class="space-y-3 hidden">
+                    <div>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">
+                            Topic Names (One topic per line) *
+                        </label>
+                        <textarea id="bulkTopicList" name="topicList" rows="6" placeholder="Enter topic names (one topic per line)" class="w-full p-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y font-mono leading-relaxed"></textarea>
+                    </div>
+
+                    <div>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Default Difficulty for Batch</label>
+                        <select name="bulkDifficulty" id="bulkTopicDifficulty" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                            <option value="Easy">Easy</option>
+                            <option value="Medium" selected>Medium</option>
+                            <option value="Hard">Hard</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Footer Buttons -->
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" onclick="closeModal('unifiedTopicModal')" class="h-9 px-3 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+                    <button type="submit" id="unifiedSubmitBtn" class="h-9 px-4 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium transition-all">Save Topic</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: EDIT TOPIC -->
+    <div id="editTopicModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-[#0f172a] rounded-lg border border-slate-200 dark:border-slate-800 max-w-lg w-full max-h-[92vh] overflow-y-auto p-4 sm:p-5 space-y-4 shadow-xl">
+            <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-rounded text-primary text-xl">edit</span>
+                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Edit Topic</h3>
+                </div>
+                <button type="button" onclick="closeModal('editTopicModal')" class="size-7 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 flex items-center justify-center">
+                    <span class="material-symbols-rounded text-base">close</span>
+                </button>
+            </div>
+
+            <form id="editTopicForm" onsubmit="submitEditTopic(event)" class="space-y-3">
+                <input type="hidden" id="editTopicId" name="id">
+
+                <div>
+                    <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Topic Name *</label>
+                    <input type="text" id="editTopicName" name="name" required placeholder="Topic name" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Topic Code</label>
+                        <input type="text" id="editTopicCode" name="code" placeholder="Topic code" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Difficulty</label>
+                        <select id="editTopicDifficulty" name="difficulty" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                            <option value="Easy">Easy</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Hard">Hard</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Sequence Order</label>
+                        <input type="number" id="editTopicOrder" name="order" placeholder="Order #" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Keywords</label>
+                    <input type="text" id="editTopicKeywords" name="keywords" placeholder="Keywords" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                </div>
+
+                <div>
+                    <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Description</label>
+                    <textarea id="editTopicDescription" name="description" rows="2" placeholder="Topic description" class="w-full p-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y"></textarea>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" onclick="closeModal('editTopicModal')" class="h-9 px-3 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+                    <button type="submit" id="editTopicSubmitBtn" class="h-9 px-4 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium transition-all">Update Topic</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        const apiBase = '<%= baseUrl %>';
+        const currentClassLevel = '<%= selClass %>';
+        const currentSubject = '<%= selSubject %>';
+        let currentModalMode = 'single';
+        let isSelectionMode = false;
+
+        // Selection Mode Controls (Beside Add Button)
+        function toggleSelectionMode() {
+            if (isSelectionMode) {
+                exitSelectionMode();
+            } else {
+                enterSelectionMode();
+            }
+        }
+
+        function enterSelectionMode() {
+            isSelectionMode = true;
+            document.body.classList.add('selection-mode-active');
+            const toolbar = document.getElementById('selectionToolbar');
+            if (toolbar) toolbar.classList.remove('hidden');
+
+            const btn = document.getElementById('btnToggleSelection');
+            const icon = document.getElementById('btnSelectionIcon');
+            const label = document.getElementById('btnSelectionLabel');
+            if (btn) btn.className = 'h-9 px-3 rounded-md bg-primary/10 text-primary border border-primary/40 font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-all';
+            if (icon) {
+                icon.innerText = 'close';
+                icon.className = 'material-symbols-rounded text-[18px] text-primary';
+            }
+            if (label) label.innerText = 'Exit Selection';
+
+            updateSelectedTopicsCount();
+        }
+
+        function exitSelectionMode() {
+            isSelectionMode = false;
+            document.body.classList.remove('selection-mode-active');
+            const toolbar = document.getElementById('selectionToolbar');
+            if (toolbar) toolbar.classList.add('hidden');
+
+            const btn = document.getElementById('btnToggleSelection');
+            const icon = document.getElementById('btnSelectionIcon');
+            const label = document.getElementById('btnSelectionLabel');
+            if (btn) btn.className = 'h-9 px-3 rounded-md bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 shadow-xs transition-all';
+            if (icon) {
+                icon.innerText = 'checklist';
+                icon.className = 'material-symbols-rounded text-[18px] text-slate-500';
+            }
+            if (label) label.innerText = 'Select Topics';
+
+            deselectAllLive();
+        }
+
+        function selectAllLiveTopics() {
+            document.querySelectorAll('.topic-checkbox').forEach(cb => cb.checked = true);
+            document.querySelectorAll('.chapter-checkbox').forEach(cb => {
+                cb.checked = true;
+                cb.indeterminate = false;
+            });
+            updateSelectedTopicsCount();
+        }
+
+        function onChapterHeaderClick(event, chIdx) {
+            if (isSelectionMode) {
+                // If clicked on action buttons or the checkbox itself, don't double-trigger
+                if (event.target.closest('button') || event.target.closest('input[type="checkbox"]')) {
+                    return;
+                }
+                const chCb = document.getElementById(`chapter_cb_${chIdx}`);
+                if (chCb) {
+                    const newChecked = !chCb.checked;
+                    chCb.checked = newChecked;
+                    toggleSelectChapterTopics(chIdx, newChecked);
+                }
+                return;
+            }
+            toggleChapterAccordion('ch_' + chIdx);
+        }
+
+        function onTopicItemClick(event, topicId, chIdx) {
+            if (!isSelectionMode) return;
+            // Prevent toggling if clicked on action buttons or the checkbox itself
+            if (event.target.closest('button') || event.target.closest('input[type="checkbox"]')) {
+                return;
+            }
+            const cb = document.querySelector(`.topic-checkbox[data-id="${topicId}"]`);
+            if (cb) {
+                cb.checked = !cb.checked;
+                updateSelectedTopicsCount();
+            }
+        }
+
+        // Tab Switcher
+        function switchTopicTab(tab) {
+            const liveView = document.getElementById('liveTopicsView');
+            const pendingView = document.getElementById('pendingTopicsView');
+            const archiveView = document.getElementById('archivedTopicsView');
+            const tabActiveBtn = document.getElementById('tabActiveBtn');
+            const tabPendingBtn = document.getElementById('tabPendingBtn');
+            const tabArchiveBtn = document.getElementById('tabArchiveBtn');
+            const btnToggleSelection = document.getElementById('btnToggleSelection');
+            const unifiedModalOpenBtn = document.getElementById('unifiedModalOpenBtn');
+
+            exitSelectionMode();
+            deselectAllArchive();
+
+            // Reset tab button styles
+            const inactiveClass = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white';
+            const activeClass = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs';
+
+            if (tabActiveBtn) tabActiveBtn.className = inactiveClass;
+            if (tabPendingBtn) tabPendingBtn.className = inactiveClass;
+            if (tabArchiveBtn) tabArchiveBtn.className = inactiveClass;
+
+            if (liveView) liveView.classList.add('hidden');
+            if (pendingView) pendingView.classList.add('hidden');
+            if (archiveView) archiveView.classList.add('hidden');
+
+            if (tab === 'active') {
+                if (liveView) liveView.classList.remove('hidden');
+                if (tabActiveBtn) tabActiveBtn.className = activeClass;
+                if (btnToggleSelection) btnToggleSelection.classList.remove('hidden');
+                if (unifiedModalOpenBtn) unifiedModalOpenBtn.classList.remove('hidden');
+                if (window.history.replaceState) {
+                    const u = new URL(window.location.href);
+                    u.searchParams.delete('tab');
+                    window.history.replaceState(null, '', u.toString());
+                }
+            } else if (tab === 'pending') {
+                if (pendingView) pendingView.classList.remove('hidden');
+                if (tabPendingBtn) tabPendingBtn.className = activeClass;
+                if (btnToggleSelection) btnToggleSelection.classList.add('hidden');
+                if (unifiedModalOpenBtn) unifiedModalOpenBtn.classList.remove('hidden');
+                if (window.history.replaceState) {
+                    const u = new URL(window.location.href);
+                    u.searchParams.set('tab', 'pending');
+                    window.history.replaceState(null, '', u.toString());
+                }
+            } else {
+                if (archiveView) archiveView.classList.remove('hidden');
+                if (tabArchiveBtn) tabArchiveBtn.className = activeClass;
+                if (btnToggleSelection) btnToggleSelection.classList.add('hidden');
+                if (unifiedModalOpenBtn) unifiedModalOpenBtn.classList.add('hidden');
+                if (window.history.replaceState) {
+                    const u = new URL(window.location.href);
+                    u.searchParams.set('tab', 'archive');
+                    window.history.replaceState(null, '', u.toString());
+                }
+            }
+        }
+
+        // Navigation filters
+        function onClassChange(newClass) {
+            const u = new URL(window.location.href);
+            u.searchParams.set('classLevel', newClass);
+            u.searchParams.delete('subject');
+            window.location.href = u.toString();
+        }
+
+        function onGroupChange(newGroup) {
+            const u = new URL(window.location.href);
+            u.searchParams.set('group', newGroup);
+            u.searchParams.delete('subject');
+            window.location.href = u.toString();
+        }
+
+        function onSubjectChange(newSub) {
+            const u = new URL(window.location.href);
+            u.searchParams.set('subject', newSub);
+            window.location.href = u.toString();
+        }
+
+        // Accordion toggle
+        function toggleChapterAccordion(chId) {
+            const content = document.getElementById('content_' + chId);
+            const icon = document.getElementById('icon_' + chId);
+            if (!content) return;
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                if (icon) icon.style.transform = 'rotate(0deg)';
+            } else {
+                content.classList.add('hidden');
+                if (icon) icon.style.transform = 'rotate(-90deg)';
+            }
+        }
+
+        // Client search filter
+        function filterTopicsClientSide(query) {
+            query = (query || '').toLowerCase().trim();
+            const cards = document.querySelectorAll('.chapter-card');
+            cards.forEach(card => {
+                const topicItems = card.querySelectorAll('.topic-item');
+                let matchInChapter = false;
+                topicItems.forEach(item => {
+                    const name = (item.getAttribute('data-topic-name') || '').toLowerCase();
+                    if (!query || name.includes(query)) {
+                        item.classList.remove('hidden');
+                        matchInChapter = true;
+                    } else {
+                        item.classList.add('hidden');
+                    }
+                });
+
+                if (!query || matchInChapter) {
+                    card.classList.remove('hidden');
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+        }
+
+        // ==========================================
+        // CHAPTER DELETION (MOVE TO HISTORY BUCKET)
+        // ==========================================
+        async function deleteChapter(chapterName, topicCount) {
+            const confirm = await Swal.fire({
+                title: 'Move Chapter to History Bucket?',
+                html: `Are you sure you want to move chapter <strong>"${chapterName}"</strong> and all its <strong>${topicCount}</strong> topic(s) to the History Bucket?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#d97706',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Move to History Bucket'
+            });
+
+            if (confirm.isConfirmed) {
+                try {
+                    Swal.fire({ title: 'Moving Chapter...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                    const res = await fetch(`${apiBase}/topics/chapter/delete`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({
+                            classLevel: currentClassLevel,
+                            subject: currentSubject,
+                            chapterName,
+                            action: 'archive'
+                        })
+                    });
+
+                    const text = await res.text();
+                    let data = {};
+                    try { data = JSON.parse(text); } catch(e) { data = { error: text.replace(/<[^>]*>?/gm, '').trim() }; }
+
+                    if (res.ok && data.success !== false) {
+                        await Swal.fire({ icon: 'success', title: 'Chapter Moved to Bucket!', text: data.message, timer: 1200, showConfirmButton: false });
+                        window.location.href = window.location.pathname + '?tab=archive&classLevel=' + encodeURIComponent(currentClassLevel) + '&subject=' + encodeURIComponent(currentSubject);
+                    } else {
+                        if (res.status === 404 || (data && (data.error === 'Invalid data' || data.error.includes('Cannot POST')))) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Server Restart Required',
+                                html: `সার্ভারটি মেমোরিতে আগের কোড ধরে রেখেছে।<br><br>দয়া করে টার্মিনালে Node.js সার্ভারটি রিস্টার্ট করুন (<kbd class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs">Ctrl + C</kbd> দিয়ে বন্ধ করে <kbd class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs">npm run dev</kbd> চালান)।`
+                            });
+                        } else {
+                            Swal.fire('Error', (data && data.error) || 'Failed to archive chapter', 'error');
+                        }
+                    }
+                } catch (err) {
+                    Swal.fire('Error', err.message || 'Connection error', 'error');
+                }
+            }
+        }
+
+        // ==========================================
+        // MULTI-SELECT TOPICS (BULK ARCHIVE)
+        // ==========================================
+        function toggleSelectChapterTopics(chIdx, checked) {
+            document.querySelectorAll(`.ch-topic-${chIdx}`).forEach(cb => {
+                cb.checked = checked;
+            });
+            const chCb = document.getElementById(`chapter_cb_${chIdx}`);
+            if (chCb) {
+                chCb.checked = checked;
+                chCb.indeterminate = false;
+            }
+            updateSelectedTopicsCount();
+        }
+
+        function getSelectedLiveTopicIds() {
+            const checked = document.querySelectorAll('.topic-checkbox:checked');
+            return Array.from(checked).map(cb => cb.getAttribute('data-id')).filter(Boolean);
+        }
+
+        function updateSelectedTopicsCount() {
+            const ids = getSelectedLiveTopicIds();
+            const bar = document.getElementById('liveBulkBar');
+            const badge = document.getElementById('liveSelectedCount');
+            const toolbarBadge = document.getElementById('toolbarSelectedCountBadge');
+            const btnToolbarMoveBucket = document.getElementById('btnToolbarMoveBucket');
+            const btnToolbarMoveBucketText = document.getElementById('btnToolbarMoveBucketText');
+
+            // Sync each chapter checkbox based on its topics
+            document.querySelectorAll('.chapter-card').forEach((card, chIdx) => {
+                const topicCbs = card.querySelectorAll('.topic-checkbox');
+                const chCb = document.getElementById(`chapter_cb_${chIdx}`);
+                if (chCb && topicCbs.length > 0) {
+                    const checkedCount = card.querySelectorAll('.topic-checkbox:checked').length;
+                    if (checkedCount === topicCbs.length) {
+                        chCb.checked = true;
+                        chCb.indeterminate = false;
+                    } else if (checkedCount > 0) {
+                        chCb.checked = false;
+                        chCb.indeterminate = true;
+                    } else {
+                        chCb.checked = false;
+                        chCb.indeterminate = false;
+                    }
+                }
+            });
+
+            if (toolbarBadge) {
+                toolbarBadge.innerText = `${ids.length} Selected`;
+            }
+
+            if (btnToolbarMoveBucket) {
+                if (ids.length > 0) {
+                    btnToolbarMoveBucket.disabled = false;
+                    if (btnToolbarMoveBucketText) btnToolbarMoveBucketText.innerText = `Move to Bucket (${ids.length})`;
+                } else {
+                    btnToolbarMoveBucket.disabled = true;
+                    if (btnToolbarMoveBucketText) btnToolbarMoveBucketText.innerText = 'Move to History Bucket';
+                }
+            }
+
+            if (ids.length > 0) {
+                if (badge) badge.innerText = ids.length;
+                if (bar) bar.classList.remove('hidden');
+            } else {
+                if (bar) bar.classList.add('hidden');
+            }
+        }
+
+        function deselectAllLive() {
+            document.querySelectorAll('.topic-checkbox').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.chapter-checkbox').forEach(cb => {
+                cb.checked = false;
+                cb.indeterminate = false;
+            });
+            updateSelectedTopicsCount();
+        }
+
+        async function bulkActionLive() {
+            const ids = getSelectedLiveTopicIds();
+            if (ids.length === 0) return;
+
+            const confirm = await Swal.fire({
+                title: 'Move Selected Topics to Bucket?',
+                text: `Move ${ids.length} selected topic(s) to the History Bucket?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#d97706',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Move to History Bucket'
+            });
+
+            if (confirm.isConfirmed) {
+                try {
+                    Swal.fire({ title: 'Moving Topics...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                    const res = await fetch(`${apiBase}/topics/bulk-action`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({ topicIds: ids, action: 'archive' })
+                    });
+
+                    const text = await res.text();
+                    let data = {};
+                    try { data = JSON.parse(text); } catch(e) { data = { error: text.replace(/<[^>]*>?/gm, '').trim() }; }
+
+                    if (res.ok && data.success !== false) {
+                        await Swal.fire({ icon: 'success', title: 'Moved to Bucket!', text: data.message, timer: 1200, showConfirmButton: false });
+                        window.location.href = window.location.pathname + '?tab=archive&classLevel=' + encodeURIComponent(currentClassLevel) + '&subject=' + encodeURIComponent(currentSubject);
+                    } else {
+                        if (res.status === 404 || (data && (data.error === 'Invalid data' || data.error.includes('Cannot POST')))) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Server Restart Required',
+                                html: `সার্ভারটি মেমোরিতে আগের কোড ধরে রেখেছে।<br><br>দয়া করে টার্মিনালে Node.js সার্ভারটি রিস্টার্ট করুন (<kbd class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs">Ctrl + C</kbd> দিয়ে বন্ধ করে <kbd class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs">npm run dev</kbd> চালান)।`
+                            });
+                        } else {
+                            Swal.fire('Error', (data && data.error) || 'Failed to move topics', 'error');
+                        }
+                    }
+                } catch (e) {
+                    Swal.fire('Error', e.message || 'Connection error', 'error');
+                }
+            }
+        }
+
+        // ==========================================
+        // ARCHIVE MULTI-SELECT (BULK RESTORE)
+        // ==========================================
+        function toggleSelectAllArchive(checked) {
+            document.querySelectorAll('.archive-topic-checkbox').forEach(cb => {
+                cb.checked = checked;
+            });
+            updateSelectedArchiveCount();
+        }
+
+        function getSelectedArchiveTopicIds() {
+            const checked = document.querySelectorAll('.archive-topic-checkbox:checked');
+            return Array.from(checked).map(cb => cb.getAttribute('data-id')).filter(Boolean);
+        }
+
+        function updateSelectedArchiveCount() {
+            const ids = getSelectedArchiveTopicIds();
+            const bar = document.getElementById('archiveBulkBar');
+            const badge = document.getElementById('archiveSelectedCount');
+            if (ids.length > 0) {
+                badge.innerText = ids.length;
+                bar.classList.remove('hidden');
+            } else {
+                bar.classList.add('hidden');
+            }
+        }
+
+        function deselectAllArchive() {
+            document.querySelectorAll('.archive-topic-checkbox').forEach(cb => cb.checked = false);
+            const selectAll = document.getElementById('selectAllArchive');
+            if (selectAll) selectAll.checked = false;
+            updateSelectedArchiveCount();
+        }
+
+        async function bulkActionArchive() {
+            const ids = getSelectedArchiveTopicIds();
+            if (ids.length === 0) return;
+
+            const confirm = await Swal.fire({
+                title: 'Restore Selected Topics?',
+                text: `Restore ${ids.length} topic(s) back to live syllabus?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#137fec',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Restore to Live'
+            });
+
+            if (confirm.isConfirmed) {
+                try {
+                    Swal.fire({ title: 'Restoring Topics...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                    const res = await fetch(`${apiBase}/topics/bulk-action`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({ topicIds: ids, action: 'restore' })
+                    });
+
+                    const text = await res.text();
+                    let data = {};
+                    try { data = JSON.parse(text); } catch(e) { data = { error: text.replace(/<[^>]*>?/gm, '').trim() }; }
+
+                    if (res.ok && data.success !== false) {
+                        await Swal.fire({ icon: 'success', title: 'Restored to Live!', text: data.message, timer: 1200, showConfirmButton: false });
+                        window.location.href = window.location.pathname + '?tab=active&classLevel=' + encodeURIComponent(currentClassLevel) + '&subject=' + encodeURIComponent(currentSubject);
+                    } else {
+                        Swal.fire('Error', (data && data.error) || 'Failed to restore topics', 'error');
+                    }
+                } catch (e) {
+                    Swal.fire('Error', e.message || 'Connection error', 'error');
+                }
+            }
+        }
+
+        // ==========================================
+        // MODAL CONTROLS & SUBMISSIONS
+        // ==========================================
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function openUnifiedModal(chapterName = '', chapterNum = 1, defaultMode = 'single') {
+            if (chapterName) {
+                document.getElementById('unifiedChapterName').value = chapterName;
+                document.getElementById('unifiedChapterNumber').value = chapterNum;
+            } else {
+                document.getElementById('unifiedChapterName').value = '';
+                document.getElementById('unifiedChapterNumber').value = '1';
+            }
+            setTopicMode(defaultMode);
+            document.getElementById('unifiedTopicModal').classList.remove('hidden');
+        }
+
+        function setTopicMode(mode) {
+            currentModalMode = mode;
+            const singleBlock = document.getElementById('singleTopicBlock');
+            const bulkBlock = document.getElementById('bulkTopicBlock');
+            const tabSingle = document.getElementById('tabModeSingle');
+            const tabBulk = document.getElementById('tabModeBulk');
+            const submitBtn = document.getElementById('unifiedSubmitBtn');
+
+            if (mode === 'single') {
+                singleBlock.classList.remove('hidden');
+                bulkBlock.classList.add('hidden');
+                tabSingle.className = 'flex-1 py-1 px-3 rounded text-xs font-medium transition-all text-center bg-white dark:bg-slate-900 text-primary shadow-xs';
+                tabBulk.className = 'flex-1 py-1 px-3 rounded text-xs font-medium transition-all text-center text-slate-500 hover:text-slate-800 dark:hover:text-slate-200';
+                submitBtn.innerText = 'Save Topic';
+                document.getElementById('singleTopicName').required = true;
+                document.getElementById('bulkTopicList').required = false;
+            } else {
+                singleBlock.classList.add('hidden');
+                bulkBlock.classList.remove('hidden');
+                tabBulk.className = 'flex-1 py-1 px-3 rounded text-xs font-medium transition-all text-center bg-white dark:bg-slate-900 text-primary shadow-xs';
+                tabSingle.className = 'flex-1 py-1 px-3 rounded text-xs font-medium transition-all text-center text-slate-500 hover:text-slate-800 dark:hover:text-slate-200';
+                submitBtn.innerText = 'Import Topics';
+                document.getElementById('singleTopicName').required = false;
+                document.getElementById('bulkTopicList').required = true;
+            }
+        }
+
+        function openEditTopicModal(id, name, code, difficulty, keywords, description, order) {
+            document.getElementById('editTopicId').value = id;
+            document.getElementById('editTopicName').value = name || '';
+            document.getElementById('editTopicCode').value = code || '';
+            document.getElementById('editTopicDifficulty').value = difficulty || 'Medium';
+            document.getElementById('editTopicKeywords').value = keywords || '';
+            document.getElementById('editTopicDescription').value = description || '';
+            document.getElementById('editTopicOrder').value = order || 0;
+            document.getElementById('editTopicModal').classList.remove('hidden');
+        }
+
+        // Submit Unified Form (Handles both Single Topic and Bulk Topics seamlessly)
+        async function submitUnifiedForm(e) {
+            e.preventDefault();
+            const btn = document.getElementById('unifiedSubmitBtn');
+            const origText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = 'Processing...';
+
+            const form = e.target;
+            const classLevel = form.classLevel.value;
+            const group = form.group.value;
+            const subject = form.subject.value;
+            const chapterName = form.chapterName.value;
+            const chapterNumber = form.chapterNumber.value;
+
+            try {
+                if (currentModalMode === 'single') {
+                    const payload = {
+                        classLevel,
+                        group,
+                        subject,
+                        chapterName,
+                        chapterNumber,
+                        name: document.getElementById('singleTopicName').value,
+                        code: document.getElementById('singleTopicCode').value,
+                        difficulty: document.getElementById('singleTopicDifficulty').value,
+                        keywords: document.getElementById('singleTopicKeywords').value,
+                        description: document.getElementById('singleTopicDesc').value
+                    };
+
+                    const res = await fetch(`${apiBase}/topics`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    const text = await res.text();
+                    let data = {};
+                    try { data = JSON.parse(text); } catch(e) { data = { error: text.replace(/<[^>]*>?/gm, '').trim() }; }
+
+                    if (res.ok && data.success) {
+                        await Swal.fire({ icon: 'success', title: 'Topic Created!', text: data.message, timer: 1200, showConfirmButton: false });
+                        window.location.reload();
+                    } else {
+                        Swal.fire('Error', data.error || 'Failed to create topic', 'error');
+                    }
+                } else {
+                    const payload = {
+                        classLevel,
+                        group,
+                        subject,
+                        chapterName,
+                        chapterNumber,
+                        topicList: document.getElementById('bulkTopicList').value,
+                        difficulty: document.getElementById('bulkTopicDifficulty').value
+                    };
+
+                    const res = await fetch(`${apiBase}/topics/bulk`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                    const text = await res.text();
+                    let data = {};
+                    try { data = JSON.parse(text); } catch(e) { data = { error: text.replace(/<[^>]*>?/gm, '').trim() }; }
+
+                    if (res.ok && data.success) {
+                        await Swal.fire({ icon: 'success', title: 'Topics Imported!', text: data.message, timer: 1200, showConfirmButton: false });
+                        window.location.reload();
+                    } else {
+                        Swal.fire('Error', data.error || 'Failed to import topics', 'error');
+                    }
+                }
+            } catch (err) {
+                Swal.fire('Error', err.message || 'Connection error', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = origText;
+            }
+        }
+
+        // Submit Edit Topic
+        async function submitEditTopic(e) {
+            e.preventDefault();
+            const btn = document.getElementById('editTopicSubmitBtn');
+            btn.disabled = true;
+            btn.innerText = 'Updating...';
+
+            const form = e.target;
+            const id = form.id.value;
+            const payload = {
+                name: form.name.value,
+                code: form.code.value,
+                difficulty: form.difficulty.value,
+                order: form.order.value,
+                keywords: form.keywords.value,
+                description: form.description.value
+            };
+
+            try {
+                const res = await fetch(`${apiBase}/topics/${id}/edit`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const text = await res.text();
+                let data = {};
+                try { data = JSON.parse(text); } catch(e) { data = { error: text.replace(/<[^>]*>?/gm, '').trim() }; }
+
+                if (res.ok && data.success) {
+                    await Swal.fire({ icon: 'success', title: 'Topic Updated!', text: data.message, timer: 1200, showConfirmButton: false });
+                    window.location.reload();
+                } else {
+                    Swal.fire('Error', data.error || 'Failed to update topic', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', err.message || 'Connection error', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Update Topic';
+            }
+        }
+
+        // Move Topic to History Bucket (Soft Delete)
+        async function archiveTopic(id, name) {
+            const confirm = await Swal.fire({
+                title: 'Move to History Bucket?',
+                text: `"${name}" will be archived from live syllabus and question generator.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#d97706',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Move to Bucket'
+            });
+
+            if (confirm.isConfirmed) {
+                try {
+                    Swal.fire({ title: 'Moving to Bucket...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                    
+                    let res = await fetch(`${apiBase}/topics/${id}/archive`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({ id, name })
+                    });
+
+                    if (!res.ok) {
+                        res = await fetch(`${apiBase}/topics/archive`, {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({ id, name })
+                        });
+                    }
+
+                    const text = await res.text();
+                    let data = {};
+                    try { 
+                        data = JSON.parse(text); 
+                    } catch(e) { 
+                        const clean = text.replace(/<[^>]*>?/gm, '').trim();
+                        data = { error: clean || 'Server returned invalid response' }; 
+                    }
+
+                    if (res.ok && data.success !== false) {
+                        await Swal.fire({ 
+                            icon: 'success', 
+                            title: 'Moved to Bucket!', 
+                            text: `"${name}" is now safely in the History Bucket.`, 
+                            timer: 1200, 
+                            showConfirmButton: false 
+                        });
+                        window.location.href = window.location.pathname + '?tab=archive&classLevel=' + encodeURIComponent(currentClassLevel) + '&subject=' + encodeURIComponent(currentSubject);
+                    } else {
+                        if (res.status === 404 || (data && (data.error === 'Invalid data' || data.error.includes('Cannot POST')))) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'Server Restart Required',
+                                html: `সার্ভারটি মেমোরিতে আগের কোড ধরে রেখেছে।<br><br>দয়া করে টার্মিনালে Node.js সার্ভারটি রিস্টার্ট করুন (<kbd class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs">Ctrl + C</kbd> দিয়ে বন্ধ করে <kbd class="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded font-mono text-xs">npm run dev</kbd> চালান)।`
+                            });
+                        } else {
+                            Swal.fire('Error', (data && data.error) || 'Failed to archive topic', 'error');
+                        }
+                    }
+                } catch (e) {
+                    Swal.fire('Error', e.message || 'Network error', 'error');
+                }
+            }
+        }
+
+        // Restore Topic from History Bucket
+        async function restoreTopic(id, name) {
+            const confirm = await Swal.fire({
+                title: 'Restore Topic to Live?',
+                text: `"${name}" will be restored back to live syllabus.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#137fec',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Restore to Live'
+            });
+
+            if (confirm.isConfirmed) {
+                try {
+                    Swal.fire({ title: 'Restoring Topic...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                    
+                    let res = await fetch(`${apiBase}/topics/${id}/restore`, {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify({ id, name })
+                    });
+
+                    if (!res.ok) {
+                        res = await fetch(`${apiBase}/topics/restore`, {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({ id, name })
+                        });
+                    }
+
+                    const text = await res.text();
+                    let data = {};
+                    try { 
+                        data = JSON.parse(text); 
+                    } catch(e) { 
+                        const clean = text.replace(/<[^>]*>?/gm, '').trim();
+                        data = { error: clean || 'Server returned invalid response' }; 
+                    }
+
+                    if (res.ok && data.success !== false) {
+                        await Swal.fire({ 
+                            icon: 'success', 
+                            title: 'Restored to Live!', 
+                            text: `"${name}" is now active in live syllabus.`, 
+                            timer: 1200, 
+                            showConfirmButton: false 
+                        });
+                        window.location.href = window.location.pathname + '?tab=active&classLevel=' + encodeURIComponent(currentClassLevel) + '&subject=' + encodeURIComponent(currentSubject);
+                    } else {
+                        Swal.fire('Error', (data && data.error) || 'Failed to restore topic', 'error');
+                    }
+                } catch (e) {
+                    Swal.fire('Error', e.message || 'Network error', 'error');
+                }
+            }
+        }
+
+        // ==========================================
+        // TEACHER SUBMISSION APPROVAL SYSTEM
+        // ==========================================
+        function toggleSelectAllPending(checked) {
+            const checkboxes = document.querySelectorAll('.pending-topic-checkbox');
+            checkboxes.forEach(cb => {
+                cb.checked = checked;
+            });
+            updateSelectedPendingCount();
+        }
+
+        function updateSelectedPendingCount() {
+            const checkboxes = document.querySelectorAll('.pending-topic-checkbox');
+            const checkedBoxes = document.querySelectorAll('.pending-topic-checkbox:checked');
+            const count = checkedBoxes.length;
+
+            const selectAll = document.getElementById('selectAllPending');
+            if (selectAll) {
+                selectAll.checked = (checkboxes.length > 0 && count === checkboxes.length);
+                selectAll.indeterminate = (count > 0 && count < checkboxes.length);
+            }
+
+            const btnApprove = document.getElementById('btnBulkApprovePending');
+            const btnReject = document.getElementById('btnBulkRejectPending');
+            const btnApproveText = document.getElementById('btnBulkApproveText');
+
+            if (btnApprove) btnApprove.disabled = (count === 0);
+            if (btnReject) btnReject.disabled = (count === 0);
+            if (btnApproveText) {
+                btnApproveText.textContent = count > 0 ? `Approve Selected (${count})` : 'Approve Selected';
+            }
+        }
+
+        async function approveSingleTopic(id, name) {
+            const result = await Swal.fire({
+                title: 'Approve Topic?',
+                html: `Are you sure you want to approve <strong>"${name}"</strong>?<br><span class="text-xs text-slate-500">This topic will immediately become available in the live curriculum & question bank.</span>`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#059669',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Approve',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (!result.isConfirmed) return;
+
+            try {
+                const res = await fetch(`${apiBase}/topics/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, topicId: id })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Approved!',
+                        text: data.message || `Topic "${name}" approved successfully.`,
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    window.location.href = window.location.pathname + '?tab=pending';
+                } else {
+                    Swal.fire('Error', (data && data.error) || 'Failed to approve topic', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Network Error', err.message || 'Could not connect to server', 'error');
+            }
+        }
+
+        async function rejectSingleTopic(id, name) {
+            const { value: reason } = await Swal.fire({
+                title: 'Reject Topic Submission',
+                text: `Provide revision feedback for "${name}" so the teacher knows what to correct:`,
+                input: 'textarea',
+                inputPlaceholder: 'e.g. Please format chapter name properly, or add detailed topic descriptions...',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Reject Submission',
+                cancelButtonText: 'Cancel',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Please provide a reason or guidance for the teacher!';
+                    }
+                }
+            });
+
+            if (!reason) return;
+
+            try {
+                const res = await fetch(`${apiBase}/topics/reject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, topicId: id, reason: reason.trim() })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'info',
+                        title: 'Submission Rejected',
+                        text: data.message || 'Topic sent back to teacher for revisions.',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    window.location.href = window.location.pathname + '?tab=pending';
+                } else {
+                    Swal.fire('Error', (data && data.error) || 'Failed to reject topic', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Network Error', err.message || 'Could not connect to server', 'error');
+            }
+        }
+
+        async function bulkApproveSelectedPending() {
+            const checkedBoxes = document.querySelectorAll('.pending-topic-checkbox:checked');
+            const topicIds = Array.from(checkedBoxes).map(cb => cb.dataset.id).filter(Boolean);
+
+            if (topicIds.length === 0) {
+                Swal.fire('Notice', 'Please select at least one pending topic to approve.', 'info');
+                return;
+            }
+
+            const result = await Swal.fire({
+                title: `Approve ${topicIds.length} Selected Topics?`,
+                text: 'All selected topics will immediately be published into the live syllabus.',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#059669',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: `Yes, Approve (${topicIds.length})`,
+                cancelButtonText: 'Cancel'
+            });
+
+            if (!result.isConfirmed) return;
+
+            try {
+                const res = await fetch(`${apiBase}/topics/bulk-approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topicIds })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Approved!',
+                        text: data.message || `${topicIds.length} topics approved successfully.`,
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    window.location.href = window.location.pathname + '?tab=pending';
+                } else {
+                    Swal.fire('Error', (data && data.error) || 'Failed to bulk approve topics', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Network Error', err.message || 'Could not connect to server', 'error');
+            }
+        }
+
+        async function bulkRejectSelectedPending() {
+            const checkedBoxes = document.querySelectorAll('.pending-topic-checkbox:checked');
+            const topicIds = Array.from(checkedBoxes).map(cb => cb.dataset.id).filter(Boolean);
+
+            if (topicIds.length === 0) {
+                Swal.fire('Notice', 'Please select at least one pending topic to reject.', 'info');
+                return;
+            }
+
+            const { value: reason } = await Swal.fire({
+                title: `Reject ${topicIds.length} Selected Submissions`,
+                text: `Provide revision reason/feedback for these ${topicIds.length} topics:`,
+                input: 'textarea',
+                inputPlaceholder: 'Reason for rejection/revision guidance...',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: `Reject ${topicIds.length} Topics`,
+                cancelButtonText: 'Cancel',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Please provide a reason or guidance for the teacher!';
+                    }
+                }
+            });
+
+            if (!reason) return;
+
+            try {
+                const res = await fetch(`${apiBase}/topics/bulk-reject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topicIds, reason: reason.trim() })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'info',
+                        title: 'Submissions Rejected',
+                        text: data.message || `${topicIds.length} topics marked as rejected.`,
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    window.location.href = window.location.pathname + '?tab=pending';
+                } else {
+                    Swal.fire('Error', (data && data.error) || 'Failed to bulk reject topics', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Network Error', err.message || 'Could not connect to server', 'error');
+            }
+        }
+
+        // Auto Tab from URL
+        document.addEventListener('DOMContentLoaded', () => {
+            const p = new URLSearchParams(window.location.search);
+            if (p.get('tab') === 'archive' || window.location.hash === '#archive') {
+                switchTopicTab('archive');
+            } else if (p.get('tab') === 'pending' || window.location.hash === '#pending') {
+                switchTopicTab('pending');
+            } else {
+                switchTopicTab('active');
+            }
+        });
+    </script>
+</body>
+</html>

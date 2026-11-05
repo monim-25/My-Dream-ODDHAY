@@ -7,10 +7,9 @@ const aiKnowledgeSchema = new mongoose.Schema({
         trim: true
     },
     classLevel: {
-        type: String,
+        type: mongoose.Schema.Types.Mixed,
         required: [true, 'Class level is required'],
-        default: 'All Classes',
-        trim: true
+        default: 'All Classes'
     },
     subject: {
         type: String,

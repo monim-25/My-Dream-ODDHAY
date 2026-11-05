@@ -245,6 +245,8 @@ const models = {
     Announcement: require('./models/Announcement'),
     RoutineTask: require('./models/RoutineTask'),
     Folder: require('./models/Folder'),
+    AcademicClass: require('./models/AcademicClass'),
+    Topic: require('./models/Topic'),
 };
 
 module.exports = { 

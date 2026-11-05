@@ -334,9 +334,20 @@
 
                                                     <!-- Subject Selection (Multiple Pills) -->
                                                     <div id="subjectField" class="col-span-full space-y-2 hidden">
-                                                        <label
-                                                            class="text-[9px] font-bold text-slate-500 dark:text-slate-400 tracking-tight">Primary
-                                                            Subjects <span class="text-rose-500">*</span></label>
+                                                        <div class="flex items-center justify-between">
+                                                            <label class="text-[9px] font-bold text-slate-500 dark:text-slate-400 tracking-tight">
+                                                                Primary Subjects <span class="text-rose-500">*</span>
+                                                            </label>
+                                                            <div class="flex items-center gap-2">
+                                                                <button type="button" onclick="selectAllClassSubjects()" class="text-[10px] font-bold text-blue-500 hover:text-blue-600 transition-colors">
+                                                                    Select All
+                                                                </button>
+                                                                <span class="text-slate-300 dark:text-slate-700 text-xs">•</span>
+                                                                <button type="button" onclick="clearAllClassSubjects()" class="text-[10px] font-bold text-slate-400 hover:text-slate-500 transition-colors">
+                                                                    Clear
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                         <div id="subjectPills" class="flex flex-wrap gap-1.5">
                                                             <!-- Pills generated via JS -->
                                                         </div>
@@ -580,8 +591,27 @@
             updateSubjectsInput();
         }
 
+        function selectAllClassSubjects() {
+            const selectedClasses = Array.from(document.querySelectorAll('input[name="classes"]:checked')).map(cb => cb.value);
+            const allSubjects = new Set();
+            selectedClasses.forEach(lvl => {
+                if (subjectsByClass[lvl]) {
+                    subjectsByClass[lvl].forEach(s => allSubjects.add(s));
+                }
+            });
+            selectedSubjects = Array.from(allSubjects);
+            updateSubjectsInput();
+            handleClassChange();
+        }
+
+        function clearAllClassSubjects() {
+            selectedSubjects = [];
+            updateSubjectsInput();
+            handleClassChange();
+        }
+
         function updateSubjectsInput() {
-            document.getElementById('subjectsInput').value = selectedSubjects.join(',');
+            document.getElementById('subjectsInput').value = selectedSubjects.join(', ');
         }
 
         // Password Generator
@@ -681,6 +711,28 @@
                 // Add multi-select classes manually if they exist
                 const classes = Array.from(document.querySelectorAll('input[name="classes"]:checked')).map(cb => cb.value);
                 if (classes.length > 0) data.classes = classes;
+
+                // Ensure subjects are synchronized
+                if (selectedSubjects && selectedSubjects.length > 0) {
+                    data.subjects = selectedSubjects.join(', ');
+                } else if (document.getElementById('subjectsInput') && document.getElementById('subjectsInput').value) {
+                    data.subjects = document.getElementById('subjectsInput').value;
+                }
+
+                if (data.role === 'teacher') {
+                    if (!data.classes || (Array.isArray(data.classes) && data.classes.length === 0)) {
+                        Swal.fire({ title: 'Class Required', text: 'Please select at least one teaching class for the teacher.', icon: 'warning' });
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalContent;
+                        return;
+                    }
+                    if (!data.subjects || String(data.subjects).trim() === '') {
+                        Swal.fire({ title: 'Subject Required', text: 'Please select at least one primary subject for the teacher.', icon: 'warning' });
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = originalContent;
+                        return;
+                    }
+                }
 
                 const response = await fetch('/admin/create-role', {
                     method: 'POST',
