@@ -1674,14 +1674,46 @@ router.post('/profile/update', teacherProtect, (req, res, next) => {
         user.sscGpa = sscGpa;
         user.hscGpa = hscGpa;
         user.cgpa = cgpa;
-        user.socialLinks = user.socialLinks || {};
-        user.socialLinks.facebook = req.body['socialLinks[facebook]'];
-        user.socialLinks.linkedin = req.body['socialLinks[linkedin]'];
+        // Robust extraction of socialLinks (handles both nested object and bracket keys)
+        const facebook = (req.body.socialLinks && typeof req.body.socialLinks === 'object' && req.body.socialLinks.facebook !== undefined)
+            ? req.body.socialLinks.facebook
+            : (req.body['socialLinks[facebook]'] || req.body.facebook || '');
+            
+        const linkedin = (req.body.socialLinks && typeof req.body.socialLinks === 'object' && req.body.socialLinks.linkedin !== undefined)
+            ? req.body.socialLinks.linkedin
+            : (req.body['socialLinks[linkedin]'] || req.body.linkedin || '');
+
+        const youtube = (req.body.socialLinks && typeof req.body.socialLinks === 'object' && req.body.socialLinks.youtube !== undefined)
+            ? req.body.socialLinks.youtube
+            : (req.body['socialLinks[youtube]'] || req.body.youtube || '');
+
+        user.socialLinks = {
+            facebook: typeof facebook === 'string' ? facebook.trim() : '',
+            linkedin: typeof linkedin === 'string' ? linkedin.trim() : '',
+            youtube: typeof youtube === 'string' ? youtube.trim() : ''
+        };
+        user.markModified('socialLinks');
 
         await user.save();
 
         // Update session
-        req.session.user.name = name;
+        if (req.session.user) {
+            req.session.user.name = name;
+            req.session.user.designation = designation;
+            req.session.user.experience = experience;
+            req.session.user.bio = bio;
+            req.session.user.achievements = achievements;
+            req.session.user.presentAddress = presentAddress;
+            req.session.user.permanentAddress = permanentAddress;
+            req.session.user.schoolName = schoolName;
+            req.session.user.collegeName = collegeName;
+            req.session.user.universityName = universityName;
+            req.session.user.sscGpa = sscGpa;
+            req.session.user.hscGpa = hscGpa;
+            req.session.user.cgpa = cgpa;
+            req.session.user.socialLinks = user.socialLinks;
+        }
+
         res.redirect('/teacher/profile?success=profile_updated');
     } catch (err) {
         console.error(err);
