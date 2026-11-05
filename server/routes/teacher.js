@@ -98,11 +98,163 @@ router.use(async (req, res, next) => {
                 req.session.user.classLevel = context.rawAssignedClasses.join(', ');
                 req.session.user.assignedClasses = context.rawAssignedClasses;
             }
+
+            // Sync fresh User flags from database
+            const freshUser = await User.findById(req.session.user._id).select('loginCount passwordResetRequired isPasswordSet isProfileSetupComplete schoolName universityName presentAddress permanentAddress profilePicture profileImage bio').lean();
+            if (freshUser) {
+                req.session.user.loginCount = freshUser.loginCount || 1;
+                req.session.user.passwordResetRequired = Boolean(freshUser.passwordResetRequired);
+                req.session.user.isPasswordSet = (typeof freshUser.isPasswordSet === 'boolean') ? freshUser.isPasswordSet : (freshUser.loginCount > 1 && !freshUser.passwordResetRequired);
+                req.session.user.isProfileSetupComplete = (typeof freshUser.isProfileSetupComplete === 'boolean') ? freshUser.isProfileSetupComplete : Boolean(freshUser.schoolName && freshUser.universityName && freshUser.presentAddress);
+                if (freshUser.profilePicture || freshUser.profileImage) {
+                    req.session.user.profilePicture = freshUser.profilePicture || freshUser.profileImage;
+                    req.session.user.profileImage = freshUser.profileImage || freshUser.profilePicture;
+                }
+            }
+
+            // Route protection for first-time password setup and mandatory academic profile
+            const path = req.path;
+            const isWhitelisted = path === '/setup-password' || path === '/onboarding-profile' || path.startsWith('/profile/avatar') || path === '/logout';
+            if (!isWhitelisted && req.session.user.role === 'teacher') {
+                if (req.session.user.passwordResetRequired || req.session.user.isPasswordSet === false) {
+                    return res.redirect('/teacher/setup-password');
+                }
+                const hasInitialProfile = Boolean(req.session.user.isProfileSetupComplete || (freshUser && freshUser.schoolName && freshUser.universityName && freshUser.presentAddress));
+                if (!hasInitialProfile) {
+                    return res.redirect('/teacher/onboarding-profile');
+                }
+            }
         } catch (e) {
             // non-fatal
         }
     }
     next();
+});
+
+// --- 1. FIRST-TIME LOGIN PASSWORD SETUP (STEP 1) ---
+router.get('/setup-password', teacherProtect, (req, res) => {
+    res.render('teacher/setup-password', {
+        user: req.session.user,
+        error: req.query.error || null,
+        csrfToken: req.csrfToken ? req.csrfToken() : ''
+    });
+});
+
+router.post('/setup-password', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const { newPassword, confirmPassword } = req.body;
+        if (!newPassword || newPassword.length < 6) {
+            return res.render('teacher/setup-password', {
+                user: req.session.user,
+                error: 'Password must be at least 6 characters long.',
+                csrfToken: req.csrfToken ? req.csrfToken() : ''
+            });
+        }
+        if (newPassword !== confirmPassword) {
+            return res.render('teacher/setup-password', {
+                user: req.session.user,
+                error: 'Passwords do not match.',
+                csrfToken: req.csrfToken ? req.csrfToken() : ''
+            });
+        }
+
+        const bcrypt = require('bcryptjs');
+        const hashed = await bcrypt.hash(newPassword, 10);
+        const teacherId = req.session.user._id;
+
+        const updatedUser = await User.findByIdAndUpdate(teacherId, {
+            password: hashed,
+            passwordResetRequired: false,
+            isPasswordSet: true
+        }, { new: true });
+
+        // Update session
+        req.session.user.passwordResetRequired = false;
+        req.session.user.isPasswordSet = true;
+
+        await logActivity(req, 'UPDATE', 'Teacher set up personal password', 'User', teacherId);
+
+        // Check if academic credentials already exist
+        const hasAcademics = Boolean(updatedUser.schoolName && updatedUser.universityName && updatedUser.presentAddress);
+        if (updatedUser.isProfileSetupComplete || hasAcademics) {
+            return res.redirect('/teacher');
+        } else {
+            return res.redirect('/teacher/onboarding-profile');
+        }
+    } catch (err) {
+        console.error('Teacher setup-password error:', err);
+        return res.render('teacher/setup-password', {
+            user: req.session.user,
+            error: 'Failed to update password. Please try again.',
+            csrfToken: req.csrfToken ? req.csrfToken() : ''
+        });
+    }
+});
+
+// --- 2. MANDATORY PROFILE CREDENTIALS (STEP 2) ---
+router.get('/onboarding-profile', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const user = await User.findById(req.session.user._id).lean();
+        res.render('teacher/onboarding-profile', {
+            user,
+            error: req.query.error || null,
+            csrfToken: req.csrfToken ? req.csrfToken() : ''
+        });
+    } catch (err) {
+        console.error('Onboarding profile error:', err);
+        res.redirect('/teacher');
+    }
+});
+
+router.post('/onboarding-profile', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const { schoolName, sscGpa, collegeName, hscGpa, universityName, cgpa, presentAddress, permanentAddress } = req.body;
+        
+        if (!schoolName || !sscGpa || !collegeName || !hscGpa || !universityName || !cgpa || !presentAddress || !permanentAddress) {
+            const user = await User.findById(req.session.user._id).lean();
+            return res.render('teacher/onboarding-profile', {
+                user: { ...user, ...req.body },
+                error: 'Please fill in all required academic credentials and address fields.',
+                csrfToken: req.csrfToken ? req.csrfToken() : ''
+            });
+        }
+
+        const teacherId = req.session.user._id;
+        await User.findByIdAndUpdate(teacherId, {
+            schoolName,
+            sscGpa,
+            collegeName,
+            hscGpa,
+            universityName,
+            cgpa,
+            presentAddress,
+            permanentAddress,
+            isProfileSetupComplete: true
+        }, { new: true });
+
+        // Update session
+        Object.assign(req.session.user, {
+            schoolName,
+            sscGpa,
+            collegeName,
+            hscGpa,
+            universityName,
+            cgpa,
+            presentAddress,
+            permanentAddress,
+            isProfileSetupComplete: true
+        });
+
+        await logActivity(req, 'UPDATE', 'Teacher completed onboarding academic and address info', 'User', teacherId);
+
+        return res.redirect('/teacher');
+    } catch (err) {
+        console.error('Submit onboarding profile error:', err);
+        return res.redirect('/teacher/onboarding-profile?error=Failed+to+save+profile');
+    }
 });
 
 // Teacher Dashboard

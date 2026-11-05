@@ -80,6 +80,8 @@ const userSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
     status: { type: String, enum: ['active', 'suspended'], default: 'active' },
     passwordResetRequired: { type: Boolean, default: false },
+    isPasswordSet: { type: Boolean, default: false },
+    isProfileSetupComplete: { type: Boolean, default: false },
     passwordResetToken: { type: String },
     passwordResetExpires: { type: Date },
     streak: { type: Number, default: 0 },

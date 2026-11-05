@@ -60,58 +60,100 @@
                 
                 <div class="p-2 sm:p-5 lg:p-6 space-y-2 sm:space-y-4 max-w-7xl mx-auto w-full pb-6 sm:pb-8 lg:pb-8">
 
-                    <!-- TEACHER WELCOME GREETING (Shown only on first login, dismissible with X) -->
+                    <!-- TEACHER DASHBOARD ONBOARDING & WELCOME BANNERS -->
                     <%
                         const tUser = locals.user || {};
                         const tLoginCount = (typeof tUser.loginCount === 'number') ? tUser.loginCount : 1;
-                        const showWelcome = tLoginCount <= 1;
 
-                        const dSubs = [];
-                        if (user.teachingSubject) dSubs.push(...String(user.teachingSubject).split(/[,;/]+/).map(s => s.trim()).filter(Boolean));
-                        if (Array.isArray(user.teachingSubjects)) dSubs.push(...user.teachingSubjects.map(s => String(s || '').trim()).filter(Boolean));
-                        const dUniqueSubs = [...new Set(dSubs)].join(', ');
+                        // Check full profile completion
+                        const dHasPhoto = Boolean(user.profilePicture || user.profileImage);
+                        const dHasBio = Boolean(user.bio && String(user.bio).trim().length > 5);
+                        const dHasAcademics = Boolean(user.schoolName && user.collegeName && user.universityName);
+                        const dHasAddresses = Boolean(user.presentAddress && user.permanentAddress);
 
-                        const dClasses = [];
-                        if (user.classLevel) dClasses.push(...String(user.classLevel).split(/[,;/]+/).map(s => s.trim().replace(/\bclass\s+class\b/gi, 'Class')).filter(Boolean));
-                        if (Array.isArray(user.assignedClasses)) dClasses.push(...user.assignedClasses.map(s => String(s || '').trim().replace(/\bclass\s+class\b/gi, 'Class')).filter(Boolean));
-                        const dUniqueClasses = [...new Set(dClasses)].join(', ');
+                        let dPercent = 0;
+                        const dMissing = [];
+                        if (dHasPhoto) dPercent += 25; else dMissing.push('Profile Photo');
+                        if (dHasBio) dPercent += 25; else dMissing.push('Bio');
+                        if (dHasAcademics) dPercent += 25; else dMissing.push('Academics');
+                        if (dHasAddresses) dPercent += 25; else dMissing.push('Address');
+
+                        const isFullProfileDone = dPercent === 100;
+
+                        // 1st login: show Welcome + Tell to complete full profile with photo
+                        const showWelcome1st = (tLoginCount === 1);
+                        // Next 2 logins (2 & 3): show profile complete message (NO welcome word!) if incomplete
+                        const showReminder23 = (tLoginCount === 2 || tLoginCount === 3) && !isFullProfileDone;
                     %>
-                    <% if (showWelcome) { %>
-                    <div id="teacherWelcomeBanner" class="rounded-xl p-3.5 sm:p-4 bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-between gap-3 transition-all duration-300">
-                        <div class="flex items-center gap-3 min-w-0">
-                            <div class="size-10 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 text-slate-700 dark:text-slate-300 flex items-center justify-center font-medium text-sm shadow-xs shrink-0 overflow-hidden">
+
+                    <% if (showWelcome1st) { %>
+                    <!-- 1ST LOGIN: WELCOME & FULL PROFILE SETUP NOTICE -->
+                    <div id="teacherWelcomeBanner" class="rounded-xl p-3.5 sm:p-5 bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-white dark:from-blue-950/30 dark:via-indigo-950/20 dark:to-[#0f172a] border border-blue-200/80 dark:border-blue-900/50 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 transition-all duration-300">
+                        <div class="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                            <div class="size-11 sm:size-12 rounded-2xl bg-primary text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0 overflow-hidden mt-0.5 sm:mt-0">
                                 <% if (user.profilePicture) { %>
                                     <img src="<%= user.profilePicture %>" alt="<%= user.name %>" class="size-full object-cover">
                                 <% } else { %>
                                     <span><%= (user.name || 'T')[0].toUpperCase() %></span>
                                 <% } %>
                             </div>
-                            <div class="min-w-0">
+                            <div class="min-w-0 space-y-1">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <h2 class="text-sm sm:text-base font-semibold text-slate-800 dark:text-slate-200 tracking-normal truncate leading-tight">Welcome, <%= user.name %></h2>
-                                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
+                                    <h2 class="text-sm sm:text-base font-bold text-slate-900 dark:text-white tracking-tight truncate leading-tight">
+                                        Welcome to ODDHAY, <%= user.name %>! 🎉
+                                    </h2>
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shrink-0">
                                         <span class="size-1.5 rounded-full bg-emerald-500"></span>
                                         Instructor
                                     </span>
-                                    <% if (dUniqueSubs) { %>
-                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-fuchsia-50 dark:bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300 border border-fuchsia-200 dark:border-fuchsia-500/20 shrink-0">
-                                        <span class="material-symbols-rounded text-xs text-fuchsia-500">menu_book</span>
-                                        <span>Subject: <%= dUniqueSubs %></span>
-                                    </span>
-                                    <% } %>
-                                    <% if (dUniqueClasses) { %>
-                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/20 shrink-0">
-                                        <span class="material-symbols-rounded text-xs text-blue-500">school</span>
-                                        <span>Class: <%= dUniqueClasses %></span>
-                                    </span>
-                                    <% } %>
                                 </div>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-normal truncate">Here is your daily teaching and course overview</p>
+                                <p class="text-xs text-slate-600 dark:text-slate-300 font-normal leading-relaxed">
+                                    Your instructor workspace is ready. Please complete your full profile by adding your <strong>profile picture</strong> and <strong>teaching bio</strong>.
+                                </p>
                             </div>
                         </div>
-                        <button type="button" onclick="dismissTeacherWelcome()" class="size-7 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center shrink-0 cursor-pointer active:scale-90" title="Dismiss">
-                            <span class="material-symbols-rounded text-base">close</span>
-                        </button>
+
+                        <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+                            <a href="/teacher/profile" class="h-8 px-3.5 rounded-lg bg-primary hover:bg-primary/90 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all">
+                                <span class="material-symbols-rounded text-base">account_circle</span>
+                                <span>Complete Full Profile</span>
+                            </a>
+                            <button type="button" onclick="dismissTeacherWelcome()" class="size-7 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center cursor-pointer active:scale-90" title="Dismiss">
+                                <span class="material-symbols-rounded text-base">close</span>
+                            </button>
+                        </div>
+                    </div>
+                    <% } else if (showReminder23) { %>
+                    <!-- 2ND & 3RD LOGINS: PROFILE COMPLETE MESSAGE (NO WELCOME) -->
+                    <div id="teacherWelcomeBanner" class="rounded-xl p-3.5 sm:p-4 bg-amber-50/80 dark:bg-amber-950/25 border border-amber-200/90 dark:border-amber-900/60 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 transition-all duration-300">
+                        <div class="flex items-start sm:items-center gap-3 min-w-0 flex-1">
+                            <div class="size-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 flex items-center justify-center shrink-0 mt-0.5 sm:mt-0">
+                                <span class="material-symbols-rounded text-xl">assignment_late</span>
+                            </div>
+                            <div class="min-w-0 space-y-0.5">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h3 class="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100">
+                                        Profile Completion Reminder
+                                    </h3>
+                                    <span class="px-2 py-0.2 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                                        <%= dPercent %>% Completed
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-600 dark:text-slate-300 font-normal leading-relaxed">
+                                    Please complete your full profile with your <strong>profile picture</strong> and <strong>bio</strong> to build student and parent confidence. Missing: <span class="text-amber-700 dark:text-amber-300 font-semibold"><%= dMissing.join(', ') %></span>.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 self-end sm:self-center shrink-0">
+                            <a href="/teacher/profile" class="h-8 px-3 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all">
+                                <span class="material-symbols-rounded text-sm">edit</span>
+                                <span>Complete Profile</span>
+                            </a>
+                            <button type="button" onclick="dismissTeacherWelcome()" class="size-7 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center cursor-pointer active:scale-90" title="Dismiss">
+                                <span class="material-symbols-rounded text-base">close</span>
+                            </button>
+                        </div>
                     </div>
                     <% } %>
 
