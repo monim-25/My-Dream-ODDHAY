@@ -213,11 +213,11 @@ router.post('/onboarding-profile', teacherProtect, async (req, res) => {
         await connectDB();
         const { schoolName, sscGpa, collegeName, hscGpa, universityName, cgpa, presentAddress, permanentAddress } = req.body;
         
-        if (!schoolName || !sscGpa || !collegeName || !hscGpa || !universityName || !cgpa || !presentAddress || !permanentAddress) {
+        if (!schoolName || !collegeName || !universityName || !presentAddress || !permanentAddress) {
             const user = await User.findById(req.session.user._id).lean();
             return res.render('teacher/onboarding-profile', {
                 user: { ...user, ...req.body },
-                error: 'Please fill in all required academic credentials and address fields.',
+                error: 'Please fill in all required academic institutions and address fields.',
                 csrfToken: req.csrfToken ? req.csrfToken() : ''
             });
         }
@@ -225,11 +225,11 @@ router.post('/onboarding-profile', teacherProtect, async (req, res) => {
         const teacherId = req.session.user._id;
         await User.findByIdAndUpdate(teacherId, {
             schoolName,
-            sscGpa,
+            sscGpa: sscGpa || '',
             collegeName,
-            hscGpa,
+            hscGpa: hscGpa || '',
             universityName,
-            cgpa,
+            cgpa: cgpa || '',
             presentAddress,
             permanentAddress,
             isProfileSetupComplete: true
@@ -238,11 +238,11 @@ router.post('/onboarding-profile', teacherProtect, async (req, res) => {
         // Update session
         Object.assign(req.session.user, {
             schoolName,
-            sscGpa,
+            sscGpa: sscGpa || '',
             collegeName,
-            hscGpa,
+            hscGpa: hscGpa || '',
             universityName,
-            cgpa,
+            cgpa: cgpa || '',
             presentAddress,
             permanentAddress,
             isProfileSetupComplete: true
