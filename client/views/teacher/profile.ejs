@@ -330,6 +330,29 @@
         async function uploadAvatar(input) {
             if (!input.files || !input.files[0]) return;
             const file = input.files[0];
+
+            if (!file.type.startsWith('image/')) {
+                showError('Please select a valid image file (PNG, JPG, JPEG, WEBP).');
+                input.value = '';
+                return;
+            }
+
+            if (file.size > 25 * 1024 * 1024) {
+                showError('Image size exceeds 25MB limit. Please choose a smaller photo.');
+                input.value = '';
+                return;
+            }
+
+            const alert = document.getElementById('errorAlert');
+            if (alert) alert.classList.add('hidden');
+
+            const uploadBtn = document.querySelector('.avatar-upload-btn');
+            const originalBtnContent = uploadBtn ? uploadBtn.innerHTML : '';
+            if (uploadBtn) {
+                uploadBtn.innerHTML = '<span class="material-symbols-rounded text-base animate-spin">progress_activity</span>';
+                uploadBtn.style.pointerEvents = 'none';
+            }
+
             const formData = new FormData();
             formData.append('profilePicture', file);
 
@@ -340,14 +363,28 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    document.getElementById('profilePreview').src = data.url;
+                    const newUrl = data.url || data.filePath;
+                    const preview = document.getElementById('profilePreview');
+                    if (preview) preview.src = newUrl;
+
+                    // Also update any sidebar / header profile avatar images on the page
+                    document.querySelectorAll('img[alt="Profile"]').forEach(img => {
+                        img.src = newUrl;
+                    });
+
                     showSuccess();
                 } else {
-                    showError(data.error || 'Avatar upload failed');
+                    showError(data.error || 'Avatar upload failed.');
                 }
             } catch (err) {
                 console.error(err);
-                showError('Avatar upload failed. Try again.');
+                showError('Avatar upload failed. Please try again.');
+            } finally {
+                if (uploadBtn) {
+                    uploadBtn.innerHTML = originalBtnContent;
+                    uploadBtn.style.pointerEvents = '';
+                }
+                input.value = '';
             }
         }
 
@@ -359,7 +396,7 @@
             setTimeout(() => {
                 popup.classList.remove('translate-x-0', 'opacity-100');
                 popup.classList.add('translate-x-full', 'opacity-0');
-            }, 3000);
+            }, 3500);
         }
 
         function showError(msg) {
@@ -368,11 +405,12 @@
             if (alert && txt) {
                 txt.textContent = msg;
                 alert.classList.remove('hidden');
+                alert.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
 
         const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('updated') === 'true') {
+        if (urlParams.get('updated') === 'true' || urlParams.get('success') === 'profile_updated') {
             showSuccess();
         }
     </script>

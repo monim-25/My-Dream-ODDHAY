@@ -24,6 +24,28 @@ const uploadAnswerMulter = multer({
     limits: { fileSize: 25 * 1024 * 1024 }
 });
 
+// Multer storage for Teacher Profile Avatar uploads
+const avatarStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const fs = require('fs');
+        const primaryDest = path.join(process.cwd(), 'client/public/uploads/avatars');
+        const secondaryDest = path.join(process.cwd(), 'public/uploads/avatars');
+        try { fs.mkdirSync(primaryDest, { recursive: true }); } catch (e) { }
+        try { fs.mkdirSync(secondaryDest, { recursive: true }); } catch (e) { }
+        cb(null, primaryDest);
+    },
+    filename: (req, file, cb) => {
+        const ext = path.extname(file.originalname) || '.jpg';
+        const userId = (req.session && req.session.user && req.session.user._id) ? req.session.user._id : 'teacher';
+        cb(null, `avatar-${userId}-${Date.now()}${ext}`);
+    }
+});
+
+const uploadAvatarMulter = multer({
+    storage: avatarStorage,
+    limits: { fileSize: 25 * 1024 * 1024 } // 25MB
+});
+
 // Helper to log system activity
 const logActivity = async (req, action, actionDetails, entityType, entityId = null) => {
     try {
@@ -1406,8 +1428,63 @@ router.get('/profile', teacherProtect, async (req, res) => {
     }
 });
 
+// Teacher Profile Avatar Upload (AJAX)
+router.post('/profile/avatar', teacherProtect, (req, res, next) => {
+    uploadAvatarMulter.fields([
+        { name: 'profilePicture', maxCount: 1 },
+        { name: 'profileImage', maxCount: 1 }
+    ])(req, res, (err) => {
+        if (err) return res.status(400).json({ success: false, error: err.message });
+        next();
+    });
+}, async (req, res) => {
+    try {
+        await connectDB();
+        const file = (req.files && (req.files['profilePicture']?.[0] || req.files['profileImage']?.[0])) || req.file;
+        if (!file) {
+            return res.status(400).json({ success: false, error: 'No image file uploaded' });
+        }
+
+        // Process file via Cloudinary with fallback to local path
+        const fileUrl = await processUploadedFile(file, 'avatars');
+        if (!fileUrl) {
+            return res.status(500).json({ success: false, error: 'Failed to process uploaded image' });
+        }
+
+        const teacherId = req.session.user._id;
+        const updatedUser = await User.findByIdAndUpdate(
+            teacherId,
+            { profilePicture: fileUrl, profileImage: fileUrl },
+            { new: true }
+        );
+
+        if (!updatedUser) {
+            return res.status(404).json({ success: false, error: 'Teacher account not found' });
+        }
+
+        // Keep session in sync
+        if (req.session && req.session.user) {
+            req.session.user.profilePicture = fileUrl;
+            req.session.user.profileImage = fileUrl;
+        }
+
+        await logActivity(req, 'UPDATE', 'Updated teacher profile photo', 'User', teacherId);
+
+        return res.json({
+            success: true,
+            url: fileUrl,
+            message: 'Profile picture updated successfully'
+        });
+    } catch (err) {
+        console.error('Teacher avatar upload error:', err);
+        return res.status(500).json({ success: false, error: err.message || 'Avatar upload failed' });
+    }
+});
+
 // Profile Update Action
-router.post('/profile/update', teacherProtect, async (req, res) => {
+router.post('/profile/update', teacherProtect, (req, res, next) => {
+    uploadAvatarMulter.single('profilePicture')(req, res, () => next());
+}, async (req, res) => {
     try {
         await connectDB();
         const { 
@@ -1418,6 +1495,18 @@ router.post('/profile/update', teacherProtect, async (req, res) => {
         } = req.body;
         
         const user = await User.findById(req.session.user._id);
+
+        if (req.file) {
+            const fileUrl = await processUploadedFile(req.file, 'avatars');
+            if (fileUrl) {
+                user.profilePicture = fileUrl;
+                user.profileImage = fileUrl;
+                if (req.session.user) {
+                    req.session.user.profilePicture = fileUrl;
+                    req.session.user.profileImage = fileUrl;
+                }
+            }
+        }
 
         user.name = name;
         user.designation = designation;
@@ -1433,6 +1522,7 @@ router.post('/profile/update', teacherProtect, async (req, res) => {
         user.sscGpa = sscGpa;
         user.hscGpa = hscGpa;
         user.cgpa = cgpa;
+        user.socialLinks = user.socialLinks || {};
         user.socialLinks.facebook = req.body['socialLinks[facebook]'];
         user.socialLinks.linkedin = req.body['socialLinks[linkedin]'];
 
