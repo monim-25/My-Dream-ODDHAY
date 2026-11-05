@@ -1,17 +1,25 @@
 <header class="h-16 bg-white dark:bg-[#0b1120] flex items-center justify-between px-3 sm:px-4 border-b border-slate-200/90 dark:border-slate-800/90 sticky top-0 z-50 transition-colors duration-300 shrink-0">
-    <!-- Left: Mobile Menu Toggle + Page Title -->
-    <div class="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+    <!-- Left: Mobile Menu Toggle + Back Arrow + Page Title -->
+    <div class="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
         <!-- Mobile Sidebar Toggle -->
         <button type="button" onclick="toggleTeacherSidebar()" id="mobileMenuBtn"
-            class="lg:hidden size-9 rounded-xl bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center active:scale-95 transition-all cursor-pointer shrink-0 border border-slate-200/60 dark:border-slate-700/60"
+            class="lg:hidden size-8.5 sm:size-9 rounded-lg sm:rounded-xl bg-slate-100/80 dark:bg-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center active:scale-95 transition-all cursor-pointer shrink-0 border border-slate-200/60 dark:border-slate-700/60"
             title="Toggle Menu" aria-label="Toggle Navigation">
-            <span class="material-symbols-rounded text-[21px] leading-none">menu</span>
+            <span class="material-symbols-rounded text-[20px] sm:text-[21px] leading-none">menu</span>
         </button>
 
-        <!-- Page Title -->
+        <!-- Back Arrow Navigation Button (Shown on subpages and non-dashboard pages) -->
+        <button type="button" id="teacherNavBackBtn" onclick="handleTeacherNavBack(event)"
+            <% if (locals.backUrl) { %>data-back-url="<%= locals.backUrl %>"<% } %>
+            class="hidden size-8 sm:size-8.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-all items-center justify-center shrink-0 cursor-pointer active:scale-90 border border-transparent hover:border-slate-200/80 dark:hover:border-slate-700/80"
+            title="Go to previous page" aria-label="Go Back">
+            <span class="material-symbols-rounded text-lg sm:text-[20px] leading-none pointer-events-none">arrow_back</span>
+        </button>
+
+        <!-- Page Title (Small sized, not bold) -->
         <% if (locals.pageTitle) { %>
         <div class="min-w-0 truncate">
-            <h1 class="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100 truncate block leading-tight tracking-tight"><%- locals.pageTitle %></h1>
+            <h1 class="text-xs sm:text-[13px] font-medium text-slate-600 dark:text-slate-300 truncate block leading-tight tracking-normal"><%- locals.pageTitle %></h1>
         </div>
         <% } %>
     </div>
@@ -132,4 +140,262 @@
             if (dropdown) dropdown.classList.add('hidden');
         }
     });
+
+    // ==========================================
+    // Teacher Back Arrow Navigation Controller
+    // ==========================================
+    (function() {
+        const TEACHER_STACK_KEY = 'oddhay_teacher_nav_stack';
+        const TEACHER_IS_BACK_KEY = 'oddhay_teacher_nav_is_back';
+
+        function isTeacherTransientUrl(urlStr) {
+            if (!urlStr) return true;
+            try {
+                const u = new URL(urlStr, window.location.origin);
+                const p = u.pathname.toLowerCase();
+                return p.includes('/login') ||
+                       p.includes('/logout') ||
+                       p.includes('/auth') ||
+                       p.includes('/forgot-password') ||
+                       p.includes('/setup-password') ||
+                       p.includes('/submit');
+            } catch(e) {
+                return true;
+            }
+        }
+
+        function getTeacherLogicalParentUrl(path) {
+            if (!path || path === '/' || path === '/teacher' || path === '/teacher/') {
+                return '/teacher';
+            }
+
+            // Subpages of Courses
+            if (path.startsWith('/teacher/course/') || path.startsWith('/teacher/courses/') || path.startsWith('/teacher/edit-course')) {
+                return '/teacher/courses';
+            }
+
+            // Subpages of Quizzes / Assessment
+            if (path === '/teacher/make-quiz' || path.startsWith('/teacher/quiz/') || path.startsWith('/teacher/quiz-editor') || path.startsWith('/teacher/quiz-details')) {
+                return '/teacher/quizzes';
+            }
+
+            // Subpages of Written Evaluations
+            if (path.startsWith('/teacher/evaluate/') || path.startsWith('/teacher/written-evaluation/')) {
+                return '/teacher/written-evaluations';
+            }
+
+            // Subpages of Question Bank / Questions
+            if (path.startsWith('/teacher/add-question') || path.startsWith('/teacher/edit-question-bank') || path.startsWith('/teacher/question-bank-details')) {
+                return '/teacher/question-bank';
+            }
+
+            // Subpages of Topics
+            if (path.startsWith('/teacher/topic')) {
+                return '/teacher/topics';
+            }
+
+            // Subpages of Notes
+            if (path.startsWith('/teacher/note-details')) {
+                return '/teacher/notes';
+            }
+
+            // Subpages of Profile
+            if (path.startsWith('/teacher/profile/') && path !== '/teacher/profile') {
+                return '/teacher/profile';
+            }
+
+            // All other main teacher sections (e.g. /teacher/messages, /teacher/courses, /teacher/profile, /teacher/quizzes, etc.)
+            // logically return back to the root dashboard
+            return '/teacher';
+        }
+
+        function initTeacherNavStack() {
+            try {
+                const currentHref = window.location.href;
+                const currentPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/teacher';
+                const isBackNav = sessionStorage.getItem(TEACHER_IS_BACK_KEY) === 'true';
+                sessionStorage.removeItem(TEACHER_IS_BACK_KEY);
+
+                if (isTeacherTransientUrl(currentHref)) return;
+
+                let stack = [];
+                try {
+                    const raw = sessionStorage.getItem(TEACHER_STACK_KEY);
+                    if (raw) stack = JSON.parse(raw);
+                } catch(e) {
+                    stack = [];
+                }
+                if (!Array.isArray(stack)) stack = [];
+
+                if (isBackNav) {
+                    let foundIdx = -1;
+                    for (let i = stack.length - 1; i >= 0; i--) {
+                        try {
+                            const entryUrl = new URL(stack[i], window.location.origin);
+                            if (entryUrl.pathname.toLowerCase().replace(/\/+$/, '') === currentPath) {
+                                foundIdx = i;
+                                break;
+                            }
+                        } catch(e) {}
+                    }
+                    if (foundIdx >= 0) {
+                        stack = stack.slice(0, foundIdx + 1);
+                        stack[foundIdx] = currentHref;
+                    } else {
+                        stack.push(currentHref);
+                    }
+                } else {
+                    let loopIdx = -1;
+                    for (let i = stack.length - 1; i >= 0; i--) {
+                        try {
+                            const entryUrl = new URL(stack[i], window.location.origin);
+                            if (entryUrl.pathname.toLowerCase().replace(/\/+$/, '') === currentPath) {
+                                loopIdx = i;
+                                break;
+                            }
+                        } catch(e) {}
+                    }
+                    if (loopIdx >= 0) {
+                        stack = stack.slice(0, loopIdx + 1);
+                        stack[loopIdx] = currentHref;
+                    } else {
+                        stack.push(currentHref);
+                    }
+                    if (stack.length > 25) {
+                        stack = stack.slice(stack.length - 25);
+                    }
+                }
+                sessionStorage.setItem(TEACHER_STACK_KEY, JSON.stringify(stack));
+            } catch(e) {}
+        }
+
+        function navigateTeacherToUrl(targetUrl) {
+            try {
+                sessionStorage.setItem(TEACHER_IS_BACK_KEY, 'true');
+            } catch(e) {}
+            window.location.href = targetUrl;
+        }
+
+        window.handleTeacherNavBack = function(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            // 1. Close open SweetAlert or viewer modals first
+            if (typeof Swal !== 'undefined' && Swal.isVisible && Swal.isVisible()) {
+                Swal.close();
+                return;
+            }
+            const evalOverlay = document.getElementById('evalImageFullscreenOverlay');
+            if (evalOverlay && !evalOverlay.classList.contains('hidden')) {
+                if (typeof window.closeEvaluationImageFullscreen === 'function') {
+                    window.closeEvaluationImageFullscreen();
+                } else {
+                    evalOverlay.classList.add('hidden');
+                }
+                return;
+            }
+            const imageViewer = document.getElementById('oddhayImageViewer');
+            if (imageViewer && !imageViewer.classList.contains('hidden') && typeof window.closeImageViewer === 'function') {
+                window.closeImageViewer();
+                return;
+            }
+
+            // 2. Interceptor hook if registered
+            if (typeof window.onBeforeTeacherNavBack === 'function') {
+                const handled = window.onBeforeTeacherNavBack();
+                if (handled === true) return;
+            }
+
+            executeTeacherBackNavigation();
+        };
+
+        function executeTeacherBackNavigation() {
+            const currentPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/teacher';
+
+            // 1. Check explicit URL query param (e.g. ?from=courses, ?from=/teacher/courses)
+            try {
+                const searchParams = new URLSearchParams(window.location.search);
+                const fromSource = searchParams.get('from');
+                if (fromSource) {
+                    if (fromSource.startsWith('/')) {
+                        navigateTeacherToUrl(fromSource);
+                        return;
+                    }
+                    navigateTeacherToUrl('/teacher/' + fromSource.replace(/^teacher\//, ''));
+                    return;
+                }
+            } catch(e) {}
+
+            // 2. Check explicit data-back-url on #teacherNavBackBtn
+            const backBtn = document.getElementById('teacherNavBackBtn');
+            if (backBtn && backBtn.getAttribute('data-back-url')) {
+                const target = backBtn.getAttribute('data-back-url');
+                if (target && target !== window.location.pathname) {
+                    navigateTeacherToUrl(target);
+                    return;
+                }
+            }
+
+            // 3. Check Session Navigation Stack
+            let stack = [];
+            try {
+                const raw = sessionStorage.getItem(TEACHER_STACK_KEY);
+                if (raw) stack = JSON.parse(raw);
+            } catch(e) {}
+
+            if (Array.isArray(stack) && stack.length > 1) {
+                for (let i = stack.length - 2; i >= 0; i--) {
+                    const candidateUrl = stack[i];
+                    try {
+                        const cand = new URL(candidateUrl, window.location.origin);
+                        const candPath = cand.pathname.toLowerCase().replace(/\/+$/, '') || '/teacher';
+                        if (candPath !== currentPath && !isTeacherTransientUrl(cand.href)) {
+                            stack = stack.slice(0, i + 1);
+                            sessionStorage.setItem(TEACHER_STACK_KEY, JSON.stringify(stack));
+                            navigateTeacherToUrl(candidateUrl);
+                            return;
+                        }
+                    } catch(err) {}
+                }
+            }
+
+            // 4. Safe In-Domain Referrer
+            if (document.referrer && document.referrer !== window.location.href) {
+                try {
+                    const refUrl = new URL(document.referrer);
+                    const refPath = refUrl.pathname.toLowerCase().replace(/\/+$/, '') || '/teacher';
+                    if (refUrl.origin === window.location.origin && refPath !== currentPath && !isTeacherTransientUrl(document.referrer)) {
+                        navigateTeacherToUrl(document.referrer);
+                        return;
+                    }
+                } catch(err) {}
+            }
+
+            // 5. Logical Parent Fallback
+            const parentUrl = getTeacherLogicalParentUrl(currentPath);
+            navigateTeacherToUrl(parentUrl);
+        }
+
+        function bindTeacherNavBackButton() {
+            const backBtn = document.getElementById('teacherNavBackBtn');
+            if (backBtn) {
+                const currentPath = window.location.pathname.toLowerCase().replace(/\/+$/, '') || '/teacher';
+                const isRootDashboard = (currentPath === '/teacher' || currentPath === '/teacher/dashboard');
+
+                if (!isRootDashboard) {
+                    backBtn.classList.remove('hidden');
+                    backBtn.classList.add('flex');
+                } else {
+                    backBtn.classList.add('hidden');
+                    backBtn.classList.remove('flex');
+                }
+            }
+        }
+
+        initTeacherNavStack();
+        bindTeacherNavBackButton();
+        document.addEventListener('DOMContentLoaded', bindTeacherNavBackButton);
+    })();
 </script>
