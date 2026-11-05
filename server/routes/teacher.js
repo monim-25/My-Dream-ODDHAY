@@ -2907,6 +2907,19 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             quizData.classLevel = req.body.classLevel;
         }
 
+        const mcqCount = parseInt(req.body.mcqCount) || 0;
+        const shortCount = parseInt(req.body.shortCount) || 0;
+        const mediumCount = parseInt(req.body.mediumCount) || 0;
+        const comprehensionCount = parseInt(req.body.comprehensionCount) || 0;
+        const totalConfigured = mcqCount + shortCount + mediumCount + comprehensionCount;
+
+        if (totalConfigured <= 0) {
+            const redirectUrl = (req.body.activeFlow === 'courses' && courseId) 
+                ? `/teacher/course/${courseId}/make-quiz?error=` + encodeURIComponent('Question Configuration required: Please specify at least one question count.')
+                : '/teacher/make-quiz?error=' + encodeURIComponent('Question Configuration required: Please specify at least one question count.');
+            return res.redirect(redirectUrl);
+        }
+
         const strategy = req.body.strategy || 'manual';
         
         if (strategy === 'automated') {

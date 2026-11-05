@@ -173,6 +173,16 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
         
         const isModelTest = req.body.isModelTest === 'true';
         const courseId = isModelTest ? undefined : (req.body.courseId || undefined);
+
+        const mcqCount = parseInt(req.body.mcqCount) || 0;
+        const shortCount = parseInt(req.body.shortCount) || 0;
+        const mediumCount = parseInt(req.body.mediumCount) || 0;
+        const comprehensionCount = parseInt(req.body.comprehensionCount) || 0;
+        const totalConfigured = mcqCount + shortCount + mediumCount + comprehensionCount;
+
+        if (totalConfigured <= 0) {
+            return res.redirect('/admin/compose-quiz?error=' + encodeURIComponent('Question Configuration required: Please specify at least one question count.'));
+        }
         
         const quizData = {
             title: req.body.title,
@@ -186,6 +196,43 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
         if (isModelTest) {
             quizData.subject = req.body.subject;
             quizData.classLevel = req.body.classLevel;
+        }
+
+        for (let i = 0; i < mcqCount; i++) {
+            quizData.questions.push({ 
+                questionText: `New MCQ Question ${i+1}`, 
+                options: ['Option A', 'Option B', 'Option C', 'Option D'], 
+                correctAnswer: 0, 
+                explanation: '',
+                questionType: 'MCQ'
+            });
+        }
+        for (let i = 0; i < shortCount; i++) {
+            quizData.questions.push({ 
+                questionText: `New Short Question ${i+1}`, 
+                options: [], 
+                correctAnswer: 0, 
+                explanation: '',
+                questionType: 'Short'
+            });
+        }
+        for (let i = 0; i < mediumCount; i++) {
+            quizData.questions.push({ 
+                questionText: `New Medium Question ${i+1}`, 
+                options: [], 
+                correctAnswer: 0, 
+                explanation: '',
+                questionType: 'Medium'
+            });
+        }
+        for (let i = 0; i < comprehensionCount; i++) {
+            quizData.questions.push({ 
+                questionText: `New Comprehension Question ${i+1}`, 
+                options: [], 
+                correctAnswer: 0, 
+                explanation: '',
+                questionType: 'Comprehension'
+            });
         }
 
         const quiz = await new Quiz(quizData).save();

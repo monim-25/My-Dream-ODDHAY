@@ -30,7 +30,7 @@
             <%- include('header_v2', { pageTitle: 'Compose Assessment' }) %>
 
             <section class="flex-1 flex flex-col bg-[#F8F8FF] dark:bg-[#0b1120] border-l border-slate-900/10 dark:border-white/5">
-                <form action="/admin/add-quiz" method="POST" class="w-full">
+                <form action="/admin/add-quiz" method="POST" class="w-full" onsubmit="return handleQuizFormSubmit(event);">
                     <div class="divide-y divide-slate-100 dark:divide-white/5 bg-white dark:bg-[#0f172a]">
                         <!-- Messages -->
                         <% if (locals.success || locals.error) { %>
@@ -170,21 +170,37 @@
 
                             <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                                 <div>
-                                    <label class="form-label">MCQ Count</label>
-                                    <input type="number" name="mcqCount" value="0" min="0" class="form-input" placeholder="0">
+                                    <label class="form-label flex items-center justify-between">
+                                        <span>MCQ Count</span>
+                                        <span class="q-config-badge text-rose-500 font-bold text-xs">*</span>
+                                    </label>
+                                    <input type="number" name="mcqCount" id="mcqCount" min="0" class="form-input q-config-field" placeholder="0" oninput="validateQuestionConfig()">
                                 </div>
                                 <div>
-                                    <label class="form-label">Short Question Count</label>
-                                    <input type="number" name="shortCount" value="0" min="0" class="form-input" placeholder="0">
+                                    <label class="form-label flex items-center justify-between">
+                                        <span>Short Question Count</span>
+                                        <span class="q-config-badge text-rose-500 font-bold text-xs">*</span>
+                                    </label>
+                                    <input type="number" name="shortCount" id="shortCount" min="0" class="form-input q-config-field" placeholder="0" oninput="validateQuestionConfig()">
                                 </div>
                                 <div>
-                                    <label class="form-label">Medium Question Count</label>
-                                    <input type="number" name="mediumCount" value="0" min="0" class="form-input" placeholder="0">
+                                    <label class="form-label flex items-center justify-between">
+                                        <span>Medium Question Count</span>
+                                        <span class="q-config-badge text-rose-500 font-bold text-xs">*</span>
+                                    </label>
+                                    <input type="number" name="mediumCount" id="mediumCount" min="0" class="form-input q-config-field" placeholder="0" oninput="validateQuestionConfig()">
                                 </div>
                                 <div>
-                                    <label class="form-label">Comprehension Count</label>
-                                    <input type="number" name="comprehensionCount" value="0" min="0" class="form-input" placeholder="0">
+                                    <label class="form-label flex items-center justify-between">
+                                        <span>Comprehension Count</span>
+                                        <span class="q-config-badge text-rose-500 font-bold text-xs">*</span>
+                                    </label>
+                                    <input type="number" name="comprehensionCount" id="comprehensionCount" min="0" class="form-input q-config-field" placeholder="0" oninput="validateQuestionConfig()">
                                 </div>
+                            </div>
+                            <div id="qConfigAlert" class="hidden mt-3 p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-1.5">
+                                <span class="material-symbols-rounded text-base">error</span>
+                                <span>Please configure at least one question count (MCQ, Short, Medium, or Comprehension) to compose this assessment.</span>
                             </div>
                             <p id="strategyDesc" class="mt-4 text-[11px] text-slate-400 font-medium italic">
                                 * System will create empty slots for you to fill manually.
@@ -292,9 +308,49 @@
             }
         }
 
+        function validateQuestionConfig() {
+            const fields = ['mcqCount', 'shortCount', 'mediumCount', 'comprehensionCount'].map(id => document.getElementById(id));
+            const hasAnyFilled = fields.some(f => f && parseInt(f.value) > 0);
+            const badges = document.querySelectorAll('.q-config-badge');
+            const alertBox = document.getElementById('qConfigAlert');
+
+            if (hasAnyFilled) {
+                badges.forEach(b => {
+                    b.innerHTML = '<span class="text-slate-400 font-normal text-[10px]">(Optional)</span>';
+                });
+                fields.forEach(f => {
+                    if (f) f.removeAttribute('required');
+                });
+                if (alertBox) alertBox.classList.add('hidden');
+            } else {
+                badges.forEach(b => {
+                    b.innerHTML = '<span class="text-rose-500 font-bold text-xs">*</span>';
+                });
+                fields.forEach(f => {
+                    if (f) f.setAttribute('required', 'required');
+                });
+            }
+            return hasAnyFilled;
+        }
+
+        function handleQuizFormSubmit(event) {
+            const hasAnyFilled = validateQuestionConfig();
+            if (!hasAnyFilled) {
+                if (event) event.preventDefault();
+                const alertBox = document.getElementById('qConfigAlert');
+                if (alertBox) alertBox.classList.remove('hidden');
+                const firstField = document.getElementById('mcqCount');
+                firstField?.focus();
+                firstField?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
+            }
+            return true;
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             updateView();
             toggleStrategy('manual');
+            validateQuestionConfig();
         });
     </script>
 </body>
