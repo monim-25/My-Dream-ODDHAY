@@ -40,6 +40,9 @@ router.post('/user/theme', async (req, res) => {
         }
         if (req.session && req.session.userId) {
             await User.findByIdAndUpdate(req.session.userId, { theme });
+            if (req.session.user) {
+                req.session.user.theme = theme;
+            }
         }
         res.json({ success: true, theme });
     } catch (err) {
