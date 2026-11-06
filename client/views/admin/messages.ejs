@@ -12,6 +12,15 @@
         .chat-scroll::-webkit-scrollbar-track { background: transparent; }
         .chat-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 9999px; }
         .chat-scroll::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.4); }
+
+        @keyframes msgPulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5); }
+            50% { transform: scale(1.02); box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+        }
+        .msg-highlight-pulse {
+            animation: msgPulse 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
     </style>
 </head>
 <body class="bg-[#FFFFFF] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
@@ -140,7 +149,7 @@
                         <div class="h-16 p-3 px-4 bg-white dark:bg-[#0b1120] border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between shrink-0 shadow-2xs z-10">
                             <div class="flex items-center gap-3">
                                 <!-- Mobile Back to Contacts -->
-                                <button type="button" onclick="showMobileContacts()" class="md:hidden size-8 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center">
+                                <button type="button" onclick="showMobileContacts()" class="md:hidden size-8 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer">
                                     <span class="material-symbols-rounded text-lg">arrow_back</span>
                                 </button>
 
@@ -183,97 +192,30 @@
                             </div>
                         </div>
 
-                        <!-- Chat Messages Container -->
-                        <div id="chatMessagesScroll" class="flex-1 overflow-y-auto chat-scroll p-4 sm:p-6 space-y-3.5">
-                            <% if (activeMessages && activeMessages.length > 0) { %>
-                                <% activeMessages.forEach(msg => { %>
-                                    <% 
-                                        const isMine = String(msg.sender) === String(user._id);
-                                        const timeStr = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                    %>
-                                    <div class="flex <%= isMine ? 'justify-end' : 'justify-start' %> items-end gap-2 message-row" id="msg-row-<%= msg._id %>">
-                                        <% if (!isMine) { %>
-                                            <div class="size-7 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0 mb-1">
-                                                <% if (activeContact.profilePicture || activeContact.profileImage) { %>
-                                                    <img src="<%= activeContact.profilePicture || activeContact.profileImage %>" class="w-full h-full object-cover">
-                                                <% } else { %>
-                                                    <div class="w-full h-full flex items-center justify-center font-bold text-[10px] text-slate-600 dark:text-slate-300">
-                                                        <%= (activeContact.name || 'U').charAt(0).toUpperCase() %>
-                                                    </div>
-                                                <% } %>
-                                            </div>
-                                        <% } %>
-
-                                        <div class="max-w-[85%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-xs <%= isMine ? 'bg-primary text-white rounded-br-xs shadow-xs' : 'bg-white dark:bg-[#0f172a] text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-800 rounded-bl-xs shadow-2xs' %>">
-                                            <% if (msg.text) { %>
-                                                <p class="leading-relaxed break-words whitespace-pre-wrap"><%= msg.text %></p>
-                                            <% } %>
-
-                                            <% if (msg.attachment && msg.attachment.url) { %>
-                                                <div class="<%= msg.text ? 'mt-2 pt-2 border-t' : '' %> <%= isMine ? 'border-white/20' : 'border-slate-100 dark:border-slate-800' %>">
-                                                    <% if (msg.attachment.fileType === 'image') { %>
-                                                        <div class="rounded-xl overflow-hidden max-h-60 border border-slate-200/60 dark:border-white/10 cursor-pointer group/img" onclick="openImageLightbox('<%= msg.attachment.url %>', '<%= (msg.attachment.fileName || 'Photo').replace(/'/g, '\\\'') %>')">
-                                                            <img src="<%= msg.attachment.url %>" alt="<%= msg.attachment.fileName || 'Photo' %>" class="w-full h-full object-cover group-hover/img:scale-102 transition-transform">
-                                                        </div>
-                                                    <% } else if (msg.attachment.fileType === 'video') { %>
-                                                        <div class="rounded-xl overflow-hidden bg-black max-h-64 border border-slate-700">
-                                                            <video controls playsinline preload="metadata" class="w-full max-h-60 block">
-                                                                <source src="<%= msg.attachment.url %>">
-                                                            </video>
-                                                        </div>
-                                                    <% } else if (msg.attachment.fileType === 'audio') { %>
-                                                        <div class="p-2 rounded-xl flex items-center gap-2 <%= isMine ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800' %>">
-                                                            <span class="material-symbols-rounded text-lg">mic</span>
-                                                            <audio controls class="h-8 w-full"><source src="<%= msg.attachment.url %>"></audio>
-                                                        </div>
-                                                    <% } else if (msg.attachment.fileType === 'pdf') { %>
-                                                        <div class="flex items-center gap-2.5 p-2.5 rounded-xl <%= isMine ? 'bg-white/15' : 'bg-slate-100 dark:bg-slate-800' %>">
-                                                            <div class="size-8 rounded-lg bg-rose-500/15 text-rose-500 flex items-center justify-center shrink-0">
-                                                                <span class="material-symbols-rounded text-lg">picture_as_pdf</span>
-                                                            </div>
-                                                            <div class="min-w-0 flex-1">
-                                                                <p class="text-xs font-semibold truncate"><%= msg.attachment.fileName || 'Document.pdf' %></p>
-                                                                <p class="text-[10px] opacity-75"><%= msg.attachment.fileSize ? (msg.attachment.fileSize > 1048576 ? (msg.attachment.fileSize / 1048576).toFixed(1) + ' MB' : (msg.attachment.fileSize / 1024).toFixed(0) + ' KB') : 'PDF Document' %></p>
-                                                            </div>
-                                                            <a href="<%= msg.attachment.url %>" target="_blank" class="p-1 hover:opacity-80 shrink-0" title="Open PDF">
-                                                                <span class="material-symbols-rounded text-base">open_in_new</span>
-                                                            </a>
-                                                        </div>
-                                                    <% } else { %>
-                                                        <div class="flex items-center gap-2.5 p-2.5 rounded-xl <%= isMine ? 'bg-white/15' : 'bg-slate-100 dark:bg-slate-800' %>">
-                                                            <div class="size-8 rounded-lg bg-blue-500/15 text-blue-500 flex items-center justify-center shrink-0">
-                                                                <span class="material-symbols-rounded text-lg">description</span>
-                                                            </div>
-                                                            <div class="min-w-0 flex-1">
-                                                                <p class="text-xs font-semibold truncate"><%= msg.attachment.fileName || 'Attachment' %></p>
-                                                                <p class="text-[10px] opacity-75"><%= msg.attachment.fileSize ? (msg.attachment.fileSize > 1048576 ? (msg.attachment.fileSize / 1048576).toFixed(1) + ' MB' : (msg.attachment.fileSize / 1024).toFixed(0) + ' KB') : 'File' %></p>
-                                                            </div>
-                                                            <a href="<%= msg.attachment.url %>" download target="_blank" class="p-1 hover:opacity-80 shrink-0" title="Download">
-                                                                <span class="material-symbols-rounded text-base">download</span>
-                                                            </a>
-                                                        </div>
-                                                    <% } %>
-                                                </div>
-                                            <% } %>
-
-                                            <div class="flex items-center justify-end gap-1 mt-1 text-[10px] <%= isMine ? 'text-white/70' : 'text-slate-400' %>">
-                                                <span><%= timeStr %></span>
-                                                <% if (isMine) { %>
-                                                    <span class="material-symbols-rounded text-[12px]"><%= msg.isRead ? 'done_all' : 'done' %></span>
-                                                <% } %>
-                                            </div>
-                                        </div>
-                                    </div>
-                                <% }) %>
-                            <% } else { %>
-                                <div class="h-full flex flex-col items-center justify-center text-slate-400 py-16">
-                                    <div class="size-14 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-3">
-                                        <span class="material-symbols-rounded text-3xl">chat_bubble</span>
-                                    </div>
-                                    <p class="text-xs font-bold text-slate-700 dark:text-slate-300">No messages in this conversation yet</p>
-                                    <p class="text-[11px] text-slate-400 mt-1">Send a message below to begin direct communication with <%= activeContact.name %>.</p>
+                        <!-- Sticky Pinned Messages Banner -->
+                        <div id="portalPinnedBanner" class="hidden px-4 py-2 bg-amber-50/90 dark:bg-amber-950/30 border-b border-amber-200/80 dark:border-amber-800/60 flex items-center justify-between gap-3 shrink-0 z-10 transition-all">
+                            <div class="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1" onclick="scrollToCurrentPinnedMessage()">
+                                <div class="size-6 rounded-md bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                                    <span class="material-symbols-rounded text-sm">push_pin</span>
                                 </div>
-                            <% } %>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-[10.5px] font-bold text-amber-700 dark:text-amber-300">Pinned Message</span>
+                                        <span id="pinnedBannerAuthor" class="text-[9.5px] text-slate-500 dark:text-slate-400 truncate"></span>
+                                    </div>
+                                    <p id="pinnedBannerSnippet" class="text-[11px] text-slate-700 dark:text-slate-300 truncate font-medium leading-tight"></p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button type="button" onclick="unpinCurrentBannerMessage(event)" class="size-6.5 rounded-md text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 flex items-center justify-center transition-colors cursor-pointer" title="Unpin Message">
+                                    <span class="material-symbols-rounded text-sm">keep_off</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Chat Messages Container -->
+                        <div id="chatMessagesScroll" class="flex-1 overflow-y-auto chat-scroll p-4 sm:p-6 space-y-4">
+                            <!-- Rendered dynamically by renderConversationStream() for 100% interactive parity -->
                         </div>
 
                         <!-- Dedicated Shared Media & Files View Container inside Conversation Area -->
@@ -348,8 +290,26 @@
                             </div>
                         </div>
 
-                        <!-- Chat Input Box -->
+                        <!-- Chat Composer / Input Box Area -->
                         <div class="p-3 sm:p-4 bg-white dark:bg-[#0b1120] border-t border-slate-200/80 dark:border-slate-800 shrink-0">
+                            
+                            <!-- Staged Reply Bar -->
+                            <div id="portalStagedReplyBar" class="hidden max-w-5xl mx-auto mb-2 p-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/90 border-l-4 border-primary dark:border-primary flex items-center justify-between gap-3 animate-fade-in shadow-2xs">
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <span class="material-symbols-rounded text-primary text-base shrink-0">reply</span>
+                                    <div class="min-w-0">
+                                        <p class="text-[11px] font-bold text-primary flex items-center gap-1">
+                                            <span>Replying to</span>
+                                            <span id="stagedReplyAuthor"></span>
+                                        </p>
+                                        <p id="stagedReplyText" class="text-xs text-slate-600 dark:text-slate-300 truncate font-medium"></p>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="cancelPortalReply()" class="size-6 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center justify-center cursor-pointer transition-colors" title="Cancel Reply">
+                                    <span class="material-symbols-rounded text-sm">close</span>
+                                </button>
+                            </div>
+
                             <!-- Staged Attachment Bar -->
                             <div id="stagedAttachmentBar" class="hidden max-w-5xl mx-auto mb-2.5 p-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between gap-3 animate-fade-in">
                                 <div class="flex items-center gap-2.5 min-w-0">
@@ -442,21 +402,26 @@
     <script>
         const ACTIVE_CONTACT_ID = '<%= activeContact._id %>';
         const CURRENT_USER_ID = '<%= user._id %>';
+        const CURRENT_IS_SUPERADMIN = <%= Boolean(user.role === 'superadmin') %>;
         const BASE_PORTAL_PATH = '/admin';
 
         // Injected message data for active thread
         let ACTIVE_CONVERSATION_MESSAGES = <%- JSON.stringify(activeMessages || []) %>;
         let stagedUploadFile = null;
+        let currentPortalReplyTo = null;
 
         // Auto-scroll chat to bottom
-        function scrollChatToBottom() {
+        function scrollChatToBottom(smooth = false) {
             const container = document.getElementById('chatMessagesScroll');
             if (container) {
-                container.scrollTop = container.scrollHeight;
+                if (smooth) {
+                    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+                } else {
+                    container.scrollTop = container.scrollHeight;
+                }
             }
         }
-        scrollChatToBottom();
-        window.addEventListener('load', scrollChatToBottom);
+        window.addEventListener('load', () => scrollChatToBottom());
 
         // Helper: format bytes
         function formatBytes(bytes) {
@@ -466,7 +431,349 @@
             return bytes + ' B';
         }
 
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        function escapeJs(str) {
+            if (!str) return '';
+            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+        }
+
+        // ==========================================
+        // Full Interactive Stream Renderer
+        // ==========================================
+        function renderConversationStream() {
+            const container = document.getElementById('chatMessagesScroll');
+            if (!container) return;
+
+            if (!ACTIVE_CONVERSATION_MESSAGES || ACTIVE_CONVERSATION_MESSAGES.length === 0) {
+                container.innerHTML = `
+                    <div class="h-full flex flex-col items-center justify-center text-slate-400 py-16">
+                        <div class="size-14 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-3">
+                            <span class="material-symbols-rounded text-3xl">chat_bubble</span>
+                        </div>
+                        <p class="text-xs font-bold text-slate-700 dark:text-slate-300">No messages in this conversation yet</p>
+                        <p class="text-[11px] text-slate-400 mt-1">Send a message below to begin direct communication with <%= activeContact.name %>.</p>
+                    </div>
+                `;
+                updatePinnedBanner();
+                return;
+            }
+
+            let html = '';
+            ACTIVE_CONVERSATION_MESSAGES.forEach(msg => {
+                const isMine = String(msg.sender && (msg.sender._id || msg.sender)) === String(CURRENT_USER_ID);
+                const timeStr = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const isPinned = Boolean(msg.isPinned);
+                const likes = Array.isArray(msg.likes) ? msg.likes : [];
+                const likesCount = likes.length;
+                const isLikedByMe = likes.some(id => String(id) === String(CURRENT_USER_ID));
+                
+                const authorName = isMine ? 'You' : '<%= activeContact.name %>';
+                const msgSnippet = (msg.text || (msg.attachment ? (msg.attachment.fileName || msg.attachment.fileType) : 'Attachment')).substring(0, 80);
+                const fileType = msg.attachment ? (msg.attachment.fileType || '') : '';
+
+                // Quoted reply block
+                let replyQuoteHtml = '';
+                if (msg.replyTo && (msg.replyTo.messageId || msg.replyTo.text || msg.replyTo.fileType)) {
+                    const rSender = escapeHtml(msg.replyTo.senderName || 'Replied message');
+                    const rText = escapeHtml(msg.replyTo.text || (msg.replyTo.fileType ? ('[' + msg.replyTo.fileType + ']') : 'Attachment'));
+                    const targetId = msg.replyTo.messageId ? String(msg.replyTo.messageId) : '';
+                    replyQuoteHtml = `
+                        <div onclick="scrollToMessage('${targetId}')" class="cursor-pointer mb-2 px-2.5 py-1.5 rounded-xl border-l-2 ${isMine ? 'border-white/80 bg-white/20 text-white' : 'border-primary bg-slate-100 dark:bg-slate-800/90 text-slate-800 dark:text-slate-100'} text-[11px] select-none hover:opacity-90 transition-opacity">
+                            <div class="font-bold flex items-center gap-1 text-[10px]">
+                                <span class="material-symbols-rounded text-xs">reply</span>
+                                <span>${rSender}</span>
+                            </div>
+                            <div class="truncate opacity-80 text-[10px] mt-0.5">${rText}</div>
+                        </div>
+                    `;
+                }
+
+                // Text & Attachment
+                const textHtml = msg.text ? `<p class="leading-relaxed break-words whitespace-pre-wrap">${escapeHtml(msg.text)}</p>` : '';
+                const attHtml = renderAttachmentCardHtml(msg.attachment, isMine);
+
+                html += `
+                    <div id="msg-row-${msg._id}" class="flex flex-col ${isMine ? 'items-end' : 'items-start'} group transition-all duration-200 relative">
+                        <!-- Top meta info: Time & Pin icon -->
+                        <div class="flex items-center gap-1 mb-1 ${isMine ? 'mr-1' : 'ml-10'} select-none text-[9.5px] font-medium text-slate-400 dark:text-slate-500">
+                            ${isPinned ? '<span class="material-symbols-rounded text-xs text-amber-500 leading-none" title="Pinned message">push_pin</span>' : ''}
+                            <span>${timeStr}</span>
+                        </div>
+
+                        <!-- Message bubble + Hover Capsule Row -->
+                        <div class="flex items-start gap-2 max-w-[88%] sm:max-w-[75%] ${isMine ? 'flex-row-reverse' : ''}">
+                            ${!isMine ? `
+                                <div class="size-8 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0 mt-0.5 select-none">
+                                    <% if (activeContact.profilePicture || activeContact.profileImage) { %>
+                                        <img src="<%= activeContact.profilePicture || activeContact.profileImage %>" class="w-full h-full object-cover">
+                                    <% } else { %>
+                                        <div class="w-full h-full flex items-center justify-center font-bold text-[11px] text-slate-600 dark:text-slate-300">
+                                            <%= (activeContact.name || 'U').charAt(0).toUpperCase() %>
+                                        </div>
+                                    <% } %>
+                                </div>
+                            ` : ''}
+
+                            <!-- Bubble container with relative positioning for reaction badge -->
+                            <div class="relative max-w-full">
+                                <div class="px-4 py-2.5 rounded-2xl text-xs ${isMine ? 'bg-primary text-white rounded-br-xs shadow-xs' : 'bg-white dark:bg-[#0f172a] text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-800 rounded-bl-xs shadow-2xs'} ${isPinned ? 'ring-2 ring-amber-400/80' : ''}">
+                                    ${replyQuoteHtml}
+                                    ${textHtml}
+                                    ${attHtml}
+                                    <div class="flex items-center justify-end gap-1 mt-1 text-[10px] ${isMine ? 'text-white/70' : 'text-slate-400'}">
+                                        ${isMine ? `<span class="material-symbols-rounded text-[12px]">${msg.isRead ? 'done_all' : 'done'}</span>` : ''}
+                                    </div>
+                                </div>
+
+                                <!-- Floating Heart/Reaction Pill -->
+                                ${likesCount > 0 ? `
+                                    <button type="button" onclick="togglePortalLike('${msg._id}')" title="${isLikedByMe ? 'Unlike' : 'React with Love'}" class="absolute -bottom-2.5 ${isMine ? 'right-2' : 'left-2'} bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-md rounded-full px-1.5 py-0.5 flex items-center gap-1 text-[11px] font-bold z-10 cursor-pointer hover:scale-105 active:scale-95 transition-all select-none">
+                                        <span class="material-symbols-rounded text-sm text-rose-500 leading-none pointer-events-none">favorite</span>
+                                        ${likesCount > 1 ? `<span class="text-[10px] text-slate-700 dark:text-slate-200 font-semibold pointer-events-none">${likesCount}</span>` : ''}
+                                    </button>
+                                ` : ''}
+                            </div>
+
+                            <!-- Hover Action Capsule (Reply, React, Copy, More) -->
+                            <div class="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-xs border border-slate-200 dark:border-slate-700 rounded-full px-1.5 py-0.5 shadow-md shrink-0 select-none z-10 mt-1">
+                                <!-- Love / React -->
+                                <button type="button" onclick="togglePortalLike('${msg._id}')" title="${isLikedByMe ? 'Unlike' : 'React with Love'}" class="size-7 rounded-full ${isLikedByMe ? 'text-rose-500 bg-rose-50 dark:bg-rose-950/40' : 'text-slate-500 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-700'} flex items-center justify-center transition-all cursor-pointer active:scale-90">
+                                    <span class="material-symbols-rounded text-base leading-none pointer-events-none">favorite</span>
+                                </button>
+                                <!-- Reply -->
+                                <button type="button" onclick="initiatePortalReply('${msg._id}', '${escapeJs(authorName)}', '${escapeJs(msgSnippet)}', '${escapeJs(fileType)}')" title="Reply" class="size-7 rounded-full text-slate-500 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-all cursor-pointer active:scale-90">
+                                    <span class="material-symbols-rounded text-base leading-none pointer-events-none">reply</span>
+                                </button>
+                                <!-- Copy -->
+                                <button type="button" onclick="copyPortalMessageText('${msg._id}')" title="Copy text" class="size-7 rounded-full text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-all cursor-pointer active:scale-90">
+                                    <span id="copy-icon-${msg._id}" class="material-symbols-rounded text-base leading-none pointer-events-none">content_copy</span>
+                                </button>
+                                <!-- More Menu Toggle -->
+                                <div class="relative inline-block">
+                                    <button type="button" onclick="togglePortalMsgMenu('${msg._id}', event)" title="More options" class="size-7 rounded-full text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition-all cursor-pointer active:scale-90">
+                                        <span class="material-symbols-rounded text-base leading-none pointer-events-none">more_vert</span>
+                                    </button>
+                                    <div id="msg-menu-${msg._id}" class="portal-msg-menu hidden absolute ${isMine ? 'right-0' : 'left-0'} top-full mt-1.5 w-44 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 shadow-xl py-1 z-30 transition-all">
+                                        <button type="button" onclick="togglePortalPin('${msg._id}'); closeAllPortalMsgMenus();" class="w-full px-3 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-all cursor-pointer">
+                                            <span class="material-symbols-rounded text-base text-amber-500 leading-none">${isPinned ? 'keep_off' : 'push_pin'}</span>
+                                            <span>${isPinned ? 'Unpin message' : 'Pin message'}</span>
+                                        </button>
+                                        <button type="button" onclick="deletePortalMessage('${msg._id}', 'for_me'); closeAllPortalMsgMenus();" class="w-full px-3 py-1.5 text-left text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2 transition-all cursor-pointer">
+                                            <span class="material-symbols-rounded text-base text-slate-400 leading-none">delete_outline</span>
+                                            <span>Delete for me</span>
+                                        </button>
+                                        ${(isMine || CURRENT_IS_SUPERADMIN) ? `
+                                            <button type="button" onclick="deletePortalMessage('${msg._id}', 'for_everyone'); closeAllPortalMsgMenus();" class="w-full px-3 py-1.5 text-left text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 transition-all cursor-pointer">
+                                                <span class="material-symbols-rounded text-base text-rose-500 leading-none">delete_forever</span>
+                                                <span>Delete for everyone</span>
+                                            </button>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+            updatePinnedBanner();
+        }
+
+        // ==========================================
+        // Pinned Banner Controller
+        // ==========================================
+        let currentPinnedMessageId = null;
+        function updatePinnedBanner() {
+            const banner = document.getElementById('portalPinnedBanner');
+            const authorEl = document.getElementById('pinnedBannerAuthor');
+            const snippetEl = document.getElementById('pinnedBannerSnippet');
+            if (!banner) return;
+
+            const pinnedMsgs = (ACTIVE_CONVERSATION_MESSAGES || []).filter(m => Boolean(m.isPinned));
+            if (pinnedMsgs.length === 0) {
+                banner.classList.add('hidden');
+                currentPinnedMessageId = null;
+            } else {
+                const latestPinned = pinnedMsgs[pinnedMsgs.length - 1];
+                currentPinnedMessageId = String(latestPinned._id);
+                const isMine = String(latestPinned.sender && (latestPinned.sender._id || latestPinned.sender)) === String(CURRENT_USER_ID);
+                if (authorEl) authorEl.textContent = isMine ? '• by You' : '• by <%= activeContact.name %>';
+                if (snippetEl) snippetEl.textContent = latestPinned.text || (latestPinned.attachment ? ('[' + (latestPinned.attachment.fileType || 'Attachment') + '] ' + (latestPinned.attachment.fileName || '')) : 'Pinned message');
+                banner.classList.remove('hidden');
+            }
+        }
+
+        function scrollToCurrentPinnedMessage() {
+            if (currentPinnedMessageId) {
+                scrollToMessage(currentPinnedMessageId);
+            }
+        }
+
+        function unpinCurrentBannerMessage(e) {
+            if (e) e.stopPropagation();
+            if (currentPinnedMessageId) {
+                togglePortalPin(currentPinnedMessageId);
+            }
+        }
+
+        // Scroll to and highlight message
+        function scrollToMessage(msgId) {
+            if (!msgId) return;
+            const el = document.getElementById('msg-row-' + msgId);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.add('msg-highlight-pulse');
+                setTimeout(() => el.classList.remove('msg-highlight-pulse'), 1200);
+            }
+        }
+
+        // ==========================================
+        // Reply System Controller
+        // ==========================================
+        function initiatePortalReply(msgId, senderName, text, fileType) {
+            currentPortalReplyTo = { messageId: msgId, senderName, text, fileType };
+            const bar = document.getElementById('portalStagedReplyBar');
+            const authorEl = document.getElementById('stagedReplyAuthor');
+            const textEl = document.getElementById('stagedReplyText');
+            const input = document.getElementById('portalMessageInput');
+
+            if (authorEl) authorEl.textContent = senderName;
+            if (textEl) textEl.textContent = text || (fileType ? ('[' + fileType + ' attachment]') : 'Message');
+            if (bar) bar.classList.remove('hidden');
+
+            if (input) {
+                input.focus();
+            }
+        }
+
+        function cancelPortalReply() {
+            currentPortalReplyTo = null;
+            const bar = document.getElementById('portalStagedReplyBar');
+            if (bar) bar.classList.add('hidden');
+        }
+
+        // ==========================================
+        // Pin & React & Delete Actions
+        // ==========================================
+        async function togglePortalLike(msgId) {
+            try {
+                const res = await fetch('/api/messages/toggle-like', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messageId: msgId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    const msg = ACTIVE_CONVERSATION_MESSAGES.find(m => String(m._id) === String(msgId));
+                    if (msg) {
+                        msg.likes = data.likes || [];
+                        renderConversationStream();
+                    }
+                }
+            } catch (e) {
+                console.error('Error toggling like:', e);
+            }
+        }
+
+        async function togglePortalPin(msgId) {
+            try {
+                const res = await fetch('/api/messages/toggle-pin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messageId: msgId })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    const msg = ACTIVE_CONVERSATION_MESSAGES.find(m => String(m._id) === String(msgId));
+                    if (msg) {
+                        msg.isPinned = Boolean(data.isPinned);
+                        renderConversationStream();
+                    }
+                }
+            } catch (e) {
+                console.error('Error toggling pin:', e);
+            }
+        }
+
+        async function deletePortalMessage(msgId, type) {
+            const confirmMsg = type === 'for_everyone' ? 'Delete this message for everyone?' : 'Delete this message for you?';
+            const result = await Swal.fire({
+                title: 'Confirm Delete',
+                text: confirmMsg,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                confirmButtonText: 'Yes, delete it'
+            });
+
+            if (!result.isConfirmed) return;
+
+            try {
+                const res = await fetch('/api/messages/delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ messageId: msgId, type: type })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    if (type === 'for_everyone') {
+                        const msg = ACTIVE_CONVERSATION_MESSAGES.find(m => String(m._id) === String(msgId));
+                        if (msg) {
+                            msg.text = 'This message was deleted';
+                            msg.attachment = null;
+                            msg.deletedForEveryone = true;
+                        }
+                    } else {
+                        ACTIVE_CONVERSATION_MESSAGES = ACTIVE_CONVERSATION_MESSAGES.filter(m => String(m._id) !== String(msgId));
+                    }
+                    renderConversationStream();
+                    buildSharedMedia();
+                } else {
+                    Swal.fire('Error', data.error || 'Failed to delete message', 'error');
+                }
+            } catch (e) {
+                Swal.fire('Error', 'Network error deleting message', 'error');
+            }
+        }
+
+        function copyPortalMessageText(msgId) {
+            const msg = ACTIVE_CONVERSATION_MESSAGES.find(m => String(m._id) === String(msgId));
+            if (!msg) return;
+            const textToCopy = msg.text || (msg.attachment ? msg.attachment.url : '');
+            if (!textToCopy) return;
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const icon = document.getElementById('copy-icon-' + msgId);
+                if (icon) {
+                    icon.textContent = 'check';
+                    setTimeout(() => icon.textContent = 'content_copy', 1500);
+                }
+            }).catch(() => {});
+        }
+
+        function togglePortalMsgMenu(msgId, e) {
+            if (e) e.stopPropagation();
+            const targetMenu = document.getElementById('msg-menu-' + msgId);
+            const isHidden = targetMenu ? targetMenu.classList.contains('hidden') : true;
+            closeAllPortalMsgMenus();
+            if (targetMenu && isHidden) {
+                targetMenu.classList.remove('hidden');
+            }
+        }
+
+        function closeAllPortalMsgMenus() {
+            document.querySelectorAll('.portal-msg-menu').forEach(el => el.classList.add('hidden'));
+        }
+        document.addEventListener('click', closeAllPortalMsgMenus);
+
+        // ==========================================
         // Shared Media & Files Manager
+        // ==========================================
         function buildSharedMedia() {
             const photosVideos = [];
             const docs = [];
@@ -601,7 +908,6 @@
                 }
             }
         }
-        buildSharedMedia();
 
         // Toggle Shared Media View
         let isSharedMediaViewOpen = false;
@@ -609,6 +915,7 @@
             const mediaView = document.getElementById('sharedMediaView');
             const chatScroll = document.getElementById('chatMessagesScroll');
             const btn = document.getElementById('toggleSharedMediaBtn');
+            const pinnedBanner = document.getElementById('portalPinnedBanner');
             if (!mediaView || !chatScroll) return;
 
             if (typeof forceState === 'boolean') {
@@ -620,6 +927,7 @@
             if (isSharedMediaViewOpen) {
                 mediaView.classList.remove('hidden');
                 chatScroll.classList.add('hidden');
+                if (pinnedBanner) pinnedBanner.classList.add('hidden');
                 if (btn) {
                     btn.classList.add('bg-blue-600', 'text-white');
                     btn.classList.remove('bg-blue-50', 'text-blue-600', 'dark:bg-blue-900/20', 'dark:text-blue-400');
@@ -628,6 +936,7 @@
             } else {
                 mediaView.classList.add('hidden');
                 chatScroll.classList.remove('hidden');
+                updatePinnedBanner();
                 if (btn) {
                     btn.classList.remove('bg-blue-600', 'text-white');
                     btn.classList.add('bg-blue-50', 'text-blue-600', 'dark:bg-blue-900/20', 'dark:text-blue-400');
@@ -738,6 +1047,9 @@
                 formData.append('targetUserId', ACTIVE_CONTACT_ID);
                 if (text) formData.append('text', text);
                 if (stagedUploadFile) formData.append('file', stagedUploadFile);
+                if (currentPortalReplyTo) {
+                    formData.append('replyTo', JSON.stringify(currentPortalReplyTo));
+                }
 
                 const res = await fetch('/api/messages/send', {
                     method: 'POST',
@@ -747,10 +1059,11 @@
                 if (data.success) {
                     input.value = '';
                     clearStagedAttachment();
+                    cancelPortalReply();
                     ACTIVE_CONVERSATION_MESSAGES.push(data.message);
-                    appendMessageToThread(data.message, true);
+                    renderConversationStream();
                     buildSharedMedia();
-                    scrollChatToBottom();
+                    scrollChatToBottom(true);
                 } else {
                     Swal.fire('Error', data.error || 'Failed to send message', 'error');
                 }
@@ -824,37 +1137,9 @@
             }
         }
 
-        function appendMessageToThread(msg, isMine) {
-            const container = document.getElementById('chatMessagesScroll');
-            if (!container) return;
-
-            const timeStr = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            const row = document.createElement('div');
-            row.className = `flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 message-row`;
-            row.id = 'msg-row-' + (msg._id || Date.now());
-
-            const textHtml = msg.text ? `<p class="leading-relaxed break-words whitespace-pre-wrap">${escapeHtml(msg.text)}</p>` : '';
-            const attHtml = renderAttachmentCardHtml(msg.attachment, isMine);
-
-            row.innerHTML = `
-                ${!isMine ? `
-                    <div class="size-7 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0 mb-1">
-                        <div class="w-full h-full flex items-center justify-center font-bold text-[10px] text-slate-600 dark:text-slate-300">
-                            ${escapeHtml((msg.senderName || 'U').charAt(0).toUpperCase())}
-                        </div>
-                    </div>
-                ` : ''}
-                <div class="max-w-[85%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-xs ${isMine ? 'bg-primary text-white rounded-br-xs shadow-xs' : 'bg-white dark:bg-[#0f172a] text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-800 rounded-bl-xs shadow-2xs'}">
-                    ${textHtml}
-                    ${attHtml}
-                    <div class="flex items-center justify-end gap-1 mt-1 text-[10px] ${isMine ? 'text-white/70' : 'text-slate-400'}">
-                        <span>${timeStr}</span>
-                        ${isMine ? `<span class="material-symbols-rounded text-[12px]">done</span>` : ''}
-                    </div>
-                </div>
-            `;
-            container.appendChild(row);
-        }
+        // Initialize view render
+        renderConversationStream();
+        buildSharedMedia();
 
         // Socket.io real-time listener if available
         if (typeof io !== 'undefined') {
@@ -862,10 +1147,27 @@
             socket.on('message:new', (msg) => {
                 if (String(msg.sender) === ACTIVE_CONTACT_ID) {
                     ACTIVE_CONVERSATION_MESSAGES.push(msg);
-                    appendMessageToThread(msg, false);
+                    renderConversationStream();
                     buildSharedMedia();
-                    scrollChatToBottom();
+                    scrollChatToBottom(true);
                     fetch('/api/messages/mark-read/' + ACTIVE_CONTACT_ID, { method: 'POST' }).catch(() => {});
+                }
+            });
+
+            socket.on('message:like_updated', (data) => {
+                const msg = ACTIVE_CONVERSATION_MESSAGES.find(m => String(m._id) === String(data.messageId));
+                if (msg) {
+                    msg.likes = data.likes || [];
+                    renderConversationStream();
+                }
+            });
+
+            socket.on('message:pin_updated', (data) => {
+                const msg = ACTIVE_CONVERSATION_MESSAGES.find(m => String(m._id) === String(data.messageId));
+                if (msg) {
+                    msg.isPinned = Boolean(data.isPinned);
+                    renderConversationStream();
+                    updatePinnedBanner();
                 }
             });
         }
@@ -963,16 +1265,6 @@
                     resultsEl.innerHTML = '<div class="py-10 text-center text-rose-500 text-xs">Error searching users.</div>';
                 }
             }, 300);
-        }
-
-        function escapeHtml(str) {
-            if (!str) return '';
-            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-        }
-
-        function escapeJs(str) {
-            if (!str) return '';
-            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
         }
     </script>
 </body>
