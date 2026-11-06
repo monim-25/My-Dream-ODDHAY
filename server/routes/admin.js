@@ -4121,13 +4121,28 @@ router.get('/users', userManagementProtect, async (req, res) => {
             if (activity === 'active_7') {
                 const sevenDaysAgo = new Date();
                 sevenDaysAgo.setDate(now.getDate() - 7);
-                query.lastActive = { $gte: sevenDaysAgo };
+                query.$or = [
+                    { lastActive: { $gte: sevenDaysAgo } },
+                    { updatedAt: { $gte: sevenDaysAgo } }
+                ];
             } else if (activity === 'inactive_30') {
                 const thirtyDaysAgo = new Date();
                 thirtyDaysAgo.setDate(now.getDate() - 30);
-                query.$or = [
-                    { lastActive: { $lt: thirtyDaysAgo } },
-                    { lastActive: { $exists: false } }
+                query.$and = [
+                    {
+                        $or: [
+                            { lastActive: { $lt: thirtyDaysAgo } },
+                            { lastActive: { $exists: false } },
+                            { lastActive: null }
+                        ]
+                    },
+                    {
+                        $or: [
+                            { updatedAt: { $lt: thirtyDaysAgo } },
+                            { updatedAt: { $exists: false } },
+                            { updatedAt: null }
+                        ]
+                    }
                 ];
             }
         }
@@ -4179,9 +4194,23 @@ router.get('/users', userManagementProtect, async (req, res) => {
         statsResult.removed = removedCount;
         statsResult.newToday = newTodayCount;
 
+        const onlineUsersMap = req.app.get('onlineUsers');
+        const onlineUserIds = new Set();
+        if (onlineUsersMap) {
+            for (const u of onlineUsersMap.values()) {
+                if (u.userId) onlineUserIds.add(String(u.userId));
+            }
+        }
+
+        const enrichedUsers = users.map(u => ({
+            ...u,
+            isOnline: onlineUserIds.has(String(u._id)),
+            lastActive: u.lastActive || u.updatedAt || u.createdAt || null
+        }));
+
         res.render('admin/users', {
             user: req.session.user,
-            users,
+            users: enrichedUsers,
             stats: statsResult,
             guardiansCount: statsResult.guardians,
             filters: {

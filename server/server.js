@@ -155,6 +155,14 @@ app.use(async (req, res, next) => {
             ]);
             res.locals.unreadNotificationCount = notifCount;
             res.locals.unreadMessageCount = msgCount;
+
+            // Throttled Last Active update (every 2 minutes)
+            const nowMs = Date.now();
+            if (!req.session.lastActiveLogged || (nowMs - req.session.lastActiveLogged > 2 * 60 * 1000)) {
+                req.session.lastActiveLogged = nowMs;
+                const User = require('./models/User');
+                User.updateOne({ _id: uid }, { $set: { lastActive: new Date() } }).catch(() => {});
+            }
         } catch (e) {}
     }
 
@@ -491,6 +499,7 @@ setInterval(async () => {
 
 // ---- SOCKET.IO ----
 const onlineUsers = new Map();
+app.set('onlineUsers', onlineUsers);
 const lockedRooms = new Set();
 const Message = require('./models/Message');
 const raisedHandsByRoom = new Map();
@@ -503,6 +512,11 @@ io.on('connection', (socket) => {
         socket.join('global');
         socket.join(`user_${userId}`);
         io.emit('users:online', Array.from(onlineUsers.values()));
+
+        if (userId) {
+            const User = require('./models/User');
+            User.updateOne({ _id: userId }, { $set: { lastActive: new Date() } }).catch(() => {});
+        }
     });
 
     function updateRoomParticipantsCount(roomId) {
@@ -660,6 +674,10 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         const roomId = socket.currentRoom;
+        if (socket.userId) {
+            const User = require('./models/User');
+            User.updateOne({ _id: socket.userId }, { $set: { lastActive: new Date() } }).catch(() => {});
+        }
         onlineUsers.delete(socket.id);
         io.emit('users:online', Array.from(onlineUsers.values()));
         if (roomId) {

@@ -219,6 +219,9 @@ router.post('/login', authLimiter, async (req, res) => {
         req.session.userId = user._id.toString();
         req.session.isFirstLogin = true;
 
+        // Update lastActive immediately on login
+        User.updateOne({ _id: user._id }, { $set: { lastActive: new Date() } }).catch(() => {});
+
         req.session.save((err) => {
             if (err) return res.render('login', { error: `Session Error: ${err.message}` });
             // Force password change if admin reset it
@@ -296,7 +299,8 @@ router.post('/register', authLimiter, async (req, res) => {
             name: name.trim(),
             password,
             role: assignedRole,
-            loginCount: 1
+            loginCount: 1,
+            lastActive: new Date()
         };
         if (assignedRole !== 'parent' && classLevel) {
             userPayload.classLevel = classLevel.trim();
