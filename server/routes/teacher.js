@@ -471,6 +471,12 @@ router.get('/messages', teacherProtect, async (req, res) => {
                         stu.email = 'ODDHAY SuperAdmin';
                         stu.profilePicture = '/images/logo.png';
                         stu.profileImage = '/images/logo.png';
+                    } else if (stu.role === 'admin') {
+                        stu.name = 'Admin';
+                        stu.classLevel = 'Admin';
+                        stu.email = 'ODDHAY Admin';
+                        stu.profilePicture = '/images/logo.png';
+                        stu.profileImage = '/images/logo.png';
                     }
                     studentMap[stu._id.toString()].student = stu;
                 }
@@ -495,6 +501,12 @@ router.get('/messages', teacherProtect, async (req, res) => {
                 activeStudent.name = 'SuperAdmin';
                 activeStudent.classLevel = 'SuperAdmin';
                 activeStudent.email = 'ODDHAY SuperAdmin';
+                activeStudent.profilePicture = '/images/logo.png';
+                activeStudent.profileImage = '/images/logo.png';
+            } else if (activeStudent && activeStudent.role === 'admin') {
+                activeStudent.name = 'Admin';
+                activeStudent.classLevel = 'Admin';
+                activeStudent.email = 'ODDHAY Admin';
                 activeStudent.profilePicture = '/images/logo.png';
                 activeStudent.profileImage = '/images/logo.png';
             }

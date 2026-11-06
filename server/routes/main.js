@@ -5004,10 +5004,17 @@ router.get('/messages', protect, async (req, res) => {
             // Build map of latest message and unread count per contact
             const teacherMap = {};
             teachers.forEach(t => {
-                // If viewer is not superadmin and contact is superadmin, protect identity
+                // If viewer is not superadmin and contact is superadmin/admin, protect identity
                 if (user.role !== 'superadmin' && t.role === 'superadmin') {
                     t.name = 'SuperAdmin';
                     t.designation = 'SuperAdmin';
+                    t.teachingSubject = 'ODDHAY Authority';
+                    t.email = 'ODDHAY Support';
+                    t.profilePicture = '/images/logo.png';
+                    t.profileImage = '/images/logo.png';
+                } else if (user.role !== 'superadmin' && t.role === 'admin') {
+                    t.name = 'Admin';
+                    t.designation = 'Admin';
                     t.teachingSubject = 'ODDHAY Authority';
                     t.email = 'ODDHAY Support';
                     t.profilePicture = '/images/logo.png';
@@ -5049,6 +5056,13 @@ router.get('/messages', protect, async (req, res) => {
                         if (user.role !== 'superadmin' && activeTeacher.role === 'superadmin') {
                             activeTeacher.name = 'SuperAdmin';
                             activeTeacher.designation = 'SuperAdmin';
+                            activeTeacher.teachingSubject = 'ODDHAY Authority';
+                            activeTeacher.email = 'ODDHAY Support';
+                            activeTeacher.profilePicture = '/images/logo.png';
+                            activeTeacher.profileImage = '/images/logo.png';
+                        } else if (user.role !== 'superadmin' && activeTeacher.role === 'admin') {
+                            activeTeacher.name = 'Admin';
+                            activeTeacher.designation = 'Admin';
                             activeTeacher.teachingSubject = 'ODDHAY Authority';
                             activeTeacher.email = 'ODDHAY Support';
                             activeTeacher.profilePicture = '/images/logo.png';

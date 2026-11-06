@@ -183,13 +183,22 @@ router.get('/messages/thread/:targetUserId', protect, async (req, res) => {
         const currentUser = await User.findById(myId).select('role').lean();
         const isCurrentUserSuperAdmin = currentUser && currentUser.role === 'superadmin';
 
-        // Disguise SuperAdmin identity to standard recipients:
+        // Disguise SuperAdmin / Admin identity to standard recipients:
         // Do not reveal superadmin's personal username/name to other users; always show 'SuperAdmin'
+        // If admin sent message to anyone except superadmin: show 'Admin'
         const sanitizedMessages = messages.map(m => {
-            if (!isCurrentUserSuperAdmin && m.senderRole === 'superadmin') {
+            const isMe = String(m.sender) === String(myId);
+            if (!isCurrentUserSuperAdmin && m.senderRole === 'superadmin' && !isMe) {
                 return {
                     ...m,
                     senderName: 'SuperAdmin',
+                    userAvatar: '/images/logo.png'
+                };
+            }
+            if (!isCurrentUserSuperAdmin && m.senderRole === 'admin' && !isMe) {
+                return {
+                    ...m,
+                    senderName: 'Admin',
                     userAvatar: '/images/logo.png'
                 };
             }
@@ -342,8 +351,20 @@ router.post('/messages/send', protect, (req, res, next) => {
 
         const roomKey = [myId.toString(), targetUserId.toString()].sort().join('_');
         const isSenderSuperAdmin = sender.role === 'superadmin';
-        const senderDisplayName = isSenderSuperAdmin ? 'SuperAdmin' : sender.name;
-        const senderDisplayAvatar = isSenderSuperAdmin ? '/images/logo.png' : (sender.profilePicture || sender.profileImage || null);
+        const isSenderAdmin = sender.role === 'admin';
+        const isReceiverSuperAdmin = receiver.role === 'superadmin';
+
+        let senderDisplayName = sender.name;
+        let senderDisplayAvatar = sender.profilePicture || sender.profileImage || null;
+
+        if (isSenderSuperAdmin) {
+            senderDisplayName = 'SuperAdmin';
+            senderDisplayAvatar = '/images/logo.png';
+        } else if (isSenderAdmin && !isReceiverSuperAdmin) {
+            // Admin sending message to anyone except superadmin: show 'Admin'
+            senderDisplayName = 'Admin';
+            senderDisplayAvatar = '/images/logo.png';
+        }
 
         const newMsg = await Message.create({
             sender: sender._id,
@@ -388,6 +409,9 @@ router.post('/messages/send', protect, (req, res, next) => {
                 const socketMsg = newMsg.toObject ? newMsg.toObject() : { ...newMsg };
                 if (isSenderSuperAdmin && receiver.role !== 'superadmin') {
                     socketMsg.senderName = 'SuperAdmin';
+                    socketMsg.userAvatar = '/images/logo.png';
+                } else if (isSenderAdmin && receiver.role !== 'superadmin') {
+                    socketMsg.senderName = 'Admin';
                     socketMsg.userAvatar = '/images/logo.png';
                 }
                 io.to(`user_${receiver._id}`).emit('message:new', socketMsg);
