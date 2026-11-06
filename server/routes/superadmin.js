@@ -4029,6 +4029,10 @@ router.get('/users', superAdminProtect, async (req, res) => {
         statsResult.newToday = newTodayCount;
 
         const onlineUsersMap = req.app.get('onlineUsers');
+        const userLastSeenMap = req.app.get('userLastSeen');
+        const currentViewerId = req.session && (req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null));
+        const currentViewerIdStr = currentViewerId ? String(currentViewerId) : null;
+
         const onlineUserIds = new Set();
         if (onlineUsersMap) {
             for (const u of onlineUsersMap.values()) {
@@ -4036,11 +4040,35 @@ router.get('/users', superAdminProtect, async (req, res) => {
             }
         }
 
-        const enrichedUsers = users.map(u => ({
-            ...u,
-            isOnline: onlineUserIds.has(String(u._id)),
-            lastActive: u.lastActive || u.updatedAt || u.createdAt || null
-        }));
+        const enrichedUsers = users.map(u => {
+            const uId = String(u._id);
+            const memLastSeen = userLastSeenMap ? userLastSeenMap.get(uId) : null;
+            let effectiveLastActive = null;
+            if (memLastSeen) {
+                effectiveLastActive = new Date(memLastSeen);
+            } else if (u.lastActive) {
+                effectiveLastActive = new Date(u.lastActive);
+            }
+
+            // Real Live Online Status:
+            // 1. Current viewer viewing this dashboard is online right now
+            // 2. User has an active socket connection
+            // 3. User had activity within the last 4 minutes (240s)
+            let isOnline = false;
+            if (currentViewerIdStr && uId === currentViewerIdStr) {
+                isOnline = true;
+            } else if (onlineUserIds.has(uId)) {
+                isOnline = true;
+            } else if (effectiveLastActive && (Date.now() - effectiveLastActive.getTime() < 4 * 60 * 1000)) {
+                isOnline = true;
+            }
+
+            return {
+                ...u,
+                isOnline,
+                lastActive: effectiveLastActive
+            };
+        });
 
         res.render('superadmin/users', {
             user: req.session.user || { name: 'Super Admin', role: 'superadmin' },

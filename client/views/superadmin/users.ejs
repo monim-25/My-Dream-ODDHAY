@@ -164,9 +164,9 @@
                                             <td class="px-4 py-3 text-center whitespace-nowrap">
                                                 <% 
                                                     let actLabel = 'Never';
-                                                    let actBadge = 'text-slate-400 dark:text-slate-500 bg-slate-100/50 dark:bg-slate-800/40 border border-transparent';
+                                                    let actBadge = 'text-slate-400 dark:text-slate-500 bg-slate-100/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60';
                                                     let actDot = 'bg-slate-300 dark:bg-slate-600';
-                                                    let fullTitle = 'No activity recorded';
+                                                    let fullTitle = 'Never active on platform';
 
                                                     if (u.isOnline) {
                                                         actLabel = 'Online now';
@@ -178,10 +178,11 @@
                                                         if (!isNaN(aDate.getTime())) {
                                                             fullTitle = 'Last active: ' + aDate.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                                                             const diffSec = Math.floor((Date.now() - aDate.getTime()) / 1000);
-                                                            if (diffSec < 180) {
-                                                                actLabel = 'Just now';
+                                                            if (diffSec < 240) {
+                                                                actLabel = 'Online now';
                                                                 actBadge = 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20';
-                                                                actDot = 'bg-emerald-500';
+                                                                actDot = 'bg-emerald-500 animate-pulse';
+                                                                fullTitle = 'Currently active on platform';
                                                             } else if (diffSec < 3600) {
                                                                 actLabel = Math.floor(diffSec / 60) + 'm ago';
                                                                 actBadge = 'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700';
@@ -206,9 +207,9 @@
                                                         }
                                                     }
                                                 %>
-                                                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold <%= actBadge %>" title="<%= fullTitle %>">
+                                                <span class="activity-badge inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold <%= actBadge %>" title="<%= fullTitle %>" data-time="<%= u.lastActive ? new Date(u.lastActive).toISOString() : '' %>" data-online="<%= u.isOnline ? 'true' : 'false' %>">
                                                     <span class="size-1.5 rounded-full <%= actDot %> shrink-0"></span>
-                                                    <span><%= actLabel %></span>
+                                                    <span class="activity-label"><%= actLabel %></span>
                                                 </span>
                                             </td>
                                             <td class="pr-4 py-3 text-right">
@@ -475,6 +476,45 @@
             const sidebar = document.getElementById('adminSidebar');
             sidebar.classList.toggle('-translate-x-full');
         }
+
+        // Live heartbeat and dynamic relative timestamp updates for users table
+        (function() {
+            // Keep session active while viewing users list
+            setInterval(function() {
+                if (!document.hidden) {
+                    fetch('/api/notifications/unread-count').catch(function() {});
+                }
+            }, 30000);
+
+            // Dynamically refresh relative time labels without full reload
+            function updateActivityBadges() {
+                var badges = document.querySelectorAll('.activity-badge');
+                var now = Date.now();
+                badges.forEach(function(badge) {
+                    var isOnline = badge.getAttribute('data-online') === 'true';
+                    var timeStr = badge.getAttribute('data-time');
+                    if (isOnline) return; // stays Online now
+                    if (!timeStr) return; // stays Never
+                    var date = new Date(timeStr);
+                    if (isNaN(date.getTime())) return;
+                    var diffSec = Math.floor((now - date.getTime()) / 1000);
+                    var label = badge.querySelector('.activity-label');
+                    if (!label) return;
+                    if (diffSec < 240) {
+                        label.textContent = 'Online now';
+                    } else if (diffSec < 3600) {
+                        label.textContent = Math.floor(diffSec / 60) + 'm ago';
+                    } else if (diffSec < 86400) {
+                        label.textContent = Math.floor(diffSec / 3600) + 'h ago';
+                    } else if (diffSec < 86400 * 2) {
+                        label.textContent = 'Yesterday';
+                    } else if (diffSec < 86400 * 7) {
+                        label.textContent = Math.floor(diffSec / 86400) + 'd ago';
+                    }
+                });
+            }
+            setInterval(updateActivityBadges, 20000);
+        })();
     </script>
 </body>
 

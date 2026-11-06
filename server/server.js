@@ -130,6 +130,10 @@ let cachedAcademicClasses = null;
 let lastAcademicCacheTime = 0;
 const ACADEMIC_CACHE_TTL = 10 * 60 * 1000;
 
+// In-memory active user activity tracking (instant zero-latency access across routes)
+const userLastSeen = new Map();
+app.set('userLastSeen', userLastSeen);
+
 app.use(async (req, res, next) => {
     res.locals.user = req.session.user || null;
     res.locals.SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || 'monimmdmonim41@gmail.com').toLowerCase().trim();
@@ -137,6 +141,9 @@ app.use(async (req, res, next) => {
     res.locals.unreadMessageCount = 0;
 
     const uid = req.session && (req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null));
+    if (uid) {
+        userLastSeen.set(String(uid), Date.now());
+    }
     if (uid && mongoose.connection.readyState === 1) {
         try {
             if (!res.locals.user || !res.locals.user.email) {
@@ -156,12 +163,13 @@ app.use(async (req, res, next) => {
             res.locals.unreadNotificationCount = notifCount;
             res.locals.unreadMessageCount = msgCount;
 
-            // Throttled Last Active update (every 2 minutes)
+            // Throttled Last Active update in DB (every 60 seconds)
             const nowMs = Date.now();
-            if (!req.session.lastActiveLogged || (nowMs - req.session.lastActiveLogged > 2 * 60 * 1000)) {
+            if (!req.session.lastActiveLogged || (nowMs - req.session.lastActiveLogged > 60 * 1000)) {
                 req.session.lastActiveLogged = nowMs;
                 const User = require('./models/User');
                 User.updateOne({ _id: uid }, { $set: { lastActive: new Date() } }).catch(() => {});
+                if (req.session.user) req.session.user.lastActive = new Date();
             }
         } catch (e) {}
     }
@@ -514,6 +522,7 @@ io.on('connection', (socket) => {
         io.emit('users:online', Array.from(onlineUsers.values()));
 
         if (userId) {
+            userLastSeen.set(String(userId), Date.now());
             const User = require('./models/User');
             User.updateOne({ _id: userId }, { $set: { lastActive: new Date() } }).catch(() => {});
         }
@@ -675,6 +684,7 @@ io.on('connection', (socket) => {
     socket.on('disconnect', () => {
         const roomId = socket.currentRoom;
         if (socket.userId) {
+            userLastSeen.set(String(socket.userId), Date.now());
             const User = require('./models/User');
             User.updateOne({ _id: socket.userId }, { $set: { lastActive: new Date() } }).catch(() => {});
         }
