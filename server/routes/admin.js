@@ -5035,6 +5035,7 @@ router.get('/messages', adminProtect, async (req, res) => {
 
         res.render('admin/messages', {
             user,
+            isSuperAdmin: Boolean(user.role === 'superadmin'),
             active: 'messages',
             contacts,
             activeContact,

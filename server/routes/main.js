@@ -4972,7 +4972,7 @@ router.get('/messages', protect, async (req, res) => {
                 teachers = teachers.concat(otherStaff);
             }
 
-            // Find all direct messages between this student and teachers
+            // Find all direct messages between this student and teachers/staff
             const allMessages = await Message.find({
                 $or: [
                     { sender: user._id },
@@ -4980,9 +4980,39 @@ router.get('/messages', protect, async (req, res) => {
                 ]
             }).sort({ createdAt: -1 }).lean();
 
-            // Build map of latest message and unread count per teacher
+            // Collect any external contact IDs (such as SuperAdmin or Admin) who messaged
+            const knownIds = new Set(teachers.map(t => t._id.toString()));
+            const missingContactIds = [];
+            allMessages.forEach(msg => {
+                if (!msg || !msg.sender) return;
+                const sId = (msg.sender._id || msg.sender).toString();
+                const rId = msg.receiver ? (msg.receiver._id || msg.receiver).toString() : null;
+                const oId = sId === user._id.toString() ? rId : sId;
+                if (oId && !knownIds.has(oId)) {
+                    knownIds.add(oId);
+                    missingContactIds.push(oId);
+                }
+            });
+
+            if (missingContactIds.length > 0) {
+                const extraContacts = await User.find({ _id: { $in: missingContactIds } })
+                    .select('name teachingSubject designation profilePicture profileImage email lastActive classLevel role')
+                    .lean();
+                teachers = teachers.concat(extraContacts);
+            }
+
+            // Build map of latest message and unread count per contact
             const teacherMap = {};
             teachers.forEach(t => {
+                // If viewer is not superadmin and contact is superadmin, protect identity
+                if (user.role !== 'superadmin' && t.role === 'superadmin') {
+                    t.name = 'SuperAdmin';
+                    t.designation = 'SuperAdmin';
+                    t.teachingSubject = 'ODDHAY Authority';
+                    t.email = 'ODDHAY Support';
+                    t.profilePicture = '/images/logo.png';
+                    t.profileImage = '/images/logo.png';
+                }
                 teacherMap[t._id.toString()] = {
                     teacher: t,
                     latestMessage: null,
@@ -5015,7 +5045,17 @@ router.get('/messages', protect, async (req, res) => {
                 activeTeacher = teachers.find(t => t._id.toString() === requestedTargetId) || null;
                 if (!activeTeacher) {
                     activeTeacher = await User.findById(requestedTargetId).select('name teachingSubject designation profilePicture profileImage email lastActive classLevel role').lean();
-                    if (activeTeacher) teachers.unshift(activeTeacher);
+                    if (activeTeacher) {
+                        if (user.role !== 'superadmin' && activeTeacher.role === 'superadmin') {
+                            activeTeacher.name = 'SuperAdmin';
+                            activeTeacher.designation = 'SuperAdmin';
+                            activeTeacher.teachingSubject = 'ODDHAY Authority';
+                            activeTeacher.email = 'ODDHAY Support';
+                            activeTeacher.profilePicture = '/images/logo.png';
+                            activeTeacher.profileImage = '/images/logo.png';
+                        }
+                        teachers.unshift(activeTeacher);
+                    }
                 }
             } else {
                 activeTeacher = null;
