@@ -5,6 +5,9 @@ const os = require('os');
 const { connectDB, protect, adminProtect, adminOnlyProtect, financeProtect, userManagementProtect, superAdminProtect, contentAdminProtect, User, Course, Quiz, Note, QuestionBank, QA, Notification, Payment, SystemLog, VideoAsset } = require('../config');
 const { processUploadedFile, processUploadedFiles } = require('../services/cloudinaryService');
 const Question = require('../models/Question');
+const Topic = require('../models/Topic');
+const AcademicClass = require('../models/AcademicClass');
+const AIKnowledge = require('../models/AIKnowledge');
 const { sendPaymentApprovalEmail, sendStaffInviteEmail, sendPasswordResetNotificationEmail } = require('../services/emailService');
 
 // Helper to log system activity
@@ -4358,16 +4361,34 @@ router.post('/users/:id/password', userManagementProtect, async (req, res) => {
 const handleAdminUserUpdate = async (req, res) => {
     try {
         await connectDB();
-        const { role, status, action, classLevel, teachingSubject } = req.body;
+        const { role, status, action, classLevel, teachingSubject, designation } = req.body;
         const updates = {};
-        if (classLevel !== undefined) {
+        if (designation !== undefined) updates.designation = String(designation).trim();
+
+        if (req.body.assignedClasses !== undefined) {
+            let clsList = Array.isArray(req.body.assignedClasses) 
+                ? req.body.assignedClasses 
+                : String(req.body.assignedClasses).split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
+            clsList = clsList.map(s => s.replace(/\bclass\s+class\b/gi, 'Class').trim()).filter(Boolean);
+            updates.assignedClasses = clsList;
+            updates.classes = clsList;
+            updates.classLevel = clsList.join(', ');
+        } else if (classLevel !== undefined) {
             const cleanCls = String(classLevel).replace(/\bclass\s+class\b/gi, 'Class').trim();
             updates.classLevel = cleanCls;
             const clsArray = cleanCls.split(/[,;/]+/).map(s => s.trim().replace(/\bclass\s+class\b/gi, 'Class')).filter(Boolean);
             updates.assignedClasses = clsArray;
             updates.classes = clsArray;
         }
-        if (teachingSubject !== undefined) {
+
+        if (req.body.teachingSubjects !== undefined) {
+            let subList = Array.isArray(req.body.teachingSubjects)
+                ? req.body.teachingSubjects
+                : String(req.body.teachingSubjects).split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
+            updates.teachingSubjects = subList;
+            updates.teachingSubject = subList.join(', ');
+            updates.subject = subList.join(', ');
+        } else if (teachingSubject !== undefined) {
             const cleanSub = String(teachingSubject).trim();
             updates.teachingSubject = cleanSub;
             const subArray = cleanSub.split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
@@ -4676,24 +4697,12 @@ router.get('/user/:id', adminProtect, async (req, res) => {
         
         // 1. Fetch User with populated enrollments and quiz results
         let targetUser = await User.findById(req.params.id)
-            .populate('enrolledCourses.course', 'title subject classLevel accessType category')
+            .populate('enrolledCourses.course', 'title subject classLevel accessType category thumbnail')
             .populate('quizResults.quiz', 'title course')
             .lean();
             
         if (!targetUser) {
-            // Demo Fallback for UI Testing with fake IDs
-            targetUser = {
-                _id: req.params.id,
-                name: "Demo Guardian Profile",
-                role: "guardian",
-                email: "demo.guardian@oddhay.com",
-                phone: "+880 1700 000000",
-                students: ["507f1f77bcf86cd799439021", "507f1f77bcf86cd799439022"], // Mock IDs
-                status: 'active',
-                createdAt: new Date(Date.now() - 86400000 * 400), // ~1.1 years ago
-                totalXP: 0
-            };
-            console.log(`[Demo Mode] Injecting mock user for ID: ${req.params.id}`);
+            return res.status(404).send('User not found');
         }
 
         // 2. Fetch Payment History
@@ -4702,14 +4711,11 @@ router.get('/user/:id', adminProtect, async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
-        // 3. Fetch Activity Logs (for staff/teachers)
-        let logs = [];
-        if (['superadmin', 'admin', 'teacher'].includes(targetUser.role)) {
-            logs = await SystemLog.find({ performedBy: targetUser._id })
-                .sort({ createdAt: -1 })
-                .limit(20)
-                .lean();
-        }
+        // 3. Fetch Activity Logs
+        let logs = await SystemLog.find({ performedBy: targetUser._id })
+            .sort({ createdAt: -1 })
+            .limit(50)
+            .lean();
 
         // 4. Calculate Key Metrics
         const totalSpend = payments
@@ -4725,40 +4731,86 @@ router.get('/user/:id', adminProtect, async (req, res) => {
             avgExamScore = (totalPercentage / targetUser.quizResults.length).toFixed(1);
         }
 
+        // 5. Pre-assigned Academic Classes (for subject & class assignment dropdowns)
+        const academicClasses = await AcademicClass.find({ isArchived: { $ne: true } }).sort({ order: 1 }).lean();
+
         let teacherStats = null;
+        let teacherCourses = [];
+        let teacherTopics = [];
+        let teacherQuizzes = [];
+
         if (targetUser.role === 'teacher') {
-            const questionsAdded = await Question.countDocuments({ addedBy: targetUser._id });
-            const questionsAnswered = await QA.countDocuments({ answeredBy: targetUser._id });
-            const notesAdded = await Note.countDocuments({ addedBy: targetUser._id });
-            const coursesMentored = await Course.countDocuments({ instructor: targetUser._id });
-            
-            const teacherCourses = await Course.find({ instructor: targetUser._id }).lean();
+            const [
+                questionsAdded,
+                questionsAnswered,
+                notesAdded,
+                courses,
+                topics,
+                quizzes
+            ] = await Promise.all([
+                Question.countDocuments({ addedBy: targetUser._id }),
+                QA.countDocuments({ answeredBy: targetUser._id }),
+                Note.countDocuments({ addedBy: targetUser._id }),
+                Course.find({ instructor: targetUser._id }).sort({ createdAt: -1 }).lean(),
+                Topic.find({ submittedBy: targetUser._id }).sort({ createdAt: -1 }).lean(),
+                Quiz.find({ addedBy: targetUser._id }).populate('course', 'title').sort({ createdAt: -1 }).lean()
+            ]);
+
+            teacherCourses = courses;
+            teacherTopics = topics;
+            teacherQuizzes = quizzes;
+
             let classesTaken = 0;
-            teacherCourses.forEach(c => {
+            courses.forEach(c => {
                 c.chapters?.forEach(ch => {
                     classesTaken += (ch.recordedClasses?.length || 0) + (ch.liveClasses?.length || 0);
                 });
             });
-            
+
             teacherStats = {
                 questionsAdded,
                 questionsAnswered,
                 notesAdded,
                 classesTaken,
-                coursesMentored
+                coursesMentored: courses.length,
+                topicsCount: topics.length,
+                quizzesCount: quizzes.length
             };
         }
 
         let adminStats = null;
+        let adminCourses = [];
+        let adminReviewedTopics = [];
+        let adminAiKnowledge = [];
+        let adminUserActions = [];
+
         if (targetUser.role === 'admin' || targetUser.role === 'superadmin') {
-            const createdCourses = await Course.find({ addedBy: targetUser._id }).select('title subject classLevel createdAt').lean();
-            const integratedUsers = await User.find({ addedBy: targetUser._id }).select('name role email createdAt').lean();
-            
+            const [
+                createdCourses,
+                reviewedTopics,
+                aiKnowledge,
+                userActions
+            ] = await Promise.all([
+                Course.find({ addedBy: targetUser._id }).select('title subject classLevel accessType thumbnail createdAt').sort({ createdAt: -1 }).lean(),
+                Topic.find({ reviewedBy: targetUser._id }).select('name code classLevel subject chapter status reviewedAt createdAt').sort({ reviewedAt: -1, createdAt: -1 }).lean(),
+                AIKnowledge.find({ createdBy: targetUser._id }).select('title classLevel subject createdAt').sort({ createdAt: -1 }).lean(),
+                SystemLog.find({ performedBy: targetUser._id, action: { $in: ['CREATE_USER', 'UPDATE', 'CHANGE_ROLE', 'DELETE_USER', 'BULK_ACTION'] } }).sort({ createdAt: -1 }).limit(30).lean()
+            ]);
+
+            adminCourses = createdCourses;
+            adminReviewedTopics = reviewedTopics;
+            adminAiKnowledge = aiKnowledge;
+            adminUserActions = userActions;
+
             adminStats = {
                 createdCourses,
-                integratedUsers,
+                reviewedTopics,
+                aiKnowledge,
+                userActions,
                 totalCourses: createdCourses.length,
-                totalIntegrated: integratedUsers.length
+                totalReviewedTopics: reviewedTopics.length,
+                totalAiKnowledge: aiKnowledge.length,
+                totalUserActions: userActions.length
             };
         }
 
@@ -4774,83 +4826,27 @@ router.get('/user/:id', adminProtect, async (req, res) => {
             };
         }
 
-        // --- FAKE DATA FOR TESTING ---
-        if (payments.length === 0) {
-            payments = [
-                { transactionId: 'TXN782190', course: { title: 'Advanced Chemistry' }, amount: 1500, status: 'success', paymentMethod: 'bkash', createdAt: new Date() },
-                { transactionId: 'TXN442101', course: { title: 'Mastering Physics' }, amount: 1200, status: 'pending', paymentMethod: 'nagad', createdAt: new Date() },
-                { transactionId: 'TXN310294', course: { title: 'Organic Chemistry 101' }, amount: 800, status: 'failed', paymentMethod: 'rocket', createdAt: new Date() }
-            ];
-        }
-        if (logs.length === 0) {
-            logs = [
-                { action: 'UPDATE', actionDetails: 'Changed profile picture', entityType: 'user', createdAt: new Date() },
-                { action: 'CREATE', actionDetails: 'Uploaded new chemistry notes', entityType: 'note', createdAt: new Date() },
-                { action: 'DELETE', actionDetails: 'Removed invalid question from set', entityType: 'question', createdAt: new Date() }
-            ];
-        }
-        if (!targetUser.enrolledCourses || targetUser.enrolledCourses.length === 0) {
-            targetUser.enrolledCourses = [
-                { course: { title: 'Introduction to Biology', subject: 'Biology', classLevel: 'Class 9' }, progress: 75 },
-                { course: { title: 'Mathematics Fundamentals', subject: 'Math', classLevel: 'Class 8' }, progress: 40 }
-            ];
-        }
-        if (!targetUser.quizResults || targetUser.quizResults.length === 0) {
-            targetUser.quizResults = [
-                { quiz: { title: 'Mid-term Biology Exam' }, score: 45, total: 50, date: new Date() },
-                { quiz: { title: 'Surprise Math Quiz' }, score: 12, total: 20, date: new Date() }
-            ];
-        }
-        if (targetUser.role === 'teacher') {
-            if (!targetUser.designation) targetUser.designation = "Senior Physics Instructor";
-            if (!targetUser.experience) targetUser.experience = "12+ Years of Teaching Experience";
-            if (!targetUser.education) targetUser.education = "B.Sc & M.Sc in Applied Physics, University of Dhaka";
-            if (!targetUser.bio) targetUser.bio = "A passionate educator dedicated to simplifying complex physics concepts for HSC candidates. Previously served as the head of the science department at a reputed college. Believes in practical, real-world examples to make learning interactive and fun.";
-            if (!targetUser.achievements) targetUser.achievements = "🏆 Best Faculty Award 2022\n📚 Author of 'Physics Made Easy' reference book\n🌟 Mentored 500+ students to achieve A+ in board exams";
-            
-            // New Fields
-            if (!targetUser.presentAddress) targetUser.presentAddress = "House 12, Road 5, Dhanmondi, Dhaka 1205";
-            if (!targetUser.permanentAddress) targetUser.permanentAddress = "Village: Palashpur, Post: Amtali, District: Barishal";
-            if (!targetUser.schoolName) targetUser.schoolName = "Barishal Zilla School";
-            if (!targetUser.collegeName) targetUser.collegeName = "Notre Dame College, Dhaka";
-            if (!targetUser.universityName) targetUser.universityName = "University of Dhaka";
-            if (!targetUser.sscGpa) targetUser.sscGpa = "5.00";
-            if (!targetUser.hscGpa) targetUser.hscGpa = "5.00";
-            if (!targetUser.cgpa) targetUser.cgpa = "3.85";
-            if (!targetUser.phone) targetUser.phone = "+880 1711 223344";
-            
-            // Fake Performance & Ratings
-            targetUser.rating = 4.8;
-            targetUser.totalReviews = 124;
-            
-            targetUser.performance = {
-                accuracyRate: 98.5,
-                reportedQuestions: 3,
-                avgResolutionTime: "2.4 Hours",
-                contentScore: 92
-            };
-            
-            targetUser.reviews = [
-                { studentName: "Rafiqul Islam", avatar: "R", rating: 5, date: new Date(Date.now() - 2 * 86400000), comment: "Sir explains everything so clearly. The complex vector math felt so easy after attending his live class!" },
-                { studentName: "Sumaiya Akhter", avatar: "S", rating: 5, date: new Date(Date.now() - 5 * 86400000), comment: "The physics notes provided are top-notch. Highly recommended for HSC candidates." },
-                { studentName: "Tanvir Ahmed", avatar: "T", rating: 4, date: new Date(Date.now() - 12 * 86400000), comment: "Great teaching style, but sometimes classes run a bit longer than scheduled." }
-            ];
-        }
-        // --- END FAKE DATA ---
-
         res.render('admin/user-details', {
             user: req.session.user, // Current logged-in admin
             targetUser,
             payments,
             logs,
             stats: {
-                totalSpend: payments.reduce((sum, p) => sum + (p.amount || 0), 0),
-                avgExamScore: avgExamScore || 85.5,
+                totalSpend,
+                avgExamScore,
                 totalExams: targetUser.quizResults ? targetUser.quizResults.length : 0,
                 totalEnrollments: targetUser.enrolledCourses ? targetUser.enrolledCourses.length : 0
             },
+            academicClasses,
             teacherStats,
+            teacherCourses,
+            teacherTopics,
+            teacherQuizzes,
             adminStats,
+            adminCourses,
+            adminReviewedTopics,
+            adminAiKnowledge,
+            adminUserActions,
             guardianStats,
             active: 'users'
         });
