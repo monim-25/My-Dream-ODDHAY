@@ -43,6 +43,92 @@ router.param('qid', validateObjectId);
 // Enforce admin protection for all routes in this router
 router.use(adminProtect);
 
+// Middleware: Enforce mandatory academic & address details for Admin on first login
+router.use(async (req, res, next) => {
+    if (req.session && req.session.user && req.session.user.role === 'admin') {
+        try {
+            const path = req.path;
+            const isWhitelisted = path === '/onboarding-profile' || path.startsWith('/profile/avatar') || path === '/logout';
+            if (!isWhitelisted) {
+                const freshUser = await User.findById(req.session.user._id).select('isProfileSetupComplete schoolName collegeName universityName presentAddress permanentAddress').lean();
+                const hasAcademics = Boolean(freshUser && (freshUser.isProfileSetupComplete || (freshUser.schoolName && freshUser.collegeName && freshUser.universityName && freshUser.presentAddress && freshUser.permanentAddress)));
+                if (!hasAcademics) {
+                    return res.redirect('/admin/onboarding-profile');
+                }
+            }
+        } catch (e) {
+            // non-fatal
+        }
+    }
+    next();
+});
+
+// GET /admin/onboarding-profile - Mandatory Profile Setup on First Login
+router.get('/onboarding-profile', adminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const user = await User.findById(req.session.user._id).lean();
+        res.render('admin/onboarding-profile', {
+            user,
+            error: req.query.error || null,
+            csrfToken: req.csrfToken ? req.csrfToken() : ''
+        });
+    } catch (err) {
+        console.error('Admin onboarding profile error:', err);
+        res.redirect('/admin');
+    }
+});
+
+// POST /admin/onboarding-profile - Save Mandatory Credentials
+router.post('/onboarding-profile', adminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const { schoolName, sscGpa, collegeName, hscGpa, universityName, cgpa, presentAddress, permanentAddress } = req.body;
+
+        if (!schoolName || !collegeName || !universityName || !presentAddress || !permanentAddress) {
+            const user = await User.findById(req.session.user._id).lean();
+            return res.render('admin/onboarding-profile', {
+                user: { ...user, ...req.body },
+                error: 'Please fill in all mandatory academic institutions and address fields.',
+                csrfToken: req.csrfToken ? req.csrfToken() : ''
+            });
+        }
+
+        const adminId = req.session.user._id;
+        await User.findByIdAndUpdate(adminId, {
+            schoolName: schoolName.trim(),
+            sscGpa: (sscGpa || '').trim(),
+            collegeName: collegeName.trim(),
+            hscGpa: (hscGpa || '').trim(),
+            universityName: universityName.trim(),
+            cgpa: (cgpa || '').trim(),
+            presentAddress: presentAddress.trim(),
+            permanentAddress: permanentAddress.trim(),
+            isProfileSetupComplete: true
+        }, { new: true });
+
+        // Update session
+        Object.assign(req.session.user, {
+            schoolName: schoolName.trim(),
+            sscGpa: (sscGpa || '').trim(),
+            collegeName: collegeName.trim(),
+            hscGpa: (hscGpa || '').trim(),
+            universityName: universityName.trim(),
+            cgpa: (cgpa || '').trim(),
+            presentAddress: presentAddress.trim(),
+            permanentAddress: permanentAddress.trim(),
+            isProfileSetupComplete: true
+        });
+
+        await logActivity(req, 'UPDATE', 'Admin completed mandatory academic and address credentials', 'User', adminId);
+
+        return res.redirect('/admin');
+    } catch (err) {
+        console.error('Submit admin onboarding profile error:', err);
+        return res.redirect('/admin/onboarding-profile?error=Failed+to+save+profile');
+    }
+});
+
 // Admin main dashboard
 // Quizzes
 router.get('/quizzes', adminProtect, async (req, res) => {
@@ -3617,12 +3703,23 @@ router.get('/profile', adminProtect, async (req, res) => {
 router.post('/profile/update', adminProtect, async (req, res) => {
     try {
         await connectDB();
-        const { name, email, phone, oldPassword, newPassword, confirmPassword } = req.body;
+        const { name, email, phone, schoolName, sscGpa, collegeName, hscGpa, universityName, cgpa, presentAddress, permanentAddress, oldPassword, newPassword, confirmPassword } = req.body;
         const user = await User.findById(req.session.userId || req.session.user._id);
 
         if (name) user.name = name;
         if (email) user.email = email.toLowerCase().trim();
         if (phone) user.phone = phone.trim();
+        if (schoolName !== undefined) user.schoolName = schoolName.trim();
+        if (sscGpa !== undefined) user.sscGpa = sscGpa.trim();
+        if (collegeName !== undefined) user.collegeName = collegeName.trim();
+        if (hscGpa !== undefined) user.hscGpa = hscGpa.trim();
+        if (universityName !== undefined) user.universityName = universityName.trim();
+        if (cgpa !== undefined) user.cgpa = cgpa.trim();
+        if (presentAddress !== undefined) user.presentAddress = presentAddress.trim();
+        if (permanentAddress !== undefined) user.permanentAddress = permanentAddress.trim();
+        if (user.schoolName && user.collegeName && user.universityName && user.presentAddress && user.permanentAddress) {
+            user.isProfileSetupComplete = true;
+        }
 
         // Password change logic
         if (newPassword && newPassword.trim() !== '') {

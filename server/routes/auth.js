@@ -229,8 +229,13 @@ router.post('/login', authLimiter, async (req, res) => {
             
             if (userEmail === superEmail) return res.redirect('/superadmin');
             if (user.role === 'superadmin') return res.redirect('/superadmin');
-            if (user.role === 'admin') return res.redirect('/admin');
-            if (user.role === 'content_manager' || user.role === 'support' || user.role === 'moderator') return res.redirect('/admin');
+            if (user.role === 'admin' || user.role === 'content_manager' || user.role === 'support' || user.role === 'moderator') {
+                if (user.role === 'admin') {
+                    const hasAdminProfile = Boolean(user.isProfileSetupComplete || (user.schoolName && user.collegeName && user.universityName && user.presentAddress && user.permanentAddress));
+                    if (!hasAdminProfile) return res.redirect('/admin/onboarding-profile');
+                }
+                return res.redirect('/admin');
+            }
             if (user.role === 'teacher') {
                 const needsPass = user.passwordResetRequired || user.isPasswordSet === false;
                 if (needsPass) return res.redirect('/teacher/setup-password');
