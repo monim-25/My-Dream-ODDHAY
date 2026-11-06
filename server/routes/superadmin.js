@@ -1599,6 +1599,7 @@ router.get('/notifications', superAdminProtect, async (req, res) => {
             courses,
             history,
             userCounts: userCountMap,
+            superAdminNotifications: await Notification.find({ user: req.session.user ? (req.session.user._id || req.session.userId) : req.session.userId }).sort({ createdAt: -1 }).limit(60).lean(),
             filters: {
                 page,
                 limit,
@@ -4624,6 +4625,160 @@ router.get('/user/:id', superAdminProtect, async (req, res) => {
     } catch (err) {
         console.error('User Profile Error:', err);
         res.status(500).send('Server Error fetching user profile');
+    }
+});
+
+// GET /superadmin/messages - Superadmin Dedicated Direct Messaging Portal
+router.get('/messages', superAdminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const Message = require('../models/Message');
+        const user = req.session.user || (await User.findById(req.session.userId).lean());
+        if (!user) return res.redirect('/login');
+
+        // Fetch all direct messages involving this superadmin
+        const allMessages = await Message.find({
+            $or: [
+                { sender: user._id },
+                { receiver: user._id }
+            ],
+            deletedFor: { $ne: user._id }
+        }).sort({ createdAt: -1 }).lean();
+
+        // Build conversation contacts map
+        const contactsMap = {};
+        const contactUserIds = new Set();
+
+        allMessages.forEach(msg => {
+            const senderId = (msg.sender?._id || msg.sender).toString();
+            const receiverId = (msg.receiver?._id || msg.receiver || '').toString();
+            const otherId = senderId === user._id.toString() ? receiverId : senderId;
+
+            if (otherId && otherId !== user._id.toString()) {
+                contactUserIds.add(otherId);
+                if (!contactsMap[otherId]) {
+                    contactsMap[otherId] = {
+                        userId: otherId,
+                        user: null,
+                        latestMessage: msg,
+                        unreadCount: 0
+                    };
+                }
+                if (receiverId === user._id.toString() && !msg.isRead) {
+                    contactsMap[otherId].unreadCount++;
+                }
+            }
+        });
+
+        // Hydrate conversation contacts
+        if (contactUserIds.size > 0) {
+            const fetchedUsers = await User.find({ _id: { $in: Array.from(contactUserIds) } })
+                .select('name email phone role status profilePicture profileImage designation teachingSubject assignedClasses classLevel lastActive')
+                .lean();
+            fetchedUsers.forEach(u => {
+                const id = u._id.toString();
+                if (contactsMap[id]) {
+                    contactsMap[id].user = u;
+                }
+            });
+        }
+
+        // Add Active Teachers for quick contact
+        const teachers = await User.find({ role: 'teacher', status: 'active' })
+            .select('name email phone role status profilePicture profileImage designation teachingSubject assignedClasses classLevel lastActive')
+            .limit(30)
+            .lean();
+
+        teachers.forEach(t => {
+            const id = t._id.toString();
+            if (!contactsMap[id]) {
+                contactsMap[id] = {
+                    userId: id,
+                    user: t,
+                    latestMessage: null,
+                    unreadCount: 0
+                };
+            }
+        });
+
+        // Add other Admins
+        const otherAdmins = await User.find({ role: { $in: ['admin', 'superadmin'] }, _id: { $ne: user._id } })
+            .select('name email phone role status profilePicture profileImage designation lastActive')
+            .lean();
+
+        otherAdmins.forEach(a => {
+            const id = a._id.toString();
+            if (!contactsMap[id]) {
+                contactsMap[id] = {
+                    userId: id,
+                    user: a,
+                    latestMessage: null,
+                    unreadCount: 0
+                };
+            }
+        });
+
+        // Determine active conversation contact
+        const requestedTargetId = req.query.user || req.query.userId || req.query.teacherId || req.query.studentId;
+        let activeContact = null;
+        let activeMessages = [];
+
+        if (requestedTargetId) {
+            activeContact = contactsMap[requestedTargetId]?.user || (await User.findById(requestedTargetId).select('name email phone role status profilePicture profileImage designation teachingSubject assignedClasses classLevel lastActive').lean());
+            if (activeContact && !contactsMap[requestedTargetId]) {
+                contactsMap[requestedTargetId] = {
+                    userId: requestedTargetId,
+                    user: activeContact,
+                    latestMessage: null,
+                    unreadCount: 0
+                };
+            }
+        } else {
+            const contactsWithMsgs = Object.values(contactsMap).filter(c => c.latestMessage && c.user);
+            if (contactsWithMsgs.length > 0) {
+                activeContact = contactsWithMsgs[0].user;
+            } else if (Object.values(contactsMap).length > 0) {
+                activeContact = Object.values(contactsMap)[0].user;
+            }
+        }
+
+        if (activeContact) {
+            activeMessages = await Message.find({
+                $or: [
+                    { sender: user._id, receiver: activeContact._id },
+                    { sender: activeContact._id, receiver: user._id }
+                ],
+                deletedFor: { $ne: user._id }
+            }).sort({ createdAt: 1 }).limit(150).lean();
+
+            // Mark unread messages as read
+            await Message.updateMany(
+                { sender: activeContact._id, receiver: user._id, isRead: false },
+                { $set: { isRead: true } }
+            );
+            if (contactsMap[activeContact._id.toString()]) {
+                contactsMap[activeContact._id.toString()].unreadCount = 0;
+            }
+        }
+
+        const contacts = Object.values(contactsMap).filter(c => c.user);
+        contacts.sort((a, b) => {
+            const dateA = a.latestMessage ? new Date(a.latestMessage.createdAt).getTime() : 0;
+            const dateB = b.latestMessage ? new Date(b.latestMessage.createdAt).getTime() : 0;
+            if (dateA !== dateB) return dateB - dateA;
+            return (a.user.name || '').localeCompare(b.user.name || '');
+        });
+
+        res.render('superadmin/messages', {
+            user,
+            active: 'messages',
+            contacts,
+            activeContact,
+            activeMessages
+        });
+    } catch (err) {
+        console.error('Superadmin messages route error:', err);
+        res.status(500).send('Error loading Superadmin Messaging Portal');
     }
 });
 

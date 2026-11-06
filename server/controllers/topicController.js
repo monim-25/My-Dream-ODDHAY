@@ -398,6 +398,18 @@ const createTopic = async (req, res) => {
             ? `Topic "${newTopic.name}" submitted for Admin review and approval`
             : `Topic "${newTopic.name}" created successfully`;
 
+        if (isTeacher) {
+            try {
+                const pushNotificationService = require('../services/pushNotificationService');
+                pushNotificationService.sendToRole('superadmin', {
+                    title: 'New AI Topic Awaiting Approval',
+                    body: `Teacher ${req.session.user ? req.session.user.name : 'Teacher'} submitted "${newTopic.name}" (${newTopic.classLevel} - ${newTopic.subject}).`,
+                    url: '/superadmin/topics',
+                    type: 'topic_review'
+                }).catch(() => {});
+            } catch(e) {}
+        }
+
         res.json({
             success: true,
             message: successMsg,

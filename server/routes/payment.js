@@ -215,6 +215,16 @@ router.post('/submit', protect, async (req, res) => {
                     type: 'payment',
                     link: `/course-details/${courseId}?enrolled=1`
                 }).catch(e => console.error('Notification error:', e));
+
+                try {
+                    const pushNotificationService = require('../services/pushNotificationService');
+                    pushNotificationService.sendToRole('superadmin', {
+                        title: `Payment Received: ৳${finalAmount}`,
+                        body: `${user.name} enrolled in "${course.title}" via ${(paymentMethod || 'Manual').toUpperCase()}.`,
+                        url: '/superadmin/payments',
+                        type: 'payment_received'
+                    }).catch(() => {});
+                } catch(e) {}
             }
             if (course) {
                 try { await payment.populate('course', 'title'); } catch(e) {}

@@ -86,8 +86,189 @@
                         </div>
                     </div>
 
-                    <!-- Broadcast Composer -->
-                    <div class="bg-white dark:bg-[#0f172a] border-0 flex flex-col relative rounded-none shadow-sm shrink-0">
+                    <!-- Notifications Center Navigation Tabs -->
+                    <div class="flex border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0b1120] px-4 pt-2 gap-2 shrink-0">
+                        <button type="button" onclick="switchNotifCenterTab('received', this)" id="tab-btn-received" class="notif-tab-btn active px-4 py-2.5 text-xs font-bold border-b-2 border-primary text-primary transition-all flex items-center gap-1.5 cursor-pointer">
+                            <span class="material-symbols-rounded text-base">inbox</span> Received Alerts (<%= (locals.superAdminNotifications || []).length %>)
+                        </button>
+                        <button type="button" onclick="switchNotifCenterTab('composer', this)" id="tab-btn-composer" class="notif-tab-btn px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-1.5 cursor-pointer">
+                            <span class="material-symbols-rounded text-base">campaign</span> Broadcast Composer
+                        </button>
+                        <button type="button" onclick="switchNotifCenterTab('matrix', this)" id="tab-btn-matrix" class="notif-tab-btn px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 transition-all flex items-center gap-1.5 cursor-pointer">
+                            <span class="material-symbols-rounded text-base">rule</span> Delivery Rules & Architecture
+                        </button>
+                    </div>
+
+                    <!-- TAB 1: Superadmin Received Alerts -->
+                    <div id="tab-content-received" class="notif-tab-content active p-4 sm:p-6 space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-[#0f172a] p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <span class="material-symbols-rounded text-primary">notifications_active</span> Superadmin Real-Time In-App Alerts
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-0.5">Platform alerts sent directly to you: registrations, payments, topic reviews, and direct messages.</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="markAllSuperAdminNotifsRead()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors flex items-center gap-1 shadow-2xs cursor-pointer">
+                                    <span class="material-symbols-rounded text-sm">done_all</span> Mark All Read
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Alerts List -->
+                        <div class="bg-white dark:bg-[#0f172a] rounded-2xl border border-slate-200/80 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800/60 overflow-hidden shadow-2xs">
+                            <% if (locals.superAdminNotifications && superAdminNotifications.length > 0) { %>
+                                <% superAdminNotifications.forEach(n => { %>
+                                    <% 
+                                        const isUnread = !n.isRead;
+                                        let icon = 'notifications';
+                                        let iconColor = 'bg-blue-50 text-blue-500 dark:bg-blue-500/10';
+                                        if (n.type === 'user_registered') {
+                                            icon = 'person_add';
+                                            iconColor = 'bg-purple-50 text-purple-500 dark:bg-purple-500/10';
+                                        } else if (n.type === 'payment_received' || n.type === 'payment') {
+                                            icon = 'payments';
+                                            iconColor = 'bg-emerald-50 text-emerald-500 dark:bg-emerald-500/10';
+                                        } else if (n.type === 'topic_review') {
+                                            icon = 'psychology';
+                                            iconColor = 'bg-amber-50 text-amber-500 dark:bg-amber-500/10';
+                                        } else if (n.type === 'message') {
+                                            icon = 'chat';
+                                            iconColor = 'bg-indigo-50 text-indigo-500 dark:bg-indigo-500/10';
+                                        }
+                                    %>
+                                    <div class="p-3.5 sm:p-4 flex items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors <%= isUnread ? 'bg-primary/5 dark:bg-primary/10' : '' %>">
+                                        <div class="flex items-center gap-3 min-w-0">
+                                            <div class="size-10 rounded-xl <%= iconColor %> flex items-center justify-center shrink-0">
+                                                <span class="material-symbols-rounded text-xl"><%= icon %></span>
+                                            </div>
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-2 mb-0.5">
+                                                    <h4 class="text-xs font-bold text-slate-900 dark:text-white truncate <%= isUnread ? 'text-primary dark:text-primary' : '' %>"><%= n.title %></h4>
+                                                    <% if (isUnread) { %>
+                                                        <span class="size-2 rounded-full bg-primary shrink-0"></span>
+                                                    <% } %>
+                                                </div>
+                                                <p class="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-1"><%= n.message %></p>
+                                                <p class="text-[10px] text-slate-400 mt-1"><%= new Date(n.createdAt).toLocaleString('en-GB') %></p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-2 shrink-0">
+                                            <% if (n.link) { %>
+                                                <a href="<%= n.link %>" class="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary text-primary hover:text-white text-xs font-bold transition-colors inline-flex items-center gap-1 shadow-2xs">
+                                                    <span>Open</span>
+                                                    <span class="material-symbols-rounded text-xs">arrow_forward</span>
+                                                </a>
+                                            <% } %>
+                                        </div>
+                                    </div>
+                                <% }) %>
+                            <% } else { %>
+                                <div class="py-16 text-center text-slate-400">
+                                    <span class="material-symbols-rounded text-4xl mb-2 opacity-40">notifications_off</span>
+                                    <p class="text-xs font-bold text-slate-600 dark:text-slate-400">No in-app alerts received yet</p>
+                                    <p class="text-[11px] text-slate-400 mt-1">Platform events like registrations and payments will appear here in real-time.</p>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <!-- TAB 3: Delivery Rules & Architecture (Organized explanation) -->
+                    <div id="tab-content-matrix" class="notif-tab-content hidden p-4 sm:p-6 space-y-4">
+                        <div class="bg-white dark:bg-[#0f172a] p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-2xs space-y-4">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <span class="material-symbols-rounded text-primary">rule</span> Superadmin Notification Architecture
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-1">A comprehensive breakdown of when, how, and which notifications are delivered to the Superadmin.</p>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                                <!-- Rule 1: Registrations -->
+                                <div class="p-4 rounded-xl border border-purple-200/80 dark:border-purple-500/20 bg-purple-50/30 dark:bg-purple-900/10 space-y-2">
+                                    <div class="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold text-xs">
+                                        <span class="material-symbols-rounded text-lg">person_add</span> New Registrations
+                                    </div>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">When:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">Instantly when any student, teacher, guardian, or staff registers an account.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Delivery:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">In-App Dropdown + Bell Badge + Socket.io + Web Push.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Target Action:</p>
+                                    <p class="text-[11px] text-primary font-bold">Opens user profile insight (/superadmin/user/:id)</p>
+                                </div>
+
+                                <!-- Rule 2: Payments -->
+                                <div class="p-4 rounded-xl border border-emerald-200/80 dark:border-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-900/10 space-y-2">
+                                    <div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                                        <span class="material-symbols-rounded text-lg">payments</span> Course & Exam Payments
+                                    </div>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">When:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">Upon successful checkout, bKash/Nagad auto-approval, or manual payment.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Delivery:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">In-App Dropdown + Audio chime + Web Push.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Target Action:</p>
+                                    <p class="text-[11px] text-primary font-bold">Opens Payment History (/superadmin/payments)</p>
+                                </div>
+
+                                <!-- Rule 3: AI Topics -->
+                                <div class="p-4 rounded-xl border border-amber-200/80 dark:border-amber-500/20 bg-amber-50/30 dark:bg-amber-900/10 space-y-2">
+                                    <div class="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-bold text-xs">
+                                        <span class="material-symbols-rounded text-lg">psychology</span> AI Curriculum Topics
+                                    </div>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">When:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">When an instructor submits curriculum topics for AI validation.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Delivery:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">In-App Alert + Header dropdown notification.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Target Action:</p>
+                                    <p class="text-[11px] text-primary font-bold">Opens Syllabus & Topics (/superadmin/topics)</p>
+                                </div>
+
+                                <!-- Rule 4: Direct Messages -->
+                                <div class="p-4 rounded-xl border border-indigo-200/80 dark:border-indigo-500/20 bg-indigo-50/30 dark:bg-indigo-900/10 space-y-2">
+                                    <div class="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
+                                        <span class="material-symbols-rounded text-lg">chat</span> Direct User Messages
+                                    </div>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">When:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">When any teacher, student, or guardian sends a message to superadmin.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Delivery:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">Real-time Socket.io chat bubble + Web Push + Badge counter.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Target Action:</p>
+                                    <p class="text-[11px] text-primary font-bold">Opens Direct Messages (/superadmin/messages?user=:id)</p>
+                                </div>
+
+                                <!-- Rule 5: Parent Complaints -->
+                                <div class="p-4 rounded-xl border border-rose-200/80 dark:border-rose-500/20 bg-rose-50/30 dark:bg-rose-900/10 space-y-2">
+                                    <div class="flex items-center gap-2 text-rose-600 dark:text-rose-400 font-bold text-xs">
+                                        <span class="material-symbols-rounded text-lg">report_problem</span> Complaints & Reports
+                                    </div>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">When:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">When a guardian or student reports an issue or logs a formal grievance.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Delivery:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">High-priority In-App Alert + Push Notification.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Target Action:</p>
+                                    <p class="text-[11px] text-primary font-bold">Opens Guardian Profile Complaints Tab</p>
+                                </div>
+
+                                <!-- Rule 6: Security & Role Changes -->
+                                <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 space-y-2">
+                                    <div class="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-bold text-xs">
+                                        <span class="material-symbols-rounded text-lg">security</span> Security Audits
+                                    </div>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">When:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">On administrative role escalations, user suspensions, or security alerts.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Delivery:</p>
+                                    <p class="text-[11px] text-slate-600 dark:text-slate-400">System Log entry + Alert notification.</p>
+                                    <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">Target Action:</p>
+                                    <p class="text-[11px] text-primary font-bold">Opens Activity Logs (/superadmin/logs)</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: Broadcast Composer & History (Existing tool wrapped in tab container) -->
+                    <div id="tab-content-composer" class="notif-tab-content hidden">
+                        <!-- Broadcast Composer -->
+                        <div class="bg-white dark:bg-[#0f172a] border-0 flex flex-col relative rounded-none shadow-sm shrink-0">
                         <!-- Header -->
                         <div class="sticky top-0 z-30 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-md px-4 py-3 border-b border-slate-100 dark:border-white/5 flex items-center justify-between gap-3">
                             <div class="flex items-center gap-2">
@@ -804,6 +985,28 @@
 
         }
     </script>
+</div>
+<script>
+function switchNotifCenterTab(tabId, btn) {
+    document.querySelectorAll(".notif-tab-content").forEach(el => el.classList.add("hidden"));
+    document.querySelectorAll(".notif-tab-btn").forEach(el => {
+        el.classList.remove("active", "border-primary", "text-primary");
+        el.classList.add("border-transparent", "text-slate-500");
+    });
+    const target = document.getElementById("tab-content-" + tabId);
+    if (target) target.classList.remove("hidden");
+    if (btn) {
+        btn.classList.add("active", "border-primary", "text-primary");
+        btn.classList.remove("border-transparent", "text-slate-500");
+    }
+}
+async function markAllSuperAdminNotifsRead() {
+    try {
+        await fetch("/api/notifications/mark-all-read", { method: "POST" });
+        window.location.reload();
+    } catch(e) {}
+}
+</script>
 </body>
 
 </html>

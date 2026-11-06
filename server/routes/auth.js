@@ -330,6 +330,17 @@ router.post('/register', authLimiter, async (req, res) => {
             sendWelcomeEmail(email, newUser.name).catch(e => console.error('Failed to send welcome email:', e));
         }
 
+        // Notify superadmins about new user registration
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            pushNotificationService.sendToRole('superadmin', {
+                title: `New ${newUser.role.toUpperCase()} Registered: ${newUser.name}`,
+                body: `${newUser.name} (${newUser.email || newUser.phone || 'No Contact'}) joined ODDHAY as ${newUser.role}.`,
+                url: `/superadmin/user/${newUser._id}`,
+                type: 'user_registered'
+            }).catch(e => console.warn('Superadmin user notification warning:', e.message));
+        } catch (e) {}
+
         req.session.save((saveErr) => {
             if (saveErr) console.warn('⚠️ Session save warning on register:', saveErr.message);
             return res.json({ success: true, redirect: redirectUrl });

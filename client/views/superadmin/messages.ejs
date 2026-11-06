@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en" class="<%= user.theme === 'dark' ? 'dark' : '' %>">
+<head>
+    <%- include('../partials/head') %>
+    <title>Direct Messages | ODDHAY Command Center</title>
+    <style>
+        :root { --admin-sidebar-width: 260px; }
+        .admin-main { margin-left: var(--admin-sidebar-width); height: 100vh; display: flex; flex-direction: column; transition: all 0.3s ease; }
+        @media (max-width: 1024px) { .admin-sidebar { transform: translateX(-100%); } .admin-main { margin-left: 0; } }
+        
+        .chat-scroll::-webkit-scrollbar { width: 5px; }
+        .chat-scroll::-webkit-scrollbar-track { background: transparent; }
+        .chat-scroll::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.2); border-radius: 9999px; }
+        .chat-scroll::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.4); }
+    </style>
+</head>
+<body class="bg-[#F8FAFC] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans overflow-hidden">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <aside id="adminSidebar" class="fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] border-r border-slate-100 dark:border-slate-800 transition-transform duration-300 z-[100]">
+            <%- include('sidebar_content', { active: 'messages' }) %>
+        </aside>
+
+        <!-- Main Panel -->
+        <main class="admin-main flex-1 bg-[#F8FAFC] dark:bg-[#020617] w-full flex flex-col overflow-hidden">
+            <%- include('header_v2', { pageTitle: 'Direct Messages' }) %>
+
+            <!-- Unified Messaging Split-Screen Container -->
+            <div class="flex-1 flex overflow-hidden border-l border-slate-200/80 dark:border-white/5 relative">
+                
+                <!-- Left Pane: Contacts Directory -->
+                <div id="contactsSidebar" class="<%= activeContact ? 'hidden md:flex' : 'flex' %> w-full md:w-80 lg:w-96 flex-col border-r border-slate-200/80 dark:border-slate-800 bg-white dark:bg-[#0b1120] shrink-0 h-full">
+                    
+                    <!-- Contacts Header & Search -->
+                    <div class="p-3.5 border-b border-slate-100 dark:border-slate-800/80 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                            <h2 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <span class="material-symbols-rounded text-primary text-lg">chat</span> Conversations
+                            </h2>
+                            <button type="button" onclick="openNewChatModal()" class="px-2.5 py-1 rounded-lg bg-primary/10 hover:bg-primary text-primary hover:text-white font-bold text-xs transition-colors flex items-center gap-1 shadow-2xs">
+                                <span class="material-symbols-rounded text-sm">person_search</span> New Chat
+                            </button>
+                        </div>
+
+                        <!-- Fast Filter Input -->
+                        <div class="relative">
+                            <span class="material-symbols-rounded absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">search</span>
+                            <input type="text" id="contactSearchInput" oninput="filterContactsList(this.value)" placeholder="Search contacts..." class="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-hidden focus:border-primary transition-all">
+                        </div>
+
+                        <!-- Role Filter Chips -->
+                        <div class="flex items-center gap-1 overflow-x-auto no-scrollbar pt-0.5">
+                            <button type="button" onclick="filterByRole('all', this)" class="role-chip active px-2.5 py-1 rounded-lg text-[10px] font-bold bg-primary text-white shadow-2xs transition-all">All</button>
+                            <button type="button" onclick="filterByRole('teacher', this)" class="role-chip px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Teachers</button>
+                            <button type="button" onclick="filterByRole('admin', this)" class="role-chip px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Admins</button>
+                            <button type="button" onclick="filterByRole('student', this)" class="role-chip px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Students</button>
+                            <button type="button" onclick="filterByRole('parent', this)" class="role-chip px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all">Guardians</button>
+                        </div>
+                    </div>
+
+                    <!-- Contacts Scrollable List -->
+                    <div id="contactsContainer" class="flex-1 overflow-y-auto chat-scroll divide-y divide-slate-100 dark:divide-slate-800/50 p-1.5 space-y-0.5">
+                        <% if (contacts && contacts.length > 0) { %>
+                            <% contacts.forEach(c => { %>
+                                <% 
+                                    const u = c.user; 
+                                    const isSelected = activeContact && activeContact._id.toString() === u._id.toString();
+                                    const roleClass = u.role === 'teacher' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                                                      u.role === 'admin' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                                      u.role === 'superadmin' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
+                                                      'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+                                %>
+                                <a href="/superadmin/messages?user=<%= u._id %>" 
+                                   data-contact-id="<%= u._id %>" 
+                                   data-role="<%= u.role %>" 
+                                   data-name="<%= (u.name || '').toLowerCase() %>" 
+                                   data-email="<%= (u.email || '').toLowerCase() %>"
+                                   class="contact-item flex items-center gap-3 p-2.5 rounded-xl transition-all cursor-pointer <%= isSelected ? 'bg-primary/10 dark:bg-primary/20 border border-primary/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 border border-transparent' %>">
+                                    
+                                    <!-- Avatar -->
+                                    <div class="relative size-10 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0">
+                                        <% if (u.profilePicture || u.profileImage) { %>
+                                            <img src="<%= u.profilePicture || u.profileImage %>" class="w-full h-full object-cover">
+                                        <% } else { %>
+                                            <div class="w-full h-full flex items-center justify-center font-bold text-xs text-slate-600 dark:text-slate-300">
+                                                <%= (u.name || 'U').charAt(0).toUpperCase() %>
+                                            </div>
+                                        <% } %>
+                                        <% if (u.lastActive && (new Date() - new Date(u.lastActive)) < 5 * 60 * 1000) { %>
+                                            <span class="absolute bottom-0 right-0 size-2.5 bg-emerald-500 rounded-full border-2 border-white dark:border-slate-900"></span>
+                                        <% } %>
+                                    </div>
+
+                                    <!-- Content Info -->
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center justify-between mb-0.5">
+                                            <h4 class="text-xs font-bold text-slate-900 dark:text-white truncate <%= isSelected ? 'text-primary dark:text-primary' : '' %>"><%= u.name %></h4>
+                                            <% if (c.latestMessage) { %>
+                                                <span class="text-[10px] text-slate-400 shrink-0">
+                                                    <%= new Date(c.latestMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) %>
+                                                </span>
+                                            <% } %>
+                                        </div>
+
+                                        <div class="flex items-center justify-between gap-1">
+                                            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                                <% if (c.latestMessage) { %>
+                                                    <%= c.latestMessage.text || (c.latestMessage.attachment ? 'Sent an attachment' : 'No message') %>
+                                                <% } else { %>
+                                                    <span class="italic text-slate-400"><%= u.designation || u.teachingSubject || u.classLevel || 'Click to start chat' %></span>
+                                                <% } %>
+                                            </p>
+                                            
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <span class="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase <%= roleClass %>"><%= u.role %></span>
+                                                <% if (c.unreadCount > 0) { %>
+                                                    <span class="min-w-4 h-4 px-1 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center">
+                                                        <%= c.unreadCount %>
+                                                    </span>
+                                                <% } %>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            <% }) %>
+                        <% } else { %>
+                            <div class="py-16 text-center text-slate-400 px-4">
+                                <span class="material-symbols-rounded text-4xl mb-2 opacity-40">chat</span>
+                                <p class="text-xs font-bold text-slate-600 dark:text-slate-400">No active conversations</p>
+                                <p class="text-[11px] text-slate-400 mt-1">Click "New Chat" to start messaging any teacher or user.</p>
+                            </div>
+                        <% } %>
+                    </div>
+                </div>
+
+                <!-- Right Pane: Active Chat Conversation -->
+                <div class="<%= activeContact ? 'flex' : 'hidden md:flex' %> flex-1 flex-col bg-slate-50/50 dark:bg-slate-950/40 h-full overflow-hidden">
+                    <% if (activeContact) { %>
+                        <!-- Chat Conversation Header -->
+                        <div class="h-16 p-3 px-4 bg-white dark:bg-[#0b1120] border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between shrink-0 shadow-2xs z-10">
+                            <div class="flex items-center gap-3">
+                                <!-- Mobile Back to Contacts -->
+                                <button type="button" onclick="showMobileContacts()" class="md:hidden size-8 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center">
+                                    <span class="material-symbols-rounded text-lg">arrow_back</span>
+                                </button>
+
+                                <div class="relative size-10 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0">
+                                    <% if (activeContact.profilePicture || activeContact.profileImage) { %>
+                                        <img src="<%= activeContact.profilePicture || activeContact.profileImage %>" class="w-full h-full object-cover">
+                                    <% } else { %>
+                                        <div class="w-full h-full flex items-center justify-center font-bold text-xs text-slate-600 dark:text-slate-300">
+                                            <%= (activeContact.name || 'U').charAt(0).toUpperCase() %>
+                                        </div>
+                                    <% } %>
+                                </div>
+
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white"><%= activeContact.name %></h3>
+                                        <span class="text-[10px] px-1.5 py-0.5 rounded font-bold uppercase <%= activeContact.role === 'teacher' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' : activeContact.role === 'admin' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' %>">
+                                            <%= activeContact.role %>
+                                        </span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400">
+                                        <%= activeContact.email %> <%= activeContact.phone ? '• ' + activeContact.phone : '' %>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Header Actions -->
+                            <div class="flex items-center gap-2">
+                                <a href="/superadmin/user/<%= activeContact._id %>" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors flex items-center gap-1 shadow-2xs" title="View Full User Profile">
+                                    <span class="material-symbols-rounded text-sm">badge</span>
+                                    <span class="hidden sm:inline">User Insight</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Chat Messages Container -->
+                        <div id="chatMessagesScroll" class="flex-1 overflow-y-auto chat-scroll p-4 sm:p-6 space-y-3.5">
+                            <% if (activeMessages && activeMessages.length > 0) { %>
+                                <% activeMessages.forEach(msg => { %>
+                                    <% 
+                                        const isMine = String(msg.sender) === String(user._id);
+                                        const timeStr = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                    %>
+                                    <div class="flex <%= isMine ? 'justify-end' : 'justify-start' %> items-end gap-2 message-row">
+                                        <% if (!isMine) { %>
+                                            <div class="size-7 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0 mb-1">
+                                                <% if (activeContact.profilePicture || activeContact.profileImage) { %>
+                                                    <img src="<%= activeContact.profilePicture || activeContact.profileImage %>" class="w-full h-full object-cover">
+                                                <% } else { %>
+                                                    <div class="w-full h-full flex items-center justify-center font-bold text-[10px] text-slate-600 dark:text-slate-300">
+                                                        <%= (activeContact.name || 'U').charAt(0).toUpperCase() %>
+                                                    </div>
+                                                <% } %>
+                                            </div>
+                                        <% } %>
+
+                                        <div class="max-w-[82%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-xs <%= isMine ? 'bg-primary text-white rounded-br-xs shadow-xs' : 'bg-white dark:bg-[#0f172a] text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-800 rounded-bl-xs shadow-2xs' %>">
+                                            <p class="leading-relaxed break-words whitespace-pre-wrap"><%= msg.text %></p>
+
+                                            <% if (msg.attachment && msg.attachment.url) { %>
+                                                <div class="mt-2 pt-2 border-t <%= isMine ? 'border-white/20' : 'border-slate-100 dark:border-slate-800' %>">
+                                                    <% if (msg.attachment.fileType === 'image') { %>
+                                                        <a href="<%= msg.attachment.url %>" target="_blank" class="block rounded-lg overflow-hidden max-h-48">
+                                                            <img src="<%= msg.attachment.url %>" class="w-full object-cover hover:scale-105 transition-transform">
+                                                        </a>
+                                                    <% } else { %>
+                                                        <a href="<%= msg.attachment.url %>" target="_blank" class="flex items-center gap-2 p-2 rounded-lg <%= isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800' %> transition-colors">
+                                                            <span class="material-symbols-rounded text-base">attach_file</span>
+                                                            <span class="truncate font-semibold text-[11px]"><%= msg.attachment.fileName || 'Attachment' %></span>
+                                                        </a>
+                                                    <% } %>
+                                                </div>
+                                            <% } %>
+
+                                            <div class="flex items-center justify-end gap-1 mt-1 text-[10px] <%= isMine ? 'text-white/70' : 'text-slate-400' %>">
+                                                <span><%= timeStr %></span>
+                                                <% if (isMine) { %>
+                                                    <span class="material-symbols-rounded text-[12px]"><%= msg.isRead ? 'done_all' : 'done' %></span>
+                                                <% } %>
+                                            </div>
+                                        </div>
+                                    </div>
+                                <% }) %>
+                            <% } else { %>
+                                <div class="h-full flex flex-col items-center justify-center text-slate-400 py-16">
+                                    <div class="size-14 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mb-3">
+                                        <span class="material-symbols-rounded text-3xl">chat_bubble</span>
+                                    </div>
+                                    <p class="text-xs font-bold text-slate-700 dark:text-slate-300">No messages in this conversation yet</p>
+                                    <p class="text-[11px] text-slate-400 mt-1">Send a message below to begin direct communication with <%= activeContact.name %>.</p>
+                                </div>
+                            <% } %>
+                        </div>
+
+                        <!-- Chat Input Box -->
+                        <div class="p-3 sm:p-4 bg-white dark:bg-[#0b1120] border-t border-slate-200/80 dark:border-slate-800 shrink-0">
+                            <form id="portalSendForm" onsubmit="handleSendPortalMessage(event)" class="flex items-center gap-2 max-w-5xl mx-auto">
+                                <input type="text" id="portalMessageInput" placeholder="Write a message to <%= activeContact.name %>..." class="flex-1 px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/80 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-hidden focus:border-primary focus:ring-1 focus:ring-primary transition-all" autocomplete="off" required>
+                                
+                                <button type="submit" id="portalSendBtn" class="h-10.5 px-5 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer active:scale-95">
+                                    <span>Send</span>
+                                    <span class="material-symbols-rounded text-sm">send</span>
+                                </button>
+                            </form>
+                        </div>
+                    <% } else { %>
+                        <!-- No Conversation Selected Empty State -->
+                        <div class="h-full flex flex-col items-center justify-center text-slate-400 px-4 text-center">
+                            <div class="size-16 rounded-2xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 flex items-center justify-center text-primary mb-3 shadow-xs">
+                                <span class="material-symbols-rounded text-3xl">forum</span>
+                            </div>
+                            <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-1">Superadmin Direct Messaging Portal</h3>
+                            <p class="text-xs text-slate-400 max-w-sm mb-4">Select a contact from the left panel, or search for any teacher, admin, student, or guardian to begin communication.</p>
+                            <button type="button" onclick="openNewChatModal()" class="px-4 py-2 rounded-xl bg-primary text-white font-bold text-xs flex items-center gap-1.5 hover:bg-primary-dark transition-all shadow-xs cursor-pointer">
+                                <span class="material-symbols-rounded text-sm">search</span> Find User to Message
+                            </button>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- New Chat Modal: Search Any User in System -->
+    <div id="newChatModal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden max-h-[80vh] animate-in fade-in zoom-in-95 duration-200">
+            <div class="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <span class="material-symbols-rounded text-primary text-base">person_search</span> Find User to Message
+                </h3>
+                <button type="button" onclick="closeNewChatModal()" class="size-8 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 flex items-center justify-center">
+                    <span class="material-symbols-rounded text-lg">close</span>
+                </button>
+            </div>
+
+            <div class="p-4 border-b border-slate-100 dark:border-slate-800/80">
+                <div class="relative">
+                    <span class="material-symbols-rounded absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm pointer-events-none">search</span>
+                    <input type="text" id="globalUserSearchInput" oninput="handleGlobalUserSearch(this.value)" placeholder="Search by name, email, or role..." class="w-full pl-8 pr-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-hidden focus:border-primary transition-all">
+                </div>
+            </div>
+
+            <div id="globalUserSearchResults" class="flex-1 overflow-y-auto p-2 space-y-1 min-h-[220px]">
+                <div class="py-10 text-center text-slate-400 text-xs">
+                    Type at least 2 characters to search across all platform accounts.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <% if (activeContact) { %>
+    <script>
+        const ACTIVE_CONTACT_ID = '<%= activeContact._id %>';
+        const CURRENT_USER_ID = '<%= user._id %>';
+
+        // Auto-scroll chat to bottom
+        function scrollChatToBottom() {
+            const container = document.getElementById('chatMessagesScroll');
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+        scrollChatToBottom();
+        window.addEventListener('load', scrollChatToBottom);
+
+        async function handleSendPortalMessage(e) {
+            e.preventDefault();
+            const input = document.getElementById('portalMessageInput');
+            const btn = document.getElementById('portalSendBtn');
+            const text = (input.value || '').trim();
+            if (!text) return;
+
+            btn.disabled = true;
+            btn.innerHTML = `<span class="material-symbols-rounded animate-spin text-sm">progress_activity</span>`;
+
+            try {
+                const res = await fetch('/api/messages/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ targetUserId: ACTIVE_CONTACT_ID, text })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    input.value = '';
+                    appendMessageToThread(data.message, true);
+                    scrollChatToBottom();
+                } else {
+                    Swal.fire('Error', data.error || 'Failed to send message', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Network error sending message', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<span>Send</span><span class="material-symbols-rounded text-sm">send</span>`;
+                input.focus();
+            }
+        }
+
+        function appendMessageToThread(msg, isMine) {
+            const container = document.getElementById('chatMessagesScroll');
+            if (!container) return;
+
+            const timeStr = new Date(msg.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const row = document.createElement('div');
+            row.className = `flex ${isMine ? 'justify-end' : 'justify-start'} items-end gap-2 message-row`;
+            row.innerHTML = `
+                ${!isMine ? `
+                    <div class="size-7 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 shrink-0 mb-1">
+                        <div class="w-full h-full flex items-center justify-center font-bold text-[10px] text-slate-600 dark:text-slate-300">U</div>
+                    </div>
+                ` : ''}
+                <div class="max-w-[82%] sm:max-w-[70%] px-4 py-2.5 rounded-2xl text-xs ${isMine ? 'bg-primary text-white rounded-br-xs shadow-xs' : 'bg-white dark:bg-[#0f172a] text-slate-800 dark:text-slate-100 border border-slate-200/80 dark:border-slate-800 rounded-bl-xs shadow-2xs'}">
+                    <p class="leading-relaxed break-words whitespace-pre-wrap">${escapeHtml(msg.text || '')}</p>
+                    <div class="flex items-center justify-end gap-1 mt-1 text-[10px] ${isMine ? 'text-white/70' : 'text-slate-400'}">
+                        <span>${timeStr}</span>
+                        ${isMine ? `<span class="material-symbols-rounded text-[12px]">done</span>` : ''}
+                    </div>
+                </div>
+            `;
+            container.appendChild(row);
+        }
+
+        // Socket.io real-time listener if available
+        if (typeof io !== 'undefined') {
+            const socket = io();
+            socket.on('message:new', (msg) => {
+                if (String(msg.sender) === ACTIVE_CONTACT_ID) {
+                    appendMessageToThread(msg, false);
+                    scrollChatToBottom();
+                    fetch(`/api/messages/mark-read/${ACTIVE_CONTACT_ID}`, { method: 'POST' }).catch(() => {});
+                }
+            });
+        }
+    </script>
+    <% } %>
+
+    <script>
+        function showMobileContacts() {
+            window.location.href = '/superadmin/messages';
+        }
+
+        function filterContactsList(query) {
+            const q = (query || '').toLowerCase().trim();
+            document.querySelectorAll('.contact-item').forEach(el => {
+                const name = el.getAttribute('data-name') || '';
+                const email = el.getAttribute('data-email') || '';
+                if (!q || name.includes(q) || email.includes(q)) {
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+        }
+
+        function filterByRole(role, btn) {
+            document.querySelectorAll('.role-chip').forEach(el => {
+                el.classList.remove('active', 'bg-primary', 'text-white', 'shadow-2xs');
+                el.classList.add('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
+            });
+            if (btn) {
+                btn.classList.add('active', 'bg-primary', 'text-white', 'shadow-2xs');
+                btn.classList.remove('bg-slate-100', 'dark:bg-slate-800', 'text-slate-600', 'dark:text-slate-300');
+            }
+
+            document.querySelectorAll('.contact-item').forEach(el => {
+                const contactRole = el.getAttribute('data-role');
+                if (role === 'all' || contactRole === role) {
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+        }
+
+        // Global User Search Modal
+        function openNewChatModal() {
+            document.getElementById('newChatModal').classList.remove('hidden');
+            setTimeout(() => {
+                const input = document.getElementById('globalUserSearchInput');
+                if (input) input.focus();
+            }, 100);
+        }
+
+        function closeNewChatModal() {
+            document.getElementById('newChatModal').classList.add('hidden');
+        }
+
+        let searchDebounce = null;
+        function handleGlobalUserSearch(val) {
+            clearTimeout(searchDebounce);
+            const query = (val || '').trim();
+            const resultsEl = document.getElementById('globalUserSearchResults');
+            if (query.length < 2) {
+                resultsEl.innerHTML = '<div class="py-10 text-center text-slate-400 text-xs">Type at least 2 characters to search.</div>';
+                return;
+            }
+
+            resultsEl.innerHTML = '<div class="py-10 text-center text-slate-400 text-xs"><span class="material-symbols-rounded animate-spin mr-1">progress_activity</span> Searching...</div>';
+
+            searchDebounce = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(query)}`);
+                    const data = await res.json();
+                    if (data.success && data.users && data.users.length > 0) {
+                        resultsEl.innerHTML = data.users.map(u => `
+                            <a href="/superadmin/messages?user=${u._id}" class="flex items-center justify-between p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="size-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                                        ${(u.name || 'U').charAt(0).toUpperCase()}
+                                    </div>
+                                    <div>
+                                        <p class="text-xs font-bold text-slate-800 dark:text-slate-100">${escapeHtml(u.name)}</p>
+                                        <p class="text-[11px] text-slate-400">${escapeHtml(u.email || '')}</p>
+                                    </div>
+                                </div>
+                                <span class="text-[10px] px-2 py-0.5 rounded font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                                    ${u.role}
+                                </span>
+                            </a>
+                        `).join('');
+                    } else {
+                        resultsEl.innerHTML = '<div class="py-10 text-center text-slate-400 text-xs">No matching users found.</div>';
+                    }
+                } catch(e) {
+                    resultsEl.innerHTML = '<div class="py-10 text-center text-rose-500 text-xs">Error searching users.</div>';
+                }
+            }, 300);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>

@@ -4897,6 +4897,155 @@ router.get('/user/:id', adminProtect, async (req, res) => {
     }
 });
 
+// GET /admin/messages - Admin Dedicated Direct Messaging Portal
+router.get('/messages', adminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const Message = require('../models/Message');
+        const user = req.session.user || (await User.findById(req.session.userId).lean());
+        if (!user) return res.redirect('/login');
+
+        // Fetch all direct messages involving this admin
+        const allMessages = await Message.find({
+            $or: [
+                { sender: user._id },
+                { receiver: user._id }
+            ],
+            deletedFor: { $ne: user._id }
+        }).sort({ createdAt: -1 }).lean();
+
+        // Build conversation contacts map
+        const contactsMap = {};
+        const contactUserIds = new Set();
+
+        allMessages.forEach(msg => {
+            const senderId = (msg.sender?._id || msg.sender).toString();
+            const receiverId = (msg.receiver?._id || msg.receiver || '').toString();
+            const otherId = senderId === user._id.toString() ? receiverId : senderId;
+
+            if (otherId && otherId !== user._id.toString()) {
+                contactUserIds.add(otherId);
+                if (!contactsMap[otherId]) {
+                    contactsMap[otherId] = {
+                        userId: otherId,
+                        user: null,
+                        latestMessage: msg,
+                        unreadCount: 0
+                    };
+                }
+                if (receiverId === user._id.toString() && !msg.isRead) {
+                    contactsMap[otherId].unreadCount++;
+                }
+            }
+        });
+
+        if (contactUserIds.size > 0) {
+            const fetchedUsers = await User.find({ _id: { $in: Array.from(contactUserIds) } })
+                .select('name email phone role status profilePicture profileImage designation teachingSubject assignedClasses classLevel lastActive')
+                .lean();
+            fetchedUsers.forEach(u => {
+                const id = u._id.toString();
+                if (contactsMap[id]) {
+                    contactsMap[id].user = u;
+                }
+            });
+        }
+
+        const teachers = await User.find({ role: 'teacher', status: 'active' })
+            .select('name email phone role status profilePicture profileImage designation teachingSubject assignedClasses classLevel lastActive')
+            .limit(30)
+            .lean();
+
+        teachers.forEach(t => {
+            const id = t._id.toString();
+            if (!contactsMap[id]) {
+                contactsMap[id] = {
+                    userId: id,
+                    user: t,
+                    latestMessage: null,
+                    unreadCount: 0
+                };
+            }
+        });
+
+        const otherAdmins = await User.find({ role: { $in: ['admin', 'superadmin'] }, _id: { $ne: user._id } })
+            .select('name email phone role status profilePicture profileImage designation lastActive')
+            .lean();
+
+        otherAdmins.forEach(a => {
+            const id = a._id.toString();
+            if (!contactsMap[id]) {
+                contactsMap[id] = {
+                    userId: id,
+                    user: a,
+                    latestMessage: null,
+                    unreadCount: 0
+                };
+            }
+        });
+
+        const requestedTargetId = req.query.user || req.query.userId || req.query.teacherId || req.query.studentId;
+        let activeContact = null;
+        let activeMessages = [];
+
+        if (requestedTargetId) {
+            activeContact = contactsMap[requestedTargetId]?.user || (await User.findById(requestedTargetId).select('name email phone role status profilePicture profileImage designation teachingSubject assignedClasses classLevel lastActive').lean());
+            if (activeContact && !contactsMap[requestedTargetId]) {
+                contactsMap[requestedTargetId] = {
+                    userId: requestedTargetId,
+                    user: activeContact,
+                    latestMessage: null,
+                    unreadCount: 0
+                };
+            }
+        } else {
+            const contactsWithMsgs = Object.values(contactsMap).filter(c => c.latestMessage && c.user);
+            if (contactsWithMsgs.length > 0) {
+                activeContact = contactsWithMsgs[0].user;
+            } else if (Object.values(contactsMap).length > 0) {
+                activeContact = Object.values(contactsMap)[0].user;
+            }
+        }
+
+        if (activeContact) {
+            activeMessages = await Message.find({
+                $or: [
+                    { sender: user._id, receiver: activeContact._id },
+                    { sender: activeContact._id, receiver: user._id }
+                ],
+                deletedFor: { $ne: user._id }
+            }).sort({ createdAt: 1 }).limit(150).lean();
+
+            await Message.updateMany(
+                { sender: activeContact._id, receiver: user._id, isRead: false },
+                { $set: { isRead: true } }
+            );
+            if (contactsMap[activeContact._id.toString()]) {
+                contactsMap[activeContact._id.toString()].unreadCount = 0;
+            }
+        }
+
+        const contacts = Object.values(contactsMap).filter(c => c.user);
+        contacts.sort((a, b) => {
+            const dateA = a.latestMessage ? new Date(a.latestMessage.createdAt).getTime() : 0;
+            const dateB = b.latestMessage ? new Date(b.latestMessage.createdAt).getTime() : 0;
+            if (dateA !== dateB) return dateB - dateA;
+            return (a.user.name || '').localeCompare(b.user.name || '');
+        });
+
+        res.render('admin/messages', {
+            user,
+            active: 'messages',
+            contacts,
+            activeContact,
+            activeMessages
+        });
+    } catch (err) {
+        console.error('Admin messages route error:', err);
+        res.status(500).send('Error loading Admin Messaging Portal');
+    }
+});
+
 // POST /user/:id/complain/acknowledge — Send email to guardian about their complain
 router.post('/user/:id/complain/acknowledge', adminProtect, async (req, res) => {
     try {
