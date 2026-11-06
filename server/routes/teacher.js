@@ -353,6 +353,44 @@ router.get('/', teacherProtect, async (req, res) => {
     }
 });
 
+// Teacher Notifications Hub
+router.get('/notifications', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const Notification = require('../models/Notification');
+        const user = req.session.user;
+        const userId = user._id || user.id;
+
+        const [notifications, totalCount, unreadCount, messageCount, examCount, courseCount, announcementCount] = await Promise.all([
+            Notification.find({ user: userId }).sort({ createdAt: -1 }).limit(100).lean(),
+            Notification.countDocuments({ user: userId }),
+            Notification.countDocuments({ user: userId, isRead: false }),
+            Notification.countDocuments({ user: userId, type: 'message' }),
+            Notification.countDocuments({ user: userId, type: 'exam' }),
+            Notification.countDocuments({ user: userId, type: 'course' }),
+            Notification.countDocuments({ user: userId, type: 'announcement' })
+        ]);
+
+        res.render('teacher/notifications', {
+            user,
+            notifications,
+            stats: {
+                total: totalCount,
+                unread: unreadCount,
+                message: messageCount,
+                exam: examCount,
+                course: courseCount,
+                announcement: announcementCount
+            },
+            active: 'notifications',
+            pageTitle: 'Notifications'
+        });
+    } catch (err) {
+        console.error('Teacher Notifications Error:', err);
+        res.status(500).send('Error loading notifications');
+    }
+});
+
 // Teacher Messages Portal
 router.get('/messages', teacherProtect, async (req, res) => {
     try {

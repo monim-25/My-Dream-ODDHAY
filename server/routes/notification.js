@@ -37,7 +37,14 @@ router.get('/latest', userProtect, async (req, res) => {
             Notification.countDocuments({ user: userId, isRead: false })
         ]);
         
-        res.json({ success: true, notifications, unreadCount, userId });
+        res.json({
+            success: true,
+            notifications,
+            unreadCount,
+            userId,
+            userName: req.session.user ? req.session.user.name : '',
+            userRole: req.session.user ? req.session.user.role : ''
+        });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }

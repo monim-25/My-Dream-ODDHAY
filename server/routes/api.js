@@ -333,6 +333,32 @@ router.post('/messages/send', protect, (req, res, next) => {
             isRead: false
         });
 
+        // Send real-time notification to the receiver (Teacher or Student)
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            const targetUrl = receiver.role === 'teacher'
+                ? `/teacher/messages?studentId=${sender._id}`
+                : `/messages?teacherId=${sender._id}`;
+            const messagePreview = (text && text.trim()) ? text.trim() : (attachment ? 'Sent an attachment' : 'New message');
+
+            await pushNotificationService.sendToUser(receiver._id, {
+                title: `Message from ${sender.name}`,
+                body: messagePreview.length > 120 ? messagePreview.substring(0, 117) + '...' : messagePreview,
+                type: 'message',
+                url: targetUrl
+            });
+        } catch (notifErr) {
+            console.warn('Failed to send message notification:', notifErr.message);
+        }
+
+        // Also emit message:new via socket if receiver is online
+        try {
+            const io = req.app.get('io');
+            if (io) {
+                io.to(`user_${receiver._id}`).emit('message:new', newMsg);
+            }
+        } catch (e) {}
+
         res.json({ success: true, message: newMsg });
     } catch (err) {
         console.error('Send message error:', err);

@@ -3326,6 +3326,54 @@ router.post('/question-bank/solve/:id', protect, async (req, res) => {
             timeTakenSeconds
         }).save();
 
+        // Notify Teacher(s) if written answers need evaluation
+        if (attempt.writtenStatus === 'pending') {
+            try {
+                const pushNotificationService = require('../services/pushNotificationService');
+                const studentName = (userDoc && userDoc.name) ? userDoc.name : 'Student';
+                const examTitle = bank.title || bank.subject || 'Written Exam';
+                const notifPayload = {
+                    title: 'New Written Exam Submission',
+                    body: `${studentName} submitted written answers for "${examTitle}". Ready for evaluation!`,
+                    type: 'exam',
+                    url: `/teacher/evaluate/${attempt._id}`
+                };
+
+                const teacherIds = new Set();
+                if (bank.addedBy) {
+                    const User = require('../models/User');
+                    const addedUser = await User.findById(bank.addedBy).select('role').lean();
+                    if (addedUser && addedUser.role === 'teacher') {
+                        teacherIds.add(String(bank.addedBy));
+                    }
+                }
+                if (bank.course) {
+                    const Course = require('../models/Course');
+                    const cDoc = await Course.findById(bank.course).select('instructor').lean();
+                    if (cDoc && cDoc.instructor) {
+                        teacherIds.add(String(cDoc.instructor));
+                    }
+                }
+                if (teacherIds.size === 0 && bank.subject) {
+                    const User = require('../models/User');
+                    const teachers = await User.find({
+                        role: 'teacher',
+                        $or: [
+                            { assignedSubjects: bank.subject },
+                            { teachingSubject: bank.subject }
+                        ]
+                    }).select('_id').limit(5).lean();
+                    teachers.forEach(t => teacherIds.add(String(t._id)));
+                }
+
+                for (const tId of teacherIds) {
+                    await pushNotificationService.sendToUser(tId, notifPayload);
+                }
+            } catch (errNotif) {
+                console.warn('Failed to notify teachers of written submission:', errNotif.message);
+            }
+        }
+
         // Increment bank exam takers
         await QuestionBank.findByIdAndUpdate(bank._id, { $inc: { examTakers: 1 } });
 
@@ -3978,6 +4026,45 @@ router.post('/qa-ask', protect, (req, res, next) => {
             status: 'open'
         }).save();
 
+        // Notify Teacher(s) for the new Q&A question
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            const studentName = req.session.user ? req.session.user.name : 'Student';
+            const cleanSub = (subject || 'General Academic').trim();
+            const notifPayload = {
+                title: 'New Student Question in Q&A',
+                body: `${studentName} asked: "${question.trim().substring(0, 80)}${question.length > 80 ? '...' : ''}" in ${cleanSub}`,
+                type: 'system',
+                url: '/teacher/qa'
+            };
+
+            const teacherIds = new Set();
+            if (courseId) {
+                const Course = require('../models/Course');
+                const courseDoc = await Course.findById(courseId).select('instructor').lean();
+                if (courseDoc && courseDoc.instructor) {
+                    teacherIds.add(String(courseDoc.instructor));
+                }
+            }
+            if (teacherIds.size === 0 && cleanSub) {
+                const User = require('../models/User');
+                const teachers = await User.find({
+                    role: 'teacher',
+                    $or: [
+                        { assignedSubjects: cleanSub },
+                        { teachingSubject: cleanSub }
+                    ]
+                }).select('_id').limit(5).lean();
+                teachers.forEach(t => teacherIds.add(String(t._id)));
+            }
+
+            for (const tId of teacherIds) {
+                await pushNotificationService.sendToUser(tId, notifPayload);
+            }
+        } catch (errQANotif) {
+            console.warn('Failed to notify teachers of QA question:', errQANotif.message);
+        }
+
         if (redirectUrl) return res.redirect(redirectUrl);
         res.redirect('/qa?success=asked');
     } catch (err) {
@@ -4043,6 +4130,24 @@ router.post('/qa/reply/:id', protect, (req, res, next) => {
         });
 
         await qa.save();
+
+        // Notify original question asker if not self
+        if (qa.askedBy && qa.askedBy.toString() !== req.session.userId.toString()) {
+            try {
+                const pushNotificationService = require('../services/pushNotificationService');
+                const replierName = req.session.user ? req.session.user.name : 'Someone';
+                const User = require('../models/User');
+                const askerUser = await User.findById(qa.askedBy).select('role').lean();
+                const targetUrl = (askerUser && askerUser.role === 'teacher') ? `/teacher/qa#qa-${qa._id}` : `/qa#qa-${qa._id}`;
+                await pushNotificationService.sendToUser(qa.askedBy, {
+                    title: 'New Reply on Q&A Question',
+                    body: `${replierName} replied to: "${qa.question.substring(0, 60)}..."`,
+                    type: 'system',
+                    url: targetUrl
+                });
+            } catch (errN) {}
+        }
+
         res.redirect(`/qa?success=replied#qa-${req.params.id}`);
     } catch (err) {
         console.error('QA Reply Error:', err);
@@ -4928,6 +5033,9 @@ router.get('/messages', protect, async (req, res) => {
 });
 
 router.get('/notifications', protect, async (req, res) => {
+    if (req.session.user && req.session.user.role === 'teacher') {
+        return res.redirect('/teacher/notifications');
+    }
     try {
         await connectDB();
         const Notification = require('../models/Notification');
