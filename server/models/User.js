@@ -79,6 +79,7 @@ const userSchema = new mongoose.Schema({
     }],
     createdAt: { type: Date, default: Date.now },
     status: { type: String, enum: ['active', 'suspended'], default: 'active' },
+    addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     passwordResetRequired: { type: Boolean, default: false },
     isPasswordSet: { type: Boolean, default: false },
     isProfileSetupComplete: { type: Boolean, default: false },

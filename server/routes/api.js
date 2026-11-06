@@ -241,7 +241,7 @@ router.post('/messages/send', protect, (req, res, next) => {
             return res.status(404).json({ success: false, error: 'User not found' });
         }
 
-        // Policy: Student <-> Teacher only
+        // Policy: Student <-> Teacher, Teacher <-> Admin/Student, Admin <-> Any User
         if (sender.role === 'student') {
             if (receiver.role !== 'teacher') {
                 return res.status(403).json({ success: false, error: 'Students can only contact instructors.' });
@@ -267,11 +267,13 @@ router.post('/messages/send', protect, (req, res, next) => {
                 });
             }
         } else if (sender.role === 'teacher') {
-            if (receiver.role !== 'student') {
-                return res.status(403).json({ success: false, error: 'Instructors can only message students.' });
+            if (receiver.role !== 'student' && receiver.role !== 'admin' && receiver.role !== 'superadmin') {
+                return res.status(403).json({ success: false, error: 'Instructors can only message students or administrators.' });
             }
+        } else if (sender.role === 'admin' || sender.role === 'superadmin') {
+            // Admin & Superadmin can message any user (staff, teachers, students, parents)
         } else {
-            return res.status(403).json({ success: false, error: 'Messaging restricted to students and teachers.' });
+            return res.status(403).json({ success: false, error: 'Messaging restricted to active members and staff.' });
         }
 
         let attachment = undefined;
@@ -336,9 +338,14 @@ router.post('/messages/send', protect, (req, res, next) => {
         // Send real-time notification to the receiver (Teacher or Student)
         try {
             const pushNotificationService = require('../services/pushNotificationService');
-            const targetUrl = receiver.role === 'teacher'
-                ? `/teacher/messages?studentId=${sender._id}`
-                : `/messages?teacherId=${sender._id}`;
+            let targetUrl = '/messages';
+            if (receiver.role === 'teacher') {
+                targetUrl = `/teacher/messages?studentId=${sender._id}`;
+            } else if (receiver.role === 'admin' || receiver.role === 'superadmin') {
+                targetUrl = `/messages?user=${sender._id}`;
+            } else {
+                targetUrl = `/messages?teacherId=${sender._id}`;
+            }
             const messagePreview = (text && text.trim()) ? text.trim() : (attachment ? 'Sent an attachment' : 'New message');
 
             await pushNotificationService.sendToUser(receiver._id, {

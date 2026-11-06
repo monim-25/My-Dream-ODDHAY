@@ -4953,17 +4953,24 @@ router.get('/messages', protect, async (req, res) => {
             itemType: { $in: ['course', 'package'] }
         });
 
-        const isEligible = Boolean(hasPaidCourse || hasPaidPayment);
+        const isEligible = Boolean(hasPaidCourse || hasPaidPayment || user.role === 'admin' || user.role === 'superadmin' || user.role === 'teacher');
 
-        // Fetch teachers
+        // Fetch teachers / contacts
         let teachers = [];
         let activeTeacher = null;
         let recentConversations = [];
 
         if (isEligible) {
             teachers = await User.find({ role: 'teacher', status: 'active' })
-                .select('name teachingSubject designation profilePicture profileImage email lastActive classLevel')
+                .select('name teachingSubject designation profilePicture profileImage email lastActive classLevel role')
                 .lean();
+
+            if (user.role === 'admin' || user.role === 'superadmin') {
+                const otherStaff = await User.find({ role: { $in: ['admin', 'superadmin'] }, _id: { $ne: user._id } })
+                    .select('name teachingSubject designation profilePicture profileImage email lastActive classLevel role')
+                    .lean();
+                teachers = teachers.concat(otherStaff);
+            }
 
             // Find all direct messages between this student and teachers
             const allMessages = await Message.find({
@@ -5003,9 +5010,13 @@ router.get('/messages', protect, async (req, res) => {
 
             recentConversations = Object.values(teacherMap);
             // Only set active teacher if specifically requested in query
-            const requestedTeacherId = req.query.teacherId;
-            if (requestedTeacherId) {
-                activeTeacher = teachers.find(t => t._id.toString() === requestedTeacherId) || null;
+            const requestedTargetId = req.query.teacherId || req.query.user || req.query.studentId;
+            if (requestedTargetId) {
+                activeTeacher = teachers.find(t => t._id.toString() === requestedTargetId) || null;
+                if (!activeTeacher) {
+                    activeTeacher = await User.findById(requestedTargetId).select('name teachingSubject designation profilePicture profileImage email lastActive classLevel role').lean();
+                    if (activeTeacher) teachers.unshift(activeTeacher);
+                }
             } else {
                 activeTeacher = null;
             }

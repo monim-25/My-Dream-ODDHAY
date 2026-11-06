@@ -4050,7 +4050,8 @@ router.post('/create-role', adminOnlyProtect, async (req, res) => {
             classes: assignedClassesArray,
             teachingSubject: teachingSubjectStr,
             teachingSubjects: subjectsArray,
-            subject: teachingSubjectStr
+            subject: teachingSubjectStr,
+            addedBy: req.session.user ? req.session.user._id : (req.session.userId || undefined)
         });
 
         await newUser.save();
@@ -4826,6 +4827,44 @@ router.get('/user/:id', adminProtect, async (req, res) => {
             };
         }
 
+        // Resolve who appointed/employed this account
+        let creatorAdmin = null;
+        if (targetUser.addedBy) {
+            creatorAdmin = await User.findById(targetUser.addedBy).select('name email role profilePicture profileImage designation').lean();
+        }
+        if (!creatorAdmin) {
+            const creationLog = await SystemLog.findOne({
+                entityType: 'User',
+                entityId: targetUser._id,
+                action: { $in: ['CREATE', 'CREATE_USER'] }
+            }).populate('performedBy', 'name email role profilePicture profileImage designation').lean();
+            if (creationLog && creationLog.performedBy) {
+                creatorAdmin = creationLog.performedBy;
+            }
+        }
+        if (!creatorAdmin && (targetUser.role === 'teacher' || targetUser.role === 'admin')) {
+            creatorAdmin = await User.findOne({ role: 'superadmin' }).select('name email role profilePicture profileImage designation').lean();
+        }
+
+        // Accounts appointed by this admin
+        let appointedAccounts = [];
+        if (targetUser.role === 'admin' || targetUser.role === 'superadmin') {
+            const creationLogs = await SystemLog.find({
+                performedBy: targetUser._id,
+                action: { $in: ['CREATE', 'CREATE_USER'] },
+                entityType: 'User'
+            }).select('entityId').lean();
+
+            const logUserIds = creationLogs.map(l => l.entityId).filter(Boolean);
+
+            appointedAccounts = await User.find({
+                $or: [
+                    { addedBy: targetUser._id },
+                    { _id: { $in: logUserIds } }
+                ]
+            }).select('name email phone role status classLevel assignedClasses teachingSubjects subject createdAt lastActive profilePicture profileImage designation').sort({ createdAt: -1 }).lean();
+        }
+
         res.render('admin/user-details', {
             user: req.session.user, // Current logged-in admin
             targetUser,
@@ -4847,6 +4886,8 @@ router.get('/user/:id', adminProtect, async (req, res) => {
             adminReviewedTopics,
             adminAiKnowledge,
             adminUserActions,
+            appointedAccounts,
+            creatorAdmin,
             guardianStats,
             active: 'users'
         });
