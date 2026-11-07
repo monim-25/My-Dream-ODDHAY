@@ -544,7 +544,7 @@ router.get('/', adminProtect, async (req, res) => {
                     { $limit: 6 },
                     { $project: { title: 1, subject: 1, classLevel: 1, accessType: 1, studentCount: 1, createdAt: 1 } }
                 ]),
-                require('../models/Message').countDocuments({ isRead: false }),
+                require('../models/Message').countDocuments({ receiver: user._id, isRead: false }),
                 require('../models/Notification').countDocuments({ user: user._id, isRead: false }),
                 // NEW: Pending items
                 Payment.countDocuments({ status: 'pending' }),
@@ -1188,7 +1188,7 @@ router.get('/stats/live', adminProtect, async (req, res) => {
                 { $group: { _id: { $ifNull: ['$c.category', '$c.classLevel'] }, total: { $sum: '$amount' } } },
                 { $sort: { total: -1 } }
             ]),
-            require('../models/Message').countDocuments({ isRead: false }),
+            require('../models/Message').countDocuments({ receiver: (req.session.user ? req.session.user._id : req.session.userId), isRead: false }),
             require('../models/Notification').countDocuments({ user: req.session.user._id, isRead: false })
         ]);
 
@@ -1723,10 +1723,12 @@ router.get('/notifications', adminProtect, async (req, res) => {
         await connectDB();
         const pushNotificationService = require('../services/pushNotificationService');
         const NotificationLog = require('../models/NotificationLog');
+        const Message = require('../models/Message');
 
         const page = parseInt(req.query.page) || 1;
         const limit = 10;
         const skip = (page - 1) * limit;
+        const adminId = req.session.user ? (req.session.user._id || req.session.userId) : req.session.userId;
 
         // Fetch user counts for dropdown
         const userCounts = await User.aggregate([
@@ -1736,7 +1738,7 @@ router.get('/notifications', adminProtect, async (req, res) => {
         const userCountMap = {};
         userCounts.forEach(u => { userCountMap[u._id] = u.count; });
 
-        const [stats, courses, history, totalLogs] = await Promise.all([
+        const [stats, courses, history, totalLogs, adminNotifications, receivedMessages, unreadReceivedMessageCount] = await Promise.all([
             pushNotificationService.getStats(),
             Course.find({}, 'title').lean(),
             NotificationLog.find()
@@ -1746,7 +1748,14 @@ router.get('/notifications', adminProtect, async (req, res) => {
                 .populate('sentBy', 'name role avatar email')
                 .populate('courseId', 'title')
                 .lean(),
-            NotificationLog.countDocuments()
+            NotificationLog.countDocuments(),
+            Notification.find({ user: adminId }).sort({ createdAt: -1 }).limit(60).lean(),
+            Message.find({ receiver: adminId, deletedFor: { $ne: adminId } })
+                .sort({ createdAt: -1 })
+                .limit(60)
+                .populate('sender', 'name role email profilePicture profileImage designation')
+                .lean(),
+            Message.countDocuments({ receiver: adminId, isRead: false })
         ]);
 
         res.render('admin/notifications', {
@@ -1755,6 +1764,9 @@ router.get('/notifications', adminProtect, async (req, res) => {
             courses,
             history,
             userCounts: userCountMap,
+            adminNotifications,
+            receivedMessages,
+            unreadReceivedMessageCount,
             filters: {
                 page,
                 limit,

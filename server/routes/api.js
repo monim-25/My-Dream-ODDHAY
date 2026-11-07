@@ -108,14 +108,18 @@ router.post('/notifications/:id/read', protect, async (req, res) => {
 
 router.post('/notifications/mark-all-read', protect, async (req, res) => {
     try {
-        await Notification.updateMany({ user: req.session.user._id, isRead: false }, { isRead: true });
+        const uid = req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null);
+        if (!uid) return res.status(401).json({ success: false, error: 'Unauthorized' });
+        await Notification.updateMany({ user: uid, isRead: false }, { isRead: true });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
 router.delete('/notifications/clear-all', protect, async (req, res) => {
     try {
-        await Notification.deleteMany({ user: req.session.user._id });
+        const uid = req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null);
+        if (!uid) return res.status(401).json({ success: false, error: 'Unauthorized' });
+        await Notification.deleteMany({ user: uid });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
@@ -141,8 +145,29 @@ router.get('/admin/users/search', superAdminProtect, async (req, res) => {
 router.get('/chat/unread', protect, async (req, res) => {
     try {
         await connectDB();
-        const count = await Message.countDocuments({ receiver: req.session.userId, isRead: false });
+        const myId = req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null);
+        const count = myId ? await Message.countDocuments({ receiver: myId, isRead: false }) : 0;
         res.json({ success: true, count });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+router.get('/messages/unread-count', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const myId = req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null);
+        if (!myId) return res.json({ success: true, count: 0 });
+        const count = await Message.countDocuments({ receiver: myId, isRead: false });
+        res.json({ success: true, count });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+router.post('/messages/mark-all-read', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const myId = req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null);
+        if (!myId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+        await Message.updateMany({ receiver: myId, isRead: false }, { $set: { isRead: true } });
+        res.json({ success: true, message: 'All received messages marked as read' });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 

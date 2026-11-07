@@ -245,5 +245,54 @@
         initAdminNavStack();
         bindAdminNavBackButton();
         document.addEventListener('DOMContentLoaded', bindAdminNavBackButton);
+
+        // ==========================================
+        // Live Received Unread Message Badge Synchronizer
+        // ==========================================
+        window.updateNavbarMessageBadge = function(count) {
+            const msgBadge = document.getElementById('msg-badge');
+            if (!msgBadge) return;
+            const num = parseInt(count, 10) || 0;
+            msgBadge.textContent = num;
+            if (num > 0) {
+                msgBadge.classList.remove('hidden');
+                msgBadge.style.display = 'flex';
+            } else {
+                msgBadge.classList.add('hidden');
+                msgBadge.style.display = 'none';
+            }
+        };
+
+        window.fetchNavbarUnreadMessageCount = async function() {
+            try {
+                const res = await fetch('/api/messages/unread-count');
+                const data = await res.json();
+                if (data && data.success) {
+                    window.updateNavbarMessageBadge(data.count);
+                }
+            } catch (e) {}
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', window.fetchNavbarUnreadMessageCount);
+        } else {
+            window.fetchNavbarUnreadMessageCount();
+        }
+
+        // Live real-time socket updates for message count
+        try {
+            const socket = window.socket || (typeof io === 'function' ? io() : null);
+            if (socket) {
+                socket.on('message:new', function(m) {
+                    window.fetchNavbarUnreadMessageCount();
+                });
+                socket.on('message:deleted', function() {
+                    window.fetchNavbarUnreadMessageCount();
+                });
+                socket.on('message:read', function() {
+                    window.fetchNavbarUnreadMessageCount();
+                });
+            }
+        } catch (e) {}
     })();
 </script>
