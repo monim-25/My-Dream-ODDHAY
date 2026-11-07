@@ -1581,7 +1581,7 @@ router.get('/notifications', superAdminProtect, async (req, res) => {
         userCounts.forEach(u => { userCountMap[u._id] = u.count; });
 
         const superAdminId = req.session.user ? (req.session.user._id || req.session.userId) : req.session.userId;
-        const [stats, courses, history, totalLogs, superAdminNotifications, receivedMessages, unreadReceivedMessageCount] = await Promise.all([
+        const [stats, courses, history, totalLogs, superAdminNotifications] = await Promise.all([
             pushNotificationService.getStats(),
             Course.find({}, 'title').lean(),
             NotificationLog.find()
@@ -1592,13 +1592,7 @@ router.get('/notifications', superAdminProtect, async (req, res) => {
                 .populate('courseId', 'title')
                 .lean(),
             NotificationLog.countDocuments(),
-            Notification.find({ user: superAdminId }).sort({ createdAt: -1 }).limit(60).lean(),
-            Message.find({ receiver: superAdminId, deletedFor: { $ne: superAdminId } })
-                .sort({ createdAt: -1 })
-                .limit(60)
-                .populate('sender', 'name role email profilePicture profileImage designation')
-                .lean(),
-            Message.countDocuments({ receiver: superAdminId, isRead: false })
+            Notification.find({ user: superAdminId }).sort({ createdAt: -1 }).limit(60).lean()
         ]);
 
         res.render('superadmin/notifications', {
@@ -1608,8 +1602,6 @@ router.get('/notifications', superAdminProtect, async (req, res) => {
             history,
             userCounts: userCountMap,
             superAdminNotifications,
-            receivedMessages,
-            unreadReceivedMessageCount,
             filters: {
                 page,
                 limit,

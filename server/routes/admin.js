@@ -1738,7 +1738,7 @@ router.get('/notifications', adminProtect, async (req, res) => {
         const userCountMap = {};
         userCounts.forEach(u => { userCountMap[u._id] = u.count; });
 
-        const [stats, courses, history, totalLogs, adminNotifications, receivedMessages, unreadReceivedMessageCount] = await Promise.all([
+        const [stats, courses, history, totalLogs, adminNotifications] = await Promise.all([
             pushNotificationService.getStats(),
             Course.find({}, 'title').lean(),
             NotificationLog.find()
@@ -1749,13 +1749,7 @@ router.get('/notifications', adminProtect, async (req, res) => {
                 .populate('courseId', 'title')
                 .lean(),
             NotificationLog.countDocuments(),
-            Notification.find({ user: adminId }).sort({ createdAt: -1 }).limit(60).lean(),
-            Message.find({ receiver: adminId, deletedFor: { $ne: adminId } })
-                .sort({ createdAt: -1 })
-                .limit(60)
-                .populate('sender', 'name role email profilePicture profileImage designation')
-                .lean(),
-            Message.countDocuments({ receiver: adminId, isRead: false })
+            Notification.find({ user: adminId }).sort({ createdAt: -1 }).limit(60).lean()
         ]);
 
         res.render('admin/notifications', {
@@ -1765,8 +1759,6 @@ router.get('/notifications', adminProtect, async (req, res) => {
             history,
             userCounts: userCountMap,
             adminNotifications,
-            receivedMessages,
-            unreadReceivedMessageCount,
             filters: {
                 page,
                 limit,
