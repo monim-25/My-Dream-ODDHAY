@@ -428,7 +428,13 @@ app.get('/privacy-policy', (req, res) => res.render('privacy-policy'));
 app.get('/refund-policy', (req, res) => res.render('refund-policy'));
 app.get('/terms', (req, res) => res.render('terms'));
 app.get('/faq', (req, res) => res.render('faq'));
-app.post('/contact-submit', (req, res) => res.redirect('/?contact=success'));
+app.post('/contact-submit', (req, res) => {
+    const referer = req.get('Referer') || '';
+    if (referer.includes('/contact')) {
+        return res.redirect('/contact?success=1');
+    }
+    res.redirect('/?contact=success');
+});
 
 // Inject upload middleware into admin routes that need it
 const superadminRouter = require('./routes/superadmin');
