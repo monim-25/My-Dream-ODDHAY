@@ -35,6 +35,10 @@ const SettingSchema = new mongoose.Schema({
     },
     landingPage: {
         heroScreenshotUrl: { type: String, default: '' },
+        heroImageScale: { type: Number, default: 100 },
+        heroImageRotate: { type: Number, default: 0 },
+        heroImageOffsetX: { type: Number, default: 0 },
+        heroImageOffsetY: { type: Number, default: 0 },
         videoUrl: { type: String, default: '' },
         videoTitle: { type: String, default: 'অধ্যায় প্ল্যাটফর্ম পরিচিতি' },
         videoCaption: { type: String, default: 'এক নজরে দেখে নাও অধ্যায় কীভাবে তোমার পড়াশোনাকে করবে আরও সহজ ও কার্যকর' }

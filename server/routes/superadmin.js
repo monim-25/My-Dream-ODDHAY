@@ -3472,7 +3472,16 @@ router.post('/landing-control', superAdminProtect, (req, res, next) => {
     try {
         await connectDB();
         const Setting = require('../models/Setting');
-        const { heroScreenshotUrl, videoUrl, videoTitle, videoCaption } = req.body;
+        const { 
+            heroScreenshotUrl, 
+            heroImageScale, 
+            heroImageRotate, 
+            heroImageOffsetX, 
+            heroImageOffsetY, 
+            videoUrl, 
+            videoTitle, 
+            videoCaption 
+        } = req.body;
 
         let finalScreenshotUrl = (heroScreenshotUrl || '').trim();
         if (req.file) {
@@ -3484,6 +3493,10 @@ router.post('/landing-control', superAdminProtect, (req, res, next) => {
             'landingPage.videoUrl': (videoUrl || '').trim(),
             'landingPage.videoTitle': (videoTitle || 'অধ্যায় প্ল্যাটফর্ম পরিচিতি').trim(),
             'landingPage.videoCaption': (videoCaption || 'এক নজরে দেখে নাও অধ্যায় কীভাবে তোমার পড়াশোনাকে করবে আরও সহজ ও কার্যকর').trim(),
+            'landingPage.heroImageScale': !isNaN(Number(heroImageScale)) ? Number(heroImageScale) : 100,
+            'landingPage.heroImageRotate': !isNaN(Number(heroImageRotate)) ? Number(heroImageRotate) : 0,
+            'landingPage.heroImageOffsetX': !isNaN(Number(heroImageOffsetX)) ? Number(heroImageOffsetX) : 0,
+            'landingPage.heroImageOffsetY': !isNaN(Number(heroImageOffsetY)) ? Number(heroImageOffsetY) : 0,
             updatedBy: req.session.userId || (req.session.user ? req.session.user._id : null)
         };
 

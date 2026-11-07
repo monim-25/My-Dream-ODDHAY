@@ -12,6 +12,11 @@
             .admin-sidebar { transform: translateX(-100%); }
             .admin-main { margin-left: 0; }
         }
+
+        /* Custom slider styles */
+        input[type=range] {
+            accent-color: #18a957;
+        }
     </style>
 </head>
 
@@ -34,7 +39,7 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                         <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Landing Page Control Center</h1>
-                        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">Control the hero section screenshot, walkthrough video, and interactive presentation.</p>
+                        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">Control the hero image sizing, rotation, placement, and video tour on the landing page.</p>
                     </div>
                     <a href="/" target="_blank" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:text-primary transition-colors shadow-2xs">
                         <span class="material-symbols-rounded text-sm">open_in_new</span>
@@ -51,60 +56,136 @@
 
                 <!-- Main Form with Multipart Support -->
                 <form action="/superadmin/landing-control" method="POST" enctype="multipart/form-data" class="space-y-6">
-                    <% const landing = (settings && settings.landingPage) ? settings.landingPage : {}; %>
+                    <% 
+                        const landing = (settings && settings.landingPage) ? settings.landingPage : {};
+                        const scaleVal = typeof landing.heroImageScale === 'number' ? landing.heroImageScale : 100;
+                        const rotateVal = typeof landing.heroImageRotate === 'number' ? landing.heroImageRotate : 0;
+                        const offsetXVal = typeof landing.heroImageOffsetX === 'number' ? landing.heroImageOffsetX : 0;
+                        const offsetYVal = typeof landing.heroImageOffsetY === 'number' ? landing.heroImageOffsetY : 0;
+                    %>
                     
-                    <!-- 1. HERO PLATFORM SCREENSHOT CARD -->
-                    <div class="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-5 shadow-2xs">
-                        <div class="flex items-center gap-2 border-b border-slate-100 dark:border-slate-800/80 pb-3">
-                            <span class="material-symbols-rounded text-primary text-xl">screenshot_monitor</span>
-                            <div>
-                                <h2 class="text-base font-bold text-slate-900 dark:text-white">Hero Section Platform Screenshot</h2>
-                                <p class="text-xs text-slate-400 font-normal">This image displays in the hero section beside the headline and student stats.</p>
+                    <!-- 1. HERO PLATFORM IMAGE & FINE-TUNING STUDIO CARD -->
+                    <div class="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-6 shadow-2xs">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="material-symbols-rounded text-[#18a957] text-2xl">crop_rotate</span>
+                                <div>
+                                    <h2 class="text-base font-bold text-slate-900 dark:text-white">Hero Platform Visual & Position Studio</h2>
+                                    <p class="text-xs text-slate-400 font-normal">Upload any PNG/Image and fine-tune its size, angle, and position in real time.</p>
+                                </div>
+                            </div>
+                            <button type="button" onclick="resetImageTransforms()" class="text-xs font-semibold text-slate-500 hover:text-[#18a957] inline-flex items-center gap-1 cursor-pointer">
+                                <span class="material-symbols-rounded text-sm">restart_alt</span>
+                                <span>Reset Position</span>
+                            </button>
+                        </div>
+
+                        <!-- Upload & URL Grid -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Direct File Upload -->
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                                    Upload New Image (PNG / Transparent Image)
+                                </label>
+                                <input type="file" id="heroScreenshotFile" name="heroScreenshotFile" accept="image/*"
+                                    onchange="previewSelectedImage(this)"
+                                    class="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-3.5 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-[#18a957]/10 file:text-[#18a957] hover:file:bg-[#18a957]/20 cursor-pointer">
+                                <p class="text-[11px] text-slate-400">Works with transparent PNGs, isometric cut-outs, device screens, or graphics.</p>
+                            </div>
+
+                            <!-- Image URL Alternative -->
+                            <div class="space-y-1.5">
+                                <label for="heroScreenshotUrl" class="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                                    OR Image URL (Hosted Link / CDN)
+                                </label>
+                                <input type="text" id="heroScreenshotUrl" name="heroScreenshotUrl" value="<%= landing.heroScreenshotUrl || '' %>"
+                                    placeholder="https://example.com/mockup.png"
+                                    oninput="updateLiveImagePreview(this.value)"
+                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-[#18a957] transition-colors">
                             </div>
                         </div>
 
-                        <!-- Direct File Upload -->
-                        <div class="space-y-1.5">
-                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                                Upload Screenshot Image
-                            </label>
-                            <input type="file" id="heroScreenshotFile" name="heroScreenshotFile" accept="image/*"
-                                onchange="previewSelectedImage(this)"
-                                class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer">
-                            <p class="text-[11px] text-slate-400">Recommended resolution: 16:10 or 16:9 ratio (e.g. 1920x1200 or 1280x800 px, PNG / WebP / JPG).</p>
+                        <!-- Fine-Tuning Controls (Size, Rotate, Move X, Move Y) -->
+                        <div class="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 p-4 space-y-4">
+                            <span class="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                                <span class="material-symbols-rounded text-sm text-[#18a957]">tune</span>
+                                <span>Image Placement Controls (Real-Time Adjustment)</span>
+                            </span>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <!-- Size / Scale -->
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center justify-between text-xs">
+                                        <label for="heroImageScale" class="font-semibold text-slate-600 dark:text-slate-300">Size / Scale</label>
+                                        <span id="scaleDisplay" class="font-bold text-[#18a957] font-mono"><%= scaleVal %>%</span>
+                                    </div>
+                                    <input type="range" id="heroImageScale" name="heroImageScale" min="40" max="180" step="1" value="<%= scaleVal %>"
+                                        oninput="updateImageTransforms()" class="w-full cursor-pointer">
+                                </div>
+
+                                <!-- Rotate / Angle -->
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center justify-between text-xs">
+                                        <label for="heroImageRotate" class="font-semibold text-slate-600 dark:text-slate-300">Rotation Angle</label>
+                                        <span id="rotateDisplay" class="font-bold text-[#18a957] font-mono"><%= rotateVal %>°</span>
+                                    </div>
+                                    <input type="range" id="heroImageRotate" name="heroImageRotate" min="-180" max="180" step="1" value="<%= rotateVal %>"
+                                        oninput="updateImageTransforms()" class="w-full cursor-pointer">
+                                </div>
+
+                                <!-- Move Horizontal (X) -->
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center justify-between text-xs">
+                                        <label for="heroImageOffsetX" class="font-semibold text-slate-600 dark:text-slate-300">Move Horizontally (X)</label>
+                                        <span id="offsetXDisplay" class="font-bold text-[#18a957] font-mono"><%= offsetXVal %>px</span>
+                                    </div>
+                                    <input type="range" id="heroImageOffsetX" name="heroImageOffsetX" min="-250" max="250" step="2" value="<%= offsetXVal %>"
+                                        oninput="updateImageTransforms()" class="w-full cursor-pointer">
+                                </div>
+
+                                <!-- Move Vertical (Y) -->
+                                <div class="space-y-1.5">
+                                    <div class="flex items-center justify-between text-xs">
+                                        <label for="heroImageOffsetY" class="font-semibold text-slate-600 dark:text-slate-300">Move Vertically (Y)</label>
+                                        <span id="offsetYDisplay" class="font-bold text-[#18a957] font-mono"><%= offsetYVal %>px</span>
+                                    </div>
+                                    <input type="range" id="heroImageOffsetY" name="heroImageOffsetY" min="-200" max="200" step="2" value="<%= offsetYVal %>"
+                                        oninput="updateImageTransforms()" class="w-full cursor-pointer">
+                                </div>
+                            </div>
                         </div>
 
-                        <!-- Image URL Alternative -->
-                        <div class="space-y-1.5">
-                            <label for="heroScreenshotUrl" class="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                                OR Image URL (Hosted Link / CDN)
-                            </label>
-                            <input type="text" id="heroScreenshotUrl" name="heroScreenshotUrl" value="<%= landing.heroScreenshotUrl || '' %>"
-                                placeholder="https://example.com/screenshot.png"
-                                oninput="updateLiveImagePreview(this.value)"
-                                class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm font-medium text-slate-900 dark:text-white outline-none focus:border-primary transition-colors">
-                        </div>
-
-                        <!-- Live Screenshot Preview -->
-                        <div class="space-y-2 pt-2">
+                        <!-- Live Visual Stage Preview -->
+                        <div class="space-y-2 pt-1">
                             <div class="flex items-center justify-between">
-                                <span class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Screenshot Live Preview</span>
+                                <span class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Live Visual Stage Preview</span>
                                 <% if (landing.heroScreenshotUrl) { %>
                                     <label class="inline-flex items-center gap-1.5 text-xs text-rose-500 font-medium cursor-pointer">
                                         <input type="checkbox" name="clearHeroScreenshot" value="1" class="rounded border-slate-300 text-rose-600 focus:ring-rose-500">
-                                        <span>Remove current screenshot</span>
+                                        <span>Remove current image</span>
                                     </label>
                                 <% } %>
                             </div>
-                            <div id="imagePreviewContainer" class="min-h-[200px] max-h-[360px] w-full max-w-xl rounded-2xl bg-slate-50 dark:bg-slate-950/80 p-4 flex items-center justify-center border border-dashed border-slate-300 dark:border-slate-700 relative">
+
+                            <!-- Preview Stage Area with Ambient Dots Backdrop -->
+                            <div id="imagePreviewContainer" class="min-h-[280px] max-h-[420px] w-full rounded-2xl bg-slate-50 dark:bg-slate-950/70 p-6 flex items-center justify-center border border-dashed border-slate-300 dark:border-slate-800 relative overflow-hidden select-none">
+                                <!-- Stage Center Guideline Dot -->
+                                <div class="size-2 rounded-full bg-slate-300 dark:bg-slate-700 absolute pointer-events-none opacity-40"></div>
+
                                 <% if (landing.heroScreenshotUrl) { %>
-                                    <img id="screenshotPreviewImg" src="<%= landing.heroScreenshotUrl %>" alt="Hero Screenshot Preview" class="max-h-[320px] w-auto max-w-full object-contain drop-shadow-md">
+                                    <img id="screenshotPreviewImg" src="<%= landing.heroScreenshotUrl %>" alt="Hero Image Preview"
+                                        class="max-h-[340px] w-auto max-w-full object-contain drop-shadow-xl transition-transform duration-75">
+                                    <div id="noScreenshotPlaceholder" class="p-6 text-center text-slate-400 space-y-2 hidden">
+                                        <span class="material-symbols-rounded text-4xl">image</span>
+                                        <p class="text-xs">Select or enter an image above to preview</p>
+                                    </div>
                                 <% } else { %>
                                     <div id="noScreenshotPlaceholder" class="p-6 text-center text-slate-400 space-y-2">
-                                        <span class="material-symbols-rounded text-4xl">devices</span>
-                                        <p class="text-xs">No custom screenshot uploaded yet. Default modern platform mockup is shown on the landing page.</p>
+                                        <span class="material-symbols-rounded text-4xl">image</span>
+                                        <p class="text-xs">No custom image uploaded yet. Select an image file or enter URL to adjust size, angle and position.</p>
                                     </div>
-                                    <img id="screenshotPreviewImg" src="" alt="Hero Screenshot Preview" class="w-full h-full object-cover hidden">
+                                    <img id="screenshotPreviewImg" src="" alt="Hero Image Preview"
+                                        class="max-h-[340px] w-auto max-w-full object-contain drop-shadow-xl transition-transform duration-75 hidden">
                                 <% } %>
                             </div>
                         </div>
@@ -175,6 +256,35 @@
     </div>
 
     <script>
+        // Real-time Transform Engine
+        function updateImageTransforms() {
+            const scale = document.getElementById('heroImageScale').value;
+            const rotate = document.getElementById('heroImageRotate').value;
+            const offsetX = document.getElementById('heroImageOffsetX').value;
+            const offsetY = document.getElementById('heroImageOffsetY').value;
+
+            // Update badge indicators
+            document.getElementById('scaleDisplay').textContent = scale + '%';
+            document.getElementById('rotateDisplay').textContent = rotate + '°';
+            document.getElementById('offsetXDisplay').textContent = offsetX + 'px';
+            document.getElementById('offsetYDisplay').textContent = offsetY + 'px';
+
+            // Apply transform to preview image
+            const img = document.getElementById('screenshotPreviewImg');
+            if (img) {
+                const s = scale / 100;
+                img.style.transform = 'translate(' + offsetX + 'px, ' + offsetY + 'px) scale(' + s + ') rotate(' + rotate + 'deg)';
+            }
+        }
+
+        function resetImageTransforms() {
+            document.getElementById('heroImageScale').value = 100;
+            document.getElementById('heroImageRotate').value = 0;
+            document.getElementById('heroImageOffsetX').value = 0;
+            document.getElementById('heroImageOffsetY').value = 0;
+            updateImageTransforms();
+        }
+
         function updateLiveImagePreview(url) {
             const img = document.getElementById('screenshotPreviewImg');
             const placeholder = document.getElementById('noScreenshotPlaceholder');
@@ -184,6 +294,7 @@
                 img.src = url.trim();
                 img.classList.remove('hidden');
                 if (placeholder) placeholder.classList.add('hidden');
+                updateImageTransforms();
             } else {
                 img.classList.add('hidden');
                 if (placeholder) placeholder.classList.remove('hidden');
@@ -199,6 +310,7 @@
                     if (img) {
                         img.src = e.target.result;
                         img.classList.remove('hidden');
+                        updateImageTransforms();
                     }
                     if (placeholder) placeholder.classList.add('hidden');
                 };
@@ -232,10 +344,11 @@
             }
         }
 
-        // Initialize preview on load
+        // Initialize on load
         document.addEventListener('DOMContentLoaded', () => {
-            const input = document.getElementById('videoUrl');
-            if (input) updateLiveVideoPreview(input.value);
+            const vInput = document.getElementById('videoUrl');
+            if (vInput) updateLiveVideoPreview(vInput.value);
+            updateImageTransforms();
         });
     </script>
 </body>
