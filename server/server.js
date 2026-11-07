@@ -338,21 +338,31 @@ app.get('/', async (req, res) => {
         console.time('Homepage_Data_Fetch');
         const Course = require('./models/Course');
         const User = require('./models/User');
+        const Question = require('./models/Question');
+        const QuestionBank = require('./models/QuestionBank');
 
-        const [courses, categories, totalStudents, totalCourses] = await Promise.all([
-            Course.find().limit(6).select('title thumbnail accessType plans').lean().catch(() => []),
+        const [courses, categories, totalStudents, totalCourses, totalQuestions, totalTeachers, questionBankSample] = await Promise.all([
+            Course.find({ isCompleted: { $ne: true } })
+                .sort({ createdAt: -1 })
+                .limit(9)
+                .populate('instructor', 'name profilePicture designation username teachingSubject')
+                .lean()
+                .catch(() => []),
             Course.distinct('category').catch(() => []),
             User.countDocuments({ role: 'student' }).catch(() => 0),
-            Course.countDocuments().catch(() => 0)
+            Course.countDocuments().catch(() => 0),
+            Question.countDocuments().catch(() => 0),
+            User.countDocuments({ role: 'teacher' }).catch(() => 0),
+            QuestionBank.find({ status: 'approved' }).limit(6).select('board year subject title duration').lean().catch(() => [])
         ]);
 
         // Faster aggregation for chapter contents
         const stats = await Course.aggregate([
             {
                 $project: {
-                    classes: { $reduce: { input: "$chapters", initialValue: 0, in: { $add: ["$$value", { $size: { $ifNull: ["$$this.recordedClasses", []] } }] } } },
-                    notes: { $reduce: { input: "$chapters", initialValue: 0, in: { $add: ["$$value", { $size: { $ifNull: ["$$this.notes", []] } }] } } },
-                    quizzes: { $reduce: { input: "$chapters", initialValue: 0, in: { $add: ["$$value", { $size: { $ifNull: ["$$this.quizzes", []] } }] } } }
+                    classes: { $reduce: { input: "$chapters", initialValue: 0, in: { $add: ["$value", { $size: { $ifNull: ["$this.recordedClasses", []] } }] } } },
+                    notes: { $reduce: { input: "$chapters", initialValue: 0, in: { $add: ["$value", { $size: { $ifNull: ["$this.notes", []] } }] } } },
+                    quizzes: { $reduce: { input: "$chapters", initialValue: 0, in: { $add: ["$value", { $size: { $ifNull: ["$this.quizzes", []] } }] } } }
                 }
             },
             {
@@ -373,10 +383,33 @@ app.get('/', async (req, res) => {
         }
         console.timeEnd('Homepage_Data_Fetch');
 
-        res.render('index', { courses, categories, totalStudents, totalCourses, totalClasses, totalNotes, totalQuizzes });
+        res.render('index', { 
+            courses, 
+            categories, 
+            totalStudents: totalStudents || 0, 
+            totalCourses: totalCourses || 0, 
+            totalClasses: totalClasses || 0, 
+            totalNotes: totalNotes || 0, 
+            totalQuizzes: totalQuizzes || 0,
+            totalQuestions: totalQuestions || 0,
+            totalTeachers: totalTeachers || 0,
+            questionBankSample: questionBankSample || []
+        });
     } catch (err) {
-        try { res.render('index', { courses: [], categories: [], totalStudents: 0, totalCourses: 0, totalClasses: 0, totalNotes: 0, totalQuizzes: 0 }); }
-        catch (e) { res.status(500).send('Critical Error: ' + e.message); }
+        try { 
+            res.render('index', { 
+                courses: [], 
+                categories: [], 
+                totalStudents: 0, 
+                totalCourses: 0, 
+                totalClasses: 0, 
+                totalNotes: 0, 
+                totalQuizzes: 0,
+                totalQuestions: 0,
+                totalTeachers: 0,
+                questionBankSample: []
+            }); 
+        } catch (e) { res.status(500).send('Critical Error: ' + e.message); }
     }
 });
 app.get('/pricing', (req, res) => res.sendFile(path.join(clientPath, 'public', 'pricing.html')));
