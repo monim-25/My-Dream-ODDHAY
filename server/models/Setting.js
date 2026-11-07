@@ -51,6 +51,12 @@ const SettingSchema = new mongoose.Schema({
         customContent: { type: String, default: '' },
         metaTitle: { type: String, default: 'Privacy Policy | ODDHAY' }
     },
+    policiesAndLegal: {
+        privacyPolicy: { type: String, default: '' },
+        refundPolicy: { type: String, default: '' },
+        termsConditions: { type: String, default: '' },
+        aboutContent: { type: String, default: '' }
+    },
     landingPage: {
         heroScreenshotUrl: { type: String, default: '' },
         heroImageScale: { type: Number, default: 100 },

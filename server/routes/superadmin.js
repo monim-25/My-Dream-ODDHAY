@@ -3572,44 +3572,67 @@ router.post('/landing-control', superAdminProtect, (req, res, next) => {
     }
 });
 
-// Privacy Policy Control
-router.get('/privacy-policy', superAdminProtect, async (req, res) => {
+// Policies & Legal Control Center
+router.get('/policies', superAdminProtect, async (req, res) => {
     try {
         await connectDB();
         const Setting = require('../models/Setting');
         let settings = await Setting.findOne().populate('updatedBy', 'name role').lean();
         if (!settings) settings = await Setting.create({});
-        res.render('superadmin/privacy-policy', {
+        res.render('superadmin/policies-control', {
             user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             settings,
-            active: 'privacy-policy',
+            active: 'policies',
+            activeTab: req.query.tab || 'privacy',
             success: req.query.success || null
         });
     } catch (err) {
-        res.status(500).send('Error loading Privacy Policy control: ' + err.message);
+        res.status(500).send('Error loading Policies & Legal control: ' + err.message);
     }
 });
 
-router.post('/privacy-policy', superAdminProtect, async (req, res) => {
+router.post('/policies', superAdminProtect, async (req, res) => {
     try {
         await connectDB();
         const Setting = require('../models/Setting');
-        const { lastUpdated, metaTitle, customContent } = req.body;
+        const { tab, privacyPolicy, refundPolicy, termsConditions, aboutContent } = req.body;
+
+        const updateFields = {
+            updatedBy: req.session.userId
+        };
+
+        if (privacyPolicy !== undefined) {
+            updateFields['policiesAndLegal.privacyPolicy'] = privacyPolicy.trim();
+            updateFields['privacyPolicy.customContent'] = privacyPolicy.trim();
+        }
+        if (refundPolicy !== undefined) {
+            updateFields['policiesAndLegal.refundPolicy'] = refundPolicy.trim();
+        }
+        if (termsConditions !== undefined) {
+            updateFields['policiesAndLegal.termsConditions'] = termsConditions.trim();
+        }
+        if (aboutContent !== undefined) {
+            updateFields['policiesAndLegal.aboutContent'] = aboutContent.trim();
+        }
 
         await Setting.findOneAndUpdate({}, {
-            $set: {
-                'privacyPolicy.lastUpdated': (lastUpdated || '').trim(),
-                'privacyPolicy.metaTitle': (metaTitle || '').trim(),
-                'privacyPolicy.customContent': (customContent || '').trim(),
-                updatedBy: req.session.userId
-            }
+            $set: updateFields
         }, { upsert: true, new: true });
 
-        await logActivity(req, 'UPDATE', 'Updated Public Privacy Policy content', 'Settings');
-        res.redirect('/superadmin/privacy-policy?success=1');
+        await logActivity(req, 'UPDATE', 'Updated Public Policies & Legal content', 'Settings');
+        res.redirect(`/superadmin/policies?tab=${tab || 'privacy'}&success=1`);
     } catch (err) {
-        res.status(500).send('Error updating Privacy Policy: ' + err.message);
+        res.status(500).send('Error updating Policies & Legal: ' + err.message);
     }
+});
+
+// Privacy Policy Control (Redirect to unified Policies & Legal Center)
+router.get('/privacy-policy', superAdminProtect, (req, res) => {
+    res.redirect('/superadmin/policies?tab=privacy');
+});
+
+router.post('/privacy-policy', superAdminProtect, (req, res) => {
+    res.redirect(307, '/superadmin/policies');
 });
 
 // Profile Management
