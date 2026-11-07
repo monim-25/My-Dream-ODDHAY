@@ -168,9 +168,16 @@ router.post('/messages/mark-all-read', protect, async (req, res) => {
         if (!myId) return res.status(401).json({ success: false, error: 'Unauthorized' });
         await Message.updateMany({ receiver: myId, isRead: false }, { $set: { isRead: true } });
         try {
+            await Notification.updateMany(
+                { user: myId, type: 'message', isRead: false },
+                { $set: { isRead: true, readAt: new Date() } }
+            );
+        } catch (notifErr) {}
+        try {
             const io = req.app.get('io');
             if (io && myId) {
                 io.to(`user_${myId}`).emit('message:read', { all: true });
+                io.to(`user_${myId}`).emit('notification:read', { all: true });
             }
         } catch (e) {}
         res.json({ success: true, message: 'All received messages marked as read' });
@@ -210,6 +217,27 @@ router.get('/messages/thread/:targetUserId', protect, async (req, res) => {
             { sender: targetId, receiver: myId, isRead: false },
             { $set: { isRead: true } }
         );
+        try {
+            await Notification.updateMany(
+                {
+                    user: myId,
+                    type: 'message',
+                    isRead: false,
+                    $or: [
+                        { link: { $regex: new RegExp(targetId.toString(), 'i') } },
+                        { link: { $regex: /messages/i } }
+                    ]
+                },
+                { $set: { isRead: true, readAt: new Date() } }
+            );
+        } catch (notifErr) {}
+        try {
+            const io = req.app.get('io');
+            if (io && myId) {
+                io.to(`user_${myId}`).emit('message:read', { senderId: targetId });
+                io.to(`user_${myId}`).emit('notification:read', { type: 'message', senderId: targetId });
+            }
+        } catch (e) {}
 
         const currentUser = await User.findById(myId).select('role').lean();
         const isCurrentUserSuperAdmin = currentUser && currentUser.role === 'superadmin';
@@ -471,11 +499,25 @@ router.post('/messages/mark-read/:senderId', protect, async (req, res) => {
             { sender: senderId, receiver: myId, isRead: false },
             { $set: { isRead: true } }
         );
-
+        try {
+            await Notification.updateMany(
+                {
+                    user: myId,
+                    type: 'message',
+                    isRead: false,
+                    $or: [
+                        { link: { $regex: new RegExp(senderId.toString(), 'i') } },
+                        { link: { $regex: /messages/i } }
+                    ]
+                },
+                { $set: { isRead: true, readAt: new Date() } }
+            );
+        } catch (notifErr) {}
         try {
             const io = req.app.get('io');
             if (io && myId) {
                 io.to(`user_${myId}`).emit('message:read', { senderId });
+                io.to(`user_${myId}`).emit('notification:read', { type: 'message', senderId });
             }
         } catch (e) {}
 
