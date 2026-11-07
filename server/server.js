@@ -425,6 +425,7 @@ app.get('/ai-tutor', (req, res) => res.sendFile(path.join(clientPath, 'public', 
 app.get('/about', (req, res) => res.render('about'));
 app.get('/contact', (req, res) => res.render('contact'));
 app.get('/privacy-policy', (req, res) => res.render('privacy-policy'));
+app.get('/refund-policy', (req, res) => res.render('refund-policy'));
 app.get('/terms', (req, res) => res.render('terms'));
 app.get('/faq', (req, res) => res.render('faq'));
 app.post('/contact-submit', (req, res) => res.redirect('/?contact=success'));

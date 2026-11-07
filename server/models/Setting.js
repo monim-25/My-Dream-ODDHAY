@@ -33,6 +33,11 @@ const SettingSchema = new mongoose.Schema({
         facebook: { type: String, default: 'https://facebook.com/oddhay' },
         youtube: { type: String, default: 'https://youtube.com/@oddhay' }
     },
+    legalInfo: {
+        tradeLicense: { type: String, default: 'TRAD/DNCC/041285/2026' },
+        tinNumber: { type: String, default: '8491-7302-6194' },
+        address: { type: String, default: 'বাড়ি #১২, রোড #০৪, ধানমন্ডি, ঢাকা - ১২০৯, বাংলাদেশ' }
+    },
     landingPage: {
         heroScreenshotUrl: { type: String, default: '' },
         heroImageScale: { type: Number, default: 100 },
