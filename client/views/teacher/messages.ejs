@@ -3,7 +3,7 @@
 <head>
     <%- include('../partials/head') %>
     <%- include('../partials/app-styles') %>
-    <title>Student Messages | Instructor Portal</title>
+    <title>Messages | Instructor Portal</title>
     <style>
                 :root { --admin-sidebar-width: 260px; }
         html, body { height: 100%; height: 100dvh; overflow: hidden; margin: 0; padding: 0; }
@@ -55,7 +55,7 @@
 
         <!-- Main Messaging Studio -->
         <main class="admin-main flex-1 bg-[#FFFFFF] dark:bg-[#020617] flex flex-col h-screen overflow-hidden">
-            <%- include('header', { pageTitle: 'Student Messages' }) %>
+            <%- include('header', { pageTitle: 'Messages' }) %>
 
             <div class="content-scroll flex-1 flex overflow-hidden border-l-0 lg:border-l border-slate-200 dark:border-white/5 pb-0 lg:pb-0">
                 <div class="flex-1 bg-white dark:bg-[#0f172a] overflow-hidden flex flex-col md:flex-row h-full">
@@ -66,13 +66,13 @@
                     <!-- Search Box with Toggle Icon beside it -->
                     <div class="p-3 border-b border-slate-200/80 dark:border-slate-800/80 h-16 flex items-center gap-2 shrink-0">
                         <div class="relative flex items-center flex-1">
-                            <input type="text" id="student-search-input" oninput="filterStudentList(this.value)" placeholder="Search here..."
+                            <input type="text" id="student-search-input" oninput="filterStudentList(this.value)" placeholder="Search messages..."
                                 class="w-full pl-9 pr-3.5 py-2.5 text-xs sm:text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl outline-none focus:border-primary text-slate-900 dark:text-white placeholder:text-slate-400 font-medium transition-all shadow-2xs">
                             <span class="material-symbols-rounded absolute left-3 text-slate-400 text-lg leading-none flex items-center justify-center pointer-events-none select-none">search</span>
                         </div>
                         <button type="button" 
                             onclick="toggleTeacherConversationsSidebar()" 
-                            id="teacher-sidebar-toggle-search-btn" title="Toggle Students List" 
+                            id="teacher-sidebar-toggle-search-btn" title="Toggle Conversations List" 
                             class="hidden md:flex size-9 sm:size-10 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 items-center justify-center shrink-0 transition-all cursor-pointer shadow-2xs select-none active:scale-95">
                             <span class="material-symbols-rounded text-xl leading-none pointer-events-none">dock_to_left</span>
                         </button>
@@ -119,9 +119,25 @@
                                                 </span>
                                             <% } %>
                                         </div>
-                                        <div class="flex items-center gap-1 mt-1.5">
-                                            <span class="px-2 py-0.5 bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[9px] font-bold rounded-md">
-                                                <%= stu.classLevel || 'Student' %>
+                                        <div class="flex items-center gap-1.5 mt-1.5">
+                                            <% 
+                                                let stuDesignation = stu.designation;
+                                                if (!stuDesignation) {
+                                                    if (stu.role === 'student') stuDesignation = stu.classLevel ? (stu.classLevel + ' Student') : 'Student';
+                                                    else if (stu.role === 'superadmin') stuDesignation = 'SuperAdmin';
+                                                    else if (stu.role === 'admin') stuDesignation = 'Administrator';
+                                                    else if (stu.role === 'teacher') stuDesignation = stu.teachingSubject ? (stu.teachingSubject + ' Teacher') : 'Teacher';
+                                                    else if (stu.role === 'guardian' || stu.role === 'parent') stuDesignation = 'Guardian';
+                                                    else stuDesignation = stu.role ? (stu.role.charAt(0).toUpperCase() + stu.role.slice(1)) : 'User';
+                                                }
+                                                let stuRoleColor = 'bg-slate-200/70 dark:bg-slate-800 text-slate-600 dark:text-slate-300';
+                                                if (stu.role === 'superadmin') stuRoleColor = 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300';
+                                                else if (stu.role === 'admin') stuRoleColor = 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300';
+                                                else if (stu.role === 'teacher') stuRoleColor = 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
+                                                else if (stu.role === 'student') stuRoleColor = 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300';
+                                            %>
+                                            <span class="px-2 py-0.5 <%= stuRoleColor %> text-[9.5px] font-bold rounded-md truncate max-w-[170px]" title="<%= stuDesignation %>">
+                                                <%= stuDesignation %>
                                             </span>
                                         </div>
                                     </div>
@@ -130,8 +146,8 @@
                         <% } else { %>
                             <div class="py-12 px-4 text-center">
                                 <span class="material-symbols-rounded text-3xl text-slate-300 dark:text-slate-600 mb-1 leading-none flex items-center justify-center select-none">person_search</span>
-                                <p class="text-xs font-bold text-slate-500 dark:text-slate-400">No student conversations yet</p>
-                                <p class="text-[10px] text-slate-400 mt-0.5">When enrolled students send questions, they will appear here.</p>
+                                <p class="text-xs font-bold text-slate-500 dark:text-slate-400">No conversations yet</p>
+                                <p class="text-[10px] text-slate-400 mt-0.5">When students or staff send messages, they will appear here.</p>
                             </div>
                         <% } %>
                     </div>
@@ -175,10 +191,30 @@
                                     <div class="min-w-0">
                                         <h3 id="active-student-name" class="text-[13.5px] sm:text-[15.5px] font-semibold text-slate-800 dark:text-slate-100 tracking-tight antialiased leading-snug truncate"><%= locals.activeStudent ? activeStudent.name : '' %></h3>
                                         <div class="flex items-center gap-1.5 mt-0.5">
-                                            <span id="active-student-class" class="text-[10.5px] sm:text-[11.5px] font-semibold text-primary dark:text-primary tracking-tight antialiased truncate"><%= locals.activeStudent ? (activeStudent.classLevel || 'Student') : 'Student' %></span>
+                                            <% 
+                                                let activeDesig = '';
+                                                let activeRoleBadge = '';
+                                                if (locals.activeStudent) {
+                                                    activeDesig = activeStudent.designation;
+                                                    if (!activeDesig) {
+                                                        if (activeStudent.role === 'student') activeDesig = activeStudent.classLevel ? (activeStudent.classLevel + ' Student') : 'Student';
+                                                        else if (activeStudent.role === 'superadmin') activeDesig = 'SuperAdmin';
+                                                        else if (activeStudent.role === 'admin') activeDesig = 'Administrator';
+                                                        else if (activeStudent.role === 'teacher') activeDesig = activeStudent.teachingSubject ? (activeStudent.teachingSubject + ' Teacher') : 'Teacher';
+                                                        else if (activeStudent.role === 'guardian' || activeStudent.role === 'parent') activeDesig = 'Guardian';
+                                                        else activeDesig = activeStudent.role || 'User';
+                                                    }
+                                                    if (activeStudent.role === 'student') activeRoleBadge = 'Student';
+                                                    else if (activeStudent.role === 'superadmin') activeRoleBadge = 'Executive';
+                                                    else if (activeStudent.role === 'admin') activeRoleBadge = 'Administration';
+                                                    else if (activeStudent.role === 'teacher') activeRoleBadge = 'Faculty';
+                                                    else activeRoleBadge = activeStudent.role;
+                                                }
+                                            %>
+                                            <span id="active-student-class" class="text-[10.5px] sm:text-[11.5px] font-semibold text-primary dark:text-primary tracking-tight antialiased truncate"><%= activeDesig %></span>
                                             <span class="text-slate-300 dark:text-slate-600 text-[10px]">•</span>
-                                            <span class="text-[10.5px] sm:text-[11.5px] font-medium text-emerald-600 dark:text-emerald-400 tracking-tight antialiased flex items-center gap-1 truncate">
-                                                <span class="size-1.5 rounded-full bg-emerald-500 shrink-0"></span> Enrolled Student
+                                            <span id="active-student-role-badge" class="text-[10.5px] sm:text-[11.5px] font-medium text-emerald-600 dark:text-emerald-400 tracking-tight antialiased flex items-center gap-1 truncate">
+                                                <span class="size-1.5 rounded-full bg-emerald-500 shrink-0"></span> <%= activeRoleBadge %>
                                             </span>
                                         </div>
                                     </div>
@@ -457,8 +493,8 @@
                             <div class="size-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-3">
                                 <span class="material-symbols-rounded text-3xl leading-none flex items-center justify-center select-none">chat_bubble</span>
                             </div>
-                            <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-1">Select a Student Conversation</h3>
-                            <p class="text-xs text-slate-400 max-w-sm">Choose an enrolled student from the left list to view their questions and provide instant guidance.</p>
+                            <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-1">Select a Conversation</h3>
+                            <p class="text-xs text-slate-400 max-w-sm">Choose a contact from the left list to view messages and provide instant guidance.</p>
                         </div>
                     </div>
 
@@ -487,6 +523,7 @@
                                         <% } %>
                                     </div>
                                     <h3 id="teacher-details-name" class="text-sm font-semibold text-slate-800 dark:text-slate-100 leading-snug tracking-tight"><%= locals.activeStudent ? activeStudent.name : '' %></h3>
+                                    <p id="teacher-details-designation" class="text-xs font-medium text-primary mt-0.5"><%= locals.activeStudent ? (activeStudent.designation || (activeStudent.role === 'student' ? (activeStudent.classLevel ? activeStudent.classLevel + ' Student' : 'Student') : (activeStudent.role === 'admin' ? 'Administrator' : (activeStudent.role === 'superadmin' ? 'SuperAdmin' : activeStudent.role)))) : '' %></p>
                                 </div>
 
                                 <!-- Shared Media & Files Section -->
@@ -847,6 +884,8 @@
                 '<%= stu._id %>': {
                     name: <%- JSON.stringify(stu.name) %>,
                     classLevel: <%- JSON.stringify(stu.classLevel || 'Student') %>,
+                    designation: <%- JSON.stringify(stu.designation || '') %>,
+                    role: <%- JSON.stringify(stu.role || 'student') %>,
                     profilePicture: <%- JSON.stringify(stu.profilePicture || stu.profileImage || '') %>
                 },
             <% }); %>
@@ -1011,7 +1050,22 @@
                 if (nameEl) nameEl.textContent = stuData.name;
 
                 const clsEl = document.getElementById('active-student-class');
-                if (clsEl) clsEl.textContent = stuData.classLevel || 'Student';
+                const roleBadgeEl = document.getElementById('active-student-role-badge');
+                let displayDesig = stuData.designation;
+                if (!displayDesig) {
+                    if (stuData.role === 'student') displayDesig = stuData.classLevel ? (stuData.classLevel + ' Student') : 'Student';
+                    else if (stuData.role === 'superadmin') displayDesig = 'SuperAdmin';
+                    else if (stuData.role === 'admin') displayDesig = 'Administrator';
+                    else if (stuData.role === 'teacher') displayDesig = 'Teacher';
+                    else displayDesig = stuData.role || 'User';
+                }
+                if (clsEl) clsEl.textContent = displayDesig;
+                if (roleBadgeEl) {
+                    let rText = stuData.role === 'student' ? 'Student' : (stuData.role === 'superadmin' ? 'Executive' : (stuData.role === 'admin' ? 'Administration' : 'Faculty'));
+                    roleBadgeEl.innerHTML = `<span class="size-1.5 rounded-full bg-emerald-500 shrink-0"></span> ${rText}`;
+                }
+                const detDesig = document.getElementById('teacher-details-designation');
+                if (detDesig) detDesig.textContent = displayDesig;
 
                 const avatarEl = document.getElementById('active-student-avatar');
                 if (avatarEl) {
@@ -1886,11 +1940,9 @@
                             const senderId = (msg.sender && msg.sender._id) ? msg.sender._id.toString() : (msg.sender ? msg.sender.toString() : '');
                             const isMe = senderId === currentTeacherId;
                             const timeStr = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                            const isSuperAdminSender = msg.senderRole === 'superadmin';
-                            const isAdminSender = msg.senderRole === 'admin';
-                            const isStaffSender = (isSuperAdminSender || isAdminSender) && !isMe;
-                            const avatarUrl = isStaffSender ? '/images/logo.png' : (msg.userAvatar || (msg.sender && (msg.sender.profilePicture || msg.sender.profileImage)));
-                            const senderName = (isSuperAdminSender && !isMe) ? 'SuperAdmin' : ((isAdminSender && !isMe) ? 'Admin' : (msg.senderName || (msg.sender && msg.sender.name) || (isMe ? 'You' : 'Student')));
+                            const activeData = (activeStudentId && studentsDirectory[activeStudentId]) ? studentsDirectory[activeStudentId] : null;
+                            const avatarUrl = msg.userAvatar || (msg.sender && (msg.sender.profilePicture || msg.sender.profileImage)) || (activeData && activeData.profilePicture) || '';
+                            const senderName = isMe ? 'You' : (msg.senderName || (msg.sender && msg.sender.name) || (activeData && activeData.name) || 'User');
                             const avatarInitial = senderName ? senderName[0].toUpperCase() : 'S';
                             const msgTextSnippet = (msg.text || (msg.attachment ? msg.attachment.fileName : '')).substring(0, 100);
                             const fileType = msg.attachment ? msg.attachment.fileType : '';
@@ -1966,9 +2018,11 @@
 
                                 html += `
                                     <div id="teacher-msg-${msg._id}" class="flex flex-col items-start group transition-all duration-300 rounded-xl p-1 -m-1 relative">
-                                        <!-- 1st Line: Actions & Time -->
-                                        <div class="flex items-center gap-1 mb-1 ml-10 select-none">
-                                            <span class="text-[9.5px] font-medium text-slate-400 dark:text-slate-500">${timeStr}</span>
+                                        <!-- 1st Line: Sender Name & Designation & Time -->
+                                        <div class="flex items-center gap-1.5 mb-1 ml-10 select-none flex-wrap">
+                                            <span class="text-[11px] font-bold text-slate-700 dark:text-slate-200">${escapeHtml(senderName)}</span>
+                                            ${activeData && (activeData.designation || activeData.classLevel) ? `<span class="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300 leading-none">${escapeHtml(activeData.designation || activeData.classLevel)}</span>` : ''}
+                                            <span class="text-[9.5px] font-medium text-slate-400 dark:text-slate-500">• ${timeStr}</span>
                                             ${msg.isPinned ? '<span class="material-symbols-rounded text-xs text-amber-500 leading-none ml-0.5" title="Pinned message">push_pin</span>' : ''}
                                         </div>
                                         <!-- 2nd Line: Profile Icon & Message Box + Hover Action Capsule -->
@@ -2043,7 +2097,7 @@
 
         function escapeTeacherJs(str) {
             if (!str) return '';
-            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, ' ').replace(/\r/g, '');
+            return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\r\n/g, ' ').replace(/\r/g, '');
         }
 
         function toggleTeacherChatHeaderMenu(e) {
@@ -2074,9 +2128,8 @@
             const senderId = (msg.sender && msg.sender._id) ? msg.sender._id.toString() : (msg.sender ? msg.sender.toString() : '');
             const isMe = senderId === currentTeacherId;
             const isLikedByMe = Array.isArray(msg.likes) && msg.likes.some(id => id.toString() === currentTeacherId);
-            const isSuperAdminSender = msg.senderRole === 'superadmin';
-            const isAdminSender = msg.senderRole === 'admin';
-            const senderName = (isSuperAdminSender && !isMe) ? 'SuperAdmin' : ((isAdminSender && !isMe) ? 'Admin' : (msg.senderName || (msg.sender && msg.sender.name) || (isMe ? 'You' : 'Student')));
+        const activeData = (activeStudentId && studentsDirectory[activeStudentId]) ? studentsDirectory[activeStudentId] : null;
+        const senderName = isMe ? 'You' : (msg.senderName || (msg.sender && msg.sender.name) || (activeData && activeData.name) || 'User');
             const timeStr = new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const msgTextSnippet = (msg.text || (msg.attachment ? msg.attachment.fileName : 'Media attachment')).substring(0, 100);
             const fileType = msg.attachment ? msg.attachment.fileType : '';

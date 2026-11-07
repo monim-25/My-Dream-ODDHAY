@@ -213,20 +213,20 @@ router.get('/messages/thread/:targetUserId', protect, async (req, res) => {
 
         const currentUser = await User.findById(myId).select('role').lean();
         const isCurrentUserSuperAdmin = currentUser && currentUser.role === 'superadmin';
+        const isCurrentUserTeacher = currentUser && currentUser.role === 'teacher';
 
-        // Disguise SuperAdmin / Admin identity to standard recipients:
-        // Do not reveal superadmin's personal username/name to other users; always show 'SuperAdmin'
-        // If admin sent message to anyone except superadmin: show 'Admin'
+        // Disguise SuperAdmin / Admin identity ONLY to standard students:
+        // In teacher panel, messages are received with the sender's actual username and designation
         const sanitizedMessages = messages.map(m => {
             const isMe = String(m.sender) === String(myId);
-            if (!isCurrentUserSuperAdmin && m.senderRole === 'superadmin' && !isMe) {
+            if (!isCurrentUserSuperAdmin && !isCurrentUserTeacher && m.senderRole === 'superadmin' && !isMe) {
                 return {
                     ...m,
                     senderName: 'SuperAdmin',
                     userAvatar: '/images/logo.png'
                 };
             }
-            if (!isCurrentUserSuperAdmin && m.senderRole === 'admin' && !isMe) {
+            if (!isCurrentUserSuperAdmin && !isCurrentUserTeacher && m.senderRole === 'admin' && !isMe) {
                 return {
                     ...m,
                     senderName: 'Admin',
@@ -388,7 +388,12 @@ router.post('/messages/send', protect, (req, res, next) => {
         let senderDisplayName = sender.name;
         let senderDisplayAvatar = sender.profilePicture || sender.profileImage || null;
 
-        if (isSenderSuperAdmin) {
+        const isReceiverTeacher = receiver.role === 'teacher';
+        if (isReceiverTeacher) {
+            // In teacher panel, messages are received with actual username and designation
+            senderDisplayName = sender.name || sender.username;
+            senderDisplayAvatar = sender.profilePicture || sender.profileImage || null;
+        } else if (isSenderSuperAdmin) {
             senderDisplayName = 'SuperAdmin';
             senderDisplayAvatar = '/images/logo.png';
         } else if (isSenderAdmin && !isReceiverSuperAdmin) {
@@ -438,10 +443,10 @@ router.post('/messages/send', protect, (req, res, next) => {
             const io = req.app.get('io');
             if (io) {
                 const socketMsg = newMsg.toObject ? newMsg.toObject() : { ...newMsg };
-                if (isSenderSuperAdmin && receiver.role !== 'superadmin') {
+                if (!isReceiverTeacher && isSenderSuperAdmin && receiver.role !== 'superadmin') {
                     socketMsg.senderName = 'SuperAdmin';
                     socketMsg.userAvatar = '/images/logo.png';
-                } else if (isSenderAdmin && receiver.role !== 'superadmin') {
+                } else if (!isReceiverTeacher && isSenderAdmin && receiver.role !== 'superadmin') {
                     socketMsg.senderName = 'Admin';
                     socketMsg.userAvatar = '/images/logo.png';
                 }

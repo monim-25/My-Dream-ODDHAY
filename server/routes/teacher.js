@@ -440,7 +440,7 @@ router.get('/messages', teacherProtect, async (req, res) => {
             const enrolledStudents = await User.find({
                 'enrolledCourses.course': { $in: myCourseIds },
                 role: 'student'
-            }).select('name email classLevel profilePicture profileImage').lean();
+            }).select('name username email classLevel designation role profilePicture profileImage').lean();
 
             enrolledStudents.forEach(stu => {
                 const stuId = stu._id.toString();
@@ -457,27 +457,15 @@ router.get('/messages', teacherProtect, async (req, res) => {
             });
         }
 
-        // Fetch user profiles for any students or staff who aren't yet populated
+        // Fetch user profiles for any students, admins, teachers or staff who aren't yet populated
         const missingStudentIds = Object.keys(studentMap).filter(id => !studentMap[id].student);
         if (missingStudentIds.length > 0) {
             const extraStudents = await User.find({ _id: { $in: missingStudentIds } })
-                .select('name email classLevel profilePicture profileImage role')
+                .select('name username email classLevel designation role teachingSubject profilePicture profileImage')
                 .lean();
             extraStudents.forEach(stu => {
                 if (studentMap[stu._id.toString()]) {
-                    if (stu.role === 'superadmin') {
-                        stu.name = 'SuperAdmin';
-                        stu.classLevel = 'SuperAdmin';
-                        stu.email = 'ODDHAY SuperAdmin';
-                        stu.profilePicture = '/images/logo.png';
-                        stu.profileImage = '/images/logo.png';
-                    } else if (stu.role === 'admin') {
-                        stu.name = 'Admin';
-                        stu.classLevel = 'Admin';
-                        stu.email = 'ODDHAY Admin';
-                        stu.profilePicture = '/images/logo.png';
-                        stu.profileImage = '/images/logo.png';
-                    }
+                    // Retain actual username/name and their real designation
                     studentMap[stu._id.toString()].student = stu;
                 }
             });
@@ -492,23 +480,15 @@ router.get('/messages', teacherProtect, async (req, res) => {
             return dateB - dateA;
         });
 
-        const activeStudentId = req.query.studentId;
+        const activeStudentId = req.query.studentId || req.query.userId || req.query.contactId;
         let activeStudent = null;
         if (activeStudentId) {
             const found = conversations.find(c => c.studentId === activeStudentId);
             activeStudent = found ? found.student : null;
-            if (activeStudent && activeStudent.role === 'superadmin') {
-                activeStudent.name = 'SuperAdmin';
-                activeStudent.classLevel = 'SuperAdmin';
-                activeStudent.email = 'ODDHAY SuperAdmin';
-                activeStudent.profilePicture = '/images/logo.png';
-                activeStudent.profileImage = '/images/logo.png';
-            } else if (activeStudent && activeStudent.role === 'admin') {
-                activeStudent.name = 'Admin';
-                activeStudent.classLevel = 'Admin';
-                activeStudent.email = 'ODDHAY Admin';
-                activeStudent.profilePicture = '/images/logo.png';
-                activeStudent.profileImage = '/images/logo.png';
+            if (!activeStudent) {
+                activeStudent = await User.findById(activeStudentId)
+                    .select('name username email classLevel designation role teachingSubject profilePicture profileImage')
+                    .lean();
             }
         }
 
