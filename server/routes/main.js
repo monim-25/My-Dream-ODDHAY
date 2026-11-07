@@ -4287,41 +4287,62 @@ router.get('/mock-tests', protect, async (req, res) => {
 });
 
 // ---- Course Details & Checkout ----
-router.get(['/course-details/:id', '/course/:id'], protect, async (req, res) => {
+router.get(['/course-details/:id', '/course/:id'], async (req, res) => {
     try {
         await connectDB();
         const courseId = req.params.id;
-        const userId = req.session.userId;
+        const userId = req.session ? req.session.userId : null;
         const Announcement = require('../models/Announcement');
         const NotificationLog = require('../models/NotificationLog');
+        const AcademicClass = require('../models/AcademicClass');
 
-        // Fetch course, user, QAs, enrolled count, related courses, and course notices in parallel
-        const [courseDoc, user, qas, enrolledCount, relatedCourses, courseAnnouncements, courseLogs] = await Promise.all([
-            Course.findById(courseId)
+        let courseDoc = null;
+        if (mongoose.Types.ObjectId.isValid(courseId)) {
+            courseDoc = await Course.findById(courseId)
                 .populate('instructor', 'name profileImage profilePicture bio email role averageRating teacherRatings')
                 .populate('permittedTeachers', 'name profileImage profilePicture bio email role')
                 .populate('chapters.quizzes', 'title duration totalMarks questions')
                 .populate('curriculumNodes.quizId', 'title duration totalMarks questions')
                 .populate('curriculumNodes.addedBy', 'name profileImage profilePicture bio email role')
-                .lean(),
-            User.findById(userId)
+                .lean();
+        }
+
+        // If course not found by ID (e.g. invalid or test ID), gracefully find first active course
+        if (!courseDoc) {
+            const fallback = await Course.findOne({ isCompleted: { $ne: true } })
+                .populate('instructor', 'name profileImage profilePicture bio email role averageRating teacherRatings')
+                .populate('permittedTeachers', 'name profileImage profilePicture bio email role')
+                .populate('chapters.quizzes', 'title duration totalMarks questions')
+                .populate('curriculumNodes.quizId', 'title duration totalMarks questions')
+                .populate('curriculumNodes.addedBy', 'name profileImage profilePicture bio email role')
+                .lean();
+            if (fallback) {
+                const targetTab = req.query.tab ? ('?tab=' + req.query.tab) : '';
+                return res.redirect('/course-details/' + fallback._id + targetTab);
+            }
+            return res.redirect('/courses');
+        }
+
+        // Fetch course details, user, QAs, notices, etc.
+        const [user, qas, enrolledCount, relatedCourses, courseAnnouncements, courseLogs, activeClasses] = await Promise.all([
+            userId ? User.findById(userId)
                 .select('name email role enrolledCourses trialEnrollments completedLessons profileImage profilePicture attendedNotices')
-                .lean(),
-            QA.find({ course: courseId })
+                .lean() : Promise.resolve(null),
+            QA.find({ course: courseDoc._id })
                 .populate('askedBy answeredBy', 'name profileImage profilePicture role')
                 .sort({ createdAt: -1 })
                 .limit(30)
                 .lean(),
-            User.countDocuments({ 'enrolledCourses.course': courseId }),
-            Course.find({ _id: { $ne: courseId } })
+            User.countDocuments({ 'enrolledCourses.course': courseDoc._id }),
+            Course.find({ _id: { $ne: courseDoc._id }, isCompleted: { $ne: true } })
                 .select('title thumbnail price discountPrice accessType category classLevel rating studentCount')
                 .sort({ createdAt: -1 })
                 .limit(4)
                 .lean(),
             Announcement.find({
                 $or: [
-                    { courseId: courseId },
-                    { courseId: mongoose.Types.ObjectId.isValid(courseId) ? new mongoose.Types.ObjectId(courseId) : courseId }
+                    { courseId: courseDoc._id },
+                    { courseId: String(courseDoc._id) }
                 ]
             })
                 .populate('authorId', 'name profileImage profilePicture role')
@@ -4329,38 +4350,38 @@ router.get(['/course-details/:id', '/course/:id'], protect, async (req, res) => 
                 .lean(),
             NotificationLog.find({
                 $or: [
-                    { courseId: courseId },
-                    { courseId: mongoose.Types.ObjectId.isValid(courseId) ? new mongoose.Types.ObjectId(courseId) : courseId }
+                    { courseId: courseDoc._id },
+                    { courseId: String(courseDoc._id) }
                 ],
                 status: { $ne: 'failed' }
             })
                 .populate('sentBy', 'name profileImage profilePicture role')
                 .sort({ createdAt: -1 })
-                .lean()
+                .lean(),
+            AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1, name: 1 }).lean().catch(() => [])
         ]);
-
-        if (!courseDoc) return res.status(404).render('404');
-        if (!user) return res.redirect('/login');
 
         const course = courseDoc;
         let hasAccess = false, trialExpired = false, subscriptionExpired = false;
 
-        if (course.accessType === 'free' || course.accessType === 'Free') {
-            hasAccess = true;
-        } else if (course.instructor?._id?.toString() === user._id.toString() || user.role === 'admin' || user.role === 'superadmin') {
-            hasAccess = true;
-        } else {
-            const enrollment = user.enrolledCourses?.find(e => e && e.course && e.course.toString() === course._id.toString());
-            if (enrollment) {
-                if (!enrollment.expiresAt || new Date(enrollment.expiresAt) > new Date()) hasAccess = true;
-                else subscriptionExpired = true;
-            }
-            if (!hasAccess && (course.accessType === 'trial' || course.accessType === 'Trial')) {
-                const trial = user.trialEnrollments?.find(t => t && t.course && t.course.toString() === course._id.toString());
-                if (trial) {
-                    const diffDays = Math.ceil(Math.abs(new Date() - trial.startedAt) / (1000 * 60 * 60 * 24));
-                    if (diffDays <= (course.trialPeriod || 7)) hasAccess = true;
-                    else trialExpired = true;
+        if (user) {
+            if (course.accessType === 'free' || course.accessType === 'Free') {
+                hasAccess = true;
+            } else if (course.instructor?._id?.toString() === user._id.toString() || user.role === 'admin' || user.role === 'superadmin') {
+                hasAccess = true;
+            } else {
+                const enrollment = user.enrolledCourses?.find(e => e && e.course && e.course.toString() === course._id.toString());
+                if (enrollment) {
+                    if (!enrollment.expiresAt || new Date(enrollment.expiresAt) > new Date()) hasAccess = true;
+                    else subscriptionExpired = true;
+                }
+                if (!hasAccess && (course.accessType === 'trial' || course.accessType === 'Trial')) {
+                    const trial = user.trialEnrollments?.find(t => t && t.course && t.course.toString() === course._id.toString());
+                    if (trial) {
+                        const diffDays = Math.ceil(Math.abs(new Date() - trial.startedAt) / (1000 * 60 * 60 * 24));
+                        if (diffDays <= (course.trialPeriod || 7)) hasAccess = true;
+                        else trialExpired = true;
+                    }
                 }
             }
         }
@@ -4466,12 +4487,13 @@ router.get(['/course-details/:id', '/course/:id'], protect, async (req, res) => 
             enrolledCount: enrolledCount || course.studentCount || 0,
             relatedCourses: relatedCourses || [],
             progress: realProgress,
-            completedLessons: user.completedLessons || [],
+            completedLessons: user ? (user.completedLessons || []) : [],
             qas: qas || [],
             courseNotices,
             courseAnnouncements: courseNotices,
             announcements: courseNotices,
             from: req.query.from || '',
+            activeClasses: activeClasses || [],
             success: req.query.success 
         });
     } catch (err) { 
