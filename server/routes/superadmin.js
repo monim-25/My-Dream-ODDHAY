@@ -3447,6 +3447,46 @@ router.post('/settings', superAdminProtect, async (req, res) => {
     } catch (err) { res.status(500).send('Error updating settings: ' + err.message); }
 });
 
+// Landing Page Control Center
+router.get('/landing-control', superAdminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const Setting = require('../models/Setting');
+        let settings = await Setting.findOne().populate('updatedBy', 'name role').lean();
+        if (!settings) settings = await Setting.create({});
+        res.render('superadmin/landing-control', {
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
+            settings,
+            active: 'landing-control',
+            success: req.query.success || null
+        });
+    } catch (err) {
+        res.status(500).send('Error loading landing page control: ' + err.message);
+    }
+});
+
+router.post('/landing-control', superAdminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const Setting = require('../models/Setting');
+        const { videoUrl, videoTitle, videoCaption } = req.body;
+
+        await Setting.findOneAndUpdate({}, {
+            $set: {
+                'landingPage.videoUrl': (videoUrl || '').trim(),
+                'landingPage.videoTitle': (videoTitle || 'অধ্যায় প্ল্যাটফর্ম পরিচিতি').trim(),
+                'landingPage.videoCaption': (videoCaption || 'এক নজরে দেখে নাও অধ্যায় কীভাবে তোমার পড়াশোনাকে করবে আরও সহজ ও কার্যকর').trim(),
+                updatedBy: req.session.userId || (req.session.user ? req.session.user._id : null)
+            }
+        }, { upsert: true, new: true });
+
+        await logActivity(req, 'UPDATE', 'Updated Landing Page Video & Controls', 'Settings');
+        res.redirect('/superadmin/landing-control?success=1');
+    } catch (err) {
+        res.status(500).send('Error updating landing page control: ' + err.message);
+    }
+});
+
 // Profile Management
 router.get('/profile', superAdminProtect, async (req, res) => {
     try {

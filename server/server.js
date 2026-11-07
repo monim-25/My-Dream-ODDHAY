@@ -340,11 +340,13 @@ app.get('/', async (req, res) => {
         const User = require('./models/User');
         const Question = require('./models/Question');
         const QuestionBank = require('./models/QuestionBank');
+        const AcademicClass = require('./models/AcademicClass');
+        const Setting = require('./models/Setting');
 
-        const [courses, categories, totalStudents, totalCourses, totalQuestions, totalTeachers, questionBankSample] = await Promise.all([
+        const [courses, categories, totalStudents, totalCourses, totalQuestions, totalTeachers, questionBankSample, activeClasses, settingDoc] = await Promise.all([
             Course.find({ isCompleted: { $ne: true } })
                 .sort({ createdAt: -1 })
-                .limit(9)
+                .limit(12)
                 .populate('instructor', 'name profilePicture designation username teachingSubject')
                 .lean()
                 .catch(() => []),
@@ -353,7 +355,9 @@ app.get('/', async (req, res) => {
             Course.countDocuments().catch(() => 0),
             Question.countDocuments().catch(() => 0),
             User.countDocuments({ role: 'teacher' }).catch(() => 0),
-            QuestionBank.find({ status: 'approved' }).limit(6).select('board year subject title duration').lean().catch(() => [])
+            QuestionBank.find({ status: 'approved' }).limit(6).select('board year subject title duration classLevel').lean().catch(() => []),
+            AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1, name: 1 }).lean().catch(() => []),
+            Setting.findOne().select('landingPage').lean().catch(() => null)
         ]);
 
         // Faster aggregation for chapter contents
@@ -393,7 +397,9 @@ app.get('/', async (req, res) => {
             totalQuizzes: totalQuizzes || 0,
             totalQuestions: totalQuestions || 0,
             totalTeachers: totalTeachers || 0,
-            questionBankSample: questionBankSample || []
+            questionBankSample: questionBankSample || [],
+            activeClasses: activeClasses || [],
+            landingSettings: (settingDoc && settingDoc.landingPage) ? settingDoc.landingPage : {}
         });
     } catch (err) {
         try { 
@@ -407,7 +413,9 @@ app.get('/', async (req, res) => {
                 totalQuizzes: 0,
                 totalQuestions: 0,
                 totalTeachers: 0,
-                questionBankSample: []
+                questionBankSample: [],
+                activeClasses: [],
+                landingSettings: {}
             }); 
         } catch (e) { res.status(500).send('Critical Error: ' + e.message); }
     }

@@ -33,6 +33,11 @@ const SettingSchema = new mongoose.Schema({
         facebook: { type: String, default: 'https://facebook.com/oddhay' },
         youtube: { type: String, default: 'https://youtube.com/@oddhay' }
     },
+    landingPage: {
+        videoUrl: { type: String, default: '' },
+        videoTitle: { type: String, default: 'অধ্যায় প্ল্যাটফর্ম পরিচিতি' },
+        videoCaption: { type: String, default: 'এক নজরে দেখে নাও অধ্যায় কীভাবে তোমার পড়াশোনাকে করবে আরও সহজ ও কার্যকর' }
+    },
     updatedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
