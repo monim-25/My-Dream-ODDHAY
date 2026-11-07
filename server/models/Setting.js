@@ -43,8 +43,8 @@ const SettingSchema = new mongoose.Schema({
         address: { type: String, default: 'বাড়ি #১২, রোড #০৪, ধানমন্ডি, ঢাকা - ১২০৯, বাংলাদেশ' }
     },
     footerInfo: {
-        bioText: { type: String, default: 'নবম শ্রেণী থেকে দ্বাদশ শ্রেণীর শিক্ষার্থীদের বোর্ড পরীক্ষা প্রস্তুতি, স্মার্ট টাইমারভিত্তিক পরীক্ষা, লাইভ টেস্ট এবং একাডেমিক উৎকর্ষ সাধনের নির্ভরযোগ্য ডিজিটাল শিক্ষা প্ল্যাটফর্ম।' },
-        copyrightText: { type: String, default: 'অধ্যায় (ODDHAY) শিক্ষাপ্রযুক্তি লিমিটেড। সর্বস্বত্ব সংরক্ষিত।' }
+        bioText: { type: String, default: '' },
+        copyrightText: { type: String, default: 'ODDHAY. All Rights Reserved.' }
     },
     landingPage: {
         heroScreenshotUrl: { type: String, default: '' },
