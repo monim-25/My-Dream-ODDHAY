@@ -3572,6 +3572,46 @@ router.post('/landing-control', superAdminProtect, (req, res, next) => {
     }
 });
 
+// Privacy Policy Control
+router.get('/privacy-policy', superAdminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const Setting = require('../models/Setting');
+        let settings = await Setting.findOne().populate('updatedBy', 'name role').lean();
+        if (!settings) settings = await Setting.create({});
+        res.render('superadmin/privacy-policy', {
+            user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
+            settings,
+            active: 'privacy-policy',
+            success: req.query.success || null
+        });
+    } catch (err) {
+        res.status(500).send('Error loading Privacy Policy control: ' + err.message);
+    }
+});
+
+router.post('/privacy-policy', superAdminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const Setting = require('../models/Setting');
+        const { lastUpdated, metaTitle, customContent } = req.body;
+
+        await Setting.findOneAndUpdate({}, {
+            $set: {
+                'privacyPolicy.lastUpdated': (lastUpdated || '').trim(),
+                'privacyPolicy.metaTitle': (metaTitle || '').trim(),
+                'privacyPolicy.customContent': (customContent || '').trim(),
+                updatedBy: req.session.userId
+            }
+        }, { upsert: true, new: true });
+
+        await logActivity(req, 'UPDATE', 'Updated Public Privacy Policy content', 'Settings');
+        res.redirect('/superadmin/privacy-policy?success=1');
+    } catch (err) {
+        res.status(500).send('Error updating Privacy Policy: ' + err.message);
+    }
+});
+
 // Profile Management
 router.get('/profile', superAdminProtect, async (req, res) => {
     try {

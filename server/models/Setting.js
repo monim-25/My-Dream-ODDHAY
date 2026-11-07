@@ -46,6 +46,11 @@ const SettingSchema = new mongoose.Schema({
         bioText: { type: String, default: '' },
         copyrightText: { type: String, default: 'ODDHAY. All Rights Reserved.' }
     },
+    privacyPolicy: {
+        lastUpdated: { type: String, default: 'February 2026' },
+        customContent: { type: String, default: '' },
+        metaTitle: { type: String, default: 'Privacy Policy | ODDHAY' }
+    },
     landingPage: {
         heroScreenshotUrl: { type: String, default: '' },
         heroImageScale: { type: Number, default: 100 },
