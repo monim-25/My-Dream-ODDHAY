@@ -26,17 +26,25 @@ const SettingSchema = new mongoose.Schema({
     },
     contactInfo: {
         email: { type: String, default: 'support@oddhay.com' },
-        phone: { type: String, default: '+8801XXXXXXXXX' },
-        whatsapp: { type: String, default: '+8801XXXXXXXXX' }
+        phone: { type: String, default: '+৮৮০ ৯৬৩৮-৭৮৯০১২' },
+        whatsapp: { type: String, default: '+৮৮০১৭১২-৩৪৫৬৭৮' },
+        supportHours: { type: String, default: 'সকাল ৯টা - রাত ১১টা' }
     },
     socialLinks: {
         facebook: { type: String, default: 'https://facebook.com/oddhay' },
-        youtube: { type: String, default: 'https://youtube.com/@oddhay' }
+        youtube: { type: String, default: 'https://youtube.com/@oddhay' },
+        whatsapp: { type: String, default: 'https://wa.me/8801712345678' },
+        linkedin: { type: String, default: 'https://linkedin.com/company/oddhay' },
+        instagram: { type: String, default: 'https://instagram.com/oddhay.official' }
     },
     legalInfo: {
         tradeLicense: { type: String, default: 'TRAD/DNCC/041285/2026' },
         tinNumber: { type: String, default: '8491-7302-6194' },
         address: { type: String, default: 'বাড়ি #১২, রোড #০৪, ধানমন্ডি, ঢাকা - ১২০৯, বাংলাদেশ' }
+    },
+    footerInfo: {
+        bioText: { type: String, default: 'নবম শ্রেণী থেকে দ্বাদশ শ্রেণীর শিক্ষার্থীদের বোর্ড পরীক্ষা প্রস্তুতি, স্মার্ট টাইমারভিত্তিক পরীক্ষা, লাইভ টেস্ট এবং একাডেমিক উৎকর্ষ সাধনের নির্ভরযোগ্য ডিজিটাল শিক্ষা প্ল্যাটফর্ম।' },
+        copyrightText: { type: String, default: 'অধ্যায় (ODDHAY) শিক্ষাপ্রযুক্তি লিমিটেড। সর্বস্বত্ব সংরক্ষিত।' }
     },
     landingPage: {
         heroScreenshotUrl: { type: String, default: '' },

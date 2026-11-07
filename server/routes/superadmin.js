@@ -3408,7 +3408,8 @@ router.post('/settings', superAdminProtect, async (req, res) => {
         const Setting = require('../models/Setting');
 
         const { 
-            isMaintenanceMode, bkash, nagad, rocket, email, phone, whatsapp, facebook, youtube,
+            isMaintenanceMode, bkash, nagad, rocket, email, phone, whatsapp, supportHours, facebook, youtube,
+            whatsappSocial, linkedin, instagram, tradeLicense, tinNumber, address, bioText, copyrightText,
             gatewayMode, bkashAppKey, bkashAppSecret, bkashUsername, bkashPassword,
             nagadMerchantId, nagadPublicKey, nagadPrivateKey
         } = req.body;
@@ -3430,8 +3431,28 @@ router.post('/settings', superAdminProtect, async (req, res) => {
                     privateKey: nagadPrivateKey || ''
                 }
             },
-            contactInfo: { email, phone, whatsapp },
-            socialLinks: { facebook, youtube },
+            contactInfo: { 
+                email: (email || '').trim(), 
+                phone: (phone || '').trim(), 
+                whatsapp: (whatsapp || '').trim(),
+                supportHours: (supportHours || 'সকাল ৯টা - রাত ১১টা').trim()
+            },
+            socialLinks: { 
+                facebook: (facebook || '').trim(), 
+                youtube: (youtube || '').trim(),
+                whatsapp: (whatsappSocial || '').trim(),
+                linkedin: (linkedin || '').trim(),
+                instagram: (instagram || '').trim()
+            },
+            legalInfo: {
+                tradeLicense: (tradeLicense || '').trim(),
+                tinNumber: (tinNumber || '').trim(),
+                address: (address || '').trim()
+            },
+            footerInfo: {
+                bioText: (bioText || '').trim(),
+                copyrightText: (copyrightText || '').trim()
+            },
             updatedBy: req.session.user._id
         };
 
@@ -3480,7 +3501,21 @@ router.post('/landing-control', superAdminProtect, (req, res, next) => {
             heroImageOffsetY, 
             videoUrl, 
             videoTitle, 
-            videoCaption 
+            videoCaption,
+            tradeLicense,
+            tinNumber,
+            address,
+            email,
+            phone,
+            whatsapp,
+            supportHours,
+            facebook,
+            youtube,
+            whatsappSocial,
+            linkedin,
+            instagram,
+            bioText,
+            copyrightText
         } = req.body;
 
         let finalScreenshotUrl = (heroScreenshotUrl || '').trim();
@@ -3504,11 +3539,33 @@ router.post('/landing-control', superAdminProtect, (req, res, next) => {
             updateFields['landingPage.heroScreenshotUrl'] = req.body.clearHeroScreenshot === '1' ? '' : finalScreenshotUrl;
         }
 
+        // Legal & Trust Information
+        if (tradeLicense !== undefined) updateFields['legalInfo.tradeLicense'] = (tradeLicense || '').trim();
+        if (tinNumber !== undefined) updateFields['legalInfo.tinNumber'] = (tinNumber || '').trim();
+        if (address !== undefined) updateFields['legalInfo.address'] = (address || '').trim();
+
+        // Contact & Helpdesk Information
+        if (email !== undefined) updateFields['contactInfo.email'] = (email || '').trim();
+        if (phone !== undefined) updateFields['contactInfo.phone'] = (phone || '').trim();
+        if (whatsapp !== undefined) updateFields['contactInfo.whatsapp'] = (whatsapp || '').trim();
+        if (supportHours !== undefined) updateFields['contactInfo.supportHours'] = (supportHours || '').trim();
+
+        // Social Media Channels
+        if (facebook !== undefined) updateFields['socialLinks.facebook'] = (facebook || '').trim();
+        if (youtube !== undefined) updateFields['socialLinks.youtube'] = (youtube || '').trim();
+        if (whatsappSocial !== undefined) updateFields['socialLinks.whatsapp'] = (whatsappSocial || '').trim();
+        if (linkedin !== undefined) updateFields['socialLinks.linkedin'] = (linkedin || '').trim();
+        if (instagram !== undefined) updateFields['socialLinks.instagram'] = (instagram || '').trim();
+
+        // Footer Bio & Copyright Text
+        if (bioText !== undefined) updateFields['footerInfo.bioText'] = (bioText || '').trim();
+        if (copyrightText !== undefined) updateFields['footerInfo.copyrightText'] = (copyrightText || '').trim();
+
         await Setting.findOneAndUpdate({}, {
             $set: updateFields
         }, { upsert: true, new: true });
 
-        await logActivity(req, 'UPDATE', 'Updated Landing Page Hero Screenshot & Controls', 'Settings');
+        await logActivity(req, 'UPDATE', 'Updated Landing Page Hero, Video & Footer Controls', 'Settings');
         res.redirect('/superadmin/landing-control?success=1');
     } catch (err) {
         res.status(500).send('Error updating landing page control: ' + err.message);
