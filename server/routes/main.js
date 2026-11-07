@@ -2222,119 +2222,163 @@ router.get('/analytics', protect, (req, res) => {
 });
 
 
-// ---- Class Hub (Courses, Live, Recorded) ----
-router.get('/courses', protect, async (req, res) => {
+// ---- Public & Student Courses Catalog ----
+router.get('/courses', async (req, res) => {
     try {
         await connectDB();
-        const userId = req.session.userId;
-        const { search, subject, sort } = req.query;
-
-        // Fetch user with enrolled courses and their class level
-        const user = await User.findById(userId).populate({
-            path: 'enrolledCourses.course',
-            populate: { path: 'instructor', select: 'name' }
-        }).populate('lastWatchedLesson.course').lean();
-
-        if (!user) return res.redirect('/login');
-
-        // Fetch notifications
-        const notifications = await Notification.find({ recipient: userId })
-            .sort({ createdAt: -1 })
-            .limit(10)
-            .lean();
-
-        const userClass = user.classLevel || 'Class 10';
-        const enrolledCourseIds = (user.enrolledCourses || []).map(ec => {
-            if (!ec) return null;
-            if (ec.course && ec.course._id) return ec.course._id.toString();
-            if (ec.course) return ec.course.toString();
-            if (ec._id) return ec._id.toString();
-            return null;
-        }).filter(Boolean);
-
-        // Robust subject extraction: strictly use superadmin assigned subjects for THIS student's class & group
-        let classSubjects = await getStudentSubjects(user);
-        const subjects = Array.from(new Set(classSubjects));
-
-        // --- Fetch Courses to Explore ---
-        let exploreQuery = {
-            _id: { $nin: enrolledCourseIds }
-        };
-        if (userClass) {
-            exploreQuery.$or = [
-                { classLevel: userClass },
-                { featuredForClasses: userClass },
-                { classLevel: { $size: 0 } },
-                { classLevel: { $exists: false } }
-            ];
-        }
-        if (search) exploreQuery.title = { $regex: search, $options: 'i' };
-        if (subject && subject !== 'all') {
-            exploreQuery.subject = subject;
-        } else if (classSubjects && classSubjects.length > 0) {
-            exploreQuery.subject = { $in: classSubjects };
-        }
-
-        let exploreCourses = await Course.find(exploreQuery).sort({ createdAt: -1 }).populate('instructor', 'name').lean();
-
-        // Fallback: If no courses match the filter/class or student enrolled in all, fall back to any courses so page never appears blank
-        if (!exploreCourses || exploreCourses.length === 0) {
-            let fallbackQuery = {};
-            if (search) fallbackQuery.title = { $regex: search, $options: 'i' };
-            if (subject && subject !== 'all') {
-                fallbackQuery.subject = subject;
-            } else if (classSubjects && classSubjects.length > 0) {
-                fallbackQuery.subject = { $in: classSubjects };
-            }
-            exploreCourses = await Course.find(fallbackQuery).sort({ createdAt: -1 }).limit(10).populate('instructor', 'name').lean();
-        }
-
-        // --- Fetch Free Resources ---
-        let freeQuery = { accessType: 'free' };
-        if (userClass) {
-            freeQuery.$or = [
-                { classLevel: userClass },
-                { featuredForClasses: userClass },
-                { classLevel: { $size: 0 } },
-                { classLevel: { $exists: false } }
-            ];
-        }
-        if (classSubjects && classSubjects.length > 0) {
-            freeQuery.subject = { $in: classSubjects };
-        }
-        const freeCourses = await Course.find(freeQuery).populate('instructor', 'name').lean();
-
-        // --- Extract Live Classes & Subjects ---
-        const liveClasses = [];
+        const userId = req.session ? req.session.userId : null;
         const AcademicClass = require('../models/AcademicClass');
 
-        user.enrolledCourses.forEach(ec => {
-            if (!ec.course) return;
-            (ec.course.chapters || []).forEach(chapter => {
-                (chapter.liveClasses || []).forEach(live => {
-                    liveClasses.push({ ...live, courseTitle: ec.course.title, instructor: ec.course.instructor?.name });
+        // Check if student explicitly requested the internal student course hub view
+        if (req.query.view === 'hub' && userId) {
+            const user = await User.findById(userId).populate({
+                path: 'enrolledCourses.course',
+                populate: { path: 'instructor', select: 'name' }
+            }).populate('lastWatchedLesson.course').lean();
+
+            if (!user) return res.redirect('/login');
+
+            const notifications = await Notification.find({ recipient: userId })
+                .sort({ createdAt: -1 })
+                .limit(10)
+                .lean();
+
+            const userClass = user.classLevel || 'Class 10';
+            const enrolledCourseIds = (user.enrolledCourses || []).map(ec => {
+                if (!ec) return null;
+                if (ec.course && ec.course._id) return ec.course._id.toString();
+                if (ec.course) return ec.course.toString();
+                if (ec._id) return ec._id.toString();
+                return null;
+            }).filter(Boolean);
+
+            let classSubjects = await getStudentSubjects(user);
+            const subjects = Array.from(new Set(classSubjects));
+
+            let exploreQuery = { _id: { $nin: enrolledCourseIds } };
+            if (userClass) {
+                exploreQuery.$or = [
+                    { classLevel: userClass },
+                    { featuredForClasses: userClass },
+                    { classLevel: { $size: 0 } },
+                    { classLevel: { $exists: false } }
+                ];
+            }
+            if (req.query.search) exploreQuery.title = { $regex: req.query.search, $options: 'i' };
+            if (req.query.subject && req.query.subject !== 'all') {
+                exploreQuery.subject = req.query.subject;
+            } else if (classSubjects && classSubjects.length > 0) {
+                exploreQuery.subject = { $in: classSubjects };
+            }
+
+            let exploreCourses = await Course.find(exploreQuery).sort({ createdAt: -1 }).populate('instructor', 'name').lean();
+
+            if (!exploreCourses || exploreCourses.length === 0) {
+                let fallbackQuery = {};
+                if (req.query.search) fallbackQuery.title = { $regex: req.query.search, $options: 'i' };
+                if (req.query.subject && req.query.subject !== 'all') {
+                    fallbackQuery.subject = req.query.subject;
+                } else if (classSubjects && classSubjects.length > 0) {
+                    fallbackQuery.subject = { $in: classSubjects };
+                }
+                exploreCourses = await Course.find(fallbackQuery).sort({ createdAt: -1 }).limit(10).populate('instructor', 'name').lean();
+            }
+
+            let freeQuery = { accessType: 'free' };
+            if (userClass) {
+                freeQuery.$or = [
+                    { classLevel: userClass },
+                    { featuredForClasses: userClass },
+                    { classLevel: { $size: 0 } },
+                    { classLevel: { $exists: false } }
+                ];
+            }
+            if (classSubjects && classSubjects.length > 0) freeQuery.subject = { $in: classSubjects };
+            const freeCourses = await Course.find(freeQuery).populate('instructor', 'name').lean();
+
+            const liveClasses = [];
+            user.enrolledCourses.forEach(ec => {
+                if (!ec.course) return;
+                (ec.course.chapters || []).forEach(chapter => {
+                    (chapter.liveClasses || []).forEach(live => {
+                        liveClasses.push({ ...live, courseTitle: ec.course.title, instructor: ec.course.instructor?.name });
+                    });
                 });
             });
-        });
+            liveClasses.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-        // Sort live classes by date
-        liveClasses.sort((a, b) => new Date(a.date) - new Date(b.date));
+            return res.render('courses-hub', {
+                user,
+                enrolledCourses: user.enrolledCourses,
+                exploreCourses,
+                freeCourses,
+                liveClasses,
+                subjects,
+                search: req.query.search || '',
+                activeSubject: req.query.subject || 'all',
+                userClass,
+                notifications
+            });
+        }
+
+        // --- Dedicated Public & Available Courses Catalog Page ---
+        const { search, subject, sort, type } = req.query;
+        const classFilter = req.query.class;
+
+        // Fetch user if logged in (for navbar avatar & session state)
+        let user = null;
+        if (userId) {
+            user = await User.findById(userId).lean().catch(() => null);
+        }
+
+        // Fetch active classes from database
+        const activeClasses = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } })
+            .sort({ order: 1, name: 1 })
+            .lean()
+            .catch(() => []);
+
+        // Fetch all active courses
+        const courses = await Course.find({ isCompleted: { $ne: true } })
+            .sort({ createdAt: -1 })
+            .populate('instructor', 'name profilePicture designation username teachingSubject')
+            .lean()
+            .catch(() => []);
+
+        // Extract distinct subjects from courses
+        const subjectSet = new Set();
+        courses.forEach(c => {
+            if (Array.isArray(c.subject)) {
+                c.subject.forEach(s => s && subjectSet.add(s.trim()));
+            } else if (typeof c.subject === 'string' && c.subject.trim()) {
+                subjectSet.add(c.subject.trim());
+            }
+        });
+        const allSubjects = Array.from(subjectSet).sort();
 
         res.render('courses', {
-            user,
-            enrolledCourses: user.enrolledCourses,
-            exploreCourses,
-            freeCourses,
-            liveClasses,
-            subjects,
-            search,
+            courses,
+            activeClasses,
+            allSubjects,
+            activeClass: classFilter || 'all',
             activeSubject: subject || 'all',
-            userClass,
-            notifications
+            activeType: type || 'all',
+            search: search || '',
+            sort: sort || 'newest',
+            user: user || null
         });
     } catch (err) {
-        console.error('Class Hub Error:', err);
-        res.status(500).send('Internal Server Error');
+        console.error('Courses Catalog Error:', err);
+        res.render('courses', {
+            courses: [],
+            activeClasses: [],
+            allSubjects: [],
+            activeClass: req.query.class || 'all',
+            activeSubject: req.query.subject || 'all',
+            activeType: req.query.type || 'all',
+            search: req.query.search || '',
+            sort: req.query.sort || 'newest',
+            user: null
+        });
     }
 });
 
