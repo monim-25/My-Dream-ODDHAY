@@ -3465,22 +3465,37 @@ router.get('/landing-control', superAdminProtect, async (req, res) => {
     }
 });
 
-router.post('/landing-control', superAdminProtect, async (req, res) => {
+router.post('/landing-control', superAdminProtect, (req, res, next) => {
+    if (router.upload) return router.upload.single('heroScreenshotFile')(req, res, next);
+    next();
+}, async (req, res) => {
     try {
         await connectDB();
         const Setting = require('../models/Setting');
-        const { videoUrl, videoTitle, videoCaption } = req.body;
+        const { heroScreenshotUrl, videoUrl, videoTitle, videoCaption } = req.body;
+
+        let finalScreenshotUrl = (heroScreenshotUrl || '').trim();
+        if (req.file) {
+            const { processUploadedFile } = require('../services/cloudinaryService');
+            finalScreenshotUrl = await processUploadedFile(req.file, 'landing');
+        }
+
+        const updateFields = {
+            'landingPage.videoUrl': (videoUrl || '').trim(),
+            'landingPage.videoTitle': (videoTitle || 'অধ্যায় প্ল্যাটফর্ম পরিচিতি').trim(),
+            'landingPage.videoCaption': (videoCaption || 'এক নজরে দেখে নাও অধ্যায় কীভাবে তোমার পড়াশোনাকে করবে আরও সহজ ও কার্যকর').trim(),
+            updatedBy: req.session.userId || (req.session.user ? req.session.user._id : null)
+        };
+
+        if (finalScreenshotUrl || req.body.clearHeroScreenshot === '1') {
+            updateFields['landingPage.heroScreenshotUrl'] = req.body.clearHeroScreenshot === '1' ? '' : finalScreenshotUrl;
+        }
 
         await Setting.findOneAndUpdate({}, {
-            $set: {
-                'landingPage.videoUrl': (videoUrl || '').trim(),
-                'landingPage.videoTitle': (videoTitle || 'অধ্যায় প্ল্যাটফর্ম পরিচিতি').trim(),
-                'landingPage.videoCaption': (videoCaption || 'এক নজরে দেখে নাও অধ্যায় কীভাবে তোমার পড়াশোনাকে করবে আরও সহজ ও কার্যকর').trim(),
-                updatedBy: req.session.userId || (req.session.user ? req.session.user._id : null)
-            }
+            $set: updateFields
         }, { upsert: true, new: true });
 
-        await logActivity(req, 'UPDATE', 'Updated Landing Page Video & Controls', 'Settings');
+        await logActivity(req, 'UPDATE', 'Updated Landing Page Hero Screenshot & Controls', 'Settings');
         res.redirect('/superadmin/landing-control?success=1');
     } catch (err) {
         res.status(500).send('Error updating landing page control: ' + err.message);
