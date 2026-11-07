@@ -167,6 +167,12 @@ router.post('/messages/mark-all-read', protect, async (req, res) => {
         const myId = req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null);
         if (!myId) return res.status(401).json({ success: false, error: 'Unauthorized' });
         await Message.updateMany({ receiver: myId, isRead: false }, { $set: { isRead: true } });
+        try {
+            const io = req.app.get('io');
+            if (io && myId) {
+                io.to(`user_${myId}`).emit('message:read', { all: true });
+            }
+        } catch (e) {}
         res.json({ success: true, message: 'All received messages marked as read' });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
@@ -453,13 +459,20 @@ router.post('/messages/send', protect, (req, res, next) => {
 router.post('/messages/mark-read/:senderId', protect, async (req, res) => {
     try {
         await connectDB();
-        const myId = req.session.userId;
+        const myId = req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null);
         const senderId = req.params.senderId;
 
         await Message.updateMany(
             { sender: senderId, receiver: myId, isRead: false },
             { $set: { isRead: true } }
         );
+
+        try {
+            const io = req.app.get('io');
+            if (io && myId) {
+                io.to(`user_${myId}`).emit('message:read', { senderId });
+            }
+        } catch (e) {}
 
         res.json({ success: true });
     } catch (err) {
