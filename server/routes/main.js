@@ -4408,13 +4408,15 @@ router.get(['/course-details/:id', '/course/:id'], async (req, res) => {
 
         const totalLessons = courseLessonIds.size;
         let completedForCourse = 0;
-        const uniqueCompleted = new Set((user.completedLessons || []).map(id => id.toString()));
-        uniqueCompleted.forEach(id => {
-            if (courseLessonIds.has(id)) {
-                completedForCourse++;
-            }
-        });
-        const realProgress = totalLessons > 0 ? Math.round((completedForCourse / totalLessons) * 100) : 0;
+        if (user && user.completedLessons && user.completedLessons.length > 0) {
+            const uniqueCompleted = new Set(user.completedLessons.map(id => id.toString()));
+            uniqueCompleted.forEach(id => {
+                if (courseLessonIds.has(id)) {
+                    completedForCourse++;
+                }
+            });
+        }
+        const realProgress = (user && totalLessons > 0) ? Math.round((completedForCourse / totalLessons) * 100) : 0;
 
         // Combine and format course notices (Announcements + Course Broadcasts)
         const courseNotices = [];
