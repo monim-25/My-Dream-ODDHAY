@@ -3595,7 +3595,7 @@ router.post('/policies', superAdminProtect, async (req, res) => {
     try {
         await connectDB();
         const Setting = require('../models/Setting');
-        const { tab, privacyPolicy, refundPolicy, termsConditions, aboutContent } = req.body;
+        const { tab, privacyPolicy, refundPolicy, termsConditions, aboutContent, faqContent, contactContent } = req.body;
 
         const updateFields = {
             updatedBy: req.session.userId
@@ -3613,6 +3613,12 @@ router.post('/policies', superAdminProtect, async (req, res) => {
         }
         if (aboutContent !== undefined) {
             updateFields['policiesAndLegal.aboutContent'] = aboutContent.trim();
+        }
+        if (faqContent !== undefined) {
+            updateFields['policiesAndLegal.faqContent'] = faqContent.trim();
+        }
+        if (contactContent !== undefined) {
+            updateFields['policiesAndLegal.contactContent'] = contactContent.trim();
         }
 
         await Setting.findOneAndUpdate({}, {

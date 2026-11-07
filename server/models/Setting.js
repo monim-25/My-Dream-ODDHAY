@@ -55,7 +55,9 @@ const SettingSchema = new mongoose.Schema({
         privacyPolicy: { type: String, default: '' },
         refundPolicy: { type: String, default: '' },
         termsConditions: { type: String, default: '' },
-        aboutContent: { type: String, default: '' }
+        aboutContent: { type: String, default: '' },
+        faqContent: { type: String, default: '' },
+        contactContent: { type: String, default: '' }
     },
     landingPage: {
         heroScreenshotUrl: { type: String, default: '' },
