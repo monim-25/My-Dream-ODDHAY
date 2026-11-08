@@ -105,6 +105,15 @@
                 display: none !important;
             }
         }
+
+        /* Smooth Mobile Course Carousel Scrollbar Hide */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none !important;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none !important;
+            scrollbar-width: none !important;
+        }
     </style>
 </head>
 
@@ -552,8 +561,8 @@
                 </a>
             </div>
 
-            <!-- Professional Compact Cards Grid (2 in a line on small screen, 2 sm, 3 lg, 4 xl) -->
-            <div id="landingCoursesContainer" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 xs:gap-3.5 sm:gap-5">
+            <!-- Course Cards: Interactive Touch Carousel on Small Screen, Multi-Column Grid on Larger Screens -->
+            <div id="landingCoursesContainer" class="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 sm:gap-5 overflow-x-auto sm:overflow-visible pb-2 sm:pb-0 px-4 sm:px-0 -mx-4 sm:mx-0 snap-x snap-mandatory scroll-smooth no-scrollbar">
                 <% 
                     const courseItems = (locals.courses && courses.length > 0) ? courses : (locals.featuredCourses || []);
                     const displayCourses = courseItems.slice(0, 8);
@@ -570,7 +579,7 @@
                             let className = (course.classLevel && Array.isArray(course.classLevel) ? course.classLevel[0] : course.classLevel) || 'সকল শ্রেণী';
                             const isDesktopOnly = index >= 4;
                         %>
-                        <div class="course-card-item <%= isDesktopOnly ? 'course-card-desktop-only hidden sm:flex' : 'flex' %> group rounded-xl sm:rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#0f172a] hover:border-[#18a957]/60 hover:shadow-xl dark:hover:shadow-black/50 overflow-hidden flex-col justify-between transition-all duration-300"
+                        <div class="course-card-item <%= isDesktopOnly ? 'course-card-desktop-only hidden sm:flex' : 'flex' %> shrink-0 sm:shrink snap-center sm:snap-align-none w-[78vw] max-w-[290px] xs:w-[260px] sm:w-auto min-w-[240px] sm:min-w-0 group rounded-xl sm:rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#0f172a] hover:border-[#18a957]/60 hover:shadow-xl dark:hover:shadow-black/50 overflow-hidden flex-col justify-between transition-all duration-300"
                              data-class="<%= courseClassStr.toLowerCase() %>">
                             
                             <!-- Thumbnail Area -->
@@ -665,8 +674,11 @@
                 </div>
             </div>
 
+            <!-- Mobile Carousel Indicator Dots (Visible on small screen only) -->
+            <div id="courseCarouselDots" class="flex sm:hidden items-center justify-center gap-1.5 mt-3 mb-1"></div>
+
             <!-- Link to Full Courses Page Button (A bit colored on small screen, classic card style on larger screen) -->
-            <div class="mt-7 sm:mt-9 text-center">
+            <div class="mt-4 sm:mt-9 text-center">
                 <a href="/courses" id="bottomAllCoursesLink" class="inline-flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300/80 dark:border-emerald-800/70 text-[#148e49] dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 sm:bg-white dark:sm:bg-[#0f172a] sm:border-slate-200 dark:sm:border-slate-800 sm:text-slate-700 dark:sm:text-slate-200 sm:hover:border-[#18a957] sm:hover:text-[#18a957] font-semibold text-[13.5px] xs:text-[14px] sm:text-sm shadow-2xs hover:shadow transition-all group">
                     <span>সকল কোর্সসমূহ দেখুন</span>
                     <span class="material-symbols-rounded text-sm sm:text-base text-[#18a957] dark:text-emerald-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
@@ -872,6 +884,9 @@
                 emptyState.style.display = visibleCount === 0 ? 'block' : 'none';
             }
 
+            // Sync mobile carousel dots with visible cards
+            updateCourseCarouselDots();
+
             // Sync links to all courses with the active class filter
             const targetUrl = (normClass === 'all' || normClass === 'সকল শ্রেণী' || normClass === '')
                 ? '/courses'
@@ -901,6 +916,84 @@
                 coursesSection.scrollIntoView({ behavior: 'smooth' });
             }
         });
+
+        // Update carousel dots for mobile course slider
+        function updateCourseCarouselDots() {
+            const container = document.getElementById('landingCoursesContainer');
+            const dotsWrapper = document.getElementById('courseCarouselDots');
+            if (!container || !dotsWrapper) return;
+            
+            if (window.innerWidth >= 640) {
+                dotsWrapper.style.display = 'none';
+                return;
+            }
+
+            const visibleCards = Array.from(container.querySelectorAll('.course-card-item')).filter(c => {
+                if (c.style.display === 'none') return false;
+                if (c.classList.contains('course-card-desktop-only')) return false;
+                return true;
+            });
+            
+            if (visibleCards.length <= 1) {
+                dotsWrapper.style.display = 'none';
+                return;
+            }
+
+            dotsWrapper.style.display = 'flex';
+            dotsWrapper.innerHTML = '';
+
+            const scrollLeft = container.scrollLeft;
+            const containerCenter = scrollLeft + (container.clientWidth / 2);
+
+            let closestIdx = 0;
+            let minDiff = Infinity;
+
+            visibleCards.forEach((card, idx) => {
+                const cardCenter = card.offsetLeft + (card.offsetWidth / 2);
+                const diff = Math.abs(cardCenter - containerCenter);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestIdx = idx;
+                }
+            });
+
+            visibleCards.forEach((card, idx) => {
+                const dot = document.createElement('button');
+                dot.type = 'button';
+                dot.setAttribute('aria-label', `কোর্স ${idx + 1}`);
+                const isActive = idx === closestIdx;
+                dot.className = isActive
+                    ? 'h-2 w-5 rounded-full bg-[#18a957] transition-all duration-300 cursor-pointer'
+                    : 'h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 transition-all duration-300 cursor-pointer';
+                
+                dot.addEventListener('click', function() {
+                    card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                });
+                
+                dotsWrapper.appendChild(dot);
+            });
+        }
+
+        // Attach scroll and resize listeners for mobile carousel
+        (function setupCourseCarousel() {
+            const courseContainer = document.getElementById('landingCoursesContainer');
+            if (courseContainer) {
+                let scrollTimer;
+                courseContainer.addEventListener('scroll', function() {
+                    if (!scrollTimer) {
+                        window.requestAnimationFrame(function() {
+                            updateCourseCarouselDots();
+                            scrollTimer = null;
+                        });
+                        scrollTimer = true;
+                    }
+                }, { passive: true });
+            }
+
+            window.addEventListener('resize', updateCourseCarouselDots, { passive: true });
+            document.addEventListener('DOMContentLoaded', updateCourseCarouselDots);
+            updateCourseCarouselDots();
+        })();
 
         // Initialize from URL parameters if someone lands with ?class=9
         document.addEventListener('DOMContentLoaded', function() {
