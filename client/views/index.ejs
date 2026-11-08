@@ -677,11 +677,11 @@
             <!-- Mobile Carousel Indicator Dots (Visible on small screen only) -->
             <div id="courseCarouselDots" class="flex sm:hidden items-center justify-center gap-1.5 mt-3 mb-1"></div>
 
-            <!-- Link to Full Courses Page Button (A bit colored on small screen, classic card style on larger screen) -->
-            <div class="mt-4 sm:mt-9 text-center">
-                <a href="/courses" id="bottomAllCoursesLink" class="inline-flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300/80 dark:border-emerald-800/70 text-[#148e49] dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 sm:bg-white dark:sm:bg-[#0f172a] sm:border-slate-200 dark:sm:border-slate-800 sm:text-slate-700 dark:sm:text-slate-200 sm:hover:border-[#18a957] sm:hover:text-[#18a957] font-semibold text-[13.5px] xs:text-[14px] sm:text-sm shadow-2xs hover:shadow transition-all group">
+            <!-- Link to Full Courses Page Button (Same style as other section buttons) -->
+            <div class="mt-6 sm:mt-8 text-center">
+                <a href="/courses" id="bottomAllCoursesLink" class="w-full xs:w-auto justify-center inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-[#18a957] hover:text-[#18a957] text-[13.5px] xs:text-[14px] sm:text-sm font-semibold text-slate-800 dark:text-slate-100 transition-all shadow-2xs group">
                     <span>সকল কোর্সসমূহ দেখুন</span>
-                    <span class="material-symbols-rounded text-sm sm:text-base text-[#18a957] dark:text-emerald-400 group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                    <span class="material-symbols-rounded text-base group-hover:translate-x-1 transition-transform">arrow_forward</span>
                 </a>
             </div>
 
@@ -756,7 +756,7 @@
             <!-- View All Question Bank CTA -->
             <div class="text-center mt-6">
                 <a href="/question-bank" class="w-full xs:w-auto justify-center inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-[#18a957] hover:text-[#18a957] text-[13.5px] xs:text-[14px] sm:text-sm font-semibold text-slate-800 dark:text-slate-100 transition-all shadow-2xs">
-                    <span>সকল বোর্ড প্রশ্ন ও উত্তর সমাধান দেখুন</span>
+                    <span>সকল বোর্ড প্রশ্ন ও সমাধান দেখুন</span>
                     <span class="material-symbols-rounded text-base">arrow_forward</span>
                 </a>
             </div>
@@ -974,25 +974,103 @@
             });
         }
 
-        // Attach scroll and resize listeners for mobile carousel
+        // Setup mobile course carousel (dots + auto-scroll loop for small screen)
         (function setupCourseCarousel() {
             const courseContainer = document.getElementById('landingCoursesContainer');
-            if (courseContainer) {
-                let scrollTimer;
-                courseContainer.addEventListener('scroll', function() {
-                    if (!scrollTimer) {
-                        window.requestAnimationFrame(function() {
-                            updateCourseCarouselDots();
-                            scrollTimer = null;
-                        });
-                        scrollTimer = true;
-                    }
-                }, { passive: true });
+            if (!courseContainer) return;
+
+            let scrollTimer;
+            courseContainer.addEventListener('scroll', function() {
+                if (!scrollTimer) {
+                    window.requestAnimationFrame(function() {
+                        updateCourseCarouselDots();
+                        scrollTimer = null;
+                    });
+                    scrollTimer = true;
+                }
+            }, { passive: true });
+
+            // Auto-scroll loop for small screen (every 3.5 seconds)
+            let autoScrollTimer = null;
+            let pauseTimer = null;
+            let isUserInteracting = false;
+
+            function getVisibleMobileCards() {
+                return Array.from(courseContainer.querySelectorAll('.course-card-item')).filter(c => {
+                    if (c.style.display === 'none') return false;
+                    if (c.classList.contains('course-card-desktop-only')) return false;
+                    return true;
+                });
             }
 
-            window.addEventListener('resize', updateCourseCarouselDots, { passive: true });
-            document.addEventListener('DOMContentLoaded', updateCourseCarouselDots);
+            function scrollNextCard() {
+                if (window.innerWidth >= 640 || isUserInteracting) return;
+                const cards = getVisibleMobileCards();
+                if (cards.length <= 1) return;
+
+                const scrollLeft = courseContainer.scrollLeft;
+                const containerCenter = scrollLeft + (courseContainer.clientWidth / 2);
+
+                let closestIdx = 0;
+                let minDiff = Infinity;
+                cards.forEach((card, idx) => {
+                    const cardCenter = card.offsetLeft + (card.offsetWidth / 2);
+                    const diff = Math.abs(cardCenter - containerCenter);
+                    if (diff < minDiff) {
+                        minDiff = diff;
+                        closestIdx = idx;
+                    }
+                });
+
+                const nextIdx = (closestIdx + 1) % cards.length;
+                cards[nextIdx].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            }
+
+            function startAutoScroll() {
+                stopAutoScroll();
+                if (window.innerWidth < 640) {
+                    autoScrollTimer = setInterval(scrollNextCard, 3500);
+                }
+            }
+
+            function stopAutoScroll() {
+                if (autoScrollTimer) {
+                    clearInterval(autoScrollTimer);
+                    autoScrollTimer = null;
+                }
+            }
+
+            function pauseAutoScrollTemporarily() {
+                isUserInteracting = true;
+                stopAutoScroll();
+                clearTimeout(pauseTimer);
+                pauseTimer = setTimeout(function() {
+                    isUserInteracting = false;
+                    startAutoScroll();
+                }, 4000);
+            }
+
+            // Pause temporarily on user touch/pointer interaction
+            courseContainer.addEventListener('touchstart', pauseAutoScrollTemporarily, { passive: true });
+            courseContainer.addEventListener('touchmove', pauseAutoScrollTemporarily, { passive: true });
+            courseContainer.addEventListener('mouseenter', pauseAutoScrollTemporarily, { passive: true });
+
+            window.addEventListener('resize', function() {
+                updateCourseCarouselDots();
+                if (window.innerWidth < 640) {
+                    startAutoScroll();
+                } else {
+                    stopAutoScroll();
+                }
+            }, { passive: true });
+
+            document.addEventListener('DOMContentLoaded', function() {
+                updateCourseCarouselDots();
+                startAutoScroll();
+            });
+
             updateCourseCarouselDots();
+            startAutoScroll();
         })();
 
         // Initialize from URL parameters if someone lands with ?class=9
