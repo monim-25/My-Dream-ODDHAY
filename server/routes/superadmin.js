@@ -899,12 +899,14 @@ router.get('/course/:id/delete', superAdminProtect, async (req, res) => {
 router.get('/course/:id', superAdminProtect, async (req, res) => {
     try {
         await connectDB();
-        // 1. Fetch Course with populated instructor and creator
-        let course = await Course.findById(req.params.id)
-            .populate('instructor', 'name email profileImage role')
-            .populate('addedBy', 'name email profileImage role')
-            .populate('chapters.quizzes')
-            .lean();
+        // 1. Fetch Course with populated instructor
+        let course = null;
+        if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+            course = await Course.findById(req.params.id)
+                .populate('instructor', 'name email profileImage role')
+                .populate('chapters.quizzes')
+                .lean();
+        }
 
         let students = [];
         let stats = { studentCount: 0, examCount: 0 };
@@ -954,7 +956,7 @@ router.get('/course/:id', superAdminProtect, async (req, res) => {
             
             stats = {
                 studentCount: students.length,
-                examCount: course.chapters.reduce((acc, ch) => acc + (ch.quizzes?.length || 0), 0)
+                examCount: (course.chapters || []).reduce((acc, ch) => acc + (ch.quizzes?.length || 0), 0)
             };
         }
 
@@ -964,15 +966,15 @@ router.get('/course/:id', superAdminProtect, async (req, res) => {
         let noteCount = 0;
         let examCount = 0;
 
-        course.chapters.forEach(ch => {
+        (course.chapters || []).forEach(ch => {
             videoCount += (ch.recordedClasses?.length || 0) + (ch.liveClasses?.length || 0);
             noteCount += (ch.notes?.length || 0);
             examCount += (ch.quizzes?.length || 0);
         });
 
         // Format students for the table
-        const formattedStudents = students.map(s => {
-            const enrollment = s.enrolledCourses.find(e => e.course.toString() === course._id.toString());
+        const formattedStudents = (students || []).map(s => {
+            const enrollment = (s.enrolledCourses || []).find(e => e && e.course && e.course.toString() === course._id.toString());
             return {
                 ...s,
                 enrolledAt: enrollment ? enrollment.enrolledAt : s.createdAt,
