@@ -174,6 +174,15 @@ function extractSubjectsForStudent(classDoc, groupName) {
  */
 async function getStudentSubjects(user) {
     if (!user) return [];
+
+    // 1. If user has customized subjects array stored in user.subjects, return them directly
+    if (Array.isArray(user.subjects) && user.subjects.length > 0) {
+        const cleanSubs = user.subjects.map(s => String(s || '').trim()).filter(Boolean);
+        if (cleanSubs.length > 0) {
+            return Array.from(new Set(cleanSubs));
+        }
+    }
+
     const AcademicClass = require('../models/AcademicClass');
     const userClass = normalizeClass(user.classLevel || 'Class 10');
     const userGroup = normalizeGroup(user.group || 'General');

@@ -707,8 +707,27 @@ router.post('/register', authLimiter, async (req, res) => {
         if (classLevel) userPayload.classLevel = classLevel.trim();
         if (group) userPayload.group = group.trim();
 
-        if (Array.isArray(subjects) && subjects.length > 0) {
-            userPayload.subjects = subjects.map(s => String(s).trim()).filter(Boolean);
+        // Ensure compulsory subjects are auto-included alongside chosen group subjects
+        let finalSubjects = Array.isArray(subjects) ? subjects.map(s => String(s).trim()).filter(Boolean) : [];
+        if (classLevel) {
+            try {
+                const AcademicClass = require('../models/AcademicClass');
+                const classDoc = await AcademicClass.findOne({ name: classLevel.trim() }).lean();
+                if (classDoc) {
+                    let compSubs = [];
+                    if (classDoc.hasGroups && Array.isArray(classDoc.commonSubjects)) {
+                        compSubs = classDoc.commonSubjects;
+                    } else if (!classDoc.hasGroups && Array.isArray(classDoc.subjects)) {
+                        compSubs = classDoc.subjects;
+                    }
+                    finalSubjects = Array.from(new Set([...compSubs, ...finalSubjects]));
+                }
+            } catch (cErr) {
+                console.warn('AcademicClass lookup warning during registration:', cErr.message);
+            }
+        }
+        if (finalSubjects.length > 0) {
+            userPayload.subjects = finalSubjects;
         }
 
         const newUser = new User(userPayload);

@@ -152,6 +152,18 @@ router.get('/dashboard', protect, async (req, res) => {
                             { classLevel: { $exists: false } }
                         ];
                     }
+                    if (Array.isArray(dbUser.subjects) && dbUser.subjects.length > 0) {
+                        query.$and = [
+                            {
+                                $or: [
+                                    { subject: { $in: dbUser.subjects } },
+                                    { subject: { $size: 0 } },
+                                    { subject: { $exists: false } },
+                                    { subject: null }
+                                ]
+                            }
+                        ];
+                    }
                     return Course.find(query)
                         .sort({ featuredForClasses: -1, createdAt: -1 })
                         .limit(8)

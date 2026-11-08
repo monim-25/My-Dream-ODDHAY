@@ -247,17 +247,40 @@
                         </div>
 
                         <!-- ================= Step 3: Subject Selection (Dedicated Separate Step) ================= -->
-                        <div id="regStep3" class="reg-step hidden space-y-3.5">
-                            <div class="flex items-center justify-between mb-1.5 ml-0.5">
-                                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400">
-                                    Select Subjects (<span id="selectedSubCount">0</span> selected)
-                                </label>
-                                <button type="button" onclick="toggleAllSubjects()" id="selectAllBtn" class="text-[11px] text-[#18a957] hover:underline font-medium">
-                                    Select All
-                                </button>
+                        <div id="regStep3" class="reg-step hidden space-y-3">
+                            <!-- Compulsory Subjects (Auto-Enrolled) -->
+                            <div id="compulsorySection" class="p-2.5 rounded-xl bg-slate-50/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800/80">
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="material-symbols-outlined text-xs text-[#18a957]">verified</span>
+                                        <span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300">Compulsory Subjects</span>
+                                    </div>
+                                    <span class="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#18a957]/10 text-[#18a957]">
+                                        Auto-enrolled
+                                    </span>
+                                </div>
+                                <div id="compulsorySubjectsWrapper" class="flex flex-wrap gap-1">
+                                    <!-- Rendered dynamically as small non-editable badges -->
+                                </div>
                             </div>
-                            <div id="subjectsListWrapper" class="max-h-52 overflow-y-auto p-2 rounded-xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex flex-wrap gap-1.5">
-                                <!-- Rendered dynamically based on Superadmin class & group -->
+
+                            <!-- Group Electives / Selectable Subjects -->
+                            <div id="groupSubjectsSection">
+                                <div class="flex items-center justify-between mb-1.5 ml-0.5">
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                        Choose Group Subjects (<span id="selectedSubCount">0</span> selected)
+                                    </label>
+                                    <button type="button" onclick="toggleAllSubjects()" id="selectAllBtn" class="text-[11px] text-[#18a957] hover:underline font-medium">
+                                        Select All
+                                    </button>
+                                </div>
+                                <div id="subjectsListWrapper" class="max-h-40 overflow-y-auto p-2 rounded-xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 flex flex-wrap gap-1.5">
+                                    <!-- ONLY group subjects added by Superadmin for this group appear here -->
+                                </div>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-xs">info</span>
+                                    <span>Select the subjects you are taking in this group.</span>
+                                </p>
                             </div>
                         </div>
 
@@ -532,6 +555,7 @@
             let regCountdownTimer = null;
             let regCountdownSeconds = 60;
             let currentIdentifier = '';
+            let currentCompulsorySubjects = [];
 
             const form = document.getElementById('registerForm');
             if (!form) return;
@@ -581,6 +605,9 @@
             const classSelect = document.getElementById('classSelect');
             const groupContainer = document.getElementById('regGroupContainer');
             const groupCardsContainer = document.getElementById('groupCardsContainer');
+            const compulsorySection = document.getElementById('compulsorySection');
+            const compulsoryWrapper = document.getElementById('compulsorySubjectsWrapper');
+            const groupSubjectsSection = document.getElementById('groupSubjectsSection');
             const subjectsWrapper = document.getElementById('subjectsListWrapper');
             const selectedSubCount = document.getElementById('selectedSubCount');
 
@@ -654,7 +681,7 @@
                 });
             }
 
-            // Render subjects in Step 3 based on chosen class & group
+            // Render subjects in Step 3: Compulsory auto-added, ONLY group subjects selectable
             function updateSubjectsList() {
                 if (!subjectsWrapper) return;
                 const selectedClass = classSelect ? classSelect.value : 'Class 10';
@@ -662,63 +689,105 @@
                 const activeGroupRadio = form.querySelector('input[name="group"]:checked');
                 const selectedGroup = (activeGroupRadio ? activeGroupRadio.value : 'Science').trim();
 
-                let subjectsToRender = [];
+                let groupSubsToRender = [];
+                currentCompulsorySubjects = [];
                 const classDoc = academicClasses.find(c => c.name === selectedClass);
 
                 if (hasGroups) {
-                    if (classDoc && classDoc.groups && classDoc.groups.length > 0) {
-                        const common = classDoc.commonSubjects || [];
-                        const grp = classDoc.groups.find(g => (g.name || '').toLowerCase() === selectedGroup.toLowerCase());
-                        const grpSubs = grp ? (grp.subjects || []) : [];
-                        subjectsToRender = Array.from(new Set([...common, ...grpSubs]));
+                    // 1. Resolve Compulsory Subjects (Auto-Enrolled from Superadmin)
+                    if (classDoc && Array.isArray(classDoc.commonSubjects) && classDoc.commonSubjects.length > 0) {
+                        currentCompulsorySubjects = classDoc.commonSubjects.map(s => String(s).trim()).filter(Boolean);
                     } else {
-                        // Fallback
                         const isHsc = /11|12/i.test(selectedClass);
-                        const common = isHsc ? hscCommon : sscCommon;
+                        currentCompulsorySubjects = isHsc ? hscCommon : sscCommon;
+                    }
+
+                    // 2. Resolve ONLY Group Subjects added by Superadmin for this group
+                    if (classDoc && Array.isArray(classDoc.groups) && classDoc.groups.length > 0) {
+                        const grp = classDoc.groups.find(g => (g.name || '').toLowerCase() === selectedGroup.toLowerCase());
+                        if (grp && Array.isArray(grp.subjects) && grp.subjects.length > 0) {
+                            groupSubsToRender = grp.subjects.map(s => String(s).trim()).filter(Boolean);
+                        }
+                    }
+
+                    if (groupSubsToRender.length === 0) {
+                        const isHsc = /11|12/i.test(selectedClass);
                         const groupPool = isHsc ? hscGroupsData : sscGroupsData;
-                        const grpSubs = groupPool[selectedGroup] || groupPool['Science'] || [];
-                        subjectsToRender = Array.from(new Set([...common, ...grpSubs]));
+                        groupSubsToRender = groupPool[selectedGroup] || groupPool['Science'] || [];
                     }
+
+                    // Remove any compulsory subjects from the group choices
+                    const compSet = new Set(currentCompulsorySubjects.map(s => s.toLowerCase()));
+                    groupSubsToRender = groupSubsToRender.filter(s => !compSet.has(s.toLowerCase()));
+
+                    if (compulsorySection) compulsorySection.classList.remove('hidden');
+                    if (groupSubjectsSection) groupSubjectsSection.classList.remove('hidden');
+
                 } else {
-                    // Class without groups (Class 6-8)
-                    if (classDoc && classDoc.subjects && classDoc.subjects.length > 0) {
-                        subjectsToRender = classDoc.subjects;
+                    // Class without groups (Class 6-8): All class subjects are compulsory / auto-assigned
+                    if (classDoc && Array.isArray(classDoc.subjects) && classDoc.subjects.length > 0) {
+                        currentCompulsorySubjects = classDoc.subjects.map(s => String(s).trim()).filter(Boolean);
                     } else {
-                        subjectsToRender = ['Bangla', 'English', 'Mathematics', 'Science', 'ICT', 'Religion', 'General Science'];
+                        currentCompulsorySubjects = ['Bangla', 'English', 'Mathematics', 'Science', 'ICT', 'Religion', 'General Science'];
                     }
+                    groupSubsToRender = [];
+
+                    if (compulsorySection) compulsorySection.classList.remove('hidden');
                 }
 
-                // Render subject tag chips
-                subjectsWrapper.innerHTML = '';
-                subjectsToRender.forEach(sub => {
-                    const label = document.createElement('label');
-                    label.className = 'subject-chip selected inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-[#18a957] bg-[#18a957]/10 text-slate-800 dark:text-slate-100 text-xs font-medium cursor-pointer transition-all select-none hover:opacity-90';
-                    label.innerHTML = `
-                        <input type="checkbox" name="subjects" value="${sub}" checked class="hidden subject-checkbox">
-                        <span class="material-symbols-outlined text-xs text-[#18a957] chip-icon">check</span>
-                        <span>${sub}</span>
-                    `;
-
-                    const checkbox = label.querySelector('.subject-checkbox');
-                    const icon = label.querySelector('.chip-icon');
-
-                    label.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        checkbox.checked = !checkbox.checked;
-                        if (checkbox.checked) {
-                            label.className = 'subject-chip selected inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-[#18a957] bg-[#18a957]/10 text-slate-800 dark:text-slate-100 text-xs font-medium cursor-pointer transition-all select-none hover:opacity-90';
-                            icon.textContent = 'check';
-                            icon.className = 'material-symbols-outlined text-xs text-[#18a957] chip-icon';
-                        } else {
-                            label.className = 'subject-chip inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 text-xs font-normal cursor-pointer transition-all select-none hover:border-slate-400';
-                            icon.textContent = 'add';
-                            icon.className = 'material-symbols-outlined text-xs text-slate-400 chip-icon';
-                        }
-                        updateSelectedCount();
+                // Render Compulsory Badges (Auto-Enrolled)
+                if (compulsoryWrapper) {
+                    compulsoryWrapper.innerHTML = '';
+                    currentCompulsorySubjects.forEach(sub => {
+                        const badge = document.createElement('span');
+                        badge.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/90 dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700/80 text-[11px] font-medium text-slate-700 dark:text-slate-300 select-none';
+                        badge.innerHTML = `
+                            <span class="material-symbols-outlined text-[11px] text-[#18a957]">check</span>
+                            <span>${sub}</span>
+                        `;
+                        compulsoryWrapper.appendChild(badge);
                     });
+                }
 
-                    subjectsWrapper.appendChild(label);
-                });
+                // Render ONLY Group Elective Subjects as Interactive Checkbox Chips
+                subjectsWrapper.innerHTML = '';
+                if (groupSubsToRender.length === 0) {
+                    if (hasGroups) {
+                        subjectsWrapper.innerHTML = '<div class="w-full text-center py-2 text-xs text-slate-400">No elective group subjects configured.</div>';
+                    } else {
+                        subjectsWrapper.innerHTML = '<div class="w-full text-center py-2 text-xs text-slate-500 dark:text-slate-400">All subjects for this class are compulsory and auto-assigned. Click Next to continue.</div>';
+                    }
+                } else {
+                    groupSubsToRender.forEach(sub => {
+                        const label = document.createElement('label');
+                        label.className = 'subject-chip selected inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-[#18a957] bg-[#18a957]/10 text-slate-800 dark:text-slate-100 text-xs font-medium cursor-pointer transition-all select-none hover:opacity-90';
+                        label.innerHTML = `
+                            <input type="checkbox" name="subjects" value="${sub}" checked class="hidden subject-checkbox">
+                            <span class="material-symbols-outlined text-xs text-[#18a957] chip-icon">check</span>
+                            <span>${sub}</span>
+                        `;
+
+                        const checkbox = label.querySelector('.subject-checkbox');
+                        const icon = label.querySelector('.chip-icon');
+
+                        label.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            checkbox.checked = !checkbox.checked;
+                            if (checkbox.checked) {
+                                label.className = 'subject-chip selected inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-[#18a957] bg-[#18a957]/10 text-slate-800 dark:text-slate-100 text-xs font-medium cursor-pointer transition-all select-none hover:opacity-90';
+                                icon.textContent = 'check';
+                                icon.className = 'material-symbols-outlined text-xs text-[#18a957] chip-icon';
+                            } else {
+                                label.className = 'subject-chip inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400 text-xs font-normal cursor-pointer transition-all select-none hover:border-slate-400';
+                                icon.textContent = 'add';
+                                icon.className = 'material-symbols-outlined text-xs text-slate-400 chip-icon';
+                            }
+                            updateSelectedCount();
+                        });
+
+                        subjectsWrapper.appendChild(label);
+                    });
+                }
 
                 updateSelectedCount();
             }
@@ -799,8 +868,8 @@
                     const activeGroupRadio = form.querySelector('input[name="group"]:checked');
                     const hasGroups = classHasGroups(selectedClass);
                     sectionSubtitle.textContent = hasGroups && activeGroupRadio 
-                        ? `Choose subjects for ${selectedClass} (${activeGroupRadio.value})`
-                        : `Choose subjects for ${selectedClass}`;
+                        ? `Choose your ${activeGroupRadio.value} group subjects for ${selectedClass}`
+                        : `Compulsory & assigned subjects for ${selectedClass}`;
                 } else if (currentStep === 4) {
                     sectionTitle.textContent = 'Verify Your Account';
                     sectionSubtitle.textContent = 'Enter the 6-digit verification code.';
@@ -957,9 +1026,14 @@
 
                     // STEP 3 VALIDATION: Subject Selection -> Send OTP Code
                     if (currentStep === 3) {
-                        const checkedSubjects = form.querySelectorAll('input[name="subjects"]:checked');
-                        if (checkedSubjects.length === 0) {
-                            return showToast('Please select at least one subject');
+                        const selectedClass = classSelect ? classSelect.value : '';
+                        const hasGroups = classHasGroups(selectedClass);
+                        const groupCheckboxes = form.querySelectorAll('input[name="subjects"]');
+                        const checkedGroupSubjects = form.querySelectorAll('input[name="subjects"]:checked');
+
+                        // If class has groups and has group subjects, ensure student picks at least one group subject
+                        if (hasGroups && groupCheckboxes.length > 0 && checkedGroupSubjects.length === 0) {
+                            return showToast('Please select at least one group subject');
                         }
 
                         // Send OTP via API before moving to Step 4
@@ -1097,8 +1171,9 @@
                     confirmInput.classList.remove('!border-red-500');
                 }
 
-                // Gather checked subjects
-                const checkedSubjects = Array.from(form.querySelectorAll('input[name="subjects"]:checked')).map(cb => cb.value);
+                // Gather compulsory + checked group subjects
+                const checkedGroupSubs = Array.from(form.querySelectorAll('input[name="subjects"]:checked')).map(cb => cb.value);
+                const allSelectedSubjects = Array.from(new Set([...currentCompulsorySubjects, ...checkedGroupSubs]));
                 const activeGroup = form.querySelector('input[name="group"]:checked');
 
                 const payload = {
@@ -1106,7 +1181,7 @@
                     identifier: currentIdentifier,
                     classLevel: classSelect ? classSelect.value : '',
                     group: activeGroup ? activeGroup.value : 'General',
-                    subjects: checkedSubjects,
+                    subjects: allSelectedSubjects,
                     password: passwordInput.value,
                     confirmPassword: confirmInput.value
                 };
