@@ -234,15 +234,12 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
             console.log(`[Forgot Password] Account not found for identifier: ${raw}`);
         }
 
-        const isDev = process.env.NODE_ENV !== 'production' || !process.env.EMAIL_USER;
-
         if (isJson) {
             return res.json({
                 success: true,
                 message: successMsg,
                 maskedTarget,
-                identifier: raw,
-                demoOtp: isDev ? otp : undefined
+                identifier: raw
             });
         }
 
@@ -254,7 +251,96 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
     }
 });
 
-// POST Verify OTP and reset password
+// POST Verify OTP code only (Step 2 - Proves OTP before setting new password)
+router.post('/forgot-password/verify-code', async (req, res) => {
+    try {
+        await connectDB();
+        const { identifier, otp } = req.body;
+
+        if (!identifier) {
+            return res.status(400).json({ success: false, error: 'Identifier is missing. Please restart the process.' });
+        }
+
+        const cleanOtp = String(otp || '').trim();
+        if (!cleanOtp || cleanOtp.length !== 6) {
+            return res.status(400).json({ success: false, error: 'Please enter the 6-digit verification code.' });
+        }
+
+        const { email, phone } = normalizeIdentifier(identifier);
+        let user = null;
+        if (email) {
+            user = await User.findOne({ email: email.toLowerCase() });
+        } else if (phone) {
+            user = await User.findOne({ phone });
+        }
+
+        if (!user || !user.passwordResetOtp || user.passwordResetOtp !== cleanOtp || !user.passwordResetExpires || user.passwordResetExpires < Date.now()) {
+            return res.status(400).json({ success: false, error: 'Invalid or expired verification code. Please check and try again.' });
+        }
+
+        // Generate verified reset session token
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        user.passwordResetToken = resetToken;
+        await user.save();
+
+        return res.json({
+            success: true,
+            message: 'Verification code confirmed.',
+            resetToken: resetToken
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: `Server error: ${err.message}` });
+    }
+});
+
+// POST Set New Password (Step 3 - Allowed only after proving OTP)
+router.post('/forgot-password/reset-password', async (req, res) => {
+    try {
+        await connectDB();
+        const { identifier, resetToken, password, confirmPassword } = req.body;
+
+        if (!identifier || !resetToken) {
+            return res.status(400).json({ success: false, error: 'Session expired. Please verify your OTP code again.' });
+        }
+
+        if (!password || password.length < 6) {
+            return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
+        }
+
+        if (password !== confirmPassword) {
+            return res.status(400).json({ success: false, error: 'Passwords do not match.' });
+        }
+
+        const { email, phone } = normalizeIdentifier(identifier);
+        let user = null;
+        if (email) {
+            user = await User.findOne({ email: email.toLowerCase() });
+        } else if (phone) {
+            user = await User.findOne({ phone });
+        }
+
+        if (!user || !user.passwordResetToken || user.passwordResetToken !== resetToken || !user.passwordResetExpires || user.passwordResetExpires < Date.now()) {
+            return res.status(400).json({ success: false, error: 'Password reset session has expired. Please verify your OTP again.' });
+        }
+
+        user.password = password;
+        user.passwordResetOtp = undefined;
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        user.passwordResetRequired = false;
+        await user.save();
+
+        return res.json({
+            success: true,
+            message: 'Password has been reset successfully.',
+            redirect: '/login?reset=success'
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, error: `Server error: ${err.message}` });
+    }
+});
+
+// POST Verify OTP and reset password (legacy combined handler fallback)
 router.post('/forgot-password/verify-otp', async (req, res) => {
     const isJson = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.is('application/json');
     try {
