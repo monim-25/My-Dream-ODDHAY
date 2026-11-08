@@ -4,6 +4,7 @@ const router = express.Router();
 const crypto = require('crypto');
 const { connectDB, protect, User } = require('../config');
 const { sendRegistrationOtpEmail, sendPasswordResetOtpEmail, sendPasswordResetEmail, sendWelcomeEmail } = require('../services/emailService');
+const { sendSmsOtp } = require('../services/smsService');
 
 const rateLimit = require('express-rate-limit');
 
@@ -197,6 +198,14 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
             user = await User.findOne({ phone });
         }
 
+        // Return error if user account does not exist
+        if (!user) {
+            const err = email
+                ? 'No account found with this email address. Please check or create an account.'
+                : 'No account found with this phone number. Please check or create an account.';
+            return isJson ? res.status(404).json({ success: false, error: err }) : res.render('forgot-password', { message: null, error: err });
+        }
+
         // Generate secure 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
         const successMsg = 'A 6-digit verification code has been sent.';
@@ -210,36 +219,36 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
             maskedTarget = phone.length >= 10 ? phone.slice(0, 3) + '****' + phone.slice(-4) : phone;
         }
 
-        if (user) {
-            user.passwordResetOtp = otp;
-            user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
-            const token = crypto.randomBytes(32).toString('hex');
-            user.passwordResetToken = token;
-            await user.save();
+        user.passwordResetOtp = otp;
+        user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+        const token = crypto.randomBytes(32).toString('hex');
+        user.passwordResetToken = token;
+        await user.save();
 
-            // Send via email if user has email
-            if (user.email) {
-                try {
-                    await sendPasswordResetOtpEmail(user.email, user.name, otp);
-                } catch (mErr) {
-                    console.error('[Forgot Password] Email send error:', mErr.message);
-                }
+        let sendResult = null;
+        if (user.email) {
+            try {
+                sendResult = await sendPasswordResetOtpEmail(user.email, user.name, otp);
+            } catch (mErr) {
+                console.error('[Forgot Password] Email send error:', mErr.message);
             }
-
-            // Log / Send via SMS if phone
-            if (user.phone) {
-                console.log(`[SMS OTP] Verification code for ${user.phone}: ${otp}`);
+        } else if (user.phone) {
+            try {
+                sendResult = await sendSmsOtp(user.phone, otp, 'password_reset');
+            } catch (sErr) {
+                console.error('[Forgot Password] SMS send error:', sErr.message);
             }
-        } else {
-            console.log(`[Forgot Password] Account not found for identifier: ${raw}`);
         }
+
+        console.log(`[Forgot Password OTP] Verification code for ${user.email || user.phone}: ${otp}`);
 
         if (isJson) {
             return res.json({
                 success: true,
                 message: successMsg,
                 maskedTarget,
-                identifier: raw
+                identifier: raw,
+                simulated: sendResult?.simulated || false
             });
         }
 
@@ -501,49 +510,185 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 });
 
-// POST Register
-router.post('/register', authLimiter, async (req, res) => {
+// POST Register - Send OTP (Step 3 -> Step 4)
+router.post('/register/send-otp', forgotLimiter, async (req, res) => {
     try {
         await connectDB();
-        const { name, identifier, password, confirmPassword, role, classLevel, group } = req.body;
-        if (!name || !identifier || !password || !confirmPassword) {
-            return res.status(400).json({ error: 'দয়া করে সবগুলো প্রয়োজনীয় তথ্য প্রদান করুন।' });
+        const { name, identifier } = req.body;
+        if (!name || !name.trim()) {
+            return res.status(400).json({ success: false, error: 'Please enter your full name.' });
         }
-        if (password.length < 6) {
-            return res.status(400).json({ error: 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।' });
-        }
-        if (password !== confirmPassword) {
-            return res.status(400).json({ error: 'পাসওয়ার্ড দুটি মিলছে না।' });
+        if (!identifier || !identifier.trim()) {
+            return res.status(400).json({ success: false, error: 'Please enter an email or phone number.' });
         }
 
         const { email, phone } = normalizeIdentifier(identifier);
+        if (!email && !phone) {
+            return res.status(400).json({ success: false, error: 'Please provide a valid email or 11-digit phone number.' });
+        }
 
         if (email) {
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(email)) {
-                return res.status(400).json({ error: 'দয়া করে একটি সঠিক ইমেইল এড্রেস দিন।' });
+                return res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
             }
         } else if (phone) {
             if (!/^01[3-9]\d{8}$/.test(phone)) {
-                return res.status(400).json({ error: 'দয়া করে একটি সঠিক ১১ ডিজিটের মোবাইল নম্বর দিন (যেমন: 017XXXXXXXX)।' });
+                return res.status(400).json({ success: false, error: 'Please enter a valid 11-digit mobile number (e.g. 017XXXXXXXX).' });
             }
-        } else {
-            return res.status(400).json({ error: 'দয়া করে একটি সঠিক ইমেইল অথবা মোবাইল নম্বর দিন।' });
         }
 
         // Check if user already exists
-        const existingQuery = email ? { email } : { phone };
+        const existingQuery = email ? { email: email.toLowerCase() } : { phone };
         const existingUser = await User.findOne(existingQuery).lean();
         if (existingUser) {
             return res.status(400).json({
+                success: false,
                 error: email
-                    ? 'এই ইমেইলটি ইতিমধ্যে ব্যবহৃত হয়েছে। দয়া করে লগইন করুন।'
-                    : 'এই ফোন নম্বরটি ইতিমধ্যে ব্যবহৃত হয়েছে। দয়া করে লগইন করুন।'
+                    ? 'An account already exists with this email address. Please sign in.'
+                    : 'An account already exists with this phone number. Please sign in.'
             });
         }
 
-        // Determine Role
-        let assignedRole = role === 'parent' ? 'parent' : 'student';
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // Store OTP in session with 10-minute validity
+        req.session.regOtp = {
+            code: otp,
+            identifier: email || phone,
+            rawIdentifier: identifier.trim(),
+            name: name.trim(),
+            expiresAt: Date.now() + 10 * 60 * 1000,
+            verified: false
+        };
+
+        // Mask target for UI display
+        let maskedTarget = identifier.trim();
+        if (email) {
+            const [u, d] = email.split('@');
+            maskedTarget = (u.length > 2 ? u.slice(0, 2) + '***' : u + '***') + '@' + d;
+        } else if (phone) {
+            maskedTarget = phone.length >= 10 ? phone.slice(0, 3) + '****' + phone.slice(-4) : phone;
+        }
+
+        // Send OTP
+        let sendResult = null;
+        if (email) {
+            try {
+                sendResult = await sendRegistrationOtpEmail(email, name.trim(), otp);
+            } catch (mErr) {
+                console.error('[Registration Email OTP Error]:', mErr.message);
+            }
+        } else if (phone) {
+            try {
+                sendResult = await sendSmsOtp(phone, otp, 'registration');
+            } catch (sErr) {
+                console.error('[Registration SMS OTP Error]:', sErr.message);
+            }
+        }
+
+        console.log(`[Registration OTP] Generated code for ${email || phone}: ${otp}`);
+
+        await new Promise((resolve) => req.session.save(resolve));
+
+        return res.json({
+            success: true,
+            message: 'Verification code sent successfully.',
+            maskedTarget,
+            simulated: sendResult?.simulated || false
+        });
+    } catch (err) {
+        console.error('Registration send-otp error:', err);
+        return res.status(500).json({ success: false, error: `Server error: ${err.message}` });
+    }
+});
+
+// POST Register - Verify OTP (Step 4 -> Step 5)
+router.post('/register/verify-otp', async (req, res) => {
+    try {
+        const { identifier, otp } = req.body;
+        if (!identifier) {
+            return res.status(400).json({ success: false, error: 'Identifier is missing. Please restart registration.' });
+        }
+
+        const cleanOtp = String(otp || '').trim();
+        if (!cleanOtp || cleanOtp.length !== 6) {
+            return res.status(400).json({ success: false, error: 'Please enter the 6-digit verification code.' });
+        }
+
+        const { email, phone } = normalizeIdentifier(identifier);
+        const normalized = email || phone;
+
+        const regData = req.session.regOtp;
+        if (!regData || regData.identifier !== normalized) {
+            return res.status(400).json({ success: false, error: 'Verification session expired. Please request a new code.' });
+        }
+
+        if (Date.now() > regData.expiresAt) {
+            delete req.session.regOtp;
+            return res.status(400).json({ success: false, error: 'Verification code has expired. Please request a new code.' });
+        }
+
+        if (regData.code !== cleanOtp) {
+            return res.status(400).json({ success: false, error: 'Invalid verification code. Please check and try again.' });
+        }
+
+        // Mark verified in session
+        req.session.regOtp.verified = true;
+        await new Promise((resolve) => req.session.save(resolve));
+
+        return res.json({
+            success: true,
+            message: 'Verification code confirmed successfully.'
+        });
+    } catch (err) {
+        console.error('Registration verify-otp error:', err);
+        return res.status(500).json({ success: false, error: `Server error: ${err.message}` });
+    }
+});
+
+// POST Register - Final Submission (Step 5)
+router.post('/register', authLimiter, async (req, res) => {
+    try {
+        await connectDB();
+        const { name, identifier, password, confirmPassword, classLevel, group, subjects } = req.body;
+
+        if (!name || !identifier || !password || !confirmPassword) {
+            return res.status(400).json({ success: false, error: 'Please fill in all required fields.' });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({ success: false, error: 'Password must be at least 6 characters.' });
+        }
+
+        if (password !== confirmPassword) {
+            return res.status(400).json({ success: false, error: 'Passwords do not match.' });
+        }
+
+        const { email, phone } = normalizeIdentifier(identifier);
+        const normalized = email || phone;
+
+        // Verify OTP session proof
+        const regData = req.session.regOtp;
+        if (!regData || !regData.verified || regData.identifier !== normalized) {
+            return res.status(400).json({ success: false, error: 'Please verify your verification code before setting password.' });
+        }
+
+        // Check if user already exists
+        const existingQuery = email ? { email: email.toLowerCase() } : { phone };
+        const existingUser = await User.findOne(existingQuery).lean();
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                error: email
+                    ? 'An account already exists with this email. Please sign in.'
+                    : 'An account already exists with this phone number. Please sign in.'
+            });
+        }
+
+        // Always Student role
+        let assignedRole = 'student';
         const superEmailReg = getSuperAdminEmail();
         if (email && email.toLowerCase().trim() === superEmailReg) {
             assignedRole = 'superadmin';
@@ -556,27 +701,24 @@ router.post('/register', authLimiter, async (req, res) => {
             loginCount: 1,
             lastActive: new Date()
         };
-        if (assignedRole !== 'parent' && classLevel) {
-            userPayload.classLevel = classLevel.trim();
-        }
-        if (email) {
-            userPayload.email = email;
-        }
-        if (phone) {
-            userPayload.phone = phone;
+
+        if (email) userPayload.email = email.toLowerCase().trim();
+        if (phone) userPayload.phone = phone;
+        if (classLevel) userPayload.classLevel = classLevel.trim();
+        if (group) userPayload.group = group.trim();
+
+        if (Array.isArray(subjects) && subjects.length > 0) {
+            userPayload.subjects = subjects.map(s => String(s).trim()).filter(Boolean);
         }
 
         const newUser = new User(userPayload);
         await newUser.save();
 
-        const customRedirect = (req.body.redirect && req.body.redirect.startsWith('/') && !req.body.redirect.startsWith('//')) ? req.body.redirect : '';
-        let redirectUrl = customRedirect || '/dashboard';
-        if (!customRedirect && newUser.role === 'parent') redirectUrl = '/parent/dashboard';
-        else if (newUser.role === 'teacher') redirectUrl = '/teacher';
-        else if (newUser.role === 'superadmin') redirectUrl = '/superadmin';
-        else if (newUser.role === 'admin' || newUser.role === 'content_manager' || newUser.role === 'support' || newUser.role === 'moderator') redirectUrl = '/admin';
-
+        // Clear registration OTP session
+        delete req.session.regOtp;
         delete req.session.tempQuiz;
+
+        // Automatically log in user and establish session
         req.session.userId = newUser._id.toString();
         req.session.user = newUser.toObject();
         req.session.isFirstLogin = true;
@@ -585,31 +727,37 @@ router.post('/register', authLimiter, async (req, res) => {
             sendWelcomeEmail(email, newUser.name).catch(e => console.error('Failed to send welcome email:', e));
         }
 
-        // Notify superadmins about new user registration
+        // Push notification for superadmin
         try {
             const pushNotificationService = require('../services/pushNotificationService');
             pushNotificationService.sendToRole('superadmin', {
-                title: `New ${newUser.role.toUpperCase()} Registered: ${newUser.name}`,
-                body: `${newUser.name} (${newUser.email || newUser.phone || 'No Contact'}) joined ODDHAY as ${newUser.role}.`,
+                title: `New Student Registered: ${newUser.name}`,
+                body: `${newUser.name} (${newUser.email || newUser.phone}) joined ODDHAY.`,
                 url: `/superadmin/user/${newUser._id}`,
                 type: 'user_registered'
             }).catch(e => console.warn('Superadmin user notification warning:', e.message));
         } catch (e) {}
 
         req.session.save((saveErr) => {
-            if (saveErr) console.warn('⚠️ Session save warning on register:', saveErr.message);
-            return res.json({ success: true, redirect: redirectUrl });
+            if (saveErr) console.warn('Session save warning on register:', saveErr.message);
+            return res.json({
+                success: true,
+                message: 'Account created successfully!',
+                redirect: '/dashboard'
+            });
         });
     } catch (err) {
-        console.error('Registration error:', err);
+        console.error('Registration submission error:', err);
         if (err.code === 11000) {
             const isPhone = (err.keyPattern && err.keyPattern.phone) || (err.message && err.message.includes('phone'));
             return res.status(400).json({
-                error: isPhone ? 'এই ফোন নম্বরটি ইতিমধ্যে ব্যবহৃত হয়েছে।' : 'এই ইমেইলটি ইতিমধ্যে ব্যবহৃত হয়েছে।'
+                success: false,
+                error: isPhone ? 'An account already exists with this phone number.' : 'An account already exists with this email address.'
             });
         }
-        res.status(500).json({ error: `সার্ভার ত্রুটি: ${err.message}` });
+        return res.status(500).json({ success: false, error: `Server error: ${err.message}` });
     }
 });
 
 module.exports = router;
+
