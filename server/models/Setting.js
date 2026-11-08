@@ -62,6 +62,7 @@ const SettingSchema = new mongoose.Schema({
     landingPage: {
         heroScreenshotUrl: { type: String, default: '' },
         heroImageScale: { type: Number, default: 100 },
+        heroImageMobileScale: { type: Number, default: 100 },
         heroImageRotate: { type: Number, default: 0 },
         heroImageOffsetX: { type: Number, default: 0 },
         heroImageOffsetY: { type: Number, default: 0 },
