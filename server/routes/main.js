@@ -2893,7 +2893,7 @@ router.get(['/note/:id', '/note-viewer/:id'], async (req, res) => {
     }
 });
 
-router.get('/question-bank', async (req, res) => {
+router.get('/question-bank', protect, async (req, res) => {
     try {
         await connectDB();
         const QuestionBank = require('../models/QuestionBank');
@@ -3041,7 +3041,7 @@ router.get('/question-bank', async (req, res) => {
 });
 
 // GET /question-bank/view/:id - Detailed Question Bank View Page with Questions, Answers & Explanations
-router.get('/question-bank/view/:id', async (req, res) => {
+router.get('/question-bank/view/:id', protect, async (req, res) => {
     try {
         await connectDB();
         const QuestionBank = require('../models/QuestionBank');
