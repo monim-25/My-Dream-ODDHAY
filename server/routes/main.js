@@ -2367,10 +2367,15 @@ router.get('/courses', async (req, res) => {
         });
         const allSubjects = Array.from(subjectSet).sort();
 
+        const Setting = require('../models/Setting');
+        const siteSettings = await Setting.findOne().lean().catch(() => null) || res.locals.siteSettings || {};
+        res.locals.siteSettings = siteSettings;
+
         res.render('courses', {
             courses,
             activeClasses,
             allSubjects,
+            siteSettings,
             activeClass: classFilter || 'all',
             activeSubject: subject || 'all',
             activeType: type || 'all',
@@ -4307,6 +4312,7 @@ router.get(['/course-details/:id', '/course/:id'], async (req, res) => {
         const Announcement = require('../models/Announcement');
         const NotificationLog = require('../models/NotificationLog');
         const AcademicClass = require('../models/AcademicClass');
+        const Setting = require('../models/Setting');
 
         let courseDoc = null;
         if (mongoose.Types.ObjectId.isValid(courseId)) {
@@ -4336,7 +4342,7 @@ router.get(['/course-details/:id', '/course/:id'], async (req, res) => {
         }
 
         // Fetch course details, user, QAs, notices, etc.
-        const [user, qas, enrolledCount, relatedCourses, courseAnnouncements, courseLogs, activeClasses] = await Promise.all([
+        const [user, qas, enrolledCount, relatedCourses, courseAnnouncements, courseLogs, activeClasses, siteSettingsDoc] = await Promise.all([
             userId ? User.findById(userId)
                 .select('name email role enrolledCourses trialEnrollments completedLessons profileImage profilePicture attendedNotices')
                 .lean() : Promise.resolve(null),
@@ -4370,7 +4376,8 @@ router.get(['/course-details/:id', '/course/:id'], async (req, res) => {
                 .populate('sentBy', 'name profileImage profilePicture role')
                 .sort({ createdAt: -1 })
                 .lean(),
-            AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1, name: 1 }).lean().catch(() => [])
+            AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1, name: 1 }).lean().catch(() => []),
+            Setting.findOne().lean().catch(() => null)
         ]);
 
         const course = courseDoc;
@@ -4491,9 +4498,13 @@ router.get(['/course-details/:id', '/course/:id'], async (req, res) => {
             return res.render('lesson-player', { course, similarCourses: [], hasAccess, trialExpired, subscriptionExpired, user, qas: qas || [], courseNotices, from: req.query.from || '' });
         }
 
+        const siteSettings = siteSettingsDoc || res.locals.siteSettings || {};
+        res.locals.siteSettings = siteSettings;
+
         res.render('course-details', { 
             course, 
             user, 
+            siteSettings,
             pageTitle: course.title,
             hasAccess,
             trialExpired,
