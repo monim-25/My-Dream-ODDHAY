@@ -917,6 +917,16 @@
             }
         });
 
+        // Helper to smoothly scroll horizontal carousel container to center a card without affecting vertical window scroll
+        function scrollContainerToCard(container, card) {
+            if (!container || !card) return;
+            const containerRect = container.getBoundingClientRect();
+            const cardRect = card.getBoundingClientRect();
+            const relativeCardLeft = cardRect.left - containerRect.left;
+            const targetScrollLeft = container.scrollLeft + relativeCardLeft - ((container.clientWidth - card.clientWidth) / 2);
+            container.scrollTo({ left: Math.max(0, targetScrollLeft), behavior: 'smooth' });
+        }
+
         // Update carousel dots for mobile course slider
         function updateCourseCarouselDots() {
             const container = document.getElementById('landingCoursesContainer');
@@ -942,14 +952,15 @@
             dotsWrapper.style.display = 'flex';
             dotsWrapper.innerHTML = '';
 
-            const scrollLeft = container.scrollLeft;
-            const containerCenter = scrollLeft + (container.clientWidth / 2);
+            const containerRect = container.getBoundingClientRect();
+            const containerCenter = containerRect.left + (containerRect.width / 2);
 
             let closestIdx = 0;
             let minDiff = Infinity;
 
             visibleCards.forEach((card, idx) => {
-                const cardCenter = card.offsetLeft + (card.offsetWidth / 2);
+                const cardRect = card.getBoundingClientRect();
+                const cardCenter = cardRect.left + (cardRect.width / 2);
                 const diff = Math.abs(cardCenter - containerCenter);
                 if (diff < minDiff) {
                     minDiff = diff;
@@ -967,7 +978,7 @@
                     : 'h-2 w-2 rounded-full bg-slate-300 dark:bg-slate-700 hover:bg-slate-400 transition-all duration-300 cursor-pointer';
                 
                 dot.addEventListener('click', function() {
-                    card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                    scrollContainerToCard(container, card);
                 });
                 
                 dotsWrapper.appendChild(dot);
@@ -990,10 +1001,26 @@
                 }
             }, { passive: true });
 
-            // Auto-scroll loop for small screen (every 3.5 seconds)
+            // Auto-scroll loop for small screen (every 5 seconds, relaxed & smooth)
             let autoScrollTimer = null;
             let pauseTimer = null;
             let isUserInteracting = false;
+            let isSectionInView = false;
+
+            // Track if courses section is visible in user's viewport so auto-scroll never activates when user is elsewhere
+            if ('IntersectionObserver' in window) {
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        isSectionInView = entry.isIntersecting;
+                    });
+                }, { threshold: 0.15 });
+                const coursesSection = document.getElementById('courses');
+                if (coursesSection) {
+                    observer.observe(coursesSection);
+                }
+            } else {
+                isSectionInView = true;
+            }
 
             function getVisibleMobileCards() {
                 return Array.from(courseContainer.querySelectorAll('.course-card-item')).filter(c => {
@@ -1004,17 +1031,18 @@
             }
 
             function scrollNextCard() {
-                if (window.innerWidth >= 640 || isUserInteracting) return;
+                if (window.innerWidth >= 640 || isUserInteracting || !isSectionInView) return;
                 const cards = getVisibleMobileCards();
                 if (cards.length <= 1) return;
 
-                const scrollLeft = courseContainer.scrollLeft;
-                const containerCenter = scrollLeft + (courseContainer.clientWidth / 2);
+                const containerRect = courseContainer.getBoundingClientRect();
+                const containerCenter = containerRect.left + (containerRect.width / 2);
 
                 let closestIdx = 0;
                 let minDiff = Infinity;
                 cards.forEach((card, idx) => {
-                    const cardCenter = card.offsetLeft + (card.offsetWidth / 2);
+                    const cardRect = card.getBoundingClientRect();
+                    const cardCenter = cardRect.left + (cardRect.width / 2);
                     const diff = Math.abs(cardCenter - containerCenter);
                     if (diff < minDiff) {
                         minDiff = diff;
@@ -1023,13 +1051,13 @@
                 });
 
                 const nextIdx = (closestIdx + 1) % cards.length;
-                cards[nextIdx].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                scrollContainerToCard(courseContainer, cards[nextIdx]);
             }
 
             function startAutoScroll() {
                 stopAutoScroll();
                 if (window.innerWidth < 640) {
-                    autoScrollTimer = setInterval(scrollNextCard, 3500);
+                    autoScrollTimer = setInterval(scrollNextCard, 5000);
                 }
             }
 
@@ -1042,17 +1070,17 @@
 
             function pauseAutoScrollTemporarily() {
                 isUserInteracting = true;
-                stopAutoScroll();
                 clearTimeout(pauseTimer);
                 pauseTimer = setTimeout(function() {
                     isUserInteracting = false;
-                    startAutoScroll();
-                }, 4000);
+                }, 5000);
             }
 
             // Pause temporarily on user touch/pointer interaction
             courseContainer.addEventListener('touchstart', pauseAutoScrollTemporarily, { passive: true });
             courseContainer.addEventListener('touchmove', pauseAutoScrollTemporarily, { passive: true });
+            courseContainer.addEventListener('touchend', pauseAutoScrollTemporarily, { passive: true });
+            courseContainer.addEventListener('mousedown', pauseAutoScrollTemporarily, { passive: true });
             courseContainer.addEventListener('mouseenter', pauseAutoScrollTemporarily, { passive: true });
 
             window.addEventListener('resize', function() {
