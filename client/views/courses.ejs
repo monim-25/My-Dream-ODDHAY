@@ -65,20 +65,47 @@
                         </button>
                     </div>
 
-                    <!-- Sort Selector (50% on mobile, fixed width on desktop) -->
-                    <div class="relative w-full min-w-0 sm:w-52 sm:shrink-0">
-                        <div class="absolute left-2.5 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none text-slate-400 select-none">
-                            <span class="material-symbols-rounded text-[17px] sm:text-base">sort</span>
-                        </div>
-                        <select id="coursesSortSelect" onchange="handleSortChange(this.value)"
-                            class="w-full h-10.5 sm:h-11 pl-8 sm:pl-9 pr-6 sm:pr-8 bg-white sm:bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 rounded-xl text-[13px] xs:text-[13.5px] sm:text-sm font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-[#18a957] focus:ring-2 focus:ring-[#18a957]/20 cursor-pointer transition-all appearance-none [background-image:none] truncate shadow-2xs sm:shadow-none">
-                            <option value="newest" <%= (locals.sort === 'newest' || !locals.sort) ? 'selected' : '' %>>নতুন (Newest)</option>
-                            <option value="price_low" <%= locals.sort === 'price_low' ? 'selected' : '' %>>ফি: কম-বেশি</option>
-                            <option value="price_high" <%= locals.sort === 'price_high' ? 'selected' : '' %>>ফি: বেশি-কম</option>
-                            <option value="title_asc" <%= locals.sort === 'title_asc' ? 'selected' : '' %>>নাম (A-Z)</option>
-                        </select>
-                        <div class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 flex items-center">
-                            <span class="material-symbols-rounded text-sm sm:text-base">expand_more</span>
+                    <!-- Sort Selector (Custom Dropdown System, 50% on mobile, fixed width on desktop) -->
+                    <div class="relative w-full min-w-0 sm:w-52 sm:shrink-0" id="coursesSortDropdownWrapper">
+                        <input type="hidden" id="coursesSortSelect" value="<%= locals.sort || 'newest' %>">
+                        <button type="button" id="coursesSortDropdownBtn" onclick="toggleCoursesDropdown('coursesSortDropdown')"
+                            class="w-full h-10.5 sm:h-11 px-3 bg-white sm:bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 rounded-xl text-[13px] xs:text-[13.5px] sm:text-sm font-medium text-slate-700 dark:text-slate-200 outline-none flex items-center justify-between cursor-pointer shadow-2xs sm:shadow-none hover:border-[#18a957]/60 transition-all select-none">
+                            <div class="flex items-center gap-1.5 min-w-0 truncate">
+                                <span class="material-symbols-rounded text-[17px] sm:text-base text-slate-400 shrink-0">sort</span>
+                                <span id="coursesSortDropdownLabel" class="truncate font-semibold">
+                                    <% 
+                                        const sortLabels = {
+                                            'newest': 'নতুন (Newest)',
+                                            'price_low': 'ফি: কম-বেশি',
+                                            'price_high': 'ফি: বেশি-কম',
+                                            'title_asc': 'নাম (A-Z)'
+                                        };
+                                    %>
+                                    <%= sortLabels[locals.sort] || 'নতুন (Newest)' %>
+                                </span>
+                            </div>
+                            <span id="coursesSortDropdownArrow" class="material-symbols-rounded text-sm sm:text-base text-slate-400 shrink-0 transition-transform duration-200">expand_more</span>
+                        </button>
+                        
+                        <div id="coursesSortDropdownMenu" class="hidden absolute left-0 right-0 sm:right-auto sm:w-52 top-full mt-1.5 bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-xl shadow-xl py-1 z-50 divide-y divide-slate-100 dark:divide-slate-800/60 no-scrollbar">
+                            <div class="py-1">
+                                <% const sortOpts = [
+                                    { val: 'newest', label: 'নতুন (Newest)' },
+                                    { val: 'price_low', label: 'ফি: কম-বেশি' },
+                                    { val: 'price_high', label: 'ফি: বেশি-কম' },
+                                    { val: 'title_asc', label: 'নাম (A-Z)' }
+                                ]; %>
+                                <% sortOpts.forEach(opt => { 
+                                    const isSel = (locals.sort === opt.val || (!locals.sort && opt.val === 'newest'));
+                                %>
+                                    <button type="button" onclick="selectCoursesSortOption('<%= opt.val %>', '<%= opt.label %>')"
+                                        class="courses-sort-opt w-full px-3.5 py-2 text-left text-xs sm:text-[13px] font-semibold transition-colors flex items-center justify-between gap-2 <%= isSel ? 'text-[#18a957] font-bold bg-emerald-50/60 dark:bg-emerald-950/40' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60' %>"
+                                        data-value="<%= opt.val %>">
+                                        <span><%= opt.label %></span>
+                                        <span class="material-symbols-rounded text-sm text-[#18a957] check-icon <%= isSel ? '' : 'hidden' %>">check</span>
+                                    </button>
+                                <% }) %>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -86,51 +113,81 @@
                 <!-- Bottom Row: Class, Subject, Access Type & Reset Controls -->
                 <div class="flex flex-wrap items-center gap-2 sm:gap-2.5 pt-2.5 sm:pt-3 border-t border-slate-200/70 dark:border-slate-800/80 sm:border-slate-100 sm:dark:border-slate-800/70">
                     
-                    <!-- Class Selector -->
-                    <div class="relative flex-1 min-w-[140px] sm:min-w-[180px]">
-                        <div class="absolute left-2.5 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none text-[#18a957] select-none">
-                            <span class="material-symbols-rounded text-base sm:text-lg">school</span>
-                        </div>
-                        <select id="coursesClassFilter" onchange="handleClassFilterChange(this.value)"
-                            class="w-full h-10 sm:h-10 pl-8 pr-7 bg-white sm:bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 rounded-xl text-[13px] xs:text-[13.5px] sm:text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-[#18a957] focus:ring-2 focus:ring-[#18a957]/20 cursor-pointer transition-all appearance-none [background-image:none] shadow-2xs sm:shadow-none">
-                            <option value="all">শ্রেণী: সকল শ্রেণী</option>
-                            <% if (locals.activeClasses && activeClasses.length > 0) { %>
-                                <% activeClasses.forEach(cls => { %>
-                                    <% const isClassSelected = (locals.activeClass && (activeClass.toLowerCase() === cls.name.toLowerCase() || activeClass.toLowerCase() === cls.name.toLowerCase().replace(/\s+/g, ''))); %>
-                                    <option value="<%= cls.name %>" <%= isClassSelected ? 'selected' : '' %>>শ্রেণী: <%= cls.name %></option>
+                    <!-- Class Selector (Custom Dropdown System) -->
+                    <div class="relative flex-1 min-w-[140px] sm:min-w-[180px]" id="coursesClassDropdownWrapper">
+                        <input type="hidden" id="coursesClassFilter" value="<%= locals.activeClass || 'all' %>">
+                        <button type="button" id="coursesClassDropdownBtn" onclick="toggleCoursesDropdown('coursesClassDropdown')"
+                            class="w-full h-10 px-3 bg-white sm:bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 rounded-xl text-[13px] xs:text-[13.5px] sm:text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none flex items-center justify-between cursor-pointer shadow-2xs sm:shadow-none hover:border-[#18a957]/60 transition-all select-none">
+                            <div class="flex items-center gap-1.5 min-w-0 truncate">
+                                <span class="material-symbols-rounded text-base sm:text-lg text-[#18a957] shrink-0">school</span>
+                                <span id="coursesClassDropdownLabel" class="truncate">
+                                    <%= (locals.activeClass && locals.activeClass !== 'all') ? ('শ্রেণী: ' + locals.activeClass) : 'শ্রেণী: সকল শ্রেণী' %>
+                                </span>
+                            </div>
+                            <span id="coursesClassDropdownArrow" class="material-symbols-rounded text-sm text-slate-400 shrink-0 transition-transform duration-200">expand_more</span>
+                        </button>
+
+                        <div id="coursesClassDropdownMenu" class="hidden absolute left-0 top-full mt-1.5 w-full min-w-[190px] max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-xl shadow-xl py-1 z-50 no-scrollbar divide-y divide-slate-100 dark:divide-slate-800/60">
+                            <div class="py-1">
+                                <button type="button" onclick="selectCoursesClassOption('all', 'শ্রেণী: সকল শ্রেণী')"
+                                    class="courses-class-opt w-full px-3.5 py-2 text-left text-xs font-semibold transition-colors flex items-center justify-between gap-2 <%= (!locals.activeClass || locals.activeClass === 'all') ? 'text-[#18a957] font-bold bg-emerald-50/60 dark:bg-emerald-950/40' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60' %>"
+                                    data-value="all">
+                                    <span>শ্রেণী: সকল শ্রেণী</span>
+                                    <span class="material-symbols-rounded text-sm text-[#18a957] check-icon <%= (!locals.activeClass || locals.activeClass === 'all') ? '' : 'hidden' %>">check</span>
+                                </button>
+                                <% 
+                                    const classList = (locals.activeClasses && activeClasses.length > 0) ? activeClasses : [{ name: 'Class 9' }, { name: 'Class 10' }, { name: 'HSC 25' }, { name: 'HSC 26' }];
+                                    classList.forEach(cls => {
+                                        const isSel = (locals.activeClass && (locals.activeClass.toLowerCase() === cls.name.toLowerCase() || locals.activeClass.toLowerCase() === cls.name.toLowerCase().replace(/\s+/g, '')));
+                                %>
+                                    <button type="button" onclick="selectCoursesClassOption('<%= cls.name %>', 'শ্রেণী: <%= cls.name %>')"
+                                        class="courses-class-opt w-full px-3.5 py-2 text-left text-xs font-semibold transition-colors flex items-center justify-between gap-2 <%= isSel ? 'text-[#18a957] font-bold bg-emerald-50/60 dark:bg-emerald-950/40' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60' %>"
+                                        data-value="<%= cls.name %>">
+                                        <span>শ্রেণী: <%= cls.name %></span>
+                                        <span class="material-symbols-rounded text-sm text-[#18a957] check-icon <%= isSel ? '' : 'hidden' %>">check</span>
+                                    </button>
                                 <% }) %>
-                            <% } else { %>
-                                <option value="Class 9">শ্রেণী: Class 9</option>
-                                <option value="Class 10">শ্রেণী: Class 10</option>
-                                <option value="HSC 25">শ্রেণী: HSC 25</option>
-                                <option value="HSC 26">শ্রেণী: HSC 26</option>
-                            <% } %>
-                        </select>
-                        <div class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 flex items-center">
-                            <span class="material-symbols-rounded text-sm">expand_more</span>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Subject Selector -->
-                    <div class="relative flex-1 min-w-[140px] sm:min-w-[180px]">
-                        <div class="absolute left-2.5 top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none text-indigo-500 select-none">
-                            <span class="material-symbols-rounded text-base sm:text-lg">menu_book</span>
-                        </div>
-                        <select id="coursesSubjectFilter" onchange="handleSubjectFilterChange(this.value)"
-                            class="w-full h-10 sm:h-10 pl-8 pr-7 bg-white sm:bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 rounded-xl text-[13px] xs:text-[13.5px] sm:text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none focus:border-[#18a957] focus:ring-2 focus:ring-[#18a957]/20 cursor-pointer transition-all appearance-none [background-image:none] shadow-2xs sm:shadow-none">
-                            <option value="all">বিষয়: সকল বিষয়</option>
-                            <% 
-                                const subjectsList = (locals.allSubjects && allSubjects.length > 0) 
-                                    ? allSubjects 
-                                    : ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'Bangla', 'English'];
-                                subjectsList.forEach(sub => {
-                                    const isSubSelected = (locals.activeSubject && activeSubject.toLowerCase() === sub.toLowerCase());
-                            %>
-                                <option value="<%= sub %>" <%= isSubSelected ? 'selected' : '' %>>বিষয়: <%= sub %></option>
-                            <% }) %>
-                        </select>
-                        <div class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 flex items-center">
-                            <span class="material-symbols-rounded text-sm">expand_more</span>
+                    <!-- Subject Selector (Custom Dropdown System) -->
+                    <div class="relative flex-1 min-w-[140px] sm:min-w-[180px]" id="coursesSubjectDropdownWrapper">
+                        <input type="hidden" id="coursesSubjectFilter" value="<%= locals.activeSubject || 'all' %>">
+                        <button type="button" id="coursesSubjectDropdownBtn" onclick="toggleCoursesDropdown('coursesSubjectDropdown')"
+                            class="w-full h-10 px-3 bg-white sm:bg-slate-50/80 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/80 rounded-xl text-[13px] xs:text-[13.5px] sm:text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none flex items-center justify-between cursor-pointer shadow-2xs sm:shadow-none hover:border-[#18a957]/60 transition-all select-none">
+                            <div class="flex items-center gap-1.5 min-w-0 truncate">
+                                <span class="material-symbols-rounded text-base sm:text-lg text-indigo-500 shrink-0">menu_book</span>
+                                <span id="coursesSubjectDropdownLabel" class="truncate">
+                                    <%= (locals.activeSubject && locals.activeSubject !== 'all') ? ('বিষয়: ' + locals.activeSubject) : 'বিষয়: সকল বিষয়' %>
+                                </span>
+                            </div>
+                            <span id="coursesSubjectDropdownArrow" class="material-symbols-rounded text-sm text-slate-400 shrink-0 transition-transform duration-200">expand_more</span>
+                        </button>
+
+                        <div id="coursesSubjectDropdownMenu" class="hidden absolute left-0 top-full mt-1.5 w-full min-w-[190px] max-h-60 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700 rounded-xl shadow-xl py-1 z-50 no-scrollbar divide-y divide-slate-100 dark:divide-slate-800/60">
+                            <div class="py-1">
+                                <button type="button" onclick="selectCoursesSubjectOption('all', 'বিষয়: সকল বিষয়')"
+                                    class="courses-subject-opt w-full px-3.5 py-2 text-left text-xs font-semibold transition-colors flex items-center justify-between gap-2 <%= (!locals.activeSubject || locals.activeSubject === 'all') ? 'text-[#18a957] font-bold bg-emerald-50/60 dark:bg-emerald-950/40' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60' %>"
+                                    data-value="all">
+                                    <span>বিষয়: সকল বিষয়</span>
+                                    <span class="material-symbols-rounded text-sm text-[#18a957] check-icon <%= (!locals.activeSubject || locals.activeSubject === 'all') ? '' : 'hidden' %>">check</span>
+                                </button>
+                                <% 
+                                    const subjectsList = (locals.allSubjects && allSubjects.length > 0) 
+                                        ? allSubjects 
+                                        : ['Physics', 'Chemistry', 'Higher Math', 'General Math', 'Biology', 'ICT', 'Bangla', 'English'];
+                                    subjectsList.forEach(sub => {
+                                        const isSubSelected = (locals.activeSubject && activeSubject.toLowerCase() === sub.toLowerCase());
+                                %>
+                                    <button type="button" onclick="selectCoursesSubjectOption('<%= sub %>', 'বিষয়: <%= sub %>')"
+                                        class="courses-subject-opt w-full px-3.5 py-2 text-left text-xs font-semibold transition-colors flex items-center justify-between gap-2 <%= isSubSelected ? 'text-[#18a957] font-bold bg-emerald-50/60 dark:bg-emerald-950/40' : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60' %>"
+                                        data-value="<%= sub %>">
+                                        <span>বিষয়: <%= sub %></span>
+                                        <span class="material-symbols-rounded text-sm text-[#18a957] check-icon <%= isSubSelected ? '' : 'hidden' %>">check</span>
+                                    </button>
+                                <% }) %>
+                            </div>
                         </div>
                     </div>
 
@@ -356,6 +413,7 @@
             const mobSelect = document.getElementById('mobileClassFilter');
             if (navSelect && navSelect.value !== currentClass) navSelect.value = currentClass;
             if (mobSelect && mobSelect.value !== currentClass) mobSelect.value = currentClass;
+            if (window.syncNavClassDropdown) window.syncNavClassDropdown(currentClass);
 
             // Sync on-page controls
             const pageClassSelect = document.getElementById('coursesClassFilter');
@@ -363,6 +421,11 @@
 
             const pageSubSelect = document.getElementById('coursesSubjectFilter');
             if (pageSubSelect && pageSubSelect.value !== currentSubject) pageSubSelect.value = currentSubject;
+
+            const pageSortSelect = document.getElementById('coursesSortSelect');
+            if (pageSortSelect && pageSortSelect.value !== currentSort) pageSortSelect.value = currentSort;
+
+            updateCoursesDropdownUI();
 
             // Sync type buttons
             document.querySelectorAll('.type-filter-btn').forEach(btn => {
@@ -512,6 +575,104 @@
                 window.history.replaceState({}, '', newUrl);
             } catch (e) {}
         }
+
+        // Custom Dropdown System Handlers
+        function toggleCoursesDropdown(id) {
+            const menu = document.getElementById(id + 'Menu');
+            const arrow = document.getElementById(id + 'Arrow');
+            if (!menu) return;
+            const isHidden = menu.classList.contains('hidden');
+            closeAllCoursesDropdowns();
+            if (isHidden) {
+                menu.classList.remove('hidden');
+                if (arrow) arrow.classList.add('rotate-180');
+            }
+        }
+
+        function closeAllCoursesDropdowns() {
+            ['coursesSortDropdown', 'coursesClassDropdown', 'coursesSubjectDropdown'].forEach(id => {
+                const m = document.getElementById(id + 'Menu');
+                const a = document.getElementById(id + 'Arrow');
+                if (m) m.classList.add('hidden');
+                if (a) a.classList.remove('rotate-180');
+            });
+        }
+
+        function selectCoursesSortOption(val, label) {
+            closeAllCoursesDropdowns();
+            currentSort = val || 'newest';
+            const inp = document.getElementById('coursesSortSelect');
+            if (inp) inp.value = currentSort;
+            handleSortChange(currentSort);
+        }
+
+        function selectCoursesClassOption(val, label) {
+            closeAllCoursesDropdowns();
+            currentClass = val || 'all';
+            const inp = document.getElementById('coursesClassFilter');
+            if (inp) inp.value = currentClass;
+            handleClassFilterChange(currentClass);
+        }
+
+        function selectCoursesSubjectOption(val, label) {
+            closeAllCoursesDropdowns();
+            currentSubject = val || 'all';
+            const inp = document.getElementById('coursesSubjectFilter');
+            if (inp) inp.value = currentSubject;
+            handleSubjectFilterChange(currentSubject);
+        }
+
+        function updateCoursesDropdownUI() {
+            // Sort dropdown UI
+            const sortLabels = {
+                'newest': 'নতুন (Newest)',
+                'price_low': 'ফি: কম-বেশি',
+                'price_high': 'ফি: বেশি-কম',
+                'title_asc': 'নাম (A-Z)'
+            };
+            const sortLbl = document.getElementById('coursesSortDropdownLabel');
+            if (sortLbl && sortLabels[currentSort]) sortLbl.textContent = sortLabels[currentSort];
+            updateOptionState('.courses-sort-opt', currentSort);
+
+            // Class dropdown UI
+            const classLbl = document.getElementById('coursesClassDropdownLabel');
+            if (classLbl) {
+                classLbl.textContent = (!currentClass || currentClass === 'all') ? 'শ্রেণী: সকল শ্রেণী' : ('শ্রেণী: ' + currentClass);
+            }
+            updateOptionState('.courses-class-opt', currentClass);
+
+            // Subject dropdown UI
+            const subLbl = document.getElementById('coursesSubjectDropdownLabel');
+            if (subLbl) {
+                subLbl.textContent = (!currentSubject || currentSubject === 'all') ? 'বিষয়: সকল বিষয়' : ('বিষয়: ' + currentSubject);
+            }
+            updateOptionState('.courses-subject-opt', currentSubject);
+        }
+
+        function updateOptionState(selector, activeVal) {
+            document.querySelectorAll(selector).forEach(btn => {
+                const val = btn.getAttribute('data-value');
+                const check = btn.querySelector('.check-icon');
+                const isMatch = (val === activeVal) || (!activeVal && val === 'all');
+                if (isMatch) {
+                    btn.classList.add('text-[#18a957]', 'font-bold', 'bg-emerald-50/60', 'dark:bg-emerald-950/40');
+                    btn.classList.remove('text-slate-700', 'dark:text-slate-200');
+                    if (check) check.classList.remove('hidden');
+                } else {
+                    btn.classList.remove('text-[#18a957]', 'font-bold', 'bg-emerald-50/60', 'dark:bg-emerald-950/40');
+                    btn.classList.add('text-slate-700', 'dark:text-slate-200');
+                    if (check) check.classList.add('hidden');
+                }
+            });
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('#coursesSortDropdownWrapper') &&
+                !e.target.closest('#coursesClassDropdownWrapper') &&
+                !e.target.closest('#coursesSubjectDropdownWrapper')) {
+                closeAllCoursesDropdowns();
+            }
+        });
 
         // Filter Handlers
         function handleClassFilterChange(val) {
