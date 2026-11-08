@@ -98,6 +98,13 @@
         select.appearance-none::-ms-expand {
             display: none !important;
         }
+
+        /* Responsive course count limiter (4 on mobile/small screen, 8 on desktop/large screen) */
+        @media (max-width: 639px) {
+            .course-card-desktop-only {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 
@@ -517,9 +524,10 @@
             <div id="landingCoursesContainer" class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2.5 xs:gap-3.5 sm:gap-5">
                 <% 
                     const courseItems = (locals.courses && courses.length > 0) ? courses : (locals.featuredCourses || []);
+                    const displayCourses = courseItems.slice(0, 8);
                 %>
-                <% if (courseItems && courseItems.length > 0) { %>
-                    <% courseItems.forEach(course => { 
+                <% if (displayCourses && displayCourses.length > 0) { %>
+                    <% displayCourses.forEach((course, index) => { 
                             let isFree = (course.accessType === 'free' || !course.price || course.price === 0);
                             let subjectName = (course.subject && Array.isArray(course.subject) ? course.subject[0] : course.subject) || 'সাধারণ বিষয়';
                             let courseClassStr = '';
@@ -528,8 +536,9 @@
                                 else courseClassStr = String(course.classLevel);
                             }
                             let className = (course.classLevel && Array.isArray(course.classLevel) ? course.classLevel[0] : course.classLevel) || 'সকল শ্রেণী';
+                            const isDesktopOnly = index >= 4;
                         %>
-                        <div class="course-card-item group rounded-xl sm:rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#0f172a] hover:border-[#18a957]/60 hover:shadow-xl dark:hover:shadow-black/50 overflow-hidden flex flex-col justify-between transition-all duration-300"
+                        <div class="course-card-item <%= isDesktopOnly ? 'course-card-desktop-only hidden sm:flex' : 'flex' %> group rounded-xl sm:rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-[#0f172a] hover:border-[#18a957]/60 hover:shadow-xl dark:hover:shadow-black/50 overflow-hidden flex-col justify-between transition-all duration-300"
                              data-class="<%= courseClassStr.toLowerCase() %>">
                             
                             <!-- Thumbnail Area -->
@@ -622,6 +631,14 @@
                     <p class="text-sm font-medium mt-1">নির্বাচিত শ্রেণীর জন্য কোনো কোর্স পাওয়া যায়নি।</p>
                     <button type="button" onclick="filterLandingByClass('all')" class="text-xs sm:text-sm text-[#18a957] font-semibold hover:underline mt-2">সকল কোর্স দেখুন</button>
                 </div>
+            </div>
+
+            <!-- Link to Full Courses Page Button (Others will be available in the linked page) -->
+            <div class="mt-7 sm:mt-9 text-center">
+                <a href="/courses" id="bottomAllCoursesLink" class="inline-flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 hover:border-[#18a957] hover:text-[#18a957] text-slate-700 dark:text-slate-200 font-semibold text-xs sm:text-sm shadow-2xs hover:shadow transition-all group">
+                    <span>সকল কোর্সসমূহ দেখুন</span>
+                    <span class="material-symbols-rounded text-sm sm:text-base text-[#18a957] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+                </a>
             </div>
 
         </div>
@@ -791,23 +808,30 @@
             const cards = document.querySelectorAll('.course-card-item');
             const emptyState = document.getElementById('landingNoCoursesFound');
             const allLink = document.getElementById('allCoursesLink');
+            const bottomLink = document.getElementById('bottomAllCoursesLink');
             let visibleCount = 0;
+            const isSmallScreen = window.innerWidth < 640;
 
             const normClass = (className || 'all').trim().toLowerCase();
 
             cards.forEach(card => {
                 const cardClass = (card.getAttribute('data-class') || '').toLowerCase();
+                const isDesktopOnly = card.classList.contains('course-card-desktop-only');
                 
+                let matches = false;
                 if (normClass === 'all' || normClass === 'সকল শ্রেণী' || normClass === '') {
-                    card.style.display = 'flex';
-                    visibleCount++;
+                    matches = true;
                 } else {
-                    if (cardClass.includes(normClass) || cardClass.includes('সকল') || cardClass.includes('all')) {
-                        card.style.display = 'flex';
+                    matches = cardClass.includes(normClass) || cardClass.includes('সকল') || cardClass.includes('all');
+                }
+
+                if (matches) {
+                    card.style.display = 'flex';
+                    if (!isSmallScreen || !isDesktopOnly) {
                         visibleCount++;
-                    } else {
-                        card.style.display = 'none';
                     }
+                } else {
+                    card.style.display = 'none';
                 }
             });
 
@@ -816,15 +840,12 @@
                 emptyState.style.display = visibleCount === 0 ? 'block' : 'none';
             }
 
-            // Sync link to all courses with the active class filter
-            if (allLink) {
-                if (normClass === 'all' || normClass === 'সকল শ্রেণী' || normClass === '') {
-                    allLink.href = '/courses';
-                } else {
-                    const originalClass = className.replace(/\b(class|শ্রেণী)\s*/i, '').trim();
-                    allLink.href = `/courses?classLevel=${encodeURIComponent(className)}`;
-                }
-            }
+            // Sync links to all courses with the active class filter
+            const targetUrl = (normClass === 'all' || normClass === 'সকল শ্রেণী' || normClass === '')
+                ? '/courses'
+                : `/courses?classLevel=${encodeURIComponent(className)}`;
+            if (allLink) allLink.href = targetUrl;
+            if (bottomLink) bottomLink.href = targetUrl;
 
             // Sync visual active state on navbar select if present
             const navSelect = document.getElementById('navbarClassFilter');
