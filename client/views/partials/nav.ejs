@@ -1,6 +1,7 @@
 <!-- 1. Sleek Navigation Bar with Class Filter Beside Options (Same as Main Landing Page) -->
 <header
-    class="sticky top-0 z-50 w-full bg-white/85 dark:bg-[#091122]/85 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors"
+    id="mainHeader"
+    class="sticky top-0 z-50 w-full bg-white/85 dark:bg-[#091122]/85 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors mobile-nav-blended"
     <% if (locals.user) { %>
     data-user-id="<%= user._id %>"
         data-user-name="<%= user.name %>"
@@ -155,6 +156,35 @@
                     </div>
 </header>
 
+<style>
+    /* Small screen mobile smart blend & reveal navbar */
+    @media (max-width: 767px) {
+        #mainHeader {
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease !important;
+            will-change: transform;
+        }
+        #mainHeader.mobile-nav-blended {
+            background-color: transparent !important;
+            border-bottom-color: transparent !important;
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
+            box-shadow: none !important;
+        }
+        #mainHeader.mobile-nav-floating {
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            border-bottom-color: rgba(226, 232, 240, 0.8) !important;
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+            box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.06) !important;
+        }
+        html.dark #mainHeader.mobile-nav-floating {
+            background-color: rgba(9, 17, 34, 0.95) !important;
+            border-bottom-color: rgba(30, 41, 59, 0.8) !important;
+            box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.5) !important;
+        }
+    }
+</style>
+
 <script>
     function handleNavClassFilter(val) {
         const navSel = document.getElementById('navbarClassFilter');
@@ -179,4 +209,70 @@
             window.location.href = (val === 'all') ? '/courses' : ('/courses?class=' + encodeURIComponent(val));
         }
     }
+
+    // Smart mobile navbar reveal/hide on scroll (small screen only)
+    (function initMobileSmartNav() {
+        let lastScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+        let ticking = false;
+
+        function updateMobileNav() {
+            const header = document.getElementById('mainHeader');
+            if (!header) return;
+
+            const isMobile = window.innerWidth < 768;
+            const currentScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+
+            if (!isMobile) {
+                // Desktop: reset to standard sticky navbar
+                header.style.transform = '';
+                header.classList.remove('mobile-nav-blended', 'mobile-nav-floating');
+                lastScrollY = currentScrollY;
+                ticking = false;
+                return;
+            }
+
+            // Small screen behavior
+            if (currentScrollY <= 15) {
+                // Blended with main section at the top of the page
+                header.style.transform = 'translateY(0)';
+                header.classList.add('mobile-nav-blended');
+                header.classList.remove('mobile-nav-floating');
+            } else {
+                const diff = currentScrollY - lastScrollY;
+                if (diff > 8 && currentScrollY > 70) {
+                    // Scrolling down: scroll/hide away naturally
+                    header.style.transform = 'translateY(-100%)';
+                } else if (diff < -6) {
+                    // Scrolling up: reveal like a sleek navbar
+                    header.style.transform = 'translateY(0)';
+                    header.classList.remove('mobile-nav-blended');
+                    header.classList.add('mobile-nav-floating');
+                }
+            }
+
+            lastScrollY = currentScrollY <= 0 ? 0 : currentScrollY;
+            ticking = false;
+        }
+
+        window.addEventListener('scroll', function() {
+            if (!ticking) {
+                window.requestAnimationFrame(updateMobileNav);
+                ticking = true;
+            }
+        }, { passive: true });
+
+        window.addEventListener('resize', function() {
+            if (!ticking) {
+                window.requestAnimationFrame(updateMobileNav);
+                ticking = true;
+            }
+        }, { passive: true });
+
+        // Run once on initial execution / page load
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', updateMobileNav);
+        } else {
+            updateMobileNav();
+        }
+    })();
 </script>
