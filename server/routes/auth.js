@@ -171,10 +171,10 @@ router.get('/reset-password/:token', async (req, res) => {
             passwordResetToken: req.params.token,
             passwordResetExpires: { $gt: Date.now() }
         });
-        if (!user) return res.render('forgot-password', { message: null, error: 'রিসেট লিঙ্কটি মেয়াদ শেষ বা অবৈধ। আবার চেষ্টা করুন।' });
+        if (!user) return res.render('forgot-password', { message: null, error: 'The reset link is invalid or has expired. Please request a new one.' });
         res.render('reset-password', { token: req.params.token, error: null });
     } catch (err) {
-        res.status(500).send('সার্ভার ত্রুটি');
+        res.status(500).send('Server Error');
     }
 });
 
@@ -183,9 +183,9 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
     try {
         await connectDB();
         const { email } = req.body;
-        if (!email) return res.render('forgot-password', { message: null, error: 'ইমেইল দিন।' });
+        if (!email) return res.render('forgot-password', { message: null, error: 'Please enter your email address.' });
         const user = await User.findOne({ email: email.trim().toLowerCase() });
-        const successMsg = 'যদি এই ইমেইলে কোনো অ্যাকাউন্ট থাকে, তাহলে একটি রিসেট লিঙ্ক পাঠানো হয়েছে।';
+        const successMsg = 'If an account exists with this email, a password reset link has been sent.';
         if (!user) return res.render('forgot-password', { message: successMsg, error: null });
 
         const token = crypto.randomBytes(32).toString('hex');
@@ -197,7 +197,7 @@ router.post('/forgot-password', forgotLimiter, async (req, res) => {
         await sendPasswordResetEmail(user.email, user.name, `${baseUrl}/reset-password/${token}`);
         res.render('forgot-password', { message: successMsg, error: null });
     } catch (err) {
-        res.render('forgot-password', { message: null, error: `ইমেইল পাঠাতে সমস্যা: ${err.message}` });
+        res.render('forgot-password', { message: null, error: `Error sending email: ${err.message}` });
     }
 });
 
@@ -207,12 +207,12 @@ router.post('/reset-password/:token', async (req, res) => {
         await connectDB();
         const { password, confirmPassword } = req.body;
         if (!password || password.length < 6)
-            return res.render('reset-password', { token: req.params.token, error: 'পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে।' });
+            return res.render('reset-password', { token: req.params.token, error: 'Password must be at least 6 characters.' });
         if (password !== confirmPassword)
-            return res.render('reset-password', { token: req.params.token, error: 'পাসওয়ার্ড দুটি মিলছে না।' });
+            return res.render('reset-password', { token: req.params.token, error: 'Passwords do not match.' });
 
         const user = await User.findOne({ passwordResetToken: req.params.token, passwordResetExpires: { $gt: Date.now() } });
-        if (!user) return res.render('forgot-password', { message: null, error: 'রিসেট লিঙ্কটি মেয়াদ শেষ।' });
+        if (!user) return res.render('forgot-password', { message: null, error: 'The reset link has expired. Please request a new one.' });
 
         user.password = password;
         user.passwordResetToken = undefined;
@@ -220,7 +220,7 @@ router.post('/reset-password/:token', async (req, res) => {
         await user.save();
         res.redirect('/login?reset=success');
     } catch (err) {
-        res.render('reset-password', { token: req.params.token, error: 'সার্ভার ত্রুটি।' });
+        res.render('reset-password', { token: req.params.token, error: 'Server error. Please try again.' });
     }
 });
 
