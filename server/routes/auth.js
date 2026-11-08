@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { connectDB, protect, User } = require('../config');
-const { sendPasswordResetOtpEmail, sendPasswordResetEmail, sendWelcomeEmail } = require('../services/emailService');
+const { sendRegistrationOtpEmail, sendPasswordResetOtpEmail, sendPasswordResetEmail, sendWelcomeEmail } = require('../services/emailService');
 
 const rateLimit = require('express-rate-limit');
 

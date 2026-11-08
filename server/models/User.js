@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema({
     assignedClasses: [{ type: String, trim: true }], // Array of classes assigned to teachers
     classes: [{ type: String, trim: true }], // Array of classes assigned to teachers
     subject: { type: String, trim: true }, // Fallback subject string
+    subjects: [{ type: String, trim: true }], // Student selected subjects
     phone: { type: String, unique: true, sparse: true },
     profilePicture: { type: String },
     profileImage: { type: String },
