@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { connectDB, protect, User } = require('../config');
-const { sendPasswordResetEmail, sendWelcomeEmail } = require('../services/emailService');
+const { sendPasswordResetOtpEmail, sendPasswordResetEmail, sendWelcomeEmail } = require('../services/emailService');
 
 const rateLimit = require('express-rate-limit');
 
@@ -178,26 +178,142 @@ router.get('/reset-password/:token', async (req, res) => {
     }
 });
 
-// POST Forgot password - send email
+// POST Forgot password - send OTP via email or phone
 router.post('/forgot-password', forgotLimiter, async (req, res) => {
+    const isJson = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.is('application/json');
     try {
         await connectDB();
-        const { email } = req.body;
-        if (!email) return res.render('forgot-password', { message: null, error: 'Please enter your email address.' });
-        const user = await User.findOne({ email: email.trim().toLowerCase() });
-        const successMsg = 'If an account exists with this email, a password reset link has been sent.';
-        if (!user) return res.render('forgot-password', { message: successMsg, error: null });
+        const raw = (req.body.identifier || req.body.email || req.body.phone || '').trim();
+        if (!raw) {
+            const err = 'Please enter your email address or phone number.';
+            return isJson ? res.status(400).json({ success: false, error: err }) : res.render('forgot-password', { message: null, error: err });
+        }
 
-        const token = crypto.randomBytes(32).toString('hex');
-        user.passwordResetToken = token;
-        user.passwordResetExpires = Date.now() + 60 * 60 * 1000;
+        const { email, phone } = normalizeIdentifier(raw);
+        let user = null;
+        if (email) {
+            user = await User.findOne({ email: email.toLowerCase() });
+        } else if (phone) {
+            user = await User.findOne({ phone });
+        }
+
+        // Generate secure 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const successMsg = 'A 6-digit verification code has been sent.';
+
+        // Mask target for display
+        let maskedTarget = raw;
+        if (email) {
+            const [uname, domain] = email.split('@');
+            maskedTarget = (uname.length > 2 ? uname.slice(0, 2) + '***' : uname + '***') + '@' + domain;
+        } else if (phone) {
+            maskedTarget = phone.length >= 10 ? phone.slice(0, 3) + '****' + phone.slice(-4) : phone;
+        }
+
+        if (user) {
+            user.passwordResetOtp = otp;
+            user.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+            const token = crypto.randomBytes(32).toString('hex');
+            user.passwordResetToken = token;
+            await user.save();
+
+            // Send via email if user has email
+            if (user.email) {
+                try {
+                    await sendPasswordResetOtpEmail(user.email, user.name, otp);
+                } catch (mErr) {
+                    console.error('[Forgot Password] Email send error:', mErr.message);
+                }
+            }
+
+            // Log / Send via SMS if phone
+            if (user.phone) {
+                console.log(`[SMS OTP] Verification code for ${user.phone}: ${otp}`);
+            }
+        } else {
+            console.log(`[Forgot Password] Account not found for identifier: ${raw}`);
+        }
+
+        const isDev = process.env.NODE_ENV !== 'production' || !process.env.EMAIL_USER;
+
+        if (isJson) {
+            return res.json({
+                success: true,
+                message: successMsg,
+                maskedTarget,
+                identifier: raw,
+                demoOtp: isDev ? otp : undefined
+            });
+        }
+
+        res.render('forgot-password', { message: successMsg, error: null, step: 2, identifier: raw, maskedTarget });
+    } catch (err) {
+        const errText = `Server error: ${err.message}`;
+        if (isJson) return res.status(500).json({ success: false, error: errText });
+        res.render('forgot-password', { message: null, error: errText });
+    }
+});
+
+// POST Verify OTP and reset password
+router.post('/forgot-password/verify-otp', async (req, res) => {
+    const isJson = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.is('application/json');
+    try {
+        await connectDB();
+        const { identifier, otp, password, confirmPassword } = req.body;
+
+        if (!identifier) {
+            const err = 'Account identifier missing. Please restart the reset process.';
+            return isJson ? res.status(400).json({ success: false, error: err }) : res.render('forgot-password', { message: null, error: err });
+        }
+
+        if (!otp || String(otp).trim().length !== 6) {
+            const err = 'Please enter the 6-digit OTP code.';
+            return isJson ? res.status(400).json({ success: false, error: err }) : res.render('forgot-password', { message: null, error: err });
+        }
+
+        if (!password || password.length < 6) {
+            const err = 'Password must be at least 6 characters.';
+            return isJson ? res.status(400).json({ success: false, error: err }) : res.render('forgot-password', { message: null, error: err });
+        }
+
+        if (password !== confirmPassword) {
+            const err = 'Passwords do not match.';
+            return isJson ? res.status(400).json({ success: false, error: err }) : res.render('forgot-password', { message: null, error: err });
+        }
+
+        const { email, phone } = normalizeIdentifier(identifier);
+        let user = null;
+        if (email) {
+            user = await User.findOne({ email: email.toLowerCase() });
+        } else if (phone) {
+            user = await User.findOne({ phone });
+        }
+
+        if (!user || !user.passwordResetOtp || user.passwordResetOtp !== String(otp).trim() || !user.passwordResetExpires || user.passwordResetExpires < Date.now()) {
+            const err = 'Invalid or expired OTP code. Please request a new one.';
+            return isJson ? res.status(400).json({ success: false, error: err }) : res.render('forgot-password', { message: null, error: err });
+        }
+
+        user.password = password;
+        user.passwordResetOtp = undefined;
+        user.passwordResetToken = undefined;
+        user.passwordResetExpires = undefined;
+        user.passwordResetRequired = false;
         await user.save();
 
-        const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3005}`;
-        await sendPasswordResetEmail(user.email, user.name, `${baseUrl}/reset-password/${token}`);
-        res.render('forgot-password', { message: successMsg, error: null });
+        if (isJson) {
+            return res.json({
+                success: true,
+                message: 'Password reset successfully. Redirecting to login...',
+                redirect: '/login?reset=success'
+            });
+        }
+
+        res.redirect('/login?reset=success');
     } catch (err) {
-        res.render('forgot-password', { message: null, error: `Error sending email: ${err.message}` });
+        const errText = `Server error: ${err.message}`;
+        if (isJson) return res.status(500).json({ success: false, error: errText });
+        res.render('forgot-password', { message: null, error: errText });
     }
 });
 

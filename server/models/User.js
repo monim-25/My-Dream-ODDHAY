@@ -84,6 +84,7 @@ const userSchema = new mongoose.Schema({
     isPasswordSet: { type: Boolean, default: false },
     isProfileSetupComplete: { type: Boolean, default: false },
     passwordResetToken: { type: String },
+    passwordResetOtp: { type: String },
     passwordResetExpires: { type: Date },
     streak: { type: Number, default: 0 },
     loginCount: { type: Number, default: 0 },

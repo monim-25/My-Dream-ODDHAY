@@ -247,4 +247,71 @@ const sendStaffInviteEmail = async (toEmail, userName, role, password) => {
     } catch (err) { console.error(`❌ Failed to send staff invite: ${err.message}`); }
 };
 
-module.exports = { sendPasswordResetEmail, sendWelcomeEmail, sendPaymentApprovalEmail, sendPasswordResetNotificationEmail, sendStaffInviteEmail };
+
+/**
+ * Password Reset OTP Email
+ */
+const sendPasswordResetOtpEmail = async (toEmail, userName, otp) => {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        console.log(`[Email Config Missing] Password reset OTP for ${toEmail}: ${otp}`);
+        return null;
+    }
+    try {
+        const transporter = createTransporter();
+        const mailOptions = {
+            from: `"ODDHAY" <${process.env.EMAIL_USER}>`,
+            to: toEmail,
+            subject: `${otp} is your ODDHAY verification code`,
+            html: `
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; margin: 0; padding: 24px; color: #1e293b; }
+                    .card { max-width: 440px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+                    .header { padding: 32px 24px 20px; text-align: center; }
+                    .logo { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; color: #0f172a; text-decoration: none; }
+                    .logo span { color: #18a957; }
+                    .body { padding: 0 28px 32px; }
+                    .title { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 8px; text-align: center; }
+                    .desc { font-size: 14px; color: #64748b; line-height: 1.6; text-align: center; margin-bottom: 24px; }
+                    .otp-box { background: #f0fdf4; border: 2px dashed #18a957; border-radius: 14px; padding: 18px; text-align: center; margin-bottom: 20px; }
+                    .otp-code { font-family: monospace, Courier; font-size: 34px; font-weight: 800; letter-spacing: 10px; color: #18a957; margin-left: 10px; }
+                    .note { font-size: 12px; color: #94a3b8; text-align: center; line-height: 1.5; }
+                    .footer { background: #f8fafc; padding: 16px 24px; text-align: center; border-top: 1px solid #f1f5f9; font-size: 11px; color: #94a3b8; }
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <div class="header">
+                        <div class="logo">ODDHAY<span>.</span></div>
+                    </div>
+                    <div class="body">
+                        <div class="title">Password Reset Code</div>
+                        <div class="desc">Hello ${userName || 'there'}, use the verification code below to reset your password.</div>
+                        <div class="otp-box">
+                            <div class="otp-code">${otp}</div>
+                        </div>
+                        <div class="note">
+                            This code will expire in <strong>10 minutes</strong>. If you didn't request a password reset, you can safely ignore this email.
+                        </div>
+                    </div>
+                    <div class="footer">
+                        &copy; ${new Date().getFullYear()} ODDHAY. All rights reserved.
+                    </div>
+                </div>
+            </body>
+            </html>
+            `
+        };
+        const info = await transporter.sendMail(mailOptions);
+        console.log(`✅ Password reset OTP sent to ${toEmail}. MessageId: ${info.messageId}`);
+        return info;
+    } catch (err) {
+        console.error(`❌ Failed to send reset OTP email: ${err.message}`);
+        return null;
+    }
+};
+
+module.exports = { sendPasswordResetOtpEmail, sendPasswordResetEmail, sendWelcomeEmail, sendPaymentApprovalEmail, sendPasswordResetNotificationEmail, sendStaffInviteEmail };
