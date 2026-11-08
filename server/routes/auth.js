@@ -80,7 +80,7 @@ router.get('/login', async (req, res) => {
     res.render('login', {
         academicClasses,
         activeTab: req.query.tab === 'register' ? 'register' : 'login',
-        error: null,
+        error: req.query.error || null,
         redirect: req.query.redirect || ''
     });
 });
@@ -99,6 +99,28 @@ router.get('/register', async (req, res) => {
         redirect: req.query.redirect || ''
     });
 });
+
+// Social OAuth Routes (Google & Facebook)
+router.get('/auth/google', (req, res) => {
+    if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+        const redirectUri = `${req.protocol}://${req.get('host')}/auth/google/callback`;
+        const scope = encodeURIComponent('profile email');
+        const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;
+        return res.redirect(googleAuthUrl);
+    }
+    return res.redirect('/login?error=' + encodeURIComponent('Google Sign-In is not configured yet. Add GOOGLE_CLIENT_ID in .env to activate.'));
+});
+
+router.get('/auth/facebook', (req, res) => {
+    if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
+        const redirectUri = `${req.protocol}://${req.get('host')}/auth/facebook/callback`;
+        const scope = encodeURIComponent('email,public_profile');
+        const fbAuthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${process.env.FACEBOOK_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}`;
+        return res.redirect(fbAuthUrl);
+    }
+    return res.redirect('/login?error=' + encodeURIComponent('Facebook Sign-In is not configured yet. Add FACEBOOK_APP_ID in .env to activate.'));
+});
+
 router.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 router.get('/forgot-password', (req, res) => res.render('forgot-password', { message: null, error: null }));
 
