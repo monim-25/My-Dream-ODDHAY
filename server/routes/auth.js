@@ -70,12 +70,34 @@ async function getAcademicClasses() {
 
 // GET Login/Register pages
 router.get('/login', async (req, res) => {
+    if (req.session && req.session.userId && req.session.user) {
+        const dest = (req.query.redirect && req.query.redirect.startsWith('/') && !req.query.redirect.startsWith('//'))
+            ? req.query.redirect
+            : '/dashboard';
+        return res.redirect(dest);
+    }
     const academicClasses = await getAcademicClasses();
-    res.render('login', { academicClasses, activeTab: 'login', error: null });
+    res.render('login', {
+        academicClasses,
+        activeTab: req.query.tab === 'register' ? 'register' : 'login',
+        error: null,
+        redirect: req.query.redirect || ''
+    });
 });
 router.get('/register', async (req, res) => {
+    if (req.session && req.session.userId && req.session.user) {
+        const dest = (req.query.redirect && req.query.redirect.startsWith('/') && !req.query.redirect.startsWith('//'))
+            ? req.query.redirect
+            : '/dashboard';
+        return res.redirect(dest);
+    }
     const academicClasses = await getAcademicClasses();
-    res.render('register', { academicClasses, activeTab: 'register' });
+    res.render('login', {
+        academicClasses,
+        activeTab: 'register',
+        error: null,
+        redirect: req.query.redirect || ''
+    });
 });
 router.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 router.get('/forgot-password', (req, res) => res.render('forgot-password', { message: null, error: null }));
@@ -184,17 +206,19 @@ router.post('/reset-password/:token', async (req, res) => {
 router.post('/login', authLimiter, async (req, res) => {
     try {
         await connectDB();
+        const academicClasses = await getAcademicClasses();
+        const redirectParam = (req.body.redirect && req.body.redirect.startsWith('/') && !req.body.redirect.startsWith('//')) ? req.body.redirect : '';
         const rawIdentifier = (req.body.email || '').trim();
         const password = req.body.password;
-        if (!rawIdentifier || !password) return res.render('login', { error: 'ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।' });
+        if (!rawIdentifier || !password) return res.render('login', { academicClasses, activeTab: 'login', redirect: redirectParam, error: 'ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।' });
 
         const { email, phone } = normalizeIdentifier(rawIdentifier);
         const query = email ? { email } : { phone };
         const user = await User.findOne(query);
-        if (!user) return res.render('login', { error: 'ইমেইল/ফোন বা পাসওয়ার্ড ভুল।' });
+        if (!user) return res.render('login', { academicClasses, activeTab: 'login', redirect: redirectParam, error: 'ইমেইল/ফোন বা পাসওয়ার্ড ভুল।' });
 
         const isMatch = await user.comparePassword(password);
-        if (!isMatch) return res.render('login', { error: 'ইমেইল/ফোন বা পাসওয়ার্ড ভুল।' });
+        if (!isMatch) return res.render('login', { academicClasses, activeTab: 'login', redirect: redirectParam, error: 'ইমেইল/ফোন বা পাসওয়ার্ড ভুল।' });
 
         // Super Admin auto-promotion & role normalization
         const superEmail = getSuperAdminEmail();
@@ -244,6 +268,7 @@ router.post('/login', authLimiter, async (req, res) => {
                 return res.redirect('/teacher');
             }
             if (user.role === 'parent') return res.redirect('/parent/dashboard');
+            if (redirectParam) return res.redirect(redirectParam);
             res.redirect('/dashboard');
         });
     } catch (err) {
@@ -320,8 +345,9 @@ router.post('/register', authLimiter, async (req, res) => {
         const newUser = new User(userPayload);
         await newUser.save();
 
-        let redirectUrl = '/dashboard';
-        if (newUser.role === 'parent') redirectUrl = '/parent/dashboard';
+        const customRedirect = (req.body.redirect && req.body.redirect.startsWith('/') && !req.body.redirect.startsWith('//')) ? req.body.redirect : '';
+        let redirectUrl = customRedirect || '/dashboard';
+        if (!customRedirect && newUser.role === 'parent') redirectUrl = '/parent/dashboard';
         else if (newUser.role === 'teacher') redirectUrl = '/teacher';
         else if (newUser.role === 'superadmin') redirectUrl = '/superadmin';
         else if (newUser.role === 'admin' || newUser.role === 'content_manager' || newUser.role === 'support' || newUser.role === 'moderator') redirectUrl = '/admin';
