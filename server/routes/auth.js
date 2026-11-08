@@ -333,7 +333,7 @@ router.post('/forgot-password/reset-password', async (req, res) => {
         return res.json({
             success: true,
             message: 'Password has been reset successfully.',
-            redirect: '/login?reset=success'
+            redirect: '/login'
         });
     } catch (err) {
         return res.status(500).json({ success: false, error: `Server error: ${err.message}` });
@@ -391,11 +391,11 @@ router.post('/forgot-password/verify-otp', async (req, res) => {
             return res.json({
                 success: true,
                 message: 'Password reset successfully. Redirecting to login...',
-                redirect: '/login?reset=success'
+                redirect: '/login'
             });
         }
 
-        res.redirect('/login?reset=success');
+        res.redirect('/login');
     } catch (err) {
         const errText = `Server error: ${err.message}`;
         if (isJson) return res.status(500).json({ success: false, error: errText });
@@ -420,7 +420,7 @@ router.post('/reset-password/:token', async (req, res) => {
         user.passwordResetToken = undefined;
         user.passwordResetExpires = undefined;
         await user.save();
-        res.redirect('/login?reset=success');
+        res.redirect('/login');
     } catch (err) {
         res.render('reset-password', { token: req.params.token, error: 'Server error. Please try again.' });
     }
