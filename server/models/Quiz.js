@@ -30,4 +30,10 @@ const quizSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 });
 
+// High-performance indexes for live model tests, student exams, and queries
+quizSchema.index({ course: 1 });
+quizSchema.index({ classLevel: 1, subject: 1 });
+quizSchema.index({ scheduledAt: 1, expiresAt: 1 });
+quizSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('Quiz', quizSchema);

@@ -559,7 +559,11 @@
                 videoEl.src = '';
                 iframe.classList.remove('hidden');
                 let embedUrl = url || '';
-                if (embedUrl && embedUrl.includes('vimeo.com') && !embedUrl.includes('player.vimeo.com')) {
+                // Universal YouTube embed converter (handles watch, shorts, live, youtu.be, embed)
+                const ytMatch = embedUrl.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
+                if (ytMatch && ytMatch[1]) {
+                    embedUrl = 'https://www.youtube-nocookie.com/embed/' + ytMatch[1] + '?autoplay=1&rel=0&modestbranding=1';
+                } else if (embedUrl && embedUrl.includes('vimeo.com') && !embedUrl.includes('player.vimeo.com')) {
                     embedUrl = embedUrl.replace('vimeo.com', 'player.vimeo.com/video');
                 }
                 if (targetResumeTime > 0) {
@@ -1360,7 +1364,23 @@
         });
 
         function joinLive(roomId, title) {
+            if (!roomId) return;
             document.getElementById('playerVideoTitle').innerText = title || 'Live Class';
+            
+            // 1. YouTube Live Stream (Unlisted or Public) - play right inside lesson player
+            if (roomId.includes('youtube.com') || roomId.includes('youtu.be')) {
+                document.getElementById('live-badge').classList.remove('hidden');
+                playLesson(roomId, title || 'Live Class', 'Live', null);
+                return;
+            }
+
+            // 2. External Meeting URL (Zoom / Google Meet)
+            if (roomId.startsWith('http://') || roomId.startsWith('https://')) {
+                window.open(roomId, '_blank');
+                return;
+            }
+
+            // 3. Native Agora RTC Classroom
             document.getElementById('live-badge').classList.remove('hidden');
             window.location.href = '/live/' + roomId;
         }

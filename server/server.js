@@ -13,12 +13,38 @@ const fs = require('fs');
 const session = require('express-session');
 const MongoStore = require('connect-mongo').default || require('connect-mongo').MongoStore || require('connect-mongo');
 const { isSuperAdmin, superAdminProtect, adminProtect } = require('./config');
+const compression = require('compression');
+const helmet = require('helmet');
+const mongoSanitize = require('express-mongo-sanitize');
 
 const app = express();
 const http = require('http').createServer(app);
 const { Server: SocketIO } = require('socket.io');
+const allowedOrigins = [
+    'http://localhost:3005',
+    'http://localhost:3000',
+    'http://127.0.0.1:3005',
+    'https://oddhay.net',
+    'https://www.oddhay.net',
+    'https://oddhay.vercel.app',
+    process.env.BASE_URL
+].filter(Boolean);
+
 const io = new SocketIO(http, {
-    cors: { origin: '*', methods: ['GET', 'POST'] },
+    cors: {
+        origin: (origin, callback) => {
+            if (!origin) return callback(null, true);
+            if (allowedOrigins.some(o => origin.startsWith(o) || o.startsWith(origin))) {
+                return callback(null, true);
+            }
+            if (origin.endsWith('.vercel.app')) {
+                return callback(null, true);
+            }
+            callback(new Error('Blocked by CORS policy'));
+        },
+        methods: ['GET', 'POST'],
+        credentials: true
+    },
     transports: ['websocket', 'polling']
 });
 
@@ -96,13 +122,33 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// ---- ENTERPRISE PERFORMANCE & SECURITY MIDDLEWARE ----
+// 1. Response Compression (Gzip / Brotli) - reduces HTML/JS/CSS payloads by 60-70%
+app.use(compression());
+
+// 2. HTTP Security Headers (Helmet) - configured safely for dynamic CDNs, YouTube & WebRTC
+app.use(helmet({
+    contentSecurityPolicy: false, // Prevents blocking inline scripts, FontAwesome, Google Fonts, YouTube, Agora & Tailwind
+    crossOriginEmbedderPolicy: false, // Allows embedding YouTube player, Cloudinary images & external CDNs
+    frameguard: { action: 'sameorigin' } // Prevents clickjacking attacks
+}));
+
 // ---- MIDDLEWARE ----
 app.set('view engine', 'ejs');
 app.set('views', path.join(clientPath, 'views'));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-app.use(express.static(path.join(clientPath, 'public')));
-app.use(express.static(path.join(process.cwd(), 'public')));
+
+// 3. NoSQL Injection Defense - Sanitizes req.body, req.query, req.params
+app.use(mongoSanitize({
+    replaceWith: '_'
+}));
+const staticCacheOpts = {
+    maxAge: process.env.NODE_ENV === 'production' ? '7d' : 0,
+    etag: true
+};
+app.use(express.static(path.join(clientPath, 'public'), staticCacheOpts));
+app.use(express.static(path.join(process.cwd(), 'public'), staticCacheOpts));
 
 // Smart fallback for uploads stored in category subfolders (thumbnails, avatars, routines, videos, notes)
 app.use('/uploads', (req, res, next) => {
