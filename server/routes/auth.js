@@ -102,10 +102,15 @@ router.get('/register', async (req, res) => {
 });
 
 // Social OAuth Routes (Google & Facebook)
+const getOAuthRedirectUri = (req, path) => {
+    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0].trim();
+    return `${proto}://${req.get('host')}${path}`;
+};
+
 router.get('/auth/google', (req, res) => {
     if (req.query.redirect) req.session.oauthRedirect = req.query.redirect;
     if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-        const redirectUri = `${req.protocol}://${req.get('host')}/auth/google/callback`;
+        const redirectUri = getOAuthRedirectUri(req, '/auth/google/callback');
         const scope = encodeURIComponent('profile email');
         const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;
         return res.redirect(googleAuthUrl);
@@ -121,7 +126,7 @@ router.get('/auth/google/callback', async (req, res) => {
             return res.redirect('/login?error=' + encodeURIComponent(error ? `Google login cancelled: ${error}` : 'Authorization code missing.'));
         }
 
-        const redirectUri = `${req.protocol}://${req.get('host')}/auth/google/callback`;
+        const redirectUri = getOAuthRedirectUri(req, '/auth/google/callback');
 
         // 1. Exchange authorization code for access token
         const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -204,7 +209,7 @@ router.get('/auth/google/callback', async (req, res) => {
 router.get('/auth/facebook', (req, res) => {
     if (req.query.redirect) req.session.oauthRedirect = req.query.redirect;
     if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
-        const redirectUri = `${req.protocol}://${req.get('host')}/auth/facebook/callback`;
+        const redirectUri = getOAuthRedirectUri(req, '/auth/facebook/callback');
         const scope = encodeURIComponent('email,public_profile');
         const fbAuthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${process.env.FACEBOOK_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}`;
         return res.redirect(fbAuthUrl);
