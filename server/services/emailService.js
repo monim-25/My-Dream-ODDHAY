@@ -1,5 +1,15 @@
 const nodemailer = require('nodemailer');
 
+
+// Helper to get formatted Sender & Reply-To
+const getFromAddress = (title = 'ODDHAY শিক্ষা প্ল্যাটফর্ম') => {
+    return process.env.EMAIL_FROM || `"${title}" <${process.env.EMAIL_USER}>`;
+};
+
+const getReplyToAddress = () => {
+    return process.env.EMAIL_REPLY_TO || 'support@oddhay.net';
+};
+
 // Create transporter - Gmail SMTP
 const createTransporter = () => {
     return nodemailer.createTransport({
@@ -21,7 +31,8 @@ const sendPasswordResetEmail = async (toEmail, userName, resetLink) => {
     const transporter = createTransporter();
 
     const mailOptions = {
-        from: `"ODDHAY শিক্ষা প্ল্যাটফর্ম" <${process.env.EMAIL_USER}>`,
+        from: getFromAddress("ODDHAY শিক্ষা প্ল্যাটফর্ম"),
+        replyTo: getReplyToAddress(),
         to: toEmail,
         subject: 'পাসওয়ার্ড রিসেট করুন - ODDHAY',
         html: `
@@ -93,7 +104,8 @@ const sendWelcomeEmail = async (toEmail, userName) => {
     try {
         const transporter = createTransporter();
         await transporter.sendMail({
-            from: `"ODDHAY শিক্ষা প্ল্যাটফর্ম" <${process.env.EMAIL_USER}>`,
+            from: getFromAddress("ODDHAY শিক্ষা প্ল্যাটফর্ম"),
+        replyTo: getReplyToAddress(),
             to: toEmail,
             subject: 'ODDHAY-তে স্বাগতম! 🎓',
             html: `
@@ -130,7 +142,8 @@ const sendPaymentApprovalEmail = async (toEmail, userName, courseName, amount) =
     try {
         const transporter = createTransporter();
         await transporter.sendMail({
-            from: `"ODDHAY শিক্ষা প্ল্যাটফর্ম" <${process.env.EMAIL_USER}>`,
+            from: getFromAddress("ODDHAY শিক্ষা প্ল্যাটফর্ম"),
+        replyTo: getReplyToAddress(),
             to: toEmail,
             subject: 'পেমেন্ট অনুমোদিত হয়েছে - ODDHAY 🎓',
             html: `
@@ -164,7 +177,8 @@ const sendPasswordResetNotificationEmail = async (toEmail, userName, tempPasswor
     const transporter = createTransporter();
     try {
         await transporter.sendMail({
-            from: `"ODDHAY Command Center" <${process.env.EMAIL_USER}>`,
+            from: getFromAddress("ODDHAY Command Center"),
+            replyTo: getReplyToAddress(),
             to: toEmail,
             subject: 'Security Alert: Your Password Has Been Reset - ODDHAY',
             html: `
@@ -200,7 +214,8 @@ const sendStaffInviteEmail = async (toEmail, userName, role, password) => {
     const transporter = createTransporter();
     try {
         await transporter.sendMail({
-            from: `"ODDHAY Command Center" <${process.env.EMAIL_USER}>`,
+            from: getFromAddress("ODDHAY Command Center"),
+            replyTo: getReplyToAddress(),
             to: toEmail,
             subject: 'Welcome to the Team: Your ODDHAY Staff Account - ODDHAY',
             html: `
@@ -259,7 +274,8 @@ const sendPasswordResetOtpEmail = async (toEmail, userName, otp) => {
     try {
         const transporter = createTransporter();
         const mailOptions = {
-            from: `"ODDHAY" <${process.env.EMAIL_USER}>`,
+            from: getFromAddress("ODDHAY"),
+        replyTo: getReplyToAddress(),
             to: toEmail,
             subject: `${otp} is your ODDHAY verification code`,
             html: `
@@ -326,7 +342,8 @@ const sendRegistrationOtpEmail = async (toEmail, userName, otp) => {
     try {
         const transporter = createTransporter();
         const mailOptions = {
-            from: `"ODDHAY" <${process.env.EMAIL_USER}>`,
+            from: getFromAddress("ODDHAY"),
+        replyTo: getReplyToAddress(),
             to: toEmail,
             subject: `${otp} is your ODDHAY registration code`,
             html: `
@@ -392,7 +409,8 @@ const sendLoginOtpEmail = async (toEmail, userName, otp) => {
     try {
         const transporter = createTransporter();
         const mailOptions = {
-            from: `"ODDHAY" <${process.env.EMAIL_USER}>`,
+            from: getFromAddress("ODDHAY"),
+        replyTo: getReplyToAddress(),
             to: toEmail,
             subject: `${otp} is your ODDHAY Login verification OTP`,
             html: `
