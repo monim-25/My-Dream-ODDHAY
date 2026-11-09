@@ -1329,7 +1329,24 @@ router.post('/active-heartbeat', protect, async (req, res) => {
         await connectDB();
         const User = require('../models/User');
         const user = await User.findById(req.session.userId);
-        if (!user) return res.status(404).json({ success: false });
+        if (!user) {
+            req.session.destroy(() => {});
+            return res.status(401).json({
+                success: false,
+                accountStatus: 'deleted',
+                message: 'আপনার অ্যাকাউন্টটি এডমিন প্যানেল থেকে মুছে ফেলা হয়েছে।'
+            });
+        }
+
+        if (user.status === 'suspended') {
+            return res.status(403).json({
+                success: false,
+                accountStatus: 'suspended',
+                message: 'আপনার অ্যাকাউন্টটি এডমিন প্যানেল থেকে স্থগিত করা হয়েছে।',
+                reason: user.restrictionReason,
+                expires: user.restrictionExpires
+            });
+        }
 
         const todayStr = new Date().toISOString().split('T')[0];
         if (!user.dailyGoals || user.dailyGoals.date !== todayStr) {

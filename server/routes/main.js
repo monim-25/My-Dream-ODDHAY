@@ -20,7 +20,22 @@ router.get('/dashboard', protect, async (req, res) => {
         const Notification = require('../models/Notification');
 
         const dbUser = await User.findById(userId).populate('enrolledCourses.course').populate('lastWatchedLesson.course');
-        if (!dbUser) return res.redirect('/login');
+        if (!dbUser) {
+            req.session.destroy(() => {});
+            return res.render('account-status', {
+                type: 'deleted',
+                message: 'আপনার অ্যাকাউন্টটি এডমিন প্যানেল থেকে মুছে ফেলা হয়েছে।'
+            });
+        }
+
+        if (dbUser.status === 'suspended') {
+            return res.render('account-status', {
+                type: 'suspended',
+                user: dbUser,
+                reason: dbUser.restrictionReason,
+                expires: dbUser.restrictionExpires
+            });
+        }
 
         // Require student to complete class & academic onboarding before dashboard access
         if (dbUser.role === 'student' && (!dbUser.classLevel || !dbUser.classLevel.trim())) {
@@ -1270,7 +1285,21 @@ router.get('/dashboard', protect, async (req, res) => {
 router.get('/profile', protect, async (req, res) => {
     try {
         const user = await User.findById(req.session.userId).populate('quizResults.quiz');
-        if (!user) return res.redirect('/login');
+        if (!user) {
+            req.session.destroy(() => {});
+            return res.render('account-status', {
+                type: 'deleted',
+                message: 'আপনার অ্যাকাউন্টটি এডমিন প্যানেল থেকে মুছে ফেলা হয়েছে।'
+            });
+        }
+        if (user.status === 'suspended') {
+            return res.render('account-status', {
+                type: 'suspended',
+                user,
+                reason: user.restrictionReason,
+                expires: user.restrictionExpires
+            });
+        }
         if (user.role === 'teacher') return res.redirect('/teacher/profile');
 
         // Calculate Average Score
@@ -1548,6 +1577,16 @@ router.get('/profile/security', protect, async (req, res) => {
 });
 
 router.get('/security', protect, (req, res) => res.redirect('/profile/security'));
+
+router.get('/account-status', (req, res) => {
+    const type = req.query.type || 'deleted';
+    const reason = req.query.reason || '';
+    res.render('account-status', {
+        type,
+        reason,
+        expires: null
+    });
+});
 
 router.post('/profile/change-password', protect, async (req, res) => {
     try {

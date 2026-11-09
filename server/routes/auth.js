@@ -215,6 +215,15 @@ router.get('/auth/google/callback', async (req, res) => {
             await user.save();
         }
 
+        if (user.status === 'suspended') {
+            return res.render('account-status', {
+                type: 'suspended',
+                user,
+                reason: user.restrictionReason,
+                expires: user.restrictionExpires
+            });
+        }
+
 
         // Trust device for OAuth login
         const oauthDeviceId = getDeviceId(req) || crypto.randomBytes(24).toString('hex');
@@ -335,6 +344,15 @@ router.get('/auth/facebook/callback', async (req, res) => {
                 user.isEmailVerified = true;
             }
             await user.save();
+        }
+
+        if (user.status === 'suspended') {
+            return res.render('account-status', {
+                type: 'suspended',
+                user,
+                reason: user.restrictionReason,
+                expires: user.restrictionExpires
+            });
         }
 
         // Trust device for OAuth login
@@ -954,6 +972,15 @@ router.post('/login', authLimiter, async (req, res) => {
             await user.save();
         }
 
+        if (user.status === 'suspended') {
+            return res.render('account-status', {
+                type: 'suspended',
+                user,
+                reason: user.restrictionReason,
+                expires: user.restrictionExpires
+            });
+        }
+
         // Check if current device is already recognized & trusted
         const existingDeviceId = getDeviceId(req);
         const isDeviceTrusted = Boolean(
@@ -1117,7 +1144,13 @@ router.post('/login/verify-otp', async (req, res) => {
 
         const user = await User.findById(login2fa.userId);
         if (!user) {
-            return res.status(404).json({ success: false, error: 'ইউজার অ্যাকাউন্ট পাওয়া যায়নি।' });
+            delete req.session.login2fa;
+            return res.status(404).json({ success: false, error: 'ইউজার অ্যাকাউন্ট পাওয়া যায়নি বা মুছে ফেলা হয়েছে।' });
+        }
+
+        if (user.status === 'suspended') {
+            delete req.session.login2fa;
+            return res.status(403).json({ success: false, error: 'আপনার অ্যাকাউন্টটি স্থগিত করা হয়েছে।', suspended: true });
         }
 
         // Trust this device

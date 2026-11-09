@@ -2148,13 +2148,17 @@
                 fetch('/api/active-heartbeat', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
                     .then(r => r.json())
                     .then(data => {
+                        if (data && data.accountStatus) {
+                            showAccountStatusModal(data.accountStatus, data.message, data.reason, data.expires);
+                            return;
+                        }
                         if (data.success) {
                             refreshDailyStats();
                         }
                     })
                     .catch(e => {});
             }
-        }, 60000);
+        }, 30000);
 
         function getDashboardScrollPosition() {
             const main = document.querySelector('main');
@@ -3394,6 +3398,70 @@
                 }
             } catch (e) {}
         });
+        // Live Account Status Overlay (Triggers if account is deleted or suspended from admin panel)
+        function showAccountStatusModal(status, message, reason, expires) {
+            const modal = document.getElementById('accountStatusAlertModal');
+            if (!modal) return;
+            const iconWrapper = document.getElementById('accountStatusIconWrapper');
+            const icon = document.getElementById('accountStatusIcon');
+            const badge = document.getElementById('accountStatusBadge');
+            const title = document.getElementById('accountStatusTitle');
+            const msg = document.getElementById('accountStatusMessage');
+            const reasonBox = document.getElementById('accountStatusReasonBox');
+            const loginBtnText = document.getElementById('accountStatusLoginBtnText');
+
+            if (status === 'suspended') {
+                iconWrapper.className = 'size-16 sm:size-18 rounded-2xl bg-amber-500/10 dark:bg-amber-400/10 border border-amber-500/30 dark:border-amber-400/30 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-4 shadow-inner';
+                icon.textContent = 'block';
+                badge.className = 'inline-block px-3 py-1 rounded-full bg-amber-500/10 dark:bg-amber-400/10 text-amber-700 dark:text-amber-400 text-xs font-bold border border-amber-500/20 mb-2 uppercase tracking-wider';
+                badge.textContent = 'Account Suspended';
+                title.textContent = 'অ্যাকাউন্ট স্থগিত করা হয়েছে';
+                msg.textContent = message || 'প্ল্যাটফর্মের নির্দেশিকা লঙ্ঘন বা পর্যালোচনার কারণে আপনার অ্যাকাউন্টটি স্থগিত করা হয়েছে।';
+                if (reason) {
+                    reasonBox.innerHTML = '<div><strong>কারণ (Reason):</strong> ' + reason + '</div>' + (expires ? '<div><strong>মেয়াদ:</strong> ' + new Date(expires).toLocaleDateString('bn-BD') + ' পর্যন্ত</div>' : '');
+                    reasonBox.classList.remove('hidden');
+                } else {
+                    reasonBox.classList.add('hidden');
+                }
+                if (loginBtnText) loginBtnText.textContent = 'অন্য অ্যাকাউন্টে লগইন করুন';
+            } else {
+                iconWrapper.className = 'size-16 sm:size-18 rounded-2xl bg-rose-500/10 dark:bg-rose-400/10 border border-rose-500/30 dark:border-rose-400/30 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4 shadow-inner';
+                icon.textContent = 'person_off';
+                badge.className = 'inline-block px-3 py-1 rounded-full bg-rose-500/10 dark:bg-rose-400/10 text-rose-700 dark:text-rose-400 text-xs font-bold border border-rose-500/20 mb-2 uppercase tracking-wider';
+                badge.textContent = 'Account Deleted';
+                title.textContent = 'অ্যাকাউন্ট মুছে ফেলা হয়েছে';
+                msg.textContent = message || 'আপনার অ্যাকাউন্টটি এডমিন প্যানেল থেকে মুছে ফেলা হয়েছে। আপনি চাইলে নতুন অ্যাকাউন্ট তৈরি করতে পারেন।';
+                reasonBox.classList.add('hidden');
+                if (loginBtnText) loginBtnText.textContent = 'লগইন বা নতুন অ্যাকাউন্ট (Login / Register)';
+            }
+
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
     </script>
+
+    <!-- Real-time In-Dashboard Alert Overlay Modal -->
+    <div id="accountStatusAlertModal" class="hidden fixed inset-0 z-[9999] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="w-full max-w-[460px] bg-white dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800/90 rounded-3xl p-6 sm:p-7 shadow-2xl text-center relative overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div id="accountStatusIconWrapper" class="size-16 sm:size-18 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
+                <span id="accountStatusIcon" class="material-symbols-rounded text-4xl sm:text-5xl leading-none">person_off</span>
+            </div>
+            <div id="accountStatusBadge" class="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2"></div>
+            <h2 id="accountStatusTitle" class="text-xl font-extrabold text-slate-900 dark:text-white mb-2 leading-tight"></h2>
+            <p id="accountStatusMessage" class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-5"></p>
+            <div id="accountStatusReasonBox" class="hidden p-3.5 mb-5 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 text-left text-xs space-y-1"></div>
+            
+            <div class="flex flex-col gap-2.5 w-full">
+                <a href="/" class="w-full py-3 px-4 rounded-xl bg-[#18a957] hover:bg-[#138745] active:scale-[0.99] text-white font-bold text-xs sm:text-sm shadow-md shadow-[#18a957]/20 flex items-center justify-center gap-2 transition-all">
+                    <span class="material-symbols-rounded text-lg leading-none">home</span>
+                    <span>হোমপেজে যান (Go to Landing Page)</span>
+                </a>
+                <a href="/login" class="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/80 active:scale-[0.99] text-slate-800 dark:text-slate-100 font-bold text-xs sm:text-sm border border-slate-200 dark:border-slate-700/80 flex items-center justify-center gap-2 transition-all">
+                    <span class="material-symbols-rounded text-lg leading-none">login</span>
+                    <span id="accountStatusLoginBtnText">লগইন বা নতুন অ্যাকাউন্ট (Login / Register)</span>
+                </a>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
