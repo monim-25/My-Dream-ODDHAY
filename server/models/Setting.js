@@ -25,22 +25,22 @@ const SettingSchema = new mongoose.Schema({
         }
     },
     contactInfo: {
-        email: { type: String, default: 'support@oddhay.com' },
-        phone: { type: String, default: '+৮৮০ ৯৬৩৮-৭৮৯০১২' },
-        whatsapp: { type: String, default: '+৮৮০১৭১২-৩৪৫৬৭৮' },
-        supportHours: { type: String, default: 'সকাল ৯টা - রাত ১১টা' }
+        email: { type: String, default: '' },
+        phone: { type: String, default: '' },
+        whatsapp: { type: String, default: '' },
+        supportHours: { type: String, default: '' }
     },
     socialLinks: {
-        facebook: { type: String, default: 'https://facebook.com/oddhay' },
-        youtube: { type: String, default: 'https://youtube.com/@oddhay' },
-        whatsapp: { type: String, default: 'https://wa.me/8801712345678' },
-        linkedin: { type: String, default: 'https://linkedin.com/company/oddhay' },
-        instagram: { type: String, default: 'https://instagram.com/oddhay.official' }
+        facebook: { type: String, default: '' },
+        youtube: { type: String, default: '' },
+        whatsapp: { type: String, default: '' },
+        linkedin: { type: String, default: '' },
+        instagram: { type: String, default: '' }
     },
     legalInfo: {
-        tradeLicense: { type: String, default: 'TRAD/DNCC/041285/2026' },
-        tinNumber: { type: String, default: '8491-7302-6194' },
-        address: { type: String, default: 'বাড়ি #১২, রোড #০৪, ধানমন্ডি, ঢাকা - ১২০৯, বাংলাদেশ' }
+        tradeLicense: { type: String, default: '' },
+        tinNumber: { type: String, default: '' },
+        address: { type: String, default: '' }
     },
     footerInfo: {
         bioText: { type: String, default: '' },
