@@ -49,9 +49,33 @@ async function sendSmsOtp(phone, otp, purpose = 'verification') {
 
     const messageText = `Your ODDHAY ${purposeText} verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`;
 
-    // 1. Check Greenweb SMS Gateway
-    const greenwebToken = process.env.GREENWEB_TOKEN || process.env.SMS_API_KEY;
-    if (process.env.SMS_PROVIDER === 'greenweb' || (greenwebToken && !process.env.BULKSMS_API_KEY)) {
+    // 1. Check Alpha SMS Gateway (Alpha Net: sms.net.bd or alphasms.biz)
+    const alphaKey = process.env.ALPHA_SMS_API_KEY || process.env.ALPHASMS_API_KEY || (process.env.SMS_PROVIDER === 'alphasms' || process.env.SMS_PROVIDER === 'alphanet' ? process.env.SMS_API_KEY : null);
+    if (alphaKey || process.env.SMS_PROVIDER === 'alphasms' || process.env.SMS_PROVIDER === 'alphanet') {
+        try {
+            const senderId = process.env.SMS_SENDER_ID || process.env.ALPHA_SMS_SENDER_ID || '';
+            const isAlphaBiz = process.env.ALPHA_SMS_TYPE === 'biz' || (process.env.ALPHA_SMS_URL && process.env.ALPHA_SMS_URL.includes('alphasms.biz'));
+            
+            let url;
+            if (isAlphaBiz) {
+                const u = process.env.ALPHA_SMS_USER || '';
+                url = `https://alphasms.biz/index.php?app=ws&u=${encodeURIComponent(u)}&h=${encodeURIComponent(alphaKey)}&op=pv&to=${encodeURIComponent(international)}&msg=${encodeURIComponent(messageText)}`;
+            } else {
+                // Default: Alpha Net Official API (https://api.sms.net.bd/sendsms)
+                url = `https://api.sms.net.bd/sendsms?api_key=${encodeURIComponent(alphaKey)}&to=${encodeURIComponent(international)}&msg=${encodeURIComponent(messageText)}` + (senderId ? `&sender_id=${encodeURIComponent(senderId)}` : '');
+            }
+
+            const result = await makeHttpRequest(url);
+            console.log(`[SMS Gateway: Alpha SMS] Sent to ${local}. Response:`, result);
+            return { success: true, provider: 'alphasms', result };
+        } catch (err) {
+            console.error('[SMS Gateway Error - Alpha SMS]:', err.message);
+        }
+    }
+
+    // 2. Check Greenweb SMS Gateway
+    const greenwebToken = process.env.GREENWEB_TOKEN || (process.env.SMS_PROVIDER === 'greenweb' ? process.env.SMS_API_KEY : null);
+    if (greenwebToken && !process.env.BULKSMS_API_KEY) {
         try {
             const url = `https://api.greenweb.com.bd/api.php?token=${encodeURIComponent(greenwebToken)}&to=${encodeURIComponent(international)}&message=${encodeURIComponent(messageText)}`;
             const result = await makeHttpRequest(url);
