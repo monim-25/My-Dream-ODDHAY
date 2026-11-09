@@ -66,8 +66,16 @@ async function sendSmsOtp(phone, otp, purpose = 'verification') {
             }
 
             const result = await makeHttpRequest(url);
-            console.log(`[SMS Gateway: Alpha SMS] Sent to ${local}. Response:`, result);
-            return { success: true, provider: 'alphasms', result };
+            let parsed = null;
+            try { parsed = JSON.parse(result); } catch (e) {}
+
+            if (parsed && parsed.error !== 0) {
+                console.error(`[SMS Gateway Error - Alpha SMS]: ${parsed.msg || 'Failed'} (Error code: ${parsed.error})`);
+                return { success: false, provider: 'alphasms', error: parsed.msg, code: parsed.error, result };
+            }
+
+            console.log(`[SMS Gateway: Alpha SMS] Successfully dispatched to ${local}. Response:`, result);
+            return { success: true, provider: 'alphasms', result, requestId: parsed?.data?.request_id };
         } catch (err) {
             console.error('[SMS Gateway Error - Alpha SMS]:', err.message);
         }
