@@ -80,7 +80,7 @@ const sendPasswordResetEmail = async (toEmail, userName, resetLink) => {
                     </div>
                 </div>
                 <div class="footer">
-                    <p>© 2025 ODDHAY শিক্ষা প্ল্যাটফর্ম। সর্বস্বত্ব সংরক্ষিত।</p>
+                    <p>© 2026 ODDHAY শিক্ষা প্ল্যাটফর্ম। সর্বস্বত্ব সংরক্ষিত।</p>
                     <p style="margin-top: 6px;">এই ইমেইলটি স্বয়ংক্রিয়ভাবে পাঠানো হয়েছে, উত্তর দেবেন না।</p>
                 </div>
             </div>
@@ -122,7 +122,7 @@ const sendWelcomeEmail = async (toEmail, userName) => {
                         ড্যাশবোর্ডে যান →
                     </a>
                 </div>
-                <p style="color: #999; font-size: 12px; text-align: center;">© 2025 ODDHAY শিক্ষা প্ল্যাটফর্ম</p>
+                <p style="color: #999; font-size: 12px; text-align: center;">© 2026 ODDHAY শিক্ষা প্ল্যাটফর্ম</p>
             </div>
             `
         });
@@ -160,7 +160,7 @@ const sendPaymentApprovalEmail = async (toEmail, userName, courseName, amount) =
                         ক্লাস শুরু করুন →
                     </a>
                 </div>
-                <p style="color: #999; font-size: 12px; text-align: center;">© 2025 ODDHAY শিক্ষা প্ল্যাটফর্ম</p>
+                <p style="color: #999; font-size: 12px; text-align: center;">© 2026 ODDHAY শিক্ষা প্ল্যাটফর্ম</p>
             </div>
             `
         });

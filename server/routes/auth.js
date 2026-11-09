@@ -199,6 +199,11 @@ router.get('/auth/google/callback', async (req, res) => {
                 isPasswordSet: false
             });
             await user.save();
+
+            // Send welcome email to new Google OAuth user
+            sendWelcomeEmail(email, user.name).catch(e => {
+                console.error('Failed to send welcome email for Google OAuth signup:', e.message);
+            });
         } else {
             // Existing user update: sync Google avatar to both profilePicture and profileImage
             if (pictureUrl) {
@@ -335,6 +340,13 @@ router.get('/auth/facebook/callback', async (req, res) => {
                 isPasswordSet: false
             });
             await user.save();
+
+            // Send welcome email to new Facebook OAuth user (if email available)
+            if (fbProfile.email) {
+                sendWelcomeEmail(fbEmail, user.name).catch(e => {
+                    console.error('Failed to send welcome email for Facebook OAuth signup:', e.message);
+                });
+            }
         } else {
             // Existing user update
             if (!user.profilePicture && pictureUrl) {
