@@ -46,6 +46,8 @@ async function sendSmsOtp(phone, otp, purpose = 'verification') {
     let messageText;
     if (purpose === 'login') {
         messageText = `Your ODDHAY Login verification OTP is: ${otp}. Valid for 10 minutes. Do not share this code.`;
+    } else if (purpose === 'phone_verification' || purpose === 'verification') {
+        messageText = `Your ODDHAY Phone verification OTP is: ${otp}. Valid for 10 minutes. Do not share this code.`;
     } else {
         const purposeText = purpose === 'registration' 
             ? 'Account Registration' 

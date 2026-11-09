@@ -399,6 +399,119 @@ router.get('/onboarding', protect, async (req, res) => {
     }
 });
 
+// POST Onboarding - Send OTP for Phone Verification
+router.post('/onboarding/send-phone-otp', protect, forgotLimiter, async (req, res) => {
+    try {
+        await connectDB();
+        const { phone } = req.body;
+        if (!phone || !phone.trim()) {
+            return res.status(400).json({ success: false, error: 'Please enter your 11-digit mobile number.' });
+        }
+
+        const { phone: normalizedPhone } = normalizeIdentifier(phone.trim());
+        if (!normalizedPhone || !/^01[3-9]\d{8}$/.test(normalizedPhone)) {
+            return res.status(400).json({ success: false, error: 'Please enter a valid 11-digit mobile number (e.g. 017XXXXXXXX).' });
+        }
+
+        const existingWithPhone = await User.findOne({ phone: normalizedPhone, _id: { $ne: req.session.userId } }).lean();
+        if (existingWithPhone) {
+            return res.status(400).json({ success: false, error: 'This phone number is already registered with another account.' });
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        req.session.onboardingPhoneOtp = {
+            phone: normalizedPhone,
+            otp,
+            expiresAt: Date.now() + 10 * 60 * 1000
+        };
+
+        await sendSmsOtp(normalizedPhone, otp, 'phone_verification');
+        console.log(`[Onboarding Phone OTP] Dispatched code for ${normalizedPhone}: ${otp}`);
+
+        const maskedTarget = normalizedPhone.length >= 10 
+            ? normalizedPhone.slice(0, 3) + '****' + normalizedPhone.slice(-4) 
+            : normalizedPhone;
+
+        return res.json({
+            success: true,
+            message: 'A 6-digit OTP has been sent to your mobile number.',
+            maskedTarget,
+            phone: normalizedPhone
+        });
+    } catch (err) {
+        console.error('Send Phone OTP Error:', err);
+        return res.status(500).json({ success: false, error: `Failed to send OTP: ${err.message}` });
+    }
+});
+
+// POST Onboarding - Verify Phone OTP
+router.post('/onboarding/verify-phone-otp', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const { otp } = req.body;
+        const otpSession = req.session.onboardingPhoneOtp;
+
+        if (!otpSession || !otpSession.phone || !otpSession.otp) {
+            return res.status(400).json({ success: false, error: 'Verification session expired. Please resend OTP.' });
+        }
+
+        if (otpSession.expiresAt < Date.now()) {
+            return res.status(400).json({ success: false, error: 'OTP has expired. Please request a new code.' });
+        }
+
+        if (String(otp || '').trim() !== String(otpSession.otp).trim()) {
+            return res.status(400).json({ success: false, error: 'Invalid OTP code. Please enter the correct code.' });
+        }
+
+        const user = await User.findById(req.session.userId);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'User session not found.' });
+        }
+
+        user.phone = otpSession.phone;
+        user.isPhoneVerified = true;
+        user.isProfileSetupComplete = true;
+        user.lastActive = new Date();
+        await user.save();
+
+        delete req.session.onboardingPhoneOtp;
+        req.session.user = user.toObject();
+
+        const targetUrl = req.session.postOnboardingRedirect || '/dashboard';
+        delete req.session.postOnboardingRedirect;
+
+        req.session.save(() => {
+            return res.json({ success: true, redirect: targetUrl });
+        });
+    } catch (err) {
+        console.error('Verify Phone OTP Error:', err);
+        return res.status(500).json({ success: false, error: `Verification failed: ${err.message}` });
+    }
+});
+
+// POST Onboarding - Resend Phone OTP
+router.post('/onboarding/resend-phone-otp', protect, forgotLimiter, async (req, res) => {
+    try {
+        const otpSession = req.session.onboardingPhoneOtp;
+        if (!otpSession || !otpSession.phone) {
+            return res.status(400).json({ success: false, error: 'Session expired. Please enter your mobile number again.' });
+        }
+
+        const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+        otpSession.otp = newOtp;
+        otpSession.expiresAt = Date.now() + 10 * 60 * 1000;
+        req.session.onboardingPhoneOtp = otpSession;
+
+        await sendSmsOtp(otpSession.phone, newOtp, 'phone_verification');
+        console.log(`[Onboarding Phone Resent OTP] Sent for ${otpSession.phone}: ${newOtp}`);
+
+        return res.json({ success: true, message: 'A new OTP has been sent to your mobile number.' });
+    } catch (err) {
+        console.error('Resend Phone OTP Error:', err);
+        return res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // POST Onboarding - Save student class, group, subjects, phone
 router.post('/onboarding', protect, async (req, res) => {
     const isJson = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.is('application/json');
