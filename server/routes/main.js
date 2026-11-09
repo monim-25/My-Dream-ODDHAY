@@ -6075,45 +6075,62 @@ router.get('/live/:roomId', protect, async (req, res) => {
 
         // Try to find the course that has this live class
         let course = null;
+        let liveNode = null;
         try {
-            const courseDoc = await Course.findOne({
-                $or: [
-                    { 'curriculumNodes.meetingUrl': roomId },
-                    { 'chapters.liveClasses.meetingUrl': roomId }
-                ]
-            });
+            const isObjectId = mongoose.Types.ObjectId.isValid(roomId);
+            const searchConditions = [
+                { 'curriculumNodes.meetingUrl': roomId },
+                { 'chapters.liveClasses.meetingUrl': roomId }
+            ];
+            if (isObjectId) {
+                searchConditions.push({ 'curriculumNodes._id': roomId });
+                searchConditions.push({ 'chapters.liveClasses._id': roomId });
+            }
+            if (roomId && roomId.length >= 6) {
+                const escaped = roomId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                searchConditions.push({ 'curriculumNodes.meetingUrl': new RegExp(escaped, 'i') });
+                searchConditions.push({ 'chapters.liveClasses.meetingUrl': new RegExp(escaped, 'i') });
+            }
+
+            const courseDoc = await Course.findOne({ $or: searchConditions });
 
             if (courseDoc) {
-                if (isModerator) {
-                    let changed = false;
-                    if (courseDoc.curriculumNodes) {
-                        const node = courseDoc.curriculumNodes.find(n => n.meetingUrl === roomId);
-                        if (node) {
-                            node.isLive = true;
-                            node.isRecorded = false;
-                            node.liveStartedAt = new Date();
-                            courseDoc.markModified('curriculumNodes');
-                            changed = true;
+                // Find matching liveClass node in curriculumNodes
+                if (courseDoc.curriculumNodes) {
+                    liveNode = courseDoc.curriculumNodes.find(n => 
+                        n.type === 'liveClass' && (
+                            (n._id && n._id.toString() === roomId) ||
+                            n.meetingUrl === roomId ||
+                            (n.meetingUrl && roomId.length >= 6 && n.meetingUrl.includes(roomId))
+                        )
+                    );
+                }
+                // If not in curriculumNodes, find in chapters.liveClasses
+                if (!liveNode && courseDoc.chapters) {
+                    for (const ch of courseDoc.chapters) {
+                        if (ch.liveClasses) {
+                            const lc = ch.liveClasses.find(l => 
+                                (l._id && l._id.toString() === roomId) ||
+                                l.meetingUrl === roomId ||
+                                (l.meetingUrl && roomId.length >= 6 && l.meetingUrl.includes(roomId))
+                            );
+                            if (lc) {
+                                liveNode = lc;
+                                break;
+                            }
                         }
                     }
-                    if (courseDoc.chapters) {
-                        courseDoc.chapters.forEach(ch => {
-                            if (ch.liveClasses) {
-                                const lc = ch.liveClasses.find(l => l.meetingUrl === roomId);
-                                if (lc) {
-                                    lc.isLive = true;
-                                    lc.isRecorded = false;
-                                    lc.liveStartedAt = new Date();
-                                    courseDoc.markModified('chapters');
-                                    changed = true;
-                                }
-                            }
-                        });
-                    }
-                    if (changed) {
-                        await courseDoc.save();
-                    }
                 }
+
+                if (isModerator && liveNode) {
+                    liveNode.isLive = true;
+                    liveNode.isRecorded = false;
+                    liveNode.liveStartedAt = new Date();
+                    courseDoc.markModified('curriculumNodes');
+                    courseDoc.markModified('chapters');
+                    await courseDoc.save();
+                }
+
                 course = await Course.findById(courseDoc._id)
                     .populate('instructor', 'name profileImage profilePicture bio role')
                     .populate('curriculumNodes.quizId')
@@ -6141,39 +6158,40 @@ router.get('/live/:roomId', protect, async (req, res) => {
             flattenNodes(course.curriculumNodes, null, 0, flatNodes);
         }
 
-        // Extract the specific title of this live class
+        // Extract the specific title and details of this live class
         let liveTitle = '';
         let liveDescription = '';
         let liveNodeId = '';
         let isRecorded = false;
         let videoPath = '';
+        let isYouTubeLive = false;
+        let youtubeEmbedUrl = '';
 
-        if (course) {
-            if (course.curriculumNodes) {
-                const liveNode = course.curriculumNodes.find(n => n.meetingUrl === roomId && n.type === 'liveClass');
-                if (liveNode) {
-                    liveTitle = liveNode.name || liveNode.title;
-                    liveDescription = liveNode.description || '';
-                    liveNodeId = liveNode._id.toString();
-                    isRecorded = !!liveNode.isRecorded || !!liveNode.videoPath;
-                    videoPath = liveNode.videoPath || '';
-                }
+        if (liveNode) {
+            liveTitle = liveNode.name || liveNode.title || '';
+            liveDescription = liveNode.description || '';
+            liveNodeId = liveNode._id ? liveNode._id.toString() : '';
+            isRecorded = !!liveNode.isRecorded || !!liveNode.videoPath;
+            videoPath = liveNode.videoPath || '';
+
+            const mUrl = (liveNode.meetingUrl || '').trim();
+            const ytMatch = mUrl.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
+            if (ytMatch && ytMatch[1]) {
+                isYouTubeLive = true;
+                youtubeEmbedUrl = 'https://www.youtube-nocookie.com/embed/' + ytMatch[1] + '?autoplay=1&rel=0&enablejsapi=1';
             }
-            if (!liveTitle && course.chapters) {
-                for (const ch of course.chapters) {
-                    if (ch.liveClasses) {
-                        const lc = ch.liveClasses.find(l => l.meetingUrl === roomId);
-                        if (lc) {
-                            liveTitle = lc.title || lc.name;
-                            break;
-                        }
-                    }
-                }
+        } else if (roomId) {
+            const ytMatch = roomId.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/|v\/|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/i);
+            if (ytMatch && ytMatch[1]) {
+                isYouTubeLive = true;
+                youtubeEmbedUrl = 'https://www.youtube-nocookie.com/embed/' + ytMatch[1] + '?autoplay=1&rel=0&enablejsapi=1';
             }
         }
 
+        const effectiveRoomId = (liveNode && liveNode._id) ? liveNode._id.toString() : (liveNode && liveNode.meetingUrl && !liveNode.meetingUrl.startsWith('http') ? liveNode.meetingUrl : roomId);
+
         res.render('teacher/live-classroom', {
-            roomId,
+            roomId: effectiveRoomId,
             user: req.session.user,
             isModerator,
             course: course || null,
@@ -6183,6 +6201,8 @@ router.get('/live/:roomId', protect, async (req, res) => {
             liveDescription,
             isRecorded,
             videoPath,
+            isYouTubeLive,
+            youtubeEmbedUrl,
             flatNodes,
             playlist: flatNodes.filter(node => node.type === 'video' || (node.type === 'liveClass' && (node.isRecorded || node.videoPath))),
             agoraAppId: process.env.AGORA_APP_ID || ''

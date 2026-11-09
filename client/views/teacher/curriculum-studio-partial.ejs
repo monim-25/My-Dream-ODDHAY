@@ -836,20 +836,20 @@
                         detailHtml = node.duration ? `<span class="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-md font-mono font-medium">${node.duration}</span>` : `<span class="text-[10px] text-slate-500 font-medium">Recorded</span>`;
                     } else if (isScheduled) {
                         typeLabel = 'Scheduled Live';
-                        const joinHref = (node.meetingUrl && (node.meetingUrl.startsWith('http://') || node.meetingUrl.startsWith('https://'))) ? node.meetingUrl : `/live/${node.meetingUrl}`;
+                        const liveRoomId = (node.meetingUrl && !node.meetingUrl.startsWith('http')) ? node.meetingUrl : (node._id || node.meetingUrl);
                         detailHtml = `
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-[10px] text-slate-500 font-medium countdown-timer" data-time="${node.date}"></span>
-                                <a href="${joinHref}" target="_blank" class="text-[9px] text-primary hover:underline flex items-center gap-0.5 font-medium"><span class="material-symbols-rounded text-xs">link</span>Join</a>
+                                <a href="/live/${liveRoomId}" target="_blank" class="text-[9px] text-primary hover:underline flex items-center gap-0.5 font-medium"><span class="material-symbols-rounded text-xs">link</span>Join</a>
                             </div>
                         `;
                     } else {
                         typeLabel = 'Live Class';
-                        const joinHref = (node.meetingUrl && (node.meetingUrl.startsWith('http://') || node.meetingUrl.startsWith('https://'))) ? node.meetingUrl : `/live/${node.meetingUrl}`;
+                        const liveRoomId = (node.meetingUrl && !node.meetingUrl.startsWith('http')) ? node.meetingUrl : (node._id || node.meetingUrl);
                         detailHtml = `
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-[10px] text-rose-500 font-medium">Live Now</span>
-                                <a href="${joinHref}" target="_blank" class="text-[9px] text-primary hover:underline flex items-center gap-0.5 font-medium"><span class="material-symbols-rounded text-xs">link</span>Join</a>
+                                <a href="/live/${liveRoomId}" target="_blank" class="text-[9px] text-primary hover:underline flex items-center gap-0.5 font-medium"><span class="material-symbols-rounded text-xs">link</span>Join</a>
                             </div>
                         `;
                     }
@@ -1565,29 +1565,16 @@
                     }
                     // Check if it's an instant live class to redirect immediately
                     const liveMode = document.getElementById('liveMode')?.value;
-                    if (type === 'liveClass' && liveMode === 'instant' && res.node && res.node.meetingUrl) {
-                        const mUrl = res.node.meetingUrl;
-                        if (mUrl.startsWith('http://') || mUrl.startsWith('https://')) {
-                            if (statusText) {
-                                statusText.innerText = 'Opening Live Stream...';
-                                statusText.classList.remove('animate-pulse');
-                                statusText.classList.add('text-emerald-500');
-                            }
-                            setTimeout(() => {
-                                window.open(mUrl, '_blank');
-                                closeAssetModal();
-                                fetchAndRenderCurriculum();
-                            }, 1000);
-                            return;
-                        }
+                    if (type === 'liveClass' && liveMode === 'instant' && res.node) {
+                        const targetRoom = (res.node.meetingUrl && !res.node.meetingUrl.startsWith('http')) ? res.node.meetingUrl : (res.node._id || res.node.meetingUrl);
                         if (statusText) {
-                            statusText.innerText = 'Redirecting to Live Room...';
+                            statusText.innerText = 'Entering Live Classroom...';
                             statusText.classList.remove('animate-pulse');
                             statusText.classList.add('text-emerald-500');
                         }
                         setTimeout(() => {
-                            window.location.href = `/live/${res.node.meetingUrl}`;
-                        }, 1000);
+                            window.location.href = `/live/${targetRoom}`;
+                        }, 800);
                         return;
                     }
 
@@ -1922,11 +1909,8 @@
                 window.open(`/teacher/quiz-details/${qId}`, '_blank');
                 return;
             } else if (node.type === 'liveClass') {
-                if (node.meetingUrl && (node.meetingUrl.startsWith('http://') || node.meetingUrl.startsWith('https://'))) {
-                    window.open(node.meetingUrl, '_blank');
-                    return;
-                }
-                window.location.href = `/live/${node.meetingUrl || node._id}`;
+                const targetRoom = (node.meetingUrl && !node.meetingUrl.startsWith('http')) ? node.meetingUrl : (node._id || node.meetingUrl);
+                window.location.href = `/live/${targetRoom}`;
                 return;
             }
             alert('This item does not have a valid video attached.');

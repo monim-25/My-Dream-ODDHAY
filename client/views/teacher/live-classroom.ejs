@@ -272,10 +272,14 @@
                     <div class="lg:col-span-7 flex flex-col">
                         <div class=""><!-- overflow visible so controls are not clipped -->
                             <div class="w-full aspect-video bg-black relative">
-                                <!-- AGORA VIDEO CONTAINER -->
-                                <div id="agora-video-container" <% if(!locals.isRecorded){ %>ondblclick="toggleVideoFullscreen()"<% } %>>
+                                <!-- AGORA / YOUTUBE VIDEO CONTAINER -->
+                                <div id="agora-video-container" <% if(!locals.isRecorded && !locals.isYouTubeLive){ %>ondblclick="toggleVideoFullscreen()"<% } %>>
                                     <% if (locals.isRecorded) { %>
                                         <video src="<%= locals.videoPath %>" controls class="w-full h-full object-contain" style="background:#000;" controlsList="nodownload" autoplay></video>
+                                    <% } else if (locals.isYouTubeLive) { %>
+                                        <div class="relative w-full h-full bg-black flex items-center justify-center overflow-hidden">
+                                            <iframe src="<%= locals.youtubeEmbedUrl %>" class="w-full h-full border-0 absolute inset-0 z-10" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>
+                                        </div>
                                     <% } else { %>
                                         <!-- ═══ TOP OVERLAY ROW ═══ -->
                                     <div class="video-top-overlay">
@@ -382,7 +386,7 @@
                                     </div>
 
                                     <!-- Setup Screen (Before joining) -->
-                                    <div id="prejoin-screen" class="absolute inset-0 z-30 bg-slate-900 flex flex-col items-center justify-center px-6">
+                                    <div id="prejoin-screen" class="<%= locals.isYouTubeLive ? 'hidden ' : '' %>absolute inset-0 z-30 bg-slate-900 flex flex-col items-center justify-center px-6">
                                         <div class="size-16 rounded-full bg-slate-800 flex items-center justify-center mb-4">
                                             <span class="material-symbols-rounded text-3xl text-slate-400">videocam</span>
                                         </div>
@@ -879,6 +883,31 @@
     // Live duration variables
     var startTime = null;
     var liveInterval = null;
+
+    const IS_YOUTUBE_LIVE = <%= Boolean(locals.isYouTubeLive) %>;
+    if (IS_YOUTUBE_LIVE) {
+        document.getElementById('prejoin-screen')?.classList.add('hidden');
+        document.getElementById('agora-controls')?.classList.add('hidden');
+        document.getElementById('btn-reaction-toggle')?.classList.remove('hidden');
+        const btnFs = document.getElementById('btn-fullscreen');
+        if (btnFs) btnFs.classList.remove('hidden');
+        
+        // Start duration timer for YouTube Live session
+        if (!startTime) {
+            startTime = Date.now();
+            liveInterval = setInterval(function() {
+                var elapsed = Math.floor((Date.now() - startTime) / 1000);
+                var h = Math.floor(elapsed / 3600).toString().padStart(2, '0');
+                var m = Math.floor((elapsed % 3600) / 60).toString().padStart(2, '0');
+                var s = (elapsed % 60).toString().padStart(2, '0');
+                var timeStr = h + ':' + m + ':' + s;
+                var el = document.getElementById('liveDuration');
+                if (el) el.textContent = timeStr;
+                var el2 = document.getElementById('liveDurationOverlay');
+                if (el2) el2.textContent = timeStr;
+            }, 1000);
+        }
+    }
 
     // ==========================================
     // AGORA RTC LOGIC
@@ -2850,7 +2879,7 @@
     }
     <% } %>
     // ── Auto-join Agora channel if already joined previously (survives refresh) ──
-    if (sessionStorage.getItem("agora_joined_" + CHANNEL) === "true") {
+    if (!IS_YOUTUBE_LIVE && sessionStorage.getItem("agora_joined_" + CHANNEL) === "true") {
         isAutoJoining = true;
         const initialJoinBtn = document.getElementById('join-btn');
         if (initialJoinBtn) {
