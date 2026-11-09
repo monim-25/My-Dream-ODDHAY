@@ -885,6 +885,7 @@
     let isVideoMuted = false;
     let isScreenSharing = false;
     let isAutoJoining = false;
+    let isJoiningInProgress = false;
 
     let hostAgoraUid = null;
     let remoteVideoTracks = {};
@@ -1031,24 +1032,78 @@
             return;
         }
 
+        // 1. If client is already connected to Agora channel, simply ensure the classroom UI is active
+        if (client && client.connectionState === 'CONNECTED') {
+            console.log("Agora client is already connected.");
+            sessionStorage.setItem("agora_joined_" + CHANNEL, "true");
+            document.getElementById('prejoin-screen')?.classList.add('hidden');
+            document.getElementById('agora-controls')?.classList.remove('hidden');
+            document.getElementById('btn-reaction-toggle')?.classList.remove('hidden');
+            const btnFs = document.getElementById('btn-fullscreen');
+            if (btnFs) btnFs.classList.remove('hidden');
+            return;
+        }
+
+        // 2. Prevent concurrent / duplicate join attempts
+        if (isJoiningInProgress || (client && client.connectionState === 'CONNECTING')) {
+            console.warn("Agora join is already in progress, skipping duplicate call.");
+            return;
+        }
+
+        isJoiningInProgress = true;
+
         const joinBtn = document.getElementById('join-btn');
-        joinBtn.innerHTML = '<span class="material-symbols-rounded animate-spin">autorenew</span> Joining...';
-        joinBtn.disabled = true;
+        if (joinBtn) {
+            joinBtn.innerHTML = '<span class="material-symbols-rounded animate-spin">autorenew</span> Joining...';
+            joinBtn.disabled = true;
+        }
 
         try {
+            // Wait briefly if client is currently disconnecting
+            if (client && client.connectionState === 'DISCONNECTING') {
+                for (let i = 0; i < 10; i++) {
+                    if (client.connectionState === 'DISCONNECTED') break;
+                    await new Promise(r => setTimeout(r, 200));
+                }
+            }
+
+            // If already connected now, exit cleanly
+            if (client && client.connectionState === 'CONNECTED') {
+                sessionStorage.setItem("agora_joined_" + CHANNEL, "true");
+                document.getElementById('prejoin-screen')?.classList.add('hidden');
+                document.getElementById('agora-controls')?.classList.remove('hidden');
+                document.getElementById('btn-reaction-toggle')?.classList.remove('hidden');
+                const btnFs = document.getElementById('btn-fullscreen');
+                if (btnFs) btnFs.classList.remove('hidden');
+                return;
+            }
+
             // 1. Fetch Token from our server
             const response = await fetch(`/api/agora/token?channelName=${CHANNEL}`);
             const data = await response.json();
             const token = data.token || null; // If token is null, assumes testing mode without certificate
 
-            // 2. Join the channel
-            const uid = await client.join(APP_ID, CHANNEL, token, null);
-            console.log("Joined channel with uid:", uid);
+            // Re-check connection state before calling client.join
+            if (client && client.connectionState === 'CONNECTED') {
+                sessionStorage.setItem("agora_joined_" + CHANNEL, "true");
+                document.getElementById('prejoin-screen')?.classList.add('hidden');
+                document.getElementById('agora-controls')?.classList.remove('hidden');
+                return;
+            }
+
+            // 2. Join the channel (only if DISCONNECTED)
+            let uid = client.uid;
+            if (client.connectionState === 'DISCONNECTED') {
+                uid = await client.join(APP_ID, CHANNEL, token, null);
+                console.log("Joined channel with uid:", uid);
+            }
             sessionStorage.setItem("agora_joined_" + CHANNEL, "true");
-            client.enableAudioVolumeIndicator();
+            try {
+                client.enableAudioVolumeIndicator();
+            } catch (_) {}
 
             // Broadcast Agora UID via Socket.io
-            if (typeof socket !== 'undefined') {
+            if (typeof socket !== 'undefined' && uid) {
                 socket.emit('user:set_agora_uid', { room: '<%= roomId %>', agoraUid: uid });
             }
 
@@ -1057,22 +1112,27 @@
             // 3. Setup tracks based on role
             if (isModerator) {
                 try {
-                    localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                    if (!localAudioTrack) {
+                        localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                    }
                 } catch (audioErr) {
                     console.warn("Could not create microphone track:", audioErr);
                 }
 
                 try {
-                    localVideoTrack = await AgoraRTC.createCameraVideoTrack({
-                        encoderConfig: { width: 1280, height: 720, frameRate: 30 }
-                    });
+                    if (!localVideoTrack) {
+                        localVideoTrack = await AgoraRTC.createCameraVideoTrack({
+                            encoderConfig: { width: 1280, height: 720, frameRate: 30 }
+                        });
+                    }
                 } catch (videoErr) {
                     console.warn("Could not create camera track:", videoErr);
                 }
 
                 const tracksToPublish = [];
-                if (localAudioTrack) tracksToPublish.push(localAudioTrack);
-                if (localVideoTrack) tracksToPublish.push(localVideoTrack);
+                const alreadyPublished = client.localTracks || [];
+                if (localAudioTrack && !alreadyPublished.includes(localAudioTrack)) tracksToPublish.push(localAudioTrack);
+                if (localVideoTrack && !alreadyPublished.includes(localVideoTrack)) tracksToPublish.push(localVideoTrack);
                 if (tracksToPublish.length > 0) {
                     await client.publish(tracksToPublish);
                 }
@@ -1086,9 +1146,9 @@
             }
 
             // 6. Setup UI
-            document.getElementById('prejoin-screen').classList.add('hidden');
-            document.getElementById('agora-controls').classList.remove('hidden');
-            document.getElementById('btn-reaction-toggle').classList.remove('hidden');
+            document.getElementById('prejoin-screen')?.classList.add('hidden');
+            document.getElementById('agora-controls')?.classList.remove('hidden');
+            document.getElementById('btn-reaction-toggle')?.classList.remove('hidden');
             const btnFs = document.getElementById('btn-fullscreen');
             if (btnFs) btnFs.classList.remove('hidden');
 
@@ -1170,11 +1230,24 @@
 
         } catch (error) {
             console.error("Agora join failed:", error);
+            const errMsg = String(error?.message || '');
+            // Gracefully recover if client was already connecting or connected
+            if (error?.code === 'INVALID_OPERATION' || errMsg.includes('already in connecting/connected state') || client?.connectionState === 'CONNECTED') {
+                console.warn("Recovered from already connecting/connected state:", error);
+                sessionStorage.setItem("agora_joined_" + CHANNEL, "true");
+                document.getElementById('prejoin-screen')?.classList.add('hidden');
+                document.getElementById('agora-controls')?.classList.remove('hidden');
+                return;
+            }
+
+            sessionStorage.removeItem("agora_joined_" + CHANNEL);
             alert("Failed to join class. " + (error.message || "Please check your network connection and try again."));
             if (joinBtn) {
                 joinBtn.innerHTML = 'Try Again';
                 joinBtn.disabled = false;
             }
+        } finally {
+            isJoiningInProgress = false;
         }
     }
 
@@ -1343,7 +1416,9 @@
                 // Create local audio track on-demand
                 if (btn) btn.innerHTML = '<span class="material-symbols-rounded text-xl animate-spin">sync</span>';
                 localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-                await client.publish([localAudioTrack]);
+                if (client && client.connectionState === 'CONNECTED' && !(client.localTracks || []).includes(localAudioTrack)) {
+                    await client.publish([localAudioTrack]);
+                }
                 isAudioMuted = false;
             } else {
                 isAudioMuted = !isAudioMuted;
@@ -1380,7 +1455,9 @@
                 localVideoTrack = await AgoraRTC.createCameraVideoTrack({
                     encoderConfig: { width: 640, height: 480, frameRate: 24 }
                 });
-                await client.publish([localVideoTrack]);
+                if (client && client.connectionState === 'CONNECTED' && !(client.localTracks || []).includes(localVideoTrack)) {
+                    await client.publish([localVideoTrack]);
+                }
                 isVideoMuted = false;
             } else {
                 isVideoMuted = !isVideoMuted;
@@ -1506,6 +1583,7 @@
         try {
             sessionStorage.removeItem("agora_joined_" + CHANNEL);
             localStorage.removeItem("live_start_time_" + CHANNEL);
+            isJoiningInProgress = false;
             if (localAudioTrack) { localAudioTrack.close(); localAudioTrack = null; }
             if (localVideoTrack) { localVideoTrack.close(); localVideoTrack = null; }
             if (localScreenTrack) { localScreenTrack.close(); localScreenTrack = null; }
@@ -2765,8 +2843,18 @@
     // ── Auto-join Agora channel if already joined previously (survives refresh) ──
     if (sessionStorage.getItem("agora_joined_" + CHANNEL) === "true") {
         isAutoJoining = true;
+        const initialJoinBtn = document.getElementById('join-btn');
+        if (initialJoinBtn) {
+            initialJoinBtn.disabled = true;
+            initialJoinBtn.innerHTML = '<span class="material-symbols-rounded animate-spin">autorenew</span> Connecting...';
+        }
         joinAgoraChannel().catch(err => {
             console.warn("Auto-join failed:", err);
+            sessionStorage.removeItem("agora_joined_" + CHANNEL);
+            if (initialJoinBtn) {
+                initialJoinBtn.disabled = false;
+                initialJoinBtn.innerHTML = '<span><%= isModerator ? "Start Live" : "Join Class Now" %></span><span class="material-symbols-rounded text-xl"><%= isModerator ? "podium" : "login" %></span>';
+            }
         }).finally(() => {
             isAutoJoining = false;
         });
