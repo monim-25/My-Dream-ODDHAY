@@ -382,7 +382,7 @@ const sendRegistrationOtpEmail = async (toEmail, userName, otp) => {
 };
 
 /**
- * Login Verification OTP Email (New Device Login)
+ * Login Verification OTP Email
  */
 const sendLoginOtpEmail = async (toEmail, userName, otp) => {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -394,7 +394,7 @@ const sendLoginOtpEmail = async (toEmail, userName, otp) => {
         const mailOptions = {
             from: `"ODDHAY" <${process.env.EMAIL_USER}>`,
             to: toEmail,
-            subject: `${otp} is your ODDHAY login verification code`,
+            subject: `${otp} is your ODDHAY Login verification OTP`,
             html: `
             <!DOCTYPE html>
             <html lang="en">
@@ -421,13 +421,13 @@ const sendLoginOtpEmail = async (toEmail, userName, otp) => {
                         <div class="logo">ODDHAY<span>.</span></div>
                     </div>
                     <div class="body">
-                        <div class="title">New Device Verification</div>
-                        <div class="desc">Hello ${userName || 'there'}, you are signing in from an unrecognized device. Enter this verification code to proceed:</div>
+                        <div class="title">Login Verification</div>
+                        <div class="desc">Hello ${userName || 'there'}, your ODDHAY login verification code is:</div>
                         <div class="otp-box">
                             <div class="otp-code">${otp}</div>
                         </div>
                         <div class="note">
-                            This code is valid for <strong>10 minutes</strong>. Do not share this code with anyone.
+                            Valid for <strong>10 minutes</strong>. Do not share this code with anyone.
                         </div>
                     </div>
                     <div class="footer">

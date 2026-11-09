@@ -43,15 +43,17 @@ function normalizePhone(rawPhone) {
  */
 async function sendSmsOtp(phone, otp, purpose = 'verification') {
     const { local, international } = normalizePhone(phone);
-    const purposeText = purpose === 'registration' 
-        ? 'Account Registration' 
-        : purpose === 'password_reset' 
-        ? 'Password Reset' 
-        : purpose === 'login'
-        ? 'Login'
-        : 'Verification';
-
-    const messageText = `Your ODDHAY ${purposeText} verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`;
+    let messageText;
+    if (purpose === 'login') {
+        messageText = `Your ODDHAY Login verification OTP is: ${otp}. Valid for 10 minutes. Do not share this code.`;
+    } else {
+        const purposeText = purpose === 'registration' 
+            ? 'Account Registration' 
+            : purpose === 'password_reset' 
+            ? 'Password Reset' 
+            : 'Verification';
+        messageText = `Your ODDHAY ${purposeText} verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`;
+    }
 
     // 1. Check Alpha SMS Gateway (Alpha Net: sms.net.bd or alphasms.biz)
     const alphaKey = process.env.ALPHA_SMS_API_KEY || process.env.ALPHASMS_API_KEY || (process.env.SMS_PROVIDER === 'alphasms' || process.env.SMS_PROVIDER === 'alphanet' ? process.env.SMS_API_KEY : null);
