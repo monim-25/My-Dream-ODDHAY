@@ -195,7 +195,8 @@ router.get('/auth/google/callback', async (req, res) => {
                 role: 'student',
                 profilePicture: pictureUrl,
                 profileImage: pictureUrl,
-                isEmailVerified: true
+                isEmailVerified: true,
+                isPasswordSet: false
             });
             await user.save();
         } else {
@@ -321,7 +322,8 @@ router.get('/auth/facebook/callback', async (req, res) => {
                 password: hashedPassword,
                 role: 'student',
                 profilePicture: pictureUrl,
-                isEmailVerified: Boolean(fbProfile.email)
+                isEmailVerified: Boolean(fbProfile.email),
+                isPasswordSet: false
             });
             await user.save();
         } else {
@@ -622,13 +624,16 @@ router.post('/change-password', protect, async (req, res) => {
         const hashed = await bcrypt.hash(newPassword, 10);
 
         req.session.user.passwordResetRequired = false;
+        req.session.user.isPasswordSet = true;
         await User.findByIdAndUpdate(req.session.userId, {
             password: hashed,
+            isPasswordSet: true,
             passwordResetRequired: false
         });
 
         // Update session user
         req.session.user.passwordResetRequired = false;
+        req.session.user.isPasswordSet = true;
 
         // Dynamic Redirection based on role
         const user = req.session.user;
@@ -813,6 +818,7 @@ router.post('/forgot-password/reset-password', async (req, res) => {
         }
 
         user.password = password;
+        user.isPasswordSet = true;
         user.passwordResetOtp = undefined;
         user.passwordResetToken = undefined;
         user.passwordResetExpires = undefined;
@@ -943,6 +949,11 @@ router.post('/login', authLimiter, async (req, res) => {
             return isJson ? res.status(400).json({ success: false, error: err }) : res.render('login', { academicClasses, activeTab: 'login', redirect: redirectParam, error: err });
         }
 
+        if (user.isPasswordSet === false) {
+            user.isPasswordSet = true;
+            await user.save();
+        }
+
         // Check if current device is already recognized & trusted
         const existingDeviceId = getDeviceId(req);
         const isDeviceTrusted = Boolean(
@@ -1029,6 +1040,9 @@ router.post('/login', authLimiter, async (req, res) => {
 
         user.loginCount = (user.loginCount || 0) + 1;
         user.lastActive = new Date();
+        if (user.isPasswordSet === false) {
+            user.isPasswordSet = true;
+        }
         await user.save();
 
         delete req.session.tempQuiz;
@@ -1406,6 +1420,7 @@ router.post('/register', authLimiter, async (req, res) => {
         const userPayload = {
             name: name.trim(),
             password,
+            isPasswordSet: true,
             role: assignedRole,
             loginCount: 1,
             lastActive: new Date(),

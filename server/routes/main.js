@@ -1398,10 +1398,19 @@ router.post('/profile/update', protect, (req, res, next) => {
         }
 
         if (password && password.trim() !== '') {
-            if (!oldPassword) return res.redirect('/profile/edit?error=old_password_required');
-            const isMatch = await user.comparePassword(oldPassword);
-            if (!isMatch) return res.redirect('/profile/edit?error=wrong_old_password');
+            const isPassSet = (user.isPasswordSet !== false);
+            if (isPassSet) {
+                if (!oldPassword) return res.redirect('/profile/edit?error=old_password_required');
+                const isMatch = await user.comparePassword(oldPassword);
+                if (!isMatch) return res.redirect('/profile/edit?error=wrong_old_password');
+            }
             user.password = password;
+            user.isPasswordSet = true;
+            user.passwordResetRequired = false;
+            if (req.session.user) {
+                req.session.user.isPasswordSet = true;
+                req.session.user.passwordResetRequired = false;
+            }
         }
         await user.save();
         req.session.user.name = user.name;
@@ -1538,25 +1547,49 @@ router.get('/profile/security', protect, async (req, res) => {
     }
 });
 
+router.get('/security', protect, (req, res) => res.redirect('/profile/security'));
+
 router.post('/profile/change-password', protect, async (req, res) => {
     try {
         const { oldPassword, password, confirmPassword } = req.body;
-        if (!oldPassword || !password) {
-            return res.redirect('/profile/security?error=fields_required');
+        const user = await User.findById(req.session.userId);
+        if (!user) return res.redirect('/login');
+
+        const isPassSet = (user.isPasswordSet !== false);
+
+        if (isPassSet) {
+            if (!oldPassword || !password) {
+                return res.redirect('/profile/security?error=fields_required');
+            }
+            const isMatch = await user.comparePassword(oldPassword);
+            if (!isMatch) {
+                return res.redirect('/profile/security?error=wrong_old_password');
+            }
+        } else {
+            if (!password) {
+                return res.redirect('/profile/security?error=fields_required');
+            }
         }
+
         if (confirmPassword && password !== confirmPassword) {
             return res.redirect('/profile/security?error=password_mismatch');
         }
 
-        const user = await User.findById(req.session.userId);
-        const isMatch = await user.comparePassword(oldPassword);
-        if (!isMatch) {
-            return res.redirect('/profile/security?error=wrong_old_password');
+        if (password.length < 6) {
+            return res.redirect('/profile/security?error=password_too_short');
         }
 
         user.password = password;
+        user.isPasswordSet = true;
+        user.passwordResetRequired = false;
         await user.save();
-        res.redirect('/profile/security?success=password_changed');
+
+        if (req.session.user) {
+            req.session.user.isPasswordSet = true;
+            req.session.user.passwordResetRequired = false;
+        }
+
+        res.redirect('/profile/security?success=' + (isPassSet ? 'password_changed' : 'password_set'));
     } catch (err) {
         console.error('Change password error:', err);
         res.redirect('/profile/security?error=update_failed');

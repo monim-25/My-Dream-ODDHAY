@@ -22,7 +22,7 @@
                 <% const succ = locals.success || locals.query.success; %>
                 <div id="flash-alert" class="w-full p-3.5 bg-emerald-50 dark:bg-emerald-500/10 border-b border-emerald-200 dark:border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center gap-2 transition-all duration-300">
                     <span class="material-symbols-rounded text-lg flex items-center justify-center leading-none">check_circle</span>
-                    <span><%= succ === 'password_changed' ? 'Password updated successfully!' : (succ === 'device_logged_out' ? 'Device session logged out successfully!' : 'Security settings updated.') %></span>
+                    <span><%= succ === 'password_set' ? 'Password set successfully! You can now log in directly.' : (succ === 'password_changed' ? 'Password updated successfully!' : (succ === 'device_logged_out' ? 'Device session logged out successfully!' : 'Security settings updated.')) %></span>
                 </div>
             <% } %>
 
@@ -33,7 +33,8 @@
                     <span>
                         <%= err === 'wrong_old_password' ? 'The current password entered is incorrect.' : 
                            (err === 'password_mismatch' ? 'New passwords do not match.' : 
-                           (err === 'fields_required' ? 'All password fields are required.' : 'Failed to update security settings.')) %>
+                           (err === 'password_too_short' ? 'Password must be at least 6 characters long.' :
+                           (err === 'fields_required' ? 'All password fields are required.' : 'Failed to update security settings.'))) %>
                     </span>
                 </div>
             <% } %>
@@ -41,38 +42,54 @@
             <!-- Security Content Grid (Attached Flush to Sidebar, Navbar & Sections) -->
             <div class="grid grid-cols-1 lg:grid-cols-2 w-full border-b border-slate-200/80 dark:border-slate-800/80 divide-y lg:divide-y-0 lg:divide-x divide-slate-200/80 dark:divide-slate-800/80 bg-white dark:bg-[#0f172a]">
                 
-                <!-- Left Column: Change Password -->
-                <div class="w-full p-4 sm:p-5 bg-white dark:bg-[#0f172a]">
-                    <div class="flex items-center gap-2 mb-3.5 pb-2.5 border-b border-slate-100 dark:border-slate-800/80">
-                        <span class="material-symbols-rounded text-rose-500 text-lg flex items-center justify-center leading-none">lock</span>
-                        <h3 class="text-xs font-bold text-slate-800 dark:text-white">Change Password</h3>
+                <!-- Left Column: Change or Set Password -->
+                <% const isPassSet = (u.isPasswordSet !== false); %>
+                <div class="w-full p-4 sm:p-5 bg-white dark:bg-[#0f172a]" id="password">
+                    <div class="flex items-center justify-between mb-3.5 pb-2.5 border-b border-slate-100 dark:border-slate-800/80">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-rounded <%= isPassSet ? 'text-rose-500' : 'text-amber-500' %> text-lg flex items-center justify-center leading-none">lock</span>
+                            <h3 class="text-xs font-bold text-slate-800 dark:text-white"><%= isPassSet ? 'Change Password' : 'Set Account Password' %></h3>
+                        </div>
+                        <% if (!isPassSet) { %>
+                            <span class="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] font-bold border border-amber-500/20">Google / Social Account</span>
+                        <% } %>
                     </div>
 
+                    <% if (!isPassSet) { %>
+                        <div class="p-3 mb-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/30 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2">
+                            <span class="material-symbols-rounded text-amber-600 dark:text-amber-400 text-base shrink-0 leading-none">info</span>
+                            <span>You signed in with Google. Set a password below to enable direct login with your email or phone number.</span>
+                        </div>
+                    <% } %>
+
                     <form action="/profile/change-password" method="POST" class="space-y-3">
+                        <% if (isPassSet) { %>
                         <div>
                             <label class="block text-[11px] font-bold text-slate-400 mb-1">Current Password</label>
                             <input type="password" name="oldPassword" required
                                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
                                 placeholder="Enter current password">
                         </div>
+                        <% } %>
 
                         <div>
-                            <label class="block text-[11px] font-bold text-slate-400 mb-1">New Password</label>
-                            <input type="password" name="password" required
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1"><%= isPassSet ? 'New Password' : 'Password' %></label>
+                            <input type="password" name="password" minlength="6" required
                                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
-                                placeholder="Enter new password">
+                                placeholder="At least 6 characters">
                         </div>
 
                         <div>
-                            <label class="block text-[11px] font-bold text-slate-400 mb-1">Confirm New Password</label>
-                            <input type="password" name="confirmPassword" required
+                            <label class="block text-[11px] font-bold text-slate-400 mb-1"><%= isPassSet ? 'Confirm New Password' : 'Confirm Password' %></label>
+                            <input type="password" name="confirmPassword" minlength="6" required
                                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 focus:border-primary text-xs font-semibold text-slate-800 dark:text-white rounded-lg outline-none transition-colors"
-                                placeholder="Re-enter new password">
+                                placeholder="Re-enter password">
                         </div>
 
                         <div class="pt-2 flex justify-end">
-                            <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-xs shadow-xs transition-all flex items-center gap-1.5">
-                                <span class="material-symbols-rounded text-base flex items-center justify-center leading-none">key</span> Update Password
+                            <button type="submit" class="px-4 py-2 <%= isPassSet ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700' %> text-white rounded-lg font-bold text-xs shadow-xs transition-all flex items-center gap-1.5 cursor-pointer">
+                                <span class="material-symbols-rounded text-base flex items-center justify-center leading-none">key</span>
+                                <span><%= isPassSet ? 'Update Password' : 'Set Password' %></span>
                             </button>
                         </div>
                     </form>
