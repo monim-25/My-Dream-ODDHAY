@@ -3,7 +3,18 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { connectDB, protect, User } = require('../config');
-const { sendRegistrationOtpEmail, sendPasswordResetOtpEmail, sendPasswordResetEmail, sendWelcomeEmail } = require('../services/emailService');
+const { sendLoginOtpEmail, sendRegistrationOtpEmail, sendPasswordResetOtpEmail, sendPasswordResetEmail, sendWelcomeEmail } = require('../services/emailService');
+
+// Helper to retrieve device ID from cookies
+function getDeviceId(req) {
+    if (req.cookies && req.cookies.oddhay_device_id) {
+        return req.cookies.oddhay_device_id;
+    }
+    const cookieHeader = req.headers.cookie;
+    if (!cookieHeader) return null;
+    const match = cookieHeader.match(/(?:^|;\s*)oddhay_device_id=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+}
 const { sendSmsOtp } = require('../services/smsService');
 
 const rateLimit = require('express-rate-limit');
@@ -193,6 +204,25 @@ router.get('/auth/google/callback', async (req, res) => {
             await user.save();
         }
 
+
+        // Trust device for OAuth login
+        const oauthDeviceId = getDeviceId(req) || crypto.randomBytes(24).toString('hex');
+        if (!Array.isArray(user.trustedDevices)) user.trustedDevices = [];
+        if (!user.trustedDevices.some(d => d.deviceToken === oauthDeviceId)) {
+            user.trustedDevices.push({
+                deviceToken: oauthDeviceId,
+                userAgent: req.headers['user-agent'] || '',
+                verifiedAt: new Date()
+            });
+            await user.save();
+        }
+        res.cookie('oddhay_device_id', oauthDeviceId, {
+            maxAge: 365 * 24 * 60 * 60 * 1000,
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'
+        });
+
         // Establish session
         req.session.userId = user._id.toString();
         req.session.user = user.toObject();
@@ -289,6 +319,24 @@ router.get('/auth/facebook/callback', async (req, res) => {
             }
             await user.save();
         }
+
+        // Trust device for OAuth login
+        const fbDeviceId = getDeviceId(req) || crypto.randomBytes(24).toString('hex');
+        if (!Array.isArray(user.trustedDevices)) user.trustedDevices = [];
+        if (!user.trustedDevices.some(d => d.deviceToken === fbDeviceId)) {
+            user.trustedDevices.push({
+                deviceToken: fbDeviceId,
+                userAgent: req.headers['user-agent'] || '',
+                verifiedAt: new Date()
+            });
+            await user.save();
+        }
+        res.cookie('oddhay_device_id', fbDeviceId, {
+            maxAge: 365 * 24 * 60 * 60 * 1000,
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'
+        });
 
         // Establish session
         req.session.userId = user._id.toString();
@@ -624,76 +672,304 @@ router.post('/reset-password/:token', async (req, res) => {
 
 // POST Login
 router.post('/login', authLimiter, async (req, res) => {
+    const isJson = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.is('application/json');
     try {
         await connectDB();
         const academicClasses = await getAcademicClasses();
         const redirectParam = (req.body.redirect && req.body.redirect.startsWith('/') && !req.body.redirect.startsWith('//')) ? req.body.redirect : '';
-        const rawIdentifier = (req.body.email || '').trim();
+        const rawIdentifier = (req.body.email || req.body.identifier || '').trim();
         const password = req.body.password;
-        if (!rawIdentifier || !password) return res.render('login', { academicClasses, activeTab: 'login', redirect: redirectParam, error: 'ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।' });
+        if (!rawIdentifier || !password) {
+            const err = 'ইমেইল/ফোন এবং পাসওয়ার্ড প্রদান করুন।';
+            return isJson ? res.status(400).json({ success: false, error: err }) : res.render('login', { academicClasses, activeTab: 'login', redirect: redirectParam, error: err });
+        }
 
         const { email, phone } = normalizeIdentifier(rawIdentifier);
         const query = email ? { email } : { phone };
         const user = await User.findOne(query);
-        if (!user) return res.render('login', { academicClasses, activeTab: 'login', redirect: redirectParam, error: 'ইমেইল/ফোন বা পাসওয়ার্ড ভুল।' });
+        if (!user) {
+            const err = 'ইমেইল/ফোন বা পাসওয়ার্ড ভুল।';
+            return isJson ? res.status(400).json({ success: false, error: err }) : res.render('login', { academicClasses, activeTab: 'login', redirect: redirectParam, error: err });
+        }
 
         const isMatch = await user.comparePassword(password);
-        if (!isMatch) return res.render('login', { academicClasses, activeTab: 'login', redirect: redirectParam, error: 'ইমেইল/ফোন বা পাসওয়ার্ড ভুল।' });
+        if (!isMatch) {
+            const err = 'ইমেইল/ফোন বা পাসওয়ার্ড ভুল।';
+            return isJson ? res.status(400).json({ success: false, error: err }) : res.render('login', { academicClasses, activeTab: 'login', redirect: redirectParam, error: err });
+        }
+
+        // Check if current device is already recognized & trusted
+        const existingDeviceId = getDeviceId(req);
+        const isDeviceTrusted = Boolean(
+            existingDeviceId &&
+            Array.isArray(user.trustedDevices) &&
+            user.trustedDevices.some(d => d.deviceToken === existingDeviceId)
+        );
+
+        // If device is NOT recognized (new device / first time on this device): Require OTP!
+        if (!isDeviceTrusted) {
+            const otp = Math.floor(100000 + Math.random() * 900000).toString();
+            const deviceIdToTrust = existingDeviceId || crypto.randomBytes(24).toString('hex');
+
+            req.session.login2fa = {
+                userId: user._id.toString(),
+                otp,
+                deviceId: deviceIdToTrust,
+                expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes
+                redirect: redirectParam,
+                remember: Boolean(req.body.remember)
+            };
+
+            // Mask destination for user display
+            let maskedTarget = '';
+            if (user.phone) {
+                const p = user.phone;
+                maskedTarget = p.length >= 10 ? p.slice(0, 3) + '****' + p.slice(-4) : p;
+                try {
+                    await sendSmsOtp(user.phone, otp, 'login');
+                } catch (sErr) {
+                    console.error('[Login 2FA SMS Error]:', sErr.message);
+                }
+            } else if (user.email) {
+                const [uname, domain] = user.email.split('@');
+                maskedTarget = (uname.length > 2 ? uname.slice(0, 2) + '***' : uname + '***') + '@' + domain;
+                try {
+                    await sendLoginOtpEmail(user.email, user.name, otp);
+                } catch (mErr) {
+                    console.error('[Login 2FA Email Error]:', mErr.message);
+                }
+            }
+
+            console.log(`[Login 2FA OTP] Dispatched code for ${user.phone || user.email}: ${otp}`);
+
+            if (isJson) {
+                return res.json({
+                    success: true,
+                    requires2fa: true,
+                    maskedTarget,
+                    channel: user.phone ? 'phone' : 'email'
+                });
+            }
+
+            return res.render('login', {
+                academicClasses,
+                activeTab: 'login',
+                redirect: redirectParam,
+                requires2fa: true,
+                maskedTarget,
+                error: null
+            });
+        }
+
+        // Device is already trusted! Proceed with standard sign-in
+        res.cookie('oddhay_device_id', existingDeviceId, {
+            maxAge: 365 * 24 * 60 * 60 * 1000,
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'
+        });
 
         // Super Admin auto-promotion & role normalization
         const superEmail = getSuperAdminEmail();
         const userEmail = (user.email || '').toLowerCase().trim();
         if (userEmail === superEmail) {
-            // This is the superadmin — always enforce superadmin role
             if (user.role !== 'superadmin') {
                 user.role = 'superadmin';
                 await user.save();
             }
         } else if (user.role === 'superadmin') {
-            // Someone else has superadmin role — demote them
             user.role = 'admin';
             await user.save();
         }
 
         user.loginCount = (user.loginCount || 0) + 1;
+        user.lastActive = new Date();
         await user.save();
 
         delete req.session.tempQuiz;
         req.session.user = user.toObject();
         req.session.userId = user._id.toString();
-        req.session.isFirstLogin = true;
+        req.session.isFirstLogin = false;
 
-        // Update lastActive immediately on login
-        User.updateOne({ _id: user._id }, { $set: { lastActive: new Date() } }).catch(() => {});
+        let redirectUrl = '/dashboard';
+        if (user.passwordResetRequired) redirectUrl = '/change-password';
+        else if (userEmail === superEmail || user.role === 'superadmin') redirectUrl = '/superadmin';
+        else if (user.role === 'admin' || user.role === 'content_manager' || user.role === 'support' || user.role === 'moderator') {
+            if (user.role === 'admin') {
+                const hasAdminProfile = Boolean(user.isProfileSetupComplete || (user.schoolName && user.collegeName && user.universityName && user.presentAddress && user.permanentAddress));
+                redirectUrl = hasAdminProfile ? '/admin' : '/admin/onboarding-profile';
+            } else {
+                redirectUrl = '/admin';
+            }
+        } else if (user.role === 'teacher') {
+            const needsPass = user.passwordResetRequired || user.isPasswordSet === false;
+            if (needsPass) redirectUrl = '/teacher/setup-password';
+            else {
+                const hasAcademics = Boolean(user.isProfileSetupComplete || (user.schoolName && user.universityName && user.presentAddress));
+                redirectUrl = hasAcademics ? '/teacher' : '/teacher/onboarding-profile';
+            }
+        } else if (user.role === 'parent') redirectUrl = '/parent/dashboard';
+        else if (redirectParam) redirectUrl = redirectParam;
 
         req.session.save((err) => {
-            if (err) return res.render('login', { error: `Session Error: ${err.message}` });
-            // Force password change if admin reset it
-            if (user.passwordResetRequired) return res.redirect('/change-password');
-            
-            if (userEmail === superEmail) return res.redirect('/superadmin');
-            if (user.role === 'superadmin') return res.redirect('/superadmin');
-            if (user.role === 'admin' || user.role === 'content_manager' || user.role === 'support' || user.role === 'moderator') {
-                if (user.role === 'admin') {
-                    const hasAdminProfile = Boolean(user.isProfileSetupComplete || (user.schoolName && user.collegeName && user.universityName && user.presentAddress && user.permanentAddress));
-                    if (!hasAdminProfile) return res.redirect('/admin/onboarding-profile');
-                }
-                return res.redirect('/admin');
+            if (err) {
+                return isJson ? res.status(500).json({ success: false, error: `Session Error: ${err.message}` }) : res.render('login', { error: `Session Error: ${err.message}` });
             }
-            if (user.role === 'teacher') {
-                const needsPass = user.passwordResetRequired || user.isPasswordSet === false;
-                if (needsPass) return res.redirect('/teacher/setup-password');
-                const hasAcademics = Boolean(user.isProfileSetupComplete || (user.schoolName && user.universityName && user.presentAddress));
-                if (!hasAcademics) return res.redirect('/teacher/onboarding-profile');
-                return res.redirect('/teacher');
+            if (isJson) {
+                return res.json({ success: true, requires2fa: false, redirect: redirectUrl });
             }
-            if (user.role === 'parent') return res.redirect('/parent/dashboard');
-            if (redirectParam) return res.redirect(redirectParam);
-            res.redirect('/dashboard');
+            return res.redirect(redirectUrl);
         });
     } catch (err) {
         console.error('Login Error:', err);
+        if (isJson) return res.status(500).json({ success: false, error: `লগইন ব্যর্থ হয়েছে: ${err.message}` });
         res.render('login', { error: `লগইন ব্যর্থ হয়েছে: ${err.message}` });
+    }
+});
+
+// POST Verify Login OTP (New Device Authorization)
+router.post('/login/verify-otp', async (req, res) => {
+    try {
+        await connectDB();
+        const { otp } = req.body;
+        const login2fa = req.session.login2fa;
+
+        if (!login2fa || !login2fa.userId || !login2fa.otp) {
+            return res.status(400).json({
+                success: false,
+                error: 'লগইন ভেরিফিকেশন সেশনের মেয়াদ শেষ হয়েছে। পুনরায় লগইন করার চেষ্টা করুন।'
+            });
+        }
+
+        if (login2fa.expiresAt < Date.now()) {
+            return res.status(400).json({
+                success: false,
+                error: 'ওটিপির মেয়াদ শেষ হয়েছে (Expired)। দয়া করে নতুন কোড পাঠান।'
+            });
+        }
+
+        const inputOtp = String(otp || '').trim();
+        if (inputOtp !== String(login2fa.otp).trim()) {
+            return res.status(400).json({
+                success: false,
+                error: 'ভুল ওটিপি কোড। পুনরায় সঠিক কোডটি দিন।'
+            });
+        }
+
+        const user = await User.findById(login2fa.userId);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'ইউজার অ্যাকাউন্ট পাওয়া যায়নি।' });
+        }
+
+        // Trust this device
+        const deviceId = login2fa.deviceId || crypto.randomBytes(24).toString('hex');
+        if (!Array.isArray(user.trustedDevices)) {
+            user.trustedDevices = [];
+        }
+
+        const devIdx = user.trustedDevices.findIndex(d => d.deviceToken === deviceId);
+        if (devIdx >= 0) {
+            user.trustedDevices[devIdx].verifiedAt = new Date();
+            user.trustedDevices[devIdx].userAgent = req.headers['user-agent'] || '';
+        } else {
+            user.trustedDevices.push({
+                deviceToken: deviceId,
+                userAgent: req.headers['user-agent'] || '',
+                verifiedAt: new Date()
+            });
+        }
+
+        // Set persistent 1-year device cookie
+        res.cookie('oddhay_device_id', deviceId, {
+            maxAge: 365 * 24 * 60 * 60 * 1000,
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'
+        });
+
+        // Super Admin auto-promotion & role normalization
+        const superEmail = getSuperAdminEmail();
+        const userEmail = (user.email || '').toLowerCase().trim();
+        if (userEmail === superEmail) {
+            if (user.role !== 'superadmin') {
+                user.role = 'superadmin';
+            }
+        } else if (user.role === 'superadmin') {
+            user.role = 'admin';
+        }
+
+        user.loginCount = (user.loginCount || 0) + 1;
+        user.lastActive = new Date();
+        await user.save();
+
+        const redirectParam = login2fa.redirect || '';
+        delete req.session.login2fa;
+        delete req.session.tempQuiz;
+
+        req.session.user = user.toObject();
+        req.session.userId = user._id.toString();
+        req.session.isFirstLogin = false;
+
+        let redirectUrl = '/dashboard';
+        if (user.passwordResetRequired) redirectUrl = '/change-password';
+        else if (userEmail === superEmail || user.role === 'superadmin') redirectUrl = '/superadmin';
+        else if (user.role === 'admin' || user.role === 'content_manager' || user.role === 'support' || user.role === 'moderator') {
+            if (user.role === 'admin') {
+                const hasAdminProfile = Boolean(user.isProfileSetupComplete || (user.schoolName && user.collegeName && user.universityName && user.presentAddress && user.permanentAddress));
+                redirectUrl = hasAdminProfile ? '/admin' : '/admin/onboarding-profile';
+            } else {
+                redirectUrl = '/admin';
+            }
+        } else if (user.role === 'teacher') {
+            const needsPass = user.passwordResetRequired || user.isPasswordSet === false;
+            if (needsPass) redirectUrl = '/teacher/setup-password';
+            else {
+                const hasAcademics = Boolean(user.isProfileSetupComplete || (user.schoolName && user.universityName && user.presentAddress));
+                redirectUrl = hasAcademics ? '/teacher' : '/teacher/onboarding-profile';
+            }
+        } else if (user.role === 'parent') redirectUrl = '/parent/dashboard';
+        else if (redirectParam) redirectUrl = redirectParam;
+
+        req.session.save((err) => {
+            if (err) return res.status(500).json({ success: false, error: err.message });
+            return res.json({ success: true, redirect: redirectUrl });
+        });
+    } catch (err) {
+        console.error('[Verify Login OTP Error]:', err);
+        return res.status(500).json({ success: false, error: `সার্ভার ত্রুটি: ${err.message}` });
+    }
+});
+
+// POST Resend Login OTP
+router.post('/login/resend-otp', forgotLimiter, async (req, res) => {
+    try {
+        await connectDB();
+        const login2fa = req.session.login2fa;
+        if (!login2fa || !login2fa.userId) {
+            return res.status(400).json({ success: false, error: 'লগইন সেশন পাওয়া যায়নি। অনুগ্রহ করে পুনরায় লগইন করুন।' });
+        }
+
+        const user = await User.findById(login2fa.userId);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'ইউজার পাওয়া যায়নি।' });
+        }
+
+        const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+        login2fa.otp = newOtp;
+        login2fa.expiresAt = Date.now() + 10 * 60 * 1000;
+        req.session.login2fa = login2fa;
+
+        if (user.phone) {
+            await sendSmsOtp(user.phone, newOtp, 'login');
+        } else if (user.email) {
+            await sendLoginOtpEmail(user.email, user.name, newOtp);
+        }
+
+        console.log(`[Resent Login OTP] Sent code for ${user.phone || user.email}: ${newOtp}`);
+        return res.json({ success: true, message: 'নতুন ভেরিফিকেশন কোড পাঠানো হয়েছে।' });
+    } catch (err) {
+        console.error('[Resend Login OTP Error]:', err);
+        return res.status(500).json({ success: false, error: err.message });
     }
 });
 
@@ -881,12 +1157,18 @@ router.post('/register', authLimiter, async (req, res) => {
             assignedRole = 'superadmin';
         }
 
+        const initialDeviceId = getDeviceId(req) || crypto.randomBytes(24).toString('hex');
         const userPayload = {
             name: name.trim(),
             password,
             role: assignedRole,
             loginCount: 1,
-            lastActive: new Date()
+            lastActive: new Date(),
+            trustedDevices: [{
+                deviceToken: initialDeviceId,
+                userAgent: req.headers['user-agent'] || '',
+                verifiedAt: new Date()
+            }]
         };
 
         if (email) userPayload.email = email.toLowerCase().trim();
@@ -923,6 +1205,14 @@ router.post('/register', authLimiter, async (req, res) => {
         // Clear registration OTP session
         delete req.session.regOtp;
         delete req.session.tempQuiz;
+
+        // Set persistent device cookie for newly registered user
+        res.cookie('oddhay_device_id', initialDeviceId, {
+            maxAge: 365 * 24 * 60 * 60 * 1000,
+            httpOnly: true,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production'
+        });
 
         // Automatically log in user and establish session
         req.session.userId = newUser._id.toString();

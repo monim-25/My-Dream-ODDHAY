@@ -69,7 +69,7 @@
                 </div>
 
                 <!-- Segmented Tabs: Sign In vs Register -->
-                <div class="flex p-1 bg-slate-100 dark:bg-slate-900/90 rounded-xl mb-3.5 sm:mb-4.5 border border-slate-200/80 dark:border-slate-800/80">
+                <div id="authTabsWrapper" class="flex p-1 bg-slate-100 dark:bg-slate-900/90 rounded-xl mb-3.5 sm:mb-4.5 border border-slate-200/80 dark:border-slate-800/80">
                     <button type="button" id="tabBtnLogin" onclick="switchAuthTab('login')"
                         class="flex-1 py-2 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-1.5 shadow-xs bg-[#18a957] text-white">
                         <span class="material-symbols-outlined text-base">login</span>
@@ -94,7 +94,9 @@
 
                 <!-- ================= SIGN IN SECTION ================= -->
                 <div id="loginSection" class="transition-all duration-200">
-                    <h1 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white tracking-tight mb-3 sm:mb-3.5 text-center">
+                    <!-- Standard Sign In Form Fields -->
+                    <div id="loginFieldsSection">
+                        <h1 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white tracking-tight mb-3 sm:mb-3.5 text-center">
                         Sign In
                     </h1>
 
@@ -165,6 +167,59 @@
                                 Sign up
                             </a>
                         </p>
+                    </div>
+                    </div>
+
+                    <!-- New Device Login OTP Verification Screen (2FA) -->
+                    <div id="loginOtpSection" class="hidden space-y-3.5 transition-all duration-200">
+                        <div class="text-center">
+                            <div class="inline-flex items-center justify-center size-11 rounded-2xl bg-[#18a957]/10 text-[#18a957] mb-2">
+                                <span class="material-symbols-outlined text-2xl">devices</span>
+                            </div>
+                            <h2 class="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white tracking-tight mb-1">
+                                Device Verification
+                            </h2>
+                            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed px-1">
+                                Enter the 6-digit code sent to your <span id="loginOtpChannel">number</span> <strong id="loginOtpTarget" class="text-slate-800 dark:text-white font-mono"></strong> to authorize this device.
+                            </p>
+                        </div>
+
+                        <form id="loginOtpForm" class="space-y-3 sm:space-y-3.5">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 ml-0.5 text-center">
+                                    6-Digit Verification Code
+                                </label>
+                                <div class="relative">
+                                    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">
+                                        pin
+                                    </span>
+                                    <input type="text" id="loginOtpInput" placeholder="••••••" maxlength="6" inputmode="numeric" pattern="[0-9]*"
+                                        class="w-full pl-10 pr-3.5 h-11 rounded-xl bg-slate-50/70 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-[#18a957] focus:border-[#18a957] text-slate-900 dark:text-white font-mono text-center text-lg tracking-[0.4em] placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400 transition-all outline-none"
+                                        autocomplete="one-time-code" required>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center justify-between text-xs pt-0.5 text-slate-500 dark:text-slate-400">
+                                <span>Didn't receive code?</span>
+                                <button type="button" id="loginResendOtpBtn" onclick="resendLoginOtp()" disabled
+                                    class="text-slate-400 font-medium transition-colors disabled:cursor-not-allowed">
+                                    <span>Resend OTP</span>
+                                    <span id="loginCountdownText" class="ml-1 text-slate-400 font-mono">(60s)</span>
+                                </button>
+                            </div>
+
+                            <button type="submit" id="loginOtpSubmitBtn"
+                                class="w-full h-11 rounded-xl bg-[#18a957] hover:bg-[#148e49] text-white font-bold text-base flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] transition-all cursor-pointer">
+                                <span id="loginOtpBtnText">Verify & Continue</span>
+                                <span id="loginOtpBtnIcon" class="material-symbols-outlined text-lg">verified_user</span>
+                            </button>
+
+                            <button type="button" onclick="cancelLoginOtp()"
+                                class="w-full h-10 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                                <span class="material-symbols-outlined text-base">arrow_back</span>
+                                <span>Back to Sign In</span>
+                            </button>
+                        </form>
                     </div>
                 </div>
 
@@ -375,7 +430,7 @@
             </div>
 
             <!-- Social Login Options: Downside the Form (Minimal Gap) -->
-            <div class="mt-2 px-0.5">
+            <div id="socialLoginWrapper" class="mt-2 px-0.5">
                 <div class="relative my-1.5">
                     <div class="absolute inset-0 flex items-center">
                         <div class="w-full border-t border-slate-200/80 dark:border-slate-800"></div>
@@ -519,19 +574,273 @@
             }, 3500);
         }
 
-        // Login Form Spinner on Submit
+        // Login & Device 2FA OTP Logic
+        let loginOtpCountdown = 60;
+        let loginOtpTimer = null;
+
+        function showLoginOtpView(maskedTarget, channel) {
+            const loginFields = document.getElementById('loginFieldsSection');
+            const loginOtpSection = document.getElementById('loginOtpSection');
+            const targetSpan = document.getElementById('loginOtpTarget');
+            const channelSpan = document.getElementById('loginOtpChannel');
+            const otpInput = document.getElementById('loginOtpInput');
+            const socialWrapper = document.getElementById('socialLoginWrapper');
+            const authTabs = document.getElementById('authTabsWrapper');
+
+            if (loginFields) loginFields.classList.add('hidden');
+            if (socialWrapper) socialWrapper.classList.add('hidden');
+            if (authTabs) authTabs.classList.add('hidden');
+
+            if (loginOtpSection) loginOtpSection.classList.remove('hidden');
+            if (targetSpan) targetSpan.textContent = maskedTarget || '';
+            if (channelSpan) channelSpan.textContent = channel === 'email' ? 'email' : 'mobile number';
+
+            if (otpInput) {
+                otpInput.value = '';
+                setTimeout(() => otpInput.focus(), 150);
+            }
+
+            startLoginOtpCountdown();
+            showToast('Verification code sent to ' + maskedTarget, 'success');
+        }
+
+        function cancelLoginOtp() {
+            if (loginOtpTimer) clearInterval(loginOtpTimer);
+            const loginFields = document.getElementById('loginFieldsSection');
+            const loginOtpSection = document.getElementById('loginOtpSection');
+            const socialWrapper = document.getElementById('socialLoginWrapper');
+            const authTabs = document.getElementById('authTabsWrapper');
+            const otpInput = document.getElementById('loginOtpInput');
+
+            if (loginOtpSection) loginOtpSection.classList.add('hidden');
+            if (loginFields) loginFields.classList.remove('hidden');
+            if (socialWrapper) socialWrapper.classList.remove('hidden');
+            if (authTabs) authTabs.classList.remove('hidden');
+
+            if (otpInput) otpInput.value = '';
+        }
+
+        function startLoginOtpCountdown() {
+            if (loginOtpTimer) clearInterval(loginOtpTimer);
+            loginOtpCountdown = 60;
+            const btn = document.getElementById('loginResendOtpBtn');
+            const countText = document.getElementById('loginCountdownText');
+
+            if (btn) {
+                btn.disabled = true;
+                btn.className = "text-slate-400 font-medium transition-colors disabled:cursor-not-allowed";
+            }
+            if (countText) countText.textContent = '(' + loginOtpCountdown + 's)';
+
+            loginOtpTimer = setInterval(() => {
+                loginOtpCountdown--;
+                if (loginOtpCountdown <= 0) {
+                    clearInterval(loginOtpTimer);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.className = "text-[#18a957] font-semibold hover:underline cursor-pointer";
+                    }
+                    if (countText) countText.textContent = '';
+                } else {
+                    if (countText) countText.textContent = '(' + loginOtpCountdown + 's)';
+                }
+            }, 1000);
+        }
+
+        async function resendLoginOtp() {
+            const btn = document.getElementById('loginResendOtpBtn');
+            if (btn) btn.disabled = true;
+
+            try {
+                const res = await fetch('/login/resend-otp', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message || 'New OTP sent successfully!', 'success');
+                    startLoginOtpCountdown();
+                } else {
+                    showToast(data.error || 'Failed to resend code.');
+                    if (btn) btn.disabled = false;
+                }
+            } catch (err) {
+                showToast('Network error while resending code.');
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        // Login Form Submit (AJAX with Device Verification)
         const loginForm = document.getElementById('loginForm');
         if (loginForm) {
-            loginForm.addEventListener('submit', function() {
+            loginForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
                 const btn = document.getElementById('loginSubmitBtn');
                 const text = document.getElementById('loginBtnText');
                 const icon = document.getElementById('loginBtnIcon');
-                if (btn && text) {
-                    btn.disabled = true;
-                    btn.classList.add('opacity-80', 'cursor-not-allowed');
-                    text.textContent = 'Signing in...';
-                    if (icon) icon.textContent = 'sync';
-                    if (icon) icon.classList.add('animate-spin');
+                const emailInput = document.getElementById('loginEmail');
+                const passwordInput = document.getElementById('loginPasswordInput');
+                const rememberInput = loginForm.querySelector('input[name="remember"]');
+                const redirectInput = loginForm.querySelector('input[name="redirect"]');
+
+                const identifier = emailInput ? emailInput.value.trim() : '';
+                const password = passwordInput ? passwordInput.value : '';
+
+                if (!identifier || !password) {
+                    showToast('Please enter your email/phone and password.');
+                    return;
+                }
+
+                btn.disabled = true;
+                btn.classList.add('opacity-80', 'cursor-not-allowed');
+                text.textContent = 'Signing in...';
+                if (icon) {
+                    icon.textContent = 'sync';
+                    icon.classList.add('animate-spin');
+                }
+
+                try {
+                    const res = await fetch('/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            email: identifier,
+                            password: password,
+                            remember: rememberInput ? rememberInput.checked : false,
+                            redirect: redirectInput ? redirectInput.value : ''
+                        })
+                    });
+
+                    const data = await res.json();
+
+                    if (!res.ok || !data.success) {
+                        showToast(data.error || 'Invalid email/phone or password.');
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-80', 'cursor-not-allowed');
+                        text.textContent = 'Sign In';
+                        if (icon) {
+                            icon.textContent = 'login';
+                            icon.classList.remove('animate-spin');
+                        }
+                        return;
+                    }
+
+                    // Check if 2FA verification is required for this new device
+                    if (data.requires2fa) {
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-80', 'cursor-not-allowed');
+                        text.textContent = 'Sign In';
+                        if (icon) {
+                            icon.textContent = 'login';
+                            icon.classList.remove('animate-spin');
+                        }
+
+                        showLoginOtpView(data.maskedTarget, data.channel);
+                        return;
+                    }
+
+                    // Device already trusted: direct sign-in
+                    showToast('Signed in successfully! Redirecting...', 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect || '/dashboard';
+                    }, 350);
+
+                } catch (err) {
+                    console.error('Login submit error:', err);
+                    showToast('Network error. Please try again.');
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-80', 'cursor-not-allowed');
+                    text.textContent = 'Sign In';
+                    if (icon) {
+                        icon.textContent = 'login';
+                        icon.classList.remove('animate-spin');
+                    }
+                }
+            });
+        }
+
+        // Login OTP Form Submit
+        const loginOtpForm = document.getElementById('loginOtpForm');
+        if (loginOtpForm) {
+            loginOtpForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const otpInput = document.getElementById('loginOtpInput');
+                const otpVal = otpInput ? otpInput.value.trim() : '';
+
+                if (!otpVal || otpVal.length !== 6) {
+                    showToast('Please enter the 6-digit verification code.');
+                    if (otpInput) otpInput.focus();
+                    return;
+                }
+
+                const btn = document.getElementById('loginOtpSubmitBtn');
+                const text = document.getElementById('loginOtpBtnText');
+                const icon = document.getElementById('loginOtpBtnIcon');
+
+                btn.disabled = true;
+                btn.classList.add('opacity-80', 'cursor-not-allowed');
+                text.textContent = 'Verifying...';
+                if (icon) {
+                    icon.textContent = 'sync';
+                    icon.classList.add('animate-spin');
+                }
+
+                try {
+                    const res = await fetch('/login/verify-otp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        body: JSON.stringify({ otp: otpVal })
+                    });
+
+                    const data = await res.json();
+
+                    if (!res.ok || !data.success) {
+                        showToast(data.error || 'Invalid verification code.');
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-80', 'cursor-not-allowed');
+                        text.textContent = 'Verify & Continue';
+                        if (icon) {
+                            icon.textContent = 'verified_user';
+                            icon.classList.remove('animate-spin');
+                        }
+                        if (otpInput) {
+                            otpInput.select();
+                            otpInput.focus();
+                        }
+                        return;
+                    }
+
+                    showToast('Device verified! Signing in...', 'success');
+                    setTimeout(() => {
+                        window.location.href = data.redirect || '/dashboard';
+                    }, 350);
+
+                } catch (err) {
+                    console.error('Login OTP verify error:', err);
+                    showToast('Network error. Please try again.');
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-80', 'cursor-not-allowed');
+                    text.textContent = 'Verify & Continue';
+                    if (icon) {
+                        icon.textContent = 'verified_user';
+                        icon.classList.remove('animate-spin');
+                    }
+                }
+            });
+        }
+
+        // Auto submit login OTP on typing 6 digits
+        const loginOtpInputField = document.getElementById('loginOtpInput');
+        if (loginOtpInputField) {
+            loginOtpInputField.addEventListener('input', function() {
+                this.value = this.value.replace(/[^0-9]/g, '');
+                if (this.value.length === 6) {
+                    if (loginOtpForm) {
+                        loginOtpForm.dispatchEvent(new Event('submit', { cancelable: true }));
+                    }
                 }
             });
         }

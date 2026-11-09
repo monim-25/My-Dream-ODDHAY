@@ -128,6 +128,12 @@ const userSchema = new mongoose.Schema({
         lastActive: { type: Date, default: Date.now }
     }],
 
+    trustedDevices: [{
+        deviceToken: { type: String, required: true },
+        userAgent: { type: String },
+        verifiedAt: { type: Date, default: Date.now }
+    }],
+
     blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 
     socialLinks: {

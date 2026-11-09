@@ -47,6 +47,8 @@ async function sendSmsOtp(phone, otp, purpose = 'verification') {
         ? 'Account Registration' 
         : purpose === 'password_reset' 
         ? 'Password Reset' 
+        : purpose === 'login'
+        ? 'Login'
         : 'Verification';
 
     const messageText = `Your ODDHAY ${purposeText} verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`;
