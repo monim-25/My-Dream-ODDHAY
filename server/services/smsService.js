@@ -14,22 +14,24 @@ const http = require('http');
 function normalizePhone(rawPhone) {
     if (!rawPhone) return { local: '', international: '' };
     const bengaliDigits = { '০': '0', '১': '1', '২': '2', '৩': '3', '৪': '4', '৫': '5', '৬': '6', '৭': '7', '৮': '8', '৯': '9' };
-    let clean = String(rawPhone).replace(/[০-৯]/g, d => bengaliDigits[d]).replace(/[\s\-\+\(\)]/g, '');
-    if (clean.startsWith('880')) {
-        return {
-            local: '0' + clean.slice(3),
-            international: clean
-        };
+    let clean = String(rawPhone).replace(/[০-৯]/g, d => bengaliDigits[d]).replace(/[\s\-\+\(\)\.]/g, '');
+    
+    if (clean.startsWith('00880')) {
+        clean = '880' + clean.slice(5);
+    } else if (clean.startsWith('8800')) {
+        clean = '880' + clean.slice(4);
+    } else if (clean.startsWith('0')) {
+        clean = '880' + clean.slice(1);
+    } else if (/^1[3-9]\d{8}$/.test(clean)) {
+        clean = '880' + clean;
+    } else if (!clean.startsWith('880')) {
+        clean = '880' + clean;
     }
-    if (clean.startsWith('0')) {
-        return {
-            local: clean,
-            international: '88' + clean
-        };
-    }
+
+    const local = '0' + clean.slice(3);
     return {
-        local: '0' + clean,
-        international: '880' + clean
+        local,
+        international: clean
     };
 }
 

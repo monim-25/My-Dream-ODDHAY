@@ -45,10 +45,16 @@ function normalizeIdentifier(rawId) {
     const bengaliDigits = {'০':'0','১':'1','২':'2','৩':'3','৪':'4','৫':'5','৬':'6','৭':'7','৮':'8','৯':'9'};
     clean = clean.replace(/[০-৯]/g, d => bengaliDigits[d]);
 
-    // Clean phone number: remove spaces, hyphens, plus, parentheses
-    let phone = clean.replace(/[\s\-\+\(\)]/g, '');
-    if (phone.startsWith('880')) {
+    // Clean phone number: remove spaces, hyphens, plus, parentheses, dots
+    let phone = clean.replace(/[\s\-\+\(\)\.]/g, '');
+    if (phone.startsWith('00880')) {
+        phone = '0' + phone.substring(5);
+    } else if (phone.startsWith('8800')) {
+        phone = phone.substring(3);
+    } else if (phone.startsWith('880')) {
         phone = '0' + phone.substring(3);
+    } else if (/^1[3-9]\d{8}$/.test(phone)) {
+        phone = '0' + phone;
     }
     return { email: null, phone };
 }
