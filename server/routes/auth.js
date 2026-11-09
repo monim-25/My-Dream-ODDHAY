@@ -228,13 +228,18 @@ router.get('/auth/google/callback', async (req, res) => {
         req.session.user = user.toObject();
         req.session.isFirstLogin = false;
 
+        const hasClass = Boolean(user.classLevel && user.classLevel.trim());
+        const defaultDest = (!hasClass && user.role === 'student') ? '/onboarding' : '/dashboard';
         const targetRedirect = req.session.oauthRedirect || (
             user.role === 'superadmin' ? '/superadmin' :
             user.role === 'admin' ? '/admin' :
             user.role === 'teacher' ? '/teacher' :
-            user.role === 'parent' ? '/parent/dashboard' : '/dashboard'
+            user.role === 'parent' ? '/parent/dashboard' : defaultDest
         );
         delete req.session.oauthRedirect;
+        if (!hasClass && user.role === 'student') {
+            return res.redirect('/onboarding');
+        }
         return res.redirect(targetRedirect);
     } catch (err) {
         console.error('Google Auth Callback Error:', err);
@@ -343,13 +348,18 @@ router.get('/auth/facebook/callback', async (req, res) => {
         req.session.user = user.toObject();
         req.session.isFirstLogin = false;
 
+        const hasClass = Boolean(user.classLevel && user.classLevel.trim());
+        const defaultDest = (!hasClass && user.role === 'student') ? '/onboarding' : '/dashboard';
         const targetRedirect = req.session.oauthRedirect || (
             user.role === 'superadmin' ? '/superadmin' :
             user.role === 'admin' ? '/admin' :
             user.role === 'teacher' ? '/teacher' :
-            user.role === 'parent' ? '/parent/dashboard' : '/dashboard'
+            user.role === 'parent' ? '/parent/dashboard' : defaultDest
         );
         delete req.session.oauthRedirect;
+        if (!hasClass && user.role === 'student') {
+            return res.redirect('/onboarding');
+        }
         return res.redirect(targetRedirect);
     } catch (err) {
         console.error('Facebook Auth Callback Error:', err);
@@ -359,6 +369,118 @@ router.get('/auth/facebook/callback', async (req, res) => {
 
 router.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 router.get('/forgot-password', (req, res) => res.render('forgot-password', { message: null, error: null }));
+
+// GET Onboarding page for students (Mandatory Class & Group setup)
+router.get('/onboarding', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const user = await User.findById(req.session.userId).lean();
+        if (!user) return res.redirect('/login');
+
+        if (user.role === 'superadmin') return res.redirect('/superadmin');
+        if (user.role === 'admin') return res.redirect('/admin');
+        if (user.role === 'teacher') return res.redirect('/teacher');
+        if (user.role === 'parent') return res.redirect('/parent/dashboard');
+
+        // If student already has classLevel configured, go to dashboard
+        if (user.classLevel && user.classLevel.trim()) {
+            return res.redirect('/dashboard');
+        }
+
+        const academicClasses = await getAcademicClasses();
+        res.render('onboarding', {
+            user,
+            academicClasses,
+            error: null
+        });
+    } catch (err) {
+        console.error('Onboarding GET error:', err);
+        res.redirect('/dashboard');
+    }
+});
+
+// POST Onboarding - Save student class, group, subjects, phone
+router.post('/onboarding', protect, async (req, res) => {
+    const isJson = req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.is('application/json');
+    try {
+        await connectDB();
+        const user = await User.findById(req.session.userId);
+        if (!user) {
+            const err = 'User session not found. Please sign in.';
+            return isJson ? res.status(404).json({ success: false, error: err }) : res.redirect('/login');
+        }
+
+        const { classLevel, group, subjects, phone } = req.body;
+
+        if (!classLevel || !classLevel.trim()) {
+            const err = 'Please select your Class / Academic Level.';
+            if (isJson) return res.status(400).json({ success: false, error: err });
+            const academicClasses = await getAcademicClasses();
+            return res.render('onboarding', { user, academicClasses, error: err });
+        }
+
+        user.classLevel = classLevel.trim();
+
+        let finalGroup = (group || '').trim();
+        let finalSubjects = Array.isArray(subjects) ? subjects.map(s => String(s).trim()).filter(Boolean) : (subjects ? [String(subjects).trim()] : []);
+
+        try {
+            const AcademicClass = require('../models/AcademicClass');
+            const classDoc = await AcademicClass.findOne({ name: user.classLevel }).lean();
+            if (classDoc) {
+                let compSubs = [];
+                if (classDoc.hasGroups && Array.isArray(classDoc.commonSubjects)) {
+                    compSubs = classDoc.commonSubjects;
+                } else if (!classDoc.hasGroups && Array.isArray(classDoc.subjects)) {
+                    compSubs = classDoc.subjects;
+                }
+                finalSubjects = Array.from(new Set([...compSubs, ...finalSubjects]));
+                if (!classDoc.hasGroups) {
+                    finalGroup = 'General';
+                }
+            }
+        } catch (cErr) {
+            console.warn('AcademicClass lookup warning during onboarding:', cErr.message);
+        }
+
+        user.group = finalGroup || 'General';
+        user.subjects = finalSubjects;
+
+        if (phone && phone.trim()) {
+            const { phone: normalizedPhone } = normalizeIdentifier(phone.trim());
+            if (normalizedPhone) {
+                const existingWithPhone = await User.findOne({ phone: normalizedPhone, _id: { $ne: user._id } }).lean();
+                if (existingWithPhone) {
+                    const err = 'This phone number is already registered with another account.';
+                    if (isJson) return res.status(400).json({ success: false, error: err });
+                    const academicClasses = await getAcademicClasses();
+                    return res.render('onboarding', { user, academicClasses, error: err });
+                }
+                user.phone = normalizedPhone;
+            }
+        }
+
+        user.isProfileSetupComplete = true;
+        user.lastActive = new Date();
+        await user.save();
+
+        req.session.user = user.toObject();
+
+        const targetUrl = req.session.postOnboardingRedirect || '/dashboard';
+        delete req.session.postOnboardingRedirect;
+
+        req.session.save(() => {
+            if (isJson) return res.json({ success: true, redirect: targetUrl });
+            return res.redirect(targetUrl);
+        });
+    } catch (err) {
+        console.error('Onboarding POST error:', err);
+        const errText = `Failed to save profile: ${err.message}`;
+        if (isJson) return res.status(500).json({ success: false, error: errText });
+        const academicClasses = await getAcademicClasses();
+        return res.render('onboarding', { user: req.session.user || {}, academicClasses, error: errText });
+    }
+});
 
 // GET Force Change Password page
 router.get('/change-password', protect, (req, res) => {

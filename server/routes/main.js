@@ -22,6 +22,11 @@ router.get('/dashboard', protect, async (req, res) => {
         const dbUser = await User.findById(userId).populate('enrolledCourses.course').populate('lastWatchedLesson.course');
         if (!dbUser) return res.redirect('/login');
 
+        // Require student to complete class & academic onboarding before dashboard access
+        if (dbUser.role === 'student' && (!dbUser.classLevel || !dbUser.classLevel.trim())) {
+            return res.redirect('/onboarding');
+        }
+
         if (dbUser.lastWatchedLesson && dbUser.lastWatchedLesson.course) {
             const courseObj = dbUser.lastWatchedLesson.course;
             let activeNode = null;
