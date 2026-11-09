@@ -315,6 +315,9 @@
                                         <!-- RIGHT: Host Controls (moderator only) -->
                                         <% if (isModerator) { %>
                                         <div class="flex gap-2">
+                                            <button onclick="copyClassRoomLink()" class="size-9 flex items-center justify-center bg-slate-900/80 hover:bg-slate-800 text-white backdrop-blur-sm rounded-full shadow-md relative transition-all border border-slate-700/50" title="Copy Class Link to Share">
+                                                <span class="material-symbols-rounded text-[18px] text-rose-400">share</span>
+                                            </button>
                                             <button onclick="toggleParticipantsPanel()" class="size-9 flex items-center justify-center bg-slate-900/80 hover:bg-slate-800 text-white backdrop-blur-sm rounded-full shadow-md relative transition-all border border-slate-700/50" title="Participants List">
                                                 <span class="material-symbols-rounded text-[18px] text-slate-200">group</span>
                                             </button>
@@ -388,10 +391,16 @@
                                         <% if (isModerator) { %>
                                         <textarea id="liveDescriptionInput" rows="3" placeholder="Add a public comment to start the chat... (optional)" class="w-full max-w-sm px-4 py-3 text-sm bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-xl focus:outline-none focus:border-primary resize-none mb-4"></textarea>
                                         <% } %>
-                                        <button onclick="joinAgoraChannel()" id="join-btn" class="px-8 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-full shadow-lg transition-all flex items-center gap-2">
-                                            <span><%= isModerator ? 'Start Live' : 'Join Class Now' %></span>
-                                            <span class="material-symbols-rounded text-xl"><%= isModerator ? 'podium' : 'login' %></span>
-                                        </button>
+                                        <div class="flex items-center gap-3">
+                                            <button onclick="joinAgoraChannel()" id="join-btn" class="px-8 py-3 bg-primary hover:bg-primary/90 text-white font-bold rounded-full shadow-lg transition-all flex items-center gap-2">
+                                                <span><%= isModerator ? 'Start Live' : 'Join Class Now' %></span>
+                                                <span class="material-symbols-rounded text-xl"><%= isModerator ? 'podium' : 'login' %></span>
+                                            </button>
+                                            <button type="button" onclick="copyClassRoomLink()" class="px-5 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-full border border-slate-700/80 shadow-md transition-all flex items-center gap-2 text-xs cursor-pointer" title="Share with students">
+                                                <span class="material-symbols-rounded text-base text-rose-400">share</span>
+                                                <span id="copyLinkBtnText">Copy Class Link</span>
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <!-- ═══ BOTTOM OVERLAY ROW ═══ -->
@@ -2860,6 +2869,25 @@
         });
     }
 
+    function copyClassRoomLink() {
+        const url = window.location.href;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(() => {
+                const btnText = document.getElementById('copyLinkBtnText');
+                if (btnText) {
+                    const orig = btnText.innerText;
+                    btnText.innerText = 'Copied!';
+                    setTimeout(() => { btnText.innerText = orig; }, 2500);
+                }
+                alert('Class link copied to clipboard! You can share it with students.');
+            }).catch(() => {
+                prompt('Copy this live class link:', url);
+            });
+        } else {
+            prompt('Copy this live class link:', url);
+        }
+    }
+
     // Close end-live modal on backdrop click
     document.getElementById('endLiveModal').addEventListener('click', function(e) {
         if (e.target === this) this.classList.add('hidden');
@@ -2877,6 +2905,13 @@
             </button>
         </div>
         <form onsubmit="submitEditDetails(event)" class="p-6">
+            <div class="mb-4">
+                <label class="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Classroom Share Link</label>
+                <div class="flex items-center gap-2">
+                    <input type="text" readonly value="/live/<%= roomId %>" class="w-full px-3 py-2 bg-slate-100 dark:bg-[#070d19] border border-slate-200 dark:border-white/10 rounded-lg text-xs font-mono text-slate-600 dark:text-slate-300 select-all" id="editShareLinkInput">
+                    <button type="button" onclick="navigator.clipboard.writeText(window.location.href); this.innerText='Copied!'; setTimeout(()=>this.innerText='Copy', 2000)" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold shrink-0 transition-colors">Copy</button>
+                </div>
+            </div>
             <div class="mb-4">
                 <label class="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5 uppercase tracking-wider">Title</label>
                 <input type="text" id="editTitleInput" value="<%= locals.liveTitle || '' %>" required class="w-full px-4 py-2.5 bg-slate-50 dark:bg-[#0b1120] border border-slate-200 dark:border-white/10 rounded-lg text-sm text-slate-800 dark:text-white focus:outline-none focus:border-primary transition-all">
