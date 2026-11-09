@@ -128,7 +128,7 @@ router.get('/auth/google', (req, res) => {
     if (req.query.redirect) req.session.oauthRedirect = req.query.redirect;
     if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         const redirectUri = getOAuthRedirectUri(req, '/auth/google/callback');
-        const scope = encodeURIComponent('profile email');
+        const scope = encodeURIComponent('openid profile email');
         const googleAuthUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${process.env.GOOGLE_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${scope}&access_type=offline&prompt=consent`;
         return res.redirect(googleAuthUrl);
     }
@@ -178,6 +178,10 @@ router.get('/auth/google/callback', async (req, res) => {
         const email = googleProfile.email.toLowerCase().trim();
         let user = await User.findOne({ email });
 
+        // Extract and upgrade Google Profile Picture
+        const rawPic = googleProfile.picture || googleProfile.avatar_url || '';
+        const pictureUrl = rawPic ? rawPic.replace(/=s\d+(-c)?$/, '=s240-c') : '';
+
         if (!user) {
             // Register new user via Google
             const bcrypt = require('bcryptjs');
@@ -189,14 +193,20 @@ router.get('/auth/google/callback', async (req, res) => {
                 email: email,
                 password: hashedPassword,
                 role: 'student',
-                profilePicture: googleProfile.picture || '',
+                profilePicture: pictureUrl,
+                profileImage: pictureUrl,
                 isEmailVerified: true
             });
             await user.save();
         } else {
-            // Existing user update
-            if (!user.profilePicture && googleProfile.picture) {
-                user.profilePicture = googleProfile.picture;
+            // Existing user update: sync Google avatar to both profilePicture and profileImage
+            if (pictureUrl) {
+                if (!user.profilePicture || user.profilePicture.includes('googleusercontent.com') || user.profilePicture.includes('default-avatar') || user.profilePicture.includes('ui-avatars.com')) {
+                    user.profilePicture = pictureUrl;
+                }
+                if (!user.profileImage || user.profileImage.includes('googleusercontent.com') || user.profileImage.includes('default-avatar') || user.profileImage.includes('ui-avatars.com')) {
+                    user.profileImage = pictureUrl;
+                }
             }
             if (!user.isEmailVerified) {
                 user.isEmailVerified = true;
