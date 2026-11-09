@@ -103,6 +103,7 @@ router.get('/register', async (req, res) => {
 
 // Social OAuth Routes (Google & Facebook)
 router.get('/auth/google', (req, res) => {
+    if (req.query.redirect) req.session.oauthRedirect = req.query.redirect;
     if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         const redirectUri = `${req.protocol}://${req.get('host')}/auth/google/callback`;
         const scope = encodeURIComponent('profile email');
@@ -112,7 +113,96 @@ router.get('/auth/google', (req, res) => {
     return res.redirect('/login?error=' + encodeURIComponent('Google Sign-In is not configured yet. Add GOOGLE_CLIENT_ID in .env to activate.'));
 });
 
+// Google OAuth Callback Handler
+router.get('/auth/google/callback', async (req, res) => {
+    try {
+        const { code, error } = req.query;
+        if (error || !code) {
+            return res.redirect('/login?error=' + encodeURIComponent(error ? `Google login cancelled: ${error}` : 'Authorization code missing.'));
+        }
+
+        const redirectUri = `${req.protocol}://${req.get('host')}/auth/google/callback`;
+
+        // 1. Exchange authorization code for access token
+        const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                code: String(code),
+                client_id: process.env.GOOGLE_CLIENT_ID,
+                client_secret: process.env.GOOGLE_CLIENT_SECRET,
+                redirect_uri: redirectUri,
+                grant_type: 'authorization_code'
+            }).toString()
+        });
+
+        const tokenData = await tokenResponse.json();
+        if (!tokenResponse.ok || !tokenData.access_token) {
+            console.error('Google Token Exchange Failed:', tokenData);
+            return res.redirect('/login?error=' + encodeURIComponent('Failed to authenticate with Google.'));
+        }
+
+        // 2. Fetch User Profile from Google
+        const userinfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+            headers: { Authorization: `Bearer ${tokenData.access_token}` }
+        });
+        const googleProfile = await userinfoResponse.json();
+
+        if (!googleProfile || !googleProfile.email) {
+            return res.redirect('/login?error=' + encodeURIComponent('Could not retrieve email from your Google account.'));
+        }
+
+        await connectDB();
+        const email = googleProfile.email.toLowerCase().trim();
+        let user = await User.findOne({ email });
+
+        if (!user) {
+            // Register new user via Google
+            const bcrypt = require('bcryptjs');
+            const randomPassword = crypto.randomBytes(24).toString('hex');
+            const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+            user = new User({
+                name: googleProfile.name || 'Google User',
+                email: email,
+                password: hashedPassword,
+                role: 'student',
+                profilePicture: googleProfile.picture || '',
+                isEmailVerified: true
+            });
+            await user.save();
+        } else {
+            // Existing user update
+            if (!user.profilePicture && googleProfile.picture) {
+                user.profilePicture = googleProfile.picture;
+            }
+            if (!user.isEmailVerified) {
+                user.isEmailVerified = true;
+            }
+            await user.save();
+        }
+
+        // Establish session
+        req.session.userId = user._id.toString();
+        req.session.user = user.toObject();
+        req.session.isFirstLogin = false;
+
+        const targetRedirect = req.session.oauthRedirect || (
+            user.role === 'superadmin' ? '/superadmin' :
+            user.role === 'admin' ? '/admin' :
+            user.role === 'teacher' ? '/teacher' :
+            user.role === 'parent' ? '/parent/dashboard' : '/dashboard'
+        );
+        delete req.session.oauthRedirect;
+        return res.redirect(targetRedirect);
+    } catch (err) {
+        console.error('Google Auth Callback Error:', err);
+        return res.redirect('/login?error=' + encodeURIComponent('An error occurred during Google authentication.'));
+    }
+});
+
 router.get('/auth/facebook', (req, res) => {
+    if (req.query.redirect) req.session.oauthRedirect = req.query.redirect;
     if (process.env.FACEBOOK_APP_ID && process.env.FACEBOOK_APP_SECRET) {
         const redirectUri = `${req.protocol}://${req.get('host')}/auth/facebook/callback`;
         const scope = encodeURIComponent('email,public_profile');
@@ -120,6 +210,92 @@ router.get('/auth/facebook', (req, res) => {
         return res.redirect(fbAuthUrl);
     }
     return res.redirect('/login?error=' + encodeURIComponent('Facebook Sign-In is not configured yet. Add FACEBOOK_APP_ID in .env to activate.'));
+});
+
+// Facebook OAuth Callback Handler
+router.get('/auth/facebook/callback', async (req, res) => {
+    try {
+        const { code, error, error_description } = req.query;
+        if (error || !code) {
+            return res.redirect('/login?error=' + encodeURIComponent(error_description || error || 'Facebook authorization cancelled.'));
+        }
+
+        const redirectUri = `${req.protocol}://${req.get('host')}/auth/facebook/callback`;
+
+        // 1. Exchange authorization code for access token
+        const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?` + new URLSearchParams({
+            client_id: process.env.FACEBOOK_APP_ID,
+            client_secret: process.env.FACEBOOK_APP_SECRET,
+            redirect_uri: redirectUri,
+            code: String(code)
+        }).toString();
+
+        const tokenResponse = await fetch(tokenUrl);
+        const tokenData = await tokenResponse.json();
+
+        if (!tokenResponse.ok || !tokenData.access_token) {
+            console.error('Facebook Token Exchange Failed:', tokenData);
+            return res.redirect('/login?error=' + encodeURIComponent('Failed to authenticate with Facebook.'));
+        }
+
+        // 2. Fetch User Profile from Facebook Graph API
+        const userUrl = `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${tokenData.access_token}`;
+        const userResponse = await fetch(userUrl);
+        const fbProfile = await userResponse.json();
+
+        if (!fbProfile || !fbProfile.id) {
+            return res.redirect('/login?error=' + encodeURIComponent('Could not retrieve profile from Facebook.'));
+        }
+
+        await connectDB();
+        const fbEmail = (fbProfile.email || `${fbProfile.id}@facebook.oddhay.com`).toLowerCase().trim();
+        let user = await User.findOne({ email: fbEmail });
+
+        const pictureUrl = (fbProfile.picture && fbProfile.picture.data && fbProfile.picture.data.url) ? fbProfile.picture.data.url : '';
+
+        if (!user) {
+            // Register new user via Facebook
+            const bcrypt = require('bcryptjs');
+            const randomPassword = crypto.randomBytes(24).toString('hex');
+            const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+            user = new User({
+                name: fbProfile.name || 'Facebook User',
+                email: fbEmail,
+                password: hashedPassword,
+                role: 'student',
+                profilePicture: pictureUrl,
+                isEmailVerified: Boolean(fbProfile.email)
+            });
+            await user.save();
+        } else {
+            // Existing user update
+            if (!user.profilePicture && pictureUrl) {
+                user.profilePicture = pictureUrl;
+            }
+            if (fbProfile.email && !user.isEmailVerified) {
+                user.isEmailVerified = true;
+            }
+            await user.save();
+        }
+
+        // Establish session
+        req.session.userId = user._id.toString();
+        req.session.user = user.toObject();
+        req.session.isFirstLogin = false;
+
+        const targetRedirect = req.session.oauthRedirect || (
+            user.role === 'superadmin' ? '/superadmin' :
+            user.role === 'admin' ? '/admin' :
+            user.role === 'teacher' ? '/teacher' :
+            user.role === 'parent' ? '/parent/dashboard' : '/dashboard'
+        );
+        delete req.session.oauthRedirect;
+        return res.redirect(targetRedirect);
+    } catch (err) {
+        console.error('Facebook Auth Callback Error:', err);
+        return res.redirect('/login?error=' + encodeURIComponent('An error occurred during Facebook authentication.'));
+    }
 });
 
 router.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
