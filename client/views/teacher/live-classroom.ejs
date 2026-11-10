@@ -1353,12 +1353,13 @@
                 }
             }
 
-            // 6b. Post pre-join textarea as a highlighted comment (moderator only)
+            // 6b. Post pre-join textarea as a highlighted pinned comment (moderator only)
             var descInput = document.getElementById('liveDescriptionInput');
             if (descInput && !isAutoJoining) {
                 var commentText = descInput.value.trim();
-                if (commentText && typeof socket !== 'undefined') {
-                    socket.emit('message:send', { room: '<%= roomId %>', text: commentText, highlighted: true });
+                if (commentText) {
+                    postPinnedStartComment(commentText);
+                    descInput.value = '';
                 }
             }
 
@@ -1918,7 +1919,11 @@
         const badgeClass = isMentor ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 dark:bg-white/5 text-slate-500';
         const badgeText = isMentor ? 'Mentor' : '';
         const dateDisplay = `${dateStr} <span class="text-slate-300 dark:text-white/10 mx-1">&bull;</span> <span class="live-timeago" data-ts="${new Date(c.createdAt).getTime()}">${timeAgo(c.createdAt)}</span>`;
+        const isModUser = <%= Boolean(isModerator) %>;
         const isAuthor = c.sender === currentUserId || (c.user && (c.user._id === currentUserId || c.user === currentUserId));
+        const canDelete = isAuthor || isModUser;
+        const canEdit = isAuthor;
+        const canHighlight = isModUser;
 
         const repliesHTML = (c.replies || []).map(r => {
             const rDateStr = new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -1943,11 +1948,14 @@
                                 </button>
                                 <div id="dropdown-${r._id}" class="hidden absolute left-0 mt-1 w-28 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-lg rounded-none py-0.5 z-30">
                                     ${isReplyAuthor ? `
-                                        <button type="button" onclick="triggerEditReply('${c._id}','${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">edit</span> Edit</button>
-                                        <button type="button" onclick="triggerDeleteReply('${c._id}','${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">delete</span> Delete</button>
-                                    ` : `
-                                        <button type="button" onclick="triggerReportComment('${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">flag</span> Report</button>
-                                    `}
+                                        <button type="button" onclick="closeAllDropdowns(); triggerEditReply('${c._id}','${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">edit</span> Edit</button>
+                                    ` : ''}
+                                    ${(isReplyAuthor || isModUser) ? `
+                                        <button type="button" onclick="closeAllDropdowns(); triggerDeleteReply('${c._id}','${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">delete</span> Delete</button>
+                                    ` : ''}
+                                    ${!isReplyAuthor && !isModUser ? `
+                                        <button type="button" onclick="closeAllDropdowns(); triggerReportComment('${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">flag</span> Report</button>
+                                    ` : ''}
                                 </div>
                             </div>
                         </div>
@@ -2005,13 +2013,26 @@
                                 <span class="material-symbols-rounded text-sm leading-none" style="font-weight:800">more_vert</span>
                             </button>
                             <div id="dropdown-${c._id}" class="hidden absolute right-0 mt-1 w-32 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-lg rounded-none py-0.5 z-30">
-                                <button type="button" onclick="toggleCommentHighlight('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">${c.highlighted ? 'explore_off' : 'push_pin'}</span> ${c.highlighted ? 'Unhighlight' : 'Highlight'}</button>
-                                ${isAuthor ? `
-                                    <button type="button" onclick="triggerEditComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">edit</span> Edit</button>
-                                    <button type="button" onclick="triggerDeleteComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">delete</span> Delete</button>
-                                ` : `
-                                    <button type="button" onclick="triggerReportComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">flag</span> Report</button>
-                                `}
+                                ${canHighlight ? `
+                                    <button type="button" onclick="closeAllDropdowns(); toggleCommentHighlight('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5">
+                                        <span class="material-symbols-rounded text-[14px] text-amber-500">${c.highlighted ? 'explore_off' : 'push_pin'}</span> ${c.highlighted ? 'Unhighlight' : 'Highlight'}
+                                    </button>
+                                ` : ''}
+                                ${canEdit ? `
+                                    <button type="button" onclick="closeAllDropdowns(); triggerEditComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5">
+                                        <span class="material-symbols-rounded text-[14px]">edit</span> Edit
+                                    </button>
+                                ` : ''}
+                                ${canDelete ? `
+                                    <button type="button" onclick="closeAllDropdowns(); triggerDeleteComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5">
+                                        <span class="material-symbols-rounded text-[14px]">delete</span> Delete
+                                    </button>
+                                ` : ''}
+                                ${!isAuthor && !isModUser ? `
+                                    <button type="button" onclick="closeAllDropdowns(); triggerReportComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5">
+                                        <span class="material-symbols-rounded text-[14px]">flag</span> Report
+                                    </button>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
@@ -2216,17 +2237,36 @@
         finally { btn.disabled = false; btn.innerText = orig; }
     }
 
+    function closeAllDropdowns() {
+        document.querySelectorAll('[id^="dropdown-"]').forEach(el => el.classList.add('hidden'));
+    }
+
     async function toggleCommentHighlight(commentId) {
+        // Toggle locally first
+        const idx = liveComments.findIndex(c => c._id == commentId);
+        if (idx > -1) {
+            liveComments[idx].highlighted = !liveComments[idx].highlighted;
+            renderCommentsList(liveComments);
+        }
+        if (typeof commentId === 'string' && commentId.startsWith('temp_')) return;
+
         try {
             const res = await fetch(`/api/live-comment/${commentId}/toggle-highlight`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' }
             });
             const data = await res.json();
             if (data.success) {
-                const idx = liveComments.findIndex(c => c._id == commentId);
-                if (idx > -1) { liveComments[idx].highlighted = !liveComments[idx].highlighted; renderCommentsList(liveComments); }
-            } else alert(data.error || 'Failed to update');
-        } catch (err) { alert('Failed to update highlight'); }
+                const curIdx = liveComments.findIndex(c => c._id == commentId);
+                if (curIdx > -1) {
+                    liveComments[curIdx].highlighted = data.highlighted;
+                    renderCommentsList(liveComments);
+                }
+            } else {
+                showLiveToast(data.error || 'Failed to update highlight', 'info');
+            }
+        } catch (err) {
+            showLiveToast('Failed to update highlight', 'error');
+        }
     }
 
     function toggleCommentDropdown(e, id) {
@@ -2234,67 +2274,153 @@
         const dropdown = document.getElementById(`dropdown-${id}`);
         if (dropdown) {
             const isHidden = dropdown.classList.contains('hidden');
-            document.querySelectorAll('[id^="dropdown-"]').forEach(el => el.classList.add('hidden'));
+            closeAllDropdowns();
             if (isHidden) dropdown.classList.remove('hidden');
         }
     }
 
     document.addEventListener('click', () => {
-        document.querySelectorAll('[id^="dropdown-"]').forEach(el => el.classList.add('hidden'));
+        closeAllDropdowns();
     });
 
     function triggerEditComment(id) { toggleEditCommentForm(id); }
     function triggerEditReply(commentId, replyId) { toggleEditReplyForm(commentId, replyId); }
-    function triggerReportComment(id) { alert('Comment has been reported to the site administrator. Thank you.'); }
+    function triggerReportComment(id) { showLiveToast('Comment has been reported to the site administrator.', 'flag'); }
 
     function triggerDeleteComment(commentId) {
+        const modal = document.getElementById('deleteModal');
         const modalText = document.getElementById('deleteModalText');
         if (modalText) modalText.innerText = 'Are you sure you want to delete this comment? This action is permanent and cannot be undone.';
         const confirmBtn = document.getElementById('confirmDeleteBtn');
         if (confirmBtn) {
             confirmBtn.onclick = async () => {
-                const orig = confirmBtn.innerText; confirmBtn.disabled = true; confirmBtn.innerText = 'Deleting...';
+                closeDeleteModal();
+                liveComments = liveComments.filter(c => c._id != commentId);
+                renderCommentsList(liveComments);
+
+                if (typeof commentId === 'string' && commentId.startsWith('temp_')) return;
+
                 try {
                     const res = await fetch(`/api/live-comment/${commentId}`, { method: 'DELETE' });
                     const data = await res.json();
-                    if (data.success) {
-                        closeDeleteModal();
-                        liveComments = liveComments.filter(c => c._id != commentId);
-                        renderCommentsList(liveComments);
-                    } else alert('Error: ' + (data.error || 'Server error'));
-                } catch (err) { alert('Failed to delete comment'); }
-                finally { confirmBtn.disabled = false; confirmBtn.innerText = orig; }
+                    if (!data.success) {
+                        showLiveToast(data.error || 'Failed to delete comment', 'info');
+                    }
+                } catch (err) {
+                    showLiveToast('Failed to delete comment', 'error');
+                }
             };
         }
-        document.getElementById('deleteModal').classList.remove('hidden');
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+        }
     }
 
     function triggerDeleteReply(commentId, replyId) {
+        const modal = document.getElementById('deleteModal');
         const modalText = document.getElementById('deleteModalText');
         if (modalText) modalText.innerText = 'Are you sure you want to delete this reply? This action is permanent and cannot be undone.';
         const confirmBtn = document.getElementById('confirmDeleteBtn');
         if (confirmBtn) {
             confirmBtn.onclick = async () => {
-                const orig = confirmBtn.innerText; confirmBtn.disabled = true; confirmBtn.innerText = 'Deleting...';
+                closeDeleteModal();
+                const cIdx = liveComments.findIndex(c => c._id == commentId);
+                if (cIdx > -1 && liveComments[cIdx].replies) {
+                    liveComments[cIdx].replies = liveComments[cIdx].replies.filter(r => r._id != replyId);
+                    renderCommentsList(liveComments);
+                }
+
+                if (typeof replyId === 'string' && replyId.startsWith('temp_')) return;
+
                 try {
                     const res = await fetch(`/api/live-comment/${commentId}/reply/${replyId}`, { method: 'DELETE' });
                     const data = await res.json();
-                    if (data.success) {
-                        closeDeleteModal();
-                        if (data.comment) {
-                            const idx = liveComments.findIndex(c => c._id == commentId);
-                            if (idx > -1) { liveComments[idx] = data.comment; renderCommentsList(liveComments); }
+                    if (data.success && data.comment) {
+                        const idx = liveComments.findIndex(c => c._id == commentId);
+                        if (idx > -1) {
+                            liveComments[idx] = data.comment;
+                            renderCommentsList(liveComments);
                         }
-                    } else alert('Error: ' + (data.error || 'Server error'));
-                } catch (err) { alert('Failed to delete reply'); }
-                finally { confirmBtn.disabled = false; confirmBtn.innerText = orig; }
+                    }
+                } catch (err) {
+                    showLiveToast('Failed to delete reply', 'error');
+                }
             };
         }
-        document.getElementById('deleteModal').classList.remove('hidden');
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.style.display = 'flex';
+        }
     }
 
     function closeDeleteModal() {
-        document.getElementById('deleteModal').classList.add('hidden');
+        const modal = document.getElementById('deleteModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+    }
+
+    // Pinned start comment helper (moderator starting comment)
+    async function postPinnedStartComment(text) {
+        if (!text || !text.trim()) return;
+        const trimmed = text.trim();
+
+        // 1. Instant optimistic UI render at index 0 with highlighted=true
+        const tempId = 'temp_pinned_' + Date.now();
+        const optimisticPinnedComment = {
+            _id: tempId,
+            sender: '<%= user._id %>',
+            senderName: '<%= user.name %>',
+            senderRole: '<%= user.role %>',
+            userName: '<%= user.name %>',
+            userAvatar: null,
+            text: trimmed,
+            createdAt: new Date().toISOString(),
+            highlighted: true,
+            replies: []
+        };
+        liveComments.unshift(optimisticPinnedComment);
+        renderCommentsList(liveComments);
+        const list = document.getElementById('commentsList');
+        if (list) list.scrollTop = 0;
+
+        // 2. Broadcast via socket
+        emitSocketJoin();
+        socket.emit('message:send', { 
+            room: '<%= roomId %>', 
+            text: trimmed,
+            highlighted: true,
+            userId: '<%= user._id %>',
+            userName: '<%= user.name %>',
+            userRole: '<%= user.role %>'
+        });
+
+        // 3. Guaranteed persistence via REST API
+        try {
+            const res = await fetch('/api/live-comment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    room: '<%= roomId %>',
+                    text: trimmed,
+                    highlighted: true
+                })
+            });
+            const data = await res.json();
+            if (data.success && data.message) {
+                const idx = liveComments.findIndex(c => c._id === tempId);
+                if (idx !== -1) {
+                    liveComments[idx]._id = data.message._id;
+                    liveComments[idx].createdAt = data.message.createdAt;
+                    liveComments[idx].highlighted = true;
+                }
+                renderCommentsList(liveComments);
+            }
+        } catch (err) {
+            console.warn('Pinned comment send error:', err);
+        }
     }
 
     // ==========================================
@@ -3224,11 +3350,17 @@
         }
     }
 
-    // Close end-live modal on backdrop click
+    // Close modals on backdrop click
     const endModalEl = document.getElementById('endLiveModal');
     if (endModalEl) {
         endModalEl.addEventListener('click', function(e) {
             if (e.target === this) closeEndLiveModal();
+        });
+    }
+    const delModalEl = document.getElementById('deleteModal');
+    if (delModalEl) {
+        delModalEl.addEventListener('click', function(e) {
+            if (e.target === this) closeDeleteModal();
         });
     }
 </script>
