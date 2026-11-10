@@ -70,6 +70,9 @@ let cached = global.mongoose;
 if (!cached) cached = global.mongoose = { conn: null, promise: null };
 
 const connectDB = async () => {
+    if (mongoose.connection && mongoose.connection.readyState === 1) {
+        return mongoose;
+    }
     if (cached.conn) return cached.conn;
     if (!cached.promise) {
         cached.promise = mongoose.connect(MONGODB_URI, {

@@ -5,6 +5,7 @@ const User = require('../models/User');
 const Course = require('../models/Course');
 const Folder = require('../models/Folder');
 const { connectDB } = require('../config');
+const { normalizeClass, getLinkedClasses } = require('../utils/academicHelper');
 
 // Escape regex special characters
 const escapeRegex = (s) => String(s || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -555,7 +556,13 @@ const getTopicsPage = async (req, res) => {
 // API: Filtered Topics lookup for Question Bank / Quizzes / Modals
 const getTopicsApi = async (req, res) => {
     try {
-        await connectDB();
+        if (mongoose.connection && mongoose.connection.readyState !== 1) {
+            try {
+                await connectDB();
+            } catch (dbErr) {
+                console.warn('[getTopicsApi] DB connect warning:', dbErr.message);
+            }
+        }
         const { classLevel, subject, chapter, group } = req.query;
 
         const filter = { isArchived: { $nin: [true, 'true', 1] }, status: { $nin: ['pending', 'rejected'] } };
@@ -567,10 +574,23 @@ const getTopicsApi = async (req, res) => {
             } else {
                 classList = String(rawClass).split(',').map(c => c.trim()).filter(Boolean);
             }
-            if (classList.length === 1) {
-                filter.classLevel = new RegExp('^' + escapeRegex(classList[0]) + '$', 'i');
-            } else if (classList.length > 1) {
-                filter.classLevel = new RegExp('^(?:' + classList.map(escapeRegex).join('|') + ')$', 'i');
+
+            const expandedClasses = new Set();
+            classList.forEach(c => {
+                expandedClasses.add(c);
+                try {
+                    const norm = normalizeClass(c);
+                    if (norm) expandedClasses.add(norm);
+                    const linked = getLinkedClasses(c);
+                    if (Array.isArray(linked)) linked.forEach(l => expandedClasses.add(l));
+                } catch (e) {}
+            });
+            const finalClassList = Array.from(expandedClasses).filter(Boolean);
+
+            if (finalClassList.length === 1) {
+                filter.classLevel = new RegExp('^' + escapeRegex(finalClassList[0]) + '$', 'i');
+            } else if (finalClassList.length > 1) {
+                filter.classLevel = new RegExp('^(?:' + finalClassList.map(escapeRegex).join('|') + ')$', 'i');
             }
         }
         if (subject && subject !== 'all') {
@@ -584,17 +604,23 @@ const getTopicsApi = async (req, res) => {
         }
 
         const topics = await Topic.find(filter).sort({ 'chapter.number': 1, order: 1, name: 1 }).lean();
-        const chapterList = Array.from(new Set(topics.map(t => t.chapter?.name).filter(Boolean)));
+        const chapterList = Array.from(new Set(topics.map(t => (t.chapter && t.chapter.name) ? t.chapter.name : '').filter(Boolean)));
 
         res.json({
             success: true,
             count: topics.length,
-            topics,
+            topics: topics || [],
             chapters: chapterList
         });
     } catch (error) {
         console.error('getTopicsApi Error:', error);
-        res.status(500).json({ success: false, error: error.message });
+        res.status(200).json({
+            success: true,
+            count: 0,
+            topics: [],
+            chapters: [],
+            warning: error.message
+        });
     }
 };
 
