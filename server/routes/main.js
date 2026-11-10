@@ -6326,8 +6326,12 @@ router.post('/api/live/end', protect, async (req, res) => {
         }
 
         if (!course) {
-            console.warn('[/api/live/end] Course not found for roomId:', roomId);
-            return res.status(404).json({ error: 'Course or live class not found' });
+            console.warn('[/api/live/end] Standalone room or course not found for roomId:', roomId);
+            const io = req.app.get('io');
+            if (io) {
+                io.to(roomId).emit('live:ended', { roomId });
+            }
+            return res.json({ success: true, message: 'Class ended' });
         }
 
         let updated = false;
@@ -6406,13 +6410,14 @@ router.post('/api/live/end', protect, async (req, res) => {
             }
         }
 
-        if (!updated) {
-            return res.status(404).json({ error: 'Live class not found in course curriculum' });
+        const io = req.app.get('io');
+        if (io) {
+            io.to(roomId).emit('live:ended', { roomId });
         }
 
         res.json({
             success: true,
-            courseId: course._id.toString(),
+            courseId: course ? course._id.toString() : null,
             nodeId: savedNodeId,
             videoPath: savedVideoPath,
             folderId: savedFolderId

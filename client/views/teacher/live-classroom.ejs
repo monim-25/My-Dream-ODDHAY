@@ -746,7 +746,18 @@
             el.parentElement.style.display = 'none';
         }
     });
-}    function endLiveClass() {
+}    function closeEndLiveModal() {
+        const modal = document.getElementById('endLiveModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+        }
+    }
+
+    function endLiveClass() {
+        if (document.fullscreenElement) {
+            try { document.exitFullscreen(); } catch(e) {}
+        }
         const isRec = (typeof isRecordingLive !== 'undefined' && isRecordingLive) || (typeof CHANNEL !== 'undefined' && localStorage.getItem('hasRecordedSomething_' + CHANNEL) === 'true');
         const subMsg = document.getElementById('endLiveSubMsg');
         if (subMsg) {
@@ -757,14 +768,23 @@
         const modal = document.getElementById('endLiveModal');
         if (modal) {
             modal.classList.remove('hidden');
+            modal.style.display = 'flex';
         } else {
-            _doEndLiveClass();
+            if (confirm('Are you sure you want to end this live class?')) {
+                _doEndLiveClass();
+            }
         }
     }
 
     async function _doEndLiveClass() {
-        const modal = document.getElementById('endLiveModal');
-        if (modal) modal.classList.add('hidden');
+        closeEndLiveModal();
+
+        const endBtn = document.getElementById('btn-end-live');
+        if (endBtn) {
+            endBtn.disabled = true;
+            endBtn.innerHTML = '<span class="material-symbols-rounded text-xl animate-spin">sync</span>';
+        }
+        showLiveToast('লাইভ ক্লাস সমাপ্ত করা হচ্ছে...', 'stop_circle');
 
         const hasRecorded = (typeof isRecordingLive !== 'undefined' && isRecordingLive) || (typeof CHANNEL !== 'undefined' && localStorage.getItem('hasRecordedSomething_' + CHANNEL) === 'true');
 
@@ -788,10 +808,6 @@
         
         // Upload recorded chunks if they exist
         if (hasRecorded && typeof mediaRecorder !== 'undefined' && mediaRecorder) {
-            const uploadBtn = document.getElementById('btn-record');
-            if (uploadBtn) uploadBtn.innerHTML = '<span class="material-symbols-rounded text-xl animate-spin">sync</span>';
-            
-            // Stop canvas capture loop and audio context
             if (typeof _recAnimFrame !== 'undefined' && _recAnimFrame) {
                 cancelAnimationFrame(_recAnimFrame); _recAnimFrame = null;
             }
@@ -801,27 +817,24 @@
 
             const performUpload = async () => {
                 if (typeof recordedChunks === 'undefined' || !recordedChunks || recordedChunks.length === 0) {
-                    console.warn('performUpload: recordedChunks is empty');
                     return '';
                 }
                 const mimeType = (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'video/webm';
                 const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
                 const blob = new Blob(recordedChunks, { type: mimeType });
-                if (blob.size === 0) {
-                    console.warn('performUpload: blob size is 0');
-                    return '';
-                }
-                console.log('performUpload: uploading blob of size', blob.size, 'bytes');
+                if (blob.size === 0) return '';
                 const formData = new FormData();
                 formData.append('video', blob, 'live_recording.' + ext);
                 try {
-                    const upRes = await fetch('/api/live/upload-recording', { 
-                        method: 'POST', 
-                        body: formData,
-                        credentials: 'same-origin'
-                    });
+                    const upRes = await Promise.race([
+                        fetch('/api/live/upload-recording', { 
+                            method: 'POST', 
+                            body: formData,
+                            credentials: 'same-origin'
+                        }),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Upload timeout')), 8000))
+                    ]);
                     const upData = await upRes.json();
-                    console.log('performUpload response:', upData);
                     return upData.videoPath || '';
                 } catch(err) { 
                     console.error('Upload fetch failed:', err);
@@ -833,12 +846,10 @@
                 if (mediaRecorder.state !== 'inactive') {
                     finalVideoPath = await new Promise((resolve) => {
                         const timeout = setTimeout(async () => {
-                            console.warn('Recorder stop timeout reached, uploading...');
                             resolve(await performUpload());
-                        }, 6000);
+                        }, 5000);
                         mediaRecorder.onstop = async () => {
                             clearTimeout(timeout);
-                            console.log('Recorder onstop triggered, uploading...');
                             resolve(await performUpload());
                         };
                         try {
@@ -847,7 +858,6 @@
                             }
                             mediaRecorder.stop();
                         } catch(e) { 
-                            console.warn('Recorder stop exception:', e);
                             resolve(performUpload()); 
                         }
                     });
@@ -869,27 +879,23 @@
             }
         } catch(e) {}
 
-        let hasExplicitlyEndedClass = false;
-
         // Make API request to end the class and save
         try {
-            hasExplicitlyEndedClass = true;
-            const res = await fetch('/api/live/end', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    roomId: (typeof CHANNEL !== 'undefined' ? CHANNEL : '<%= roomId %>'),
-                    duration: recDurationStr,
-                    isRecorded: Boolean(hasRecorded && finalVideoPath),
-                    videoPath: finalVideoPath
-                })
-            });
+            const res = await Promise.race([
+                fetch('/api/live/end', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        roomId: (typeof CHANNEL !== 'undefined' ? CHANNEL : '<%= roomId %>'),
+                        duration: recDurationStr,
+                        isRecorded: Boolean(hasRecorded && finalVideoPath),
+                        videoPath: finalVideoPath
+                    })
+                }),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('End API timeout')), 5000))
+            ]);
             const data = await res.json();
-            if (data && data.success) {
-                leaveAgoraChannel(data.courseId || '<%= courseId %>', data.folderId, true);
-            } else {
-                leaveAgoraChannel('<%= courseId %>', null, true);
-            }
+            leaveAgoraChannel(data?.courseId || '<%= courseId %>', data?.folderId, true);
         } catch (err) {
             console.error('Live end error:', err);
             leaveAgoraChannel('<%= courseId %>', null, true);
@@ -1775,20 +1781,23 @@
                 fetch('/api/live/end', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ roomId: CHANNEL }),
+                    body: JSON.stringify({ roomId: (typeof CHANNEL !== 'undefined' ? CHANNEL : '<%= roomId %>') }),
                     keepalive: true
                 }).catch(e => {});
             } catch(e) {}
         }
         try {
-            sessionStorage.removeItem("agora_joined_" + CHANNEL);
-            localStorage.removeItem("live_start_time_" + CHANNEL);
+            sessionStorage.removeItem("agora_joined_" + (typeof CHANNEL !== 'undefined' ? CHANNEL : '<%= roomId %>'));
+            localStorage.removeItem("live_start_time_" + (typeof CHANNEL !== 'undefined' ? CHANNEL : '<%= roomId %>'));
             isJoiningInProgress = false;
-            if (localAudioTrack) { localAudioTrack.close(); localAudioTrack = null; }
-            if (localVideoTrack) { localVideoTrack.close(); localVideoTrack = null; }
-            if (localScreenTrack) { localScreenTrack.close(); localScreenTrack = null; }
+            if (localAudioTrack) { try { localAudioTrack.close(); } catch(e){} localAudioTrack = null; }
+            if (localVideoTrack) { try { localVideoTrack.close(); } catch(e){} localVideoTrack = null; }
+            if (localScreenTrack) { try { localScreenTrack.close(); } catch(e){} localScreenTrack = null; }
             if (typeof client !== 'undefined' && client && client.connectionState !== 'DISCONNECTED') {
-                await client.leave();
+                await Promise.race([
+                    client.leave(),
+                    new Promise(r => setTimeout(r, 1500))
+                ]);
             }
         } catch(e) {
             console.warn('Agora leave error (non-fatal):', e);
@@ -1797,32 +1806,43 @@
             clearInterval(liveInterval);
         }
 
-        // Redirect back appropriately based on role
-        var cid = redirectCourseId || (typeof COURSE_ID !== 'undefined' ? COURSE_ID : '');
-        var referrer = document.referrer;
+        // Bulletproof redirect that never throws
+        var cid = redirectCourseId || (typeof COURSE_ID !== 'undefined' ? COURSE_ID : '<%= courseId %>');
         var hash = folderId ? '#folder-' + folderId : '';
+        let dest = '/dashboard';
 
-        if (isMod) {
-            if (referrer && referrer.includes(window.location.host) && !referrer.includes('/live/')) {
-                var url = new URL(referrer);
-                url.hash = hash;
-                window.location.href = url.toString();
-            } else if (cid) {
-                window.location.href = '/teacher/course/' + cid + hash;
+        try {
+            if (isMod) {
+                if (cid) {
+                    dest = '/teacher/course/' + cid + hash;
+                } else if (document.referrer && document.referrer.includes(window.location.host) && !document.referrer.includes('/live/')) {
+                    dest = document.referrer;
+                } else {
+                    dest = '/dashboard';
+                }
             } else {
-                window.location.href = '/dashboard';
+                if (cid) {
+                    dest = '/courses/' + cid;
+                } else if (document.referrer && document.referrer.includes(window.location.host) && !document.referrer.includes('/live/')) {
+                    dest = document.referrer;
+                } else {
+                    dest = '/dashboard';
+                }
             }
-        } else {
-            // Student leaving live class
-            if (referrer && referrer.includes(window.location.host) && !referrer.includes('/live/')) {
-                window.location.href = referrer;
-            } else if (cid) {
-                window.location.href = '/courses/' + cid;
-            } else {
-                window.location.href = '/dashboard';
-            }
+        } catch (e) {
+            dest = '/dashboard';
         }
+
+        window.location.href = dest;
     }
+
+    // Auto-exit if host ends live class
+    socket.on('live:ended', function() {
+        showLiveToast('লাইভ ক্লাস সমাপ্ত হয়েছে।', 'info');
+        setTimeout(() => {
+            leaveAgoraChannel('<%= courseId %>', null, true);
+        }, 1500);
+    });
 
     window.addEventListener('beforeunload', function() {
         const isMod = typeof IS_MODERATOR !== 'undefined' ? Boolean(IS_MODERATOR) : <%= Boolean(isModerator) %>;
@@ -3205,9 +3225,12 @@
     }
 
     // Close end-live modal on backdrop click
-    document.getElementById('endLiveModal').addEventListener('click', function(e) {
-        if (e.target === this) this.classList.add('hidden');
-    });
+    const endModalEl = document.getElementById('endLiveModal');
+    if (endModalEl) {
+        endModalEl.addEventListener('click', function(e) {
+            if (e.target === this) closeEndLiveModal();
+        });
+    }
 </script>
 
 <% if (isModerator && locals.liveNodeId) { %>
@@ -3260,7 +3283,7 @@
         <div class="px-6 py-5">
             <p id="endLiveSubMsg" class="text-slate-300 text-sm leading-relaxed mb-6">Recording will be saved automatically as a recorded lesson.</p>
             <div class="flex gap-3">
-                <button type="button" onclick="document.getElementById('endLiveModal').classList.add('hidden')" class="flex-1 py-2.5 rounded-xl text-sm font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all">Cancel</button>
+                <button type="button" onclick="closeEndLiveModal()" class="flex-1 py-2.5 rounded-xl text-sm font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all">Cancel</button>
                 <button type="button" onclick="_doEndLiveClass()" class="flex-1 py-2.5 rounded-xl text-sm font-black text-white bg-rose-600 hover:bg-rose-500 shadow-lg shadow-rose-700/40 transition-all flex items-center justify-center gap-2">
                     <span class="material-symbols-rounded text-[18px]">stop_circle</span> End Class
                 </button>
