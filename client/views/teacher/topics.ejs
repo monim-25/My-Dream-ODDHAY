@@ -9,6 +9,7 @@
     const safeSubmissions = (typeof mySubmissions !== 'undefined' && Array.isArray(mySubmissions)) ? mySubmissions : [];
     const safeSubmissionChapters = (typeof mySubmissionChapters !== 'undefined' && Array.isArray(mySubmissionChapters)) ? mySubmissionChapters : [];
     const selClass = (typeof selectedClass !== 'undefined') ? selectedClass : '';
+    const selClasses = (typeof selectedClasses !== 'undefined' && Array.isArray(selectedClasses) && selectedClasses.length > 0) ? selectedClasses : (selClass ? [selClass] : []);
     const selGroup = (typeof selectedGroup !== 'undefined') ? selectedGroup : 'all';
     const selSubject = (typeof selectedSubject !== 'undefined') ? selectedSubject : '';
     const availSubjects = (typeof availableSubjects !== 'undefined' && Array.isArray(availableSubjects)) ? availableSubjects : [];
@@ -690,26 +691,47 @@
                 <input type="hidden" name="group" value="<%= selGroup %>">
                 <input type="hidden" name="topicId" id="unifiedTopicId" value="">
 
-                <!-- Academic Scope Indicator (Class & Subject) -->
-                <div class="grid grid-cols-2 gap-2.5">
-                    <div>
-                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Class</label>
-                        <input type="text" name="classLevel" value="<%= selClass %>" readonly class="w-full h-9 px-3 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none cursor-default">
-                    </div>
-                    <div>
-                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Subject *</label>
-                        <% if (availSubjects.length > 1) { %>
-                            <select name="subject" id="unifiedSubjectSelect" onchange="onModalSubjectChange(this.value)" class="w-full h-9 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium outline-none focus:border-primary cursor-pointer">
-                                <% availSubjects.forEach(s => { %>
-                                    <option value="<%= s %>" <%= (s.toLowerCase() === selSubject.toLowerCase()) ? 'selected' : '' %>><%= s %></option>
-                                <% }) %>
-                            </select>
-                        <% } else if (availSubjects.length === 1) { %>
-                            <input type="text" name="subject" value="<%= selSubject %>" readonly class="w-full h-9 px-3 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none cursor-default">
-                        <% } else { %>
-                            <input type="text" name="subject" placeholder="Enter subject name" required class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                <!-- Academic Scope Indicator (Multi-Class & Subject) -->
+                <div class="space-y-1.5 p-2.5 rounded-md bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <div class="flex items-center justify-between flex-wrap gap-1">
+                        <label class="text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                            <span class="material-symbols-rounded text-sm text-primary">school</span>
+                            <span>Target Classes *</span>
+                            <span class="text-[10px] text-slate-400 font-normal">(Select one or more classes)</span>
+                        </label>
+                        <% if (safeClasses.length > 1) { %>
+                        <div class="flex items-center gap-1 text-[10px]">
+                            <button type="button" onclick="selectTeacherModalClasses('all')" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-primary hover:text-white transition-all font-medium">All</button>
+                            <button type="button" onclick="selectTeacherModalClasses('clear')" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-rose-500 hover:text-white transition-all font-medium">Clear</button>
+                        </div>
                         <% } %>
                     </div>
+                    <div id="teacherModalClassGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
+                        <% safeClasses.forEach(c => { 
+                            const cName = (c && c.name) ? c.name : String(c || '');
+                            const isChecked = selClass ? cName.toLowerCase() === selClass.toLowerCase() : true;
+                        %>
+                            <label class="flex items-center gap-1.5 p-1.5 rounded border border-slate-200 dark:border-slate-700 hover:border-primary/50 cursor-pointer bg-white dark:bg-slate-900 text-xs transition-colors select-none">
+                                <input type="checkbox" name="targetClass" value="<%= cName %>" <%= isChecked ? 'checked' : '' %> class="size-3.5 accent-primary rounded cursor-pointer">
+                                <span class="font-medium text-slate-800 dark:text-slate-200 truncate"><%= cName %></span>
+                            </label>
+                        <% }) %>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Subject *</label>
+                    <% if (availSubjects.length > 1) { %>
+                        <select name="subject" id="unifiedSubjectSelect" onchange="onModalSubjectChange(this.value)" class="w-full h-9 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium outline-none focus:border-primary cursor-pointer">
+                            <% availSubjects.forEach(s => { %>
+                                <option value="<%= s %>" <%= (s.toLowerCase() === selSubject.toLowerCase()) ? 'selected' : '' %>><%= s %></option>
+                            <% }) %>
+                        </select>
+                    <% } else if (availSubjects.length === 1) { %>
+                        <input type="text" name="subject" value="<%= selSubject %>" readonly class="w-full h-9 px-3 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none cursor-default">
+                    <% } else { %>
+                        <input type="text" name="subject" placeholder="Enter subject name" required class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                    <% } %>
                 </div>
 
                 <!-- Chapter Details -->
@@ -1182,6 +1204,13 @@
             const formData = new FormData(form);
             const payload = Object.fromEntries(formData.entries());
 
+            const targetClasses = Array.from(document.querySelectorAll('#teacherModalClassGrid input[name="targetClass"]:checked')).map(cb => cb.value);
+            if (targetClasses.length === 0) {
+                return Swal.fire('Select Class', 'Please select at least one class for these topics.', 'warning');
+            }
+            payload.classLevels = targetClasses;
+            payload.classLevel = targetClasses[0];
+
             const isBulk = currentModalMode === 'bulk';
             const endpoint = isBulk ? `${apiBase}/topics/bulk` : `${apiBase}/topics`;
 
@@ -1263,6 +1292,11 @@
                 filterSubmissions(subStatus);
             }
         });
+        function selectTeacherModalClasses(mode) {
+            const cbs = document.querySelectorAll('#teacherModalClassGrid input[name="targetClass"]');
+            if (mode === 'all') cbs.forEach(cb => cb.checked = true);
+            else if (mode === 'clear') cbs.forEach(cb => cb.checked = false);
+        }
     </script>
 </body>
 </html>

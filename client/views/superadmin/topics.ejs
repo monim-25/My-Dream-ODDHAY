@@ -4,6 +4,7 @@
     const safeChapters = (typeof chapters !== 'undefined' && Array.isArray(chapters)) ? chapters : [];
     const safeArchived = (typeof archivedTopics !== 'undefined' && Array.isArray(archivedTopics)) ? archivedTopics : [];
     const selClass = (typeof selectedClass !== 'undefined') ? selectedClass : '';
+    const selClasses = (typeof selectedClasses !== 'undefined' && Array.isArray(selectedClasses) && selectedClasses.length > 0) ? selectedClasses : (selClass ? [selClass] : []);
     const selGroup = (typeof selectedGroup !== 'undefined') ? selectedGroup : 'all';
     const selSubject = (typeof selectedSubject !== 'undefined') ? selectedSubject : '';
     const availSubjects = (typeof availableSubjects !== 'undefined' && Array.isArray(availableSubjects)) ? availableSubjects : [];
@@ -124,6 +125,11 @@
                         </div>
 
                         <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <button type="button" id="btnToolbarCopyClasses" onclick="openCopyTopicsModal()" disabled
+                                    class="h-7 px-2.5 sm:px-3 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-medium flex items-center gap-1 transition-all shadow-xs shrink-0">
+                                <span class="material-symbols-rounded text-sm">content_copy</span>
+                                <span id="btnToolbarCopyText">Copy to Other Classes</span>
+                            </button>
                             <button type="button" id="btnToolbarMoveBucket" onclick="bulkActionLive()" disabled
                                     class="h-7 px-2.5 sm:px-3 rounded bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-medium flex items-center gap-1 transition-all shadow-xs shrink-0">
                                 <span class="material-symbols-rounded text-sm">inventory_2</span>
@@ -146,16 +152,63 @@
                         <div class="lg:col-span-4 xl:col-span-3 space-y-3">
                             <div class="bg-white dark:bg-[#0f172a] rounded-md border border-slate-200 dark:border-slate-800/80 p-3.5 shadow-xs space-y-3">
                                 <div>
-                                    <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 block mb-1">
-                                        Academic Class
-                                    </label>
-                                    <select id="classSelector" onchange="onClassChange(this.value)" class="w-full h-9 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-white outline-none focus:border-primary">
-                                        <% safeClasses.forEach(c => { %>
-                                            <option value="<%= c.name %>" <%= c.name.toLowerCase() === selClass.toLowerCase() ? 'selected' : '' %>>
-                                                <%= c.name %> <%= c.hasGroups ? '(Grouped)' : '' %>
-                                            </option>
-                                        <% }) %>
-                                    </select>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                                            Academic Class
+                                        </label>
+                                        <button type="button" onclick="toggleMultiClassDropdown()" class="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5 cursor-pointer">
+                                            <span class="material-symbols-rounded text-xs">checklist</span>
+                                            <span><%= selClasses.length > 1 ? selClasses.length + ' Classes' : 'Multi-Class' %></span>
+                                        </button>
+                                    </div>
+                                    <div class="relative">
+                                        <select id="classSelector" onchange="onClassChange(this.value)" class="w-full h-9 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-white outline-none focus:border-primary cursor-pointer">
+                                            <% if (selClasses.length > 1) { %>
+                                                <option value="<%= selClasses.join(',') %>" selected>Multiple (<%= selClasses.join(', ') %>)</option>
+                                            <% } %>
+                                            <% safeClasses.forEach(c => { %>
+                                                <option value="<%= c.name %>" <%= (selClasses.length === 1 && c.name.toLowerCase() === selClass.toLowerCase()) ? 'selected' : '' %>>
+                                                    <%= c.name %> <%= c.hasGroups ? '(Grouped)' : '' %>
+                                                </option>
+                                            <% }) %>
+                                        </select>
+
+                                        <!-- Multi-class selector dropdown popover -->
+                                        <div id="multiClassFilterMenu" class="hidden absolute top-full left-0 right-0 mt-1 z-30 p-2.5 bg-white dark:bg-[#0f172a] rounded-lg border border-slate-200 dark:border-slate-700 shadow-xl space-y-2">
+                                            <div class="flex items-center justify-between pb-1 border-b border-slate-100 dark:border-slate-800 text-[10px]">
+                                                <span class="font-bold text-slate-600 dark:text-slate-300">Select Multiple Classes</span>
+                                                <div class="flex items-center gap-1">
+                                                    <button type="button" onclick="selectFilterClasses('all')" class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-primary hover:text-white font-medium">All</button>
+                                                    <button type="button" onclick="selectFilterClasses('9-10')" class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-primary hover:text-white font-medium">9-10</button>
+                                                    <button type="button" onclick="selectFilterClasses('11-12')" class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-primary hover:text-white font-medium">11-12</button>
+                                                    <button type="button" onclick="selectFilterClasses('clear')" class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 hover:bg-rose-500 hover:text-white font-medium">Clear</button>
+                                                </div>
+                                            </div>
+                                            <div class="max-h-48 overflow-y-auto space-y-1">
+                                                <% safeClasses.forEach(c => { 
+                                                    const isChecked = selClasses.some(sc => sc.toLowerCase() === c.name.toLowerCase());
+                                                %>
+                                                    <label class="flex items-center gap-2 p-1 rounded hover:bg-slate-50 dark:hover:bg-slate-800/60 cursor-pointer text-xs">
+                                                        <input type="checkbox" name="filterClass" value="<%= c.name %>" <%= isChecked ? 'checked' : '' %> class="size-3.5 accent-primary rounded cursor-pointer">
+                                                        <span class="text-slate-800 dark:text-slate-200 font-medium"><%= c.name %></span>
+                                                    </label>
+                                                <% }) %>
+                                            </div>
+                                            <div class="pt-1.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-1.5">
+                                                <button type="button" onclick="toggleMultiClassDropdown()" class="px-2 py-1 text-[11px] rounded text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+                                                <button type="button" onclick="applyMultiClassFilter()" class="px-3 py-1 text-[11px] rounded bg-primary text-white font-semibold shadow-xs">Apply Filter</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <% if (selClasses.length > 1) { %>
+                                        <div class="flex flex-wrap gap-1 mt-1.5">
+                                            <% selClasses.forEach(sc => { %>
+                                                <span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] bg-primary/10 text-primary font-medium">
+                                                    <%= sc %>
+                                                </span>
+                                            <% }) %>
+                                        </div>
+                                    <% } %>
                                 </div>
 
                                 <!-- Stream / Group Filter if class has groups -->
@@ -187,9 +240,15 @@
 
                                 <!-- Subject Rail -->
                                 <div>
-                                    <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 block mb-1">
-                                        Assigned Subjects (<%= availSubjects.length %>)
-                                    </label>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                                            Assigned Subjects (<%= availSubjects.length %>)
+                                        </label>
+                                        <button type="button" onclick="openAddSubjectModal()" class="inline-flex items-center gap-0.5 text-[10.5px] font-bold text-primary hover:text-primary-dark transition-colors px-1.5 py-0.5 rounded hover:bg-primary/5 cursor-pointer" title="Add Subject to multiple classes at once">
+                                            <span class="material-symbols-rounded text-sm">add_circle</span>
+                                            <span>Add Subject</span>
+                                        </button>
+                                    </div>
                                     
                                     <!-- Mobile Subject Select (< lg) -->
                                     <div class="block lg:hidden">
@@ -657,9 +716,56 @@
 
             <!-- Unified Form -->
             <form id="unifiedTopicForm" onsubmit="submitUnifiedForm(event)" class="space-y-3">
-                <input type="hidden" name="classLevel" value="<%= selClass %>">
-                <input type="hidden" name="group" value="<%= selGroup %>">
-                <input type="hidden" name="subject" value="<%= selSubject %>">
+                <!-- Class Multi-Selection -->
+                <div class="space-y-1.5 p-2.5 rounded-md bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <div class="flex items-center justify-between flex-wrap gap-1">
+                        <label class="text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                            <span class="material-symbols-rounded text-sm text-primary">school</span>
+                            <span>Target Classes *</span>
+                            <span class="text-[10px] text-slate-400 font-normal">(Select one or more classes)</span>
+                        </label>
+                        <div class="flex items-center gap-1 text-[10px]">
+                            <button type="button" onclick="selectModalClasses('all')" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-primary hover:text-white transition-all font-medium">All</button>
+                            <button type="button" onclick="selectModalClasses('9-10')" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-primary hover:text-white transition-all font-medium">Class 9 & 10</button>
+                            <button type="button" onclick="selectModalClasses('11-12')" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-primary hover:text-white transition-all font-medium">Class 11 & 12</button>
+                            <button type="button" onclick="selectModalClasses('clear')" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-rose-500 hover:text-white transition-all font-medium">Clear</button>
+                        </div>
+                    </div>
+                    <div id="unifiedModalClassGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
+                        <% safeClasses.forEach(c => { 
+                            const isChecked = selClasses.some(sc => sc.toLowerCase() === c.name.toLowerCase());
+                        %>
+                            <label class="modal-class-pill flex items-center gap-1.5 p-1.5 rounded border border-slate-200 dark:border-slate-700 hover:border-primary/50 cursor-pointer bg-white dark:bg-slate-900 text-xs transition-colors select-none">
+                                <input type="checkbox" name="targetClass" value="<%= c.name %>" <%= isChecked ? 'checked' : '' %> class="size-3.5 accent-primary rounded cursor-pointer">
+                                <span class="font-medium text-slate-800 dark:text-slate-200 truncate"><%= c.name %></span>
+                            </label>
+                        <% }) %>
+                    </div>
+                </div>
+
+                <!-- Subject & Stream Selection -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Subject *</label>
+                        <div class="relative">
+                            <input type="text" id="unifiedSubject" name="subject" required list="unifiedSubjectsDatalist" value="<%= selSubject %>" placeholder="Enter or select subject" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                            <datalist id="unifiedSubjectsDatalist">
+                                <% availSubjects.forEach(s => { %>
+                                    <option value="<%= s %>"><%= s %></option>
+                                <% }) %>
+                            </datalist>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Stream / Group</label>
+                        <select name="group" id="unifiedGroup" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                            <option value="None" <%= (!selGroup || selGroup === 'all' || selGroup === 'None') ? 'selected' : '' %>>General / Common / None</option>
+                            <option value="Science" <%= selGroup === 'Science' ? 'selected' : '' %>>Science (বিজ্ঞান)</option>
+                            <option value="Commerce" <%= selGroup === 'Commerce' ? 'selected' : '' %>>Commerce (ব্যবসায় শিক্ষা)</option>
+                            <option value="Humanities" <%= selGroup === 'Humanities' ? 'selected' : '' %>>Humanities (মানবিক)</option>
+                        </select>
+                    </div>
+                </div>
 
                 <!-- Chapter Details (Shared for both Single & Bulk) -->
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -729,6 +835,141 @@
                 <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                     <button type="button" onclick="closeModal('unifiedTopicModal')" class="h-9 px-3 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
                     <button type="submit" id="unifiedSubmitBtn" class="h-9 px-4 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium transition-all">Save Topic</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+
+    <!-- MODAL: ADD SUBJECT TO MULTIPLE CLASSES -->
+    <div id="addSubjectModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-[#0f172a] rounded-lg border border-slate-200 dark:border-slate-800 max-w-lg w-full max-h-[92vh] overflow-y-auto p-4 sm:p-5 space-y-4 shadow-xl">
+            <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-rounded text-primary text-xl">menu_book</span>
+                    <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Add Subject across Classes</h3>
+                </div>
+                <button type="button" onclick="closeModal('addSubjectModal')" class="size-7 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 flex items-center justify-center">
+                    <span class="material-symbols-rounded text-base">close</span>
+                </button>
+            </div>
+
+            <form id="addSubjectForm" onsubmit="submitAddSubject(event)" class="space-y-3.5">
+                <div>
+                    <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Subject Name *</label>
+                    <input type="text" id="inputAddSubjectName" required list="commonSubjectsSuggestions" placeholder="e.g. Higher Mathematics, ICT, Bangla 1st Paper" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                    <datalist id="commonSubjectsSuggestions">
+                        <option value="Bangla 1st Paper">
+                        <option value="Bangla 2nd Paper">
+                        <option value="English 1st Paper">
+                        <option value="English 2nd Paper">
+                        <option value="Mathematics">
+                        <option value="Higher Mathematics">
+                        <option value="General Science">
+                        <option value="Physics">
+                        <option value="Chemistry">
+                        <option value="Biology">
+                        <option value="ICT">
+                        <option value="Accounting">
+                        <option value="Finance & Banking">
+                        <option value="Business Entrepreneurship">
+                        <option value="Economics">
+                        <option value="Civics & Citizenship">
+                        <option value="History & Civilization">
+                        <option value="Geography & Environment">
+                        <option value="Religion & Moral Education">
+                    </datalist>
+                </div>
+
+                <div>
+                    <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Stream / Group</label>
+                    <select id="selectAddSubjectGroup" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                        <option value="common">Common / আবশ্যিক (All Students of the Class)</option>
+                        <option value="Science">Science (বিজ্ঞান বিভাগ)</option>
+                        <option value="Commerce">Commerce (ব্যবসায় শিক্ষা)</option>
+                        <option value="Humanities">Humanities (মানবিক বিভাগ)</option>
+                    </select>
+                </div>
+
+                <!-- Target Classes Checkboxes -->
+                <div class="space-y-1.5 p-2.5 rounded-md bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800">
+                    <div class="flex items-center justify-between flex-wrap gap-1">
+                        <label class="text-[11px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1">
+                            <span class="material-symbols-rounded text-sm text-primary">domain</span>
+                            <span>Target Classes *</span>
+                        </label>
+                        <div class="flex items-center gap-1 text-[10px]">
+                            <button type="button" onclick="selectAddSubjectClasses('all')" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-primary hover:text-white transition-all font-medium">All</button>
+                            <button type="button" onclick="selectAddSubjectClasses('9-10')" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-primary hover:text-white transition-all font-medium">Class 9 & 10</button>
+                            <button type="button" onclick="selectAddSubjectClasses('11-12')" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-primary hover:text-white transition-all font-medium">Class 11 & 12</button>
+                            <button type="button" onclick="selectAddSubjectClasses('clear')" class="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-rose-500 hover:text-white transition-all font-medium">Clear</button>
+                        </div>
+                    </div>
+                    <div id="addSubjectClassGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 pt-1">
+                        <% safeClasses.forEach(c => { 
+                            const isChecked = selClasses.some(sc => sc.toLowerCase() === c.name.toLowerCase());
+                        %>
+                            <label class="flex items-center gap-1.5 p-1.5 rounded border border-slate-200 dark:border-slate-700 hover:border-primary/50 cursor-pointer bg-white dark:bg-slate-900 text-xs transition-colors select-none">
+                                <input type="checkbox" name="addSubjectClass" value="<%= c.name %>" <%= isChecked ? 'checked' : '' %> class="size-3.5 accent-primary rounded cursor-pointer">
+                                <span class="font-medium text-slate-800 dark:text-slate-200 truncate"><%= c.name %></span>
+                            </label>
+                        <% }) %>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" onclick="closeModal('addSubjectModal')" class="h-9 px-3 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+                    <button type="submit" id="btnSubmitAddSubject" class="h-9 px-4 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium transition-all flex items-center gap-1">
+                        <span class="material-symbols-rounded text-[17px]">add_circle</span>
+                        <span>Add Subject to Classes</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: COPY SELECTED TOPICS TO OTHER CLASSES -->
+    <div id="copyTopicsModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 hidden">
+        <div class="bg-white dark:bg-[#0f172a] rounded-lg border border-slate-200 dark:border-slate-800 max-w-lg w-full max-h-[92vh] overflow-y-auto p-4 sm:p-5 space-y-4 shadow-xl">
+            <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-rounded text-primary text-xl">content_copy</span>
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">Copy Topics to Classes</h3>
+                        <p class="text-[11px] text-slate-400 font-normal">Replicate selected topics to another class with the same syllabus.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModal('copyTopicsModal')" class="size-7 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 flex items-center justify-center">
+                    <span class="material-symbols-rounded text-base">close</span>
+                </button>
+            </div>
+
+            <form id="copyTopicsForm" onsubmit="submitCopyTopics(event)" class="space-y-3.5">
+                <div class="flex items-center justify-between p-2.5 rounded-md bg-primary/5 dark:bg-primary/10 border border-primary/20">
+                    <span class="text-xs font-medium text-primary">Selected for Copying:</span>
+                    <span id="copyTopicsCountBadge" class="px-2 py-0.5 rounded-full text-xs font-bold bg-primary text-white">0 Topics</span>
+                </div>
+
+                <div>
+                    <label class="text-[11px] font-bold text-slate-700 dark:text-slate-200 block mb-1.5">
+                        Select Destination Classes:
+                    </label>
+                    <div id="copyTopicsClassGrid" class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        <% safeClasses.forEach(c => { %>
+                            <label class="flex items-center gap-1.5 p-1.5 rounded border border-slate-200 dark:border-slate-700 hover:border-primary/50 cursor-pointer bg-white dark:bg-slate-900 text-xs transition-colors select-none">
+                                <input type="checkbox" name="copyTargetClass" value="<%= c.name %>" class="size-3.5 accent-primary rounded cursor-pointer">
+                                <span class="font-medium text-slate-800 dark:text-slate-200 truncate"><%= c.name %></span>
+                            </label>
+                        <% }) %>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button" onclick="closeModal('copyTopicsModal')" class="h-9 px-3 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+                    <button type="submit" id="btnSubmitCopyTopics" class="h-9 px-4 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium transition-all flex items-center gap-1">
+                        <span class="material-symbols-rounded text-[17px]">content_copy</span>
+                        <span>Copy Topics Now</span>
+                    </button>
                 </div>
             </form>
         </div>
@@ -1123,6 +1364,18 @@
                 }
             }
 
+            const btnToolbarCopyClasses = document.getElementById('btnToolbarCopyClasses');
+            const btnToolbarCopyText = document.getElementById('btnToolbarCopyText');
+            if (btnToolbarCopyClasses) {
+                if (ids.length > 0) {
+                    btnToolbarCopyClasses.disabled = false;
+                    if (btnToolbarCopyText) btnToolbarCopyText.innerText = `Copy to Other Classes (${ids.length})`;
+                } else {
+                    btnToolbarCopyClasses.disabled = true;
+                    if (btnToolbarCopyText) btnToolbarCopyText.innerText = 'Copy to Other Classes';
+                }
+            }
+
             if (ids.length > 0) {
                 if (badge) badge.innerText = ids.length;
                 if (bar) bar.classList.remove('hidden');
@@ -1335,15 +1588,28 @@
             btn.innerText = 'Processing...';
 
             const form = e.target;
-            const classLevel = form.classLevel.value;
-            const group = form.group.value;
-            const subject = form.subject.value;
+            const checkedClasses = Array.from(document.querySelectorAll('#unifiedModalClassGrid input[name="targetClass"]:checked')).map(cb => cb.value);
+            if (checkedClasses.length === 0) {
+                btn.disabled = false;
+                btn.innerText = origText;
+                return Swal.fire('Select Class', 'Please select at least one class for these topics.', 'warning');
+            }
+            const classLevels = checkedClasses;
+            const classLevel = checkedClasses[0];
+            const group = form.group ? form.group.value : 'None';
+            const subject = form.subject ? form.subject.value.trim() : '';
+            if (!subject) {
+                btn.disabled = false;
+                btn.innerText = origText;
+                return Swal.fire('Select Subject', 'Please enter or select a subject.', 'warning');
+            }
             const chapterName = form.chapterName.value;
             const chapterNumber = form.chapterNumber.value;
 
             try {
                 if (currentModalMode === 'single') {
                     const payload = {
+                        classLevels,
                         classLevel,
                         group,
                         subject,
@@ -1377,6 +1643,7 @@
                     }
                 } else {
                     const payload = {
+                        classLevels,
                         classLevel,
                         group,
                         subject,
@@ -1822,6 +2089,180 @@
                 switchTopicTab('active');
             }
         });
+
+        // Multi-Class Quick Selectors for Unified Modal
+        function selectModalClasses(mode) {
+            const cbs = document.querySelectorAll('#unifiedModalClassGrid input[name="targetClass"]');
+            if (mode === 'all') {
+                cbs.forEach(cb => cb.checked = true);
+            } else if (mode === 'clear') {
+                cbs.forEach(cb => cb.checked = false);
+            } else if (mode === '9-10') {
+                cbs.forEach(cb => {
+                    const v = cb.value.toLowerCase();
+                    cb.checked = (v.includes('9') || v.includes('10')) && !v.includes('11') && !v.includes('12');
+                });
+            } else if (mode === '11-12') {
+                cbs.forEach(cb => {
+                    const v = cb.value.toLowerCase();
+                    cb.checked = v.includes('11') || v.includes('12');
+                });
+            }
+        }
+
+        // Multi-Class Filter Dropdown Toggle & Apply
+        function toggleMultiClassDropdown() {
+            const menu = document.getElementById('multiClassFilterMenu');
+            if (menu) menu.classList.toggle('hidden');
+        }
+
+        function applyMultiClassFilter() {
+            const checked = Array.from(document.querySelectorAll('#multiClassFilterMenu input[name="filterClass"]:checked')).map(cb => cb.value);
+            if (checked.length === 0) {
+                return Swal.fire('Select Class', 'Please select at least one class to filter.', 'info');
+            }
+            const u = new URL(window.location.href);
+            u.searchParams.set('classLevels', checked.join(','));
+            u.searchParams.delete('classLevel');
+            u.searchParams.delete('subject');
+            window.location.href = u.toString();
+        }
+
+        function selectFilterClasses(mode) {
+            const cbs = document.querySelectorAll('#multiClassFilterMenu input[name="filterClass"]');
+            if (mode === 'all') cbs.forEach(cb => cb.checked = true);
+            else if (mode === '9-10') cbs.forEach(cb => cb.checked = (cb.value.includes('9') || cb.value.includes('10')) && !cb.value.includes('11') && !cb.value.includes('12'));
+            else if (mode === '11-12') cbs.forEach(cb => cb.checked = cb.value.includes('11') || cb.value.includes('12'));
+            else if (mode === 'clear') cbs.forEach(cb => cb.checked = false);
+        }
+
+        // Add Subject to Multiple Classes Modal
+        function openAddSubjectModal() {
+            document.getElementById('addSubjectForm').reset();
+            const currentC = '<%= selClass %>';
+            document.querySelectorAll('#addSubjectClassGrid input[name="addSubjectClass"]').forEach(cb => {
+                cb.checked = (cb.value.toLowerCase() === currentC.toLowerCase());
+            });
+            document.getElementById('addSubjectModal').classList.remove('hidden');
+        }
+
+        function selectAddSubjectClasses(mode) {
+            const cbs = document.querySelectorAll('#addSubjectClassGrid input[name="addSubjectClass"]');
+            if (mode === 'all') cbs.forEach(cb => cb.checked = true);
+            else if (mode === 'clear') cbs.forEach(cb => cb.checked = false);
+            else if (mode === '9-10') cbs.forEach(cb => {
+                const v = cb.value.toLowerCase();
+                cb.checked = (v.includes('9') || v.includes('10')) && !v.includes('11') && !v.includes('12');
+            });
+            else if (mode === '11-12') cbs.forEach(cb => {
+                const v = cb.value.toLowerCase();
+                cb.checked = v.includes('11') || v.includes('12');
+            });
+        }
+
+        async function submitAddSubject(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmitAddSubject');
+            const orig = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = 'Adding...';
+
+            const subjectName = document.getElementById('inputAddSubjectName').value.trim();
+            const group = document.getElementById('selectAddSubjectGroup').value;
+            const checkedClasses = Array.from(document.querySelectorAll('#addSubjectClassGrid input[name="addSubjectClass"]:checked')).map(cb => cb.value);
+
+            if (!subjectName) {
+                btn.disabled = false;
+                btn.innerText = orig;
+                return Swal.fire('Subject Name', 'Please enter a subject name', 'warning');
+            }
+            if (checkedClasses.length === 0) {
+                btn.disabled = false;
+                btn.innerText = orig;
+                return Swal.fire('Select Classes', 'Please select at least one class for this subject', 'warning');
+            }
+
+            try {
+                const res = await fetch(`${apiBase}/topics/add-subject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ subjectName, classLevels: checkedClasses, group })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({ icon: 'success', title: 'Subject Added!', text: data.message, timer: 1500, showConfirmButton: false });
+                    const u = new URL(window.location.href);
+                    u.searchParams.set('classLevel', checkedClasses[0]);
+                    u.searchParams.set('subject', subjectName);
+                    window.location.href = u.toString();
+                } else {
+                    Swal.fire('Error', data.error || 'Failed to add subject', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', err.message || 'Network error', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = orig;
+            }
+        }
+
+        // Copy Topics to Other Classes Modal
+        function openCopyTopicsModal() {
+            const ids = getSelectedLiveTopicIds();
+            if (ids.length === 0) {
+                return Swal.fire('Select Topics', 'Please select at least one topic first.', 'info');
+            }
+            document.getElementById('copyTopicsCountBadge').innerText = `${ids.length} Topics Selected`;
+            const currentC = '<%= selClass %>';
+            document.querySelectorAll('#copyTopicsClassGrid input[name="copyTargetClass"]').forEach(cb => {
+                cb.checked = false;
+                if (cb.value.toLowerCase() === currentC.toLowerCase()) {
+                    cb.disabled = true;
+                    cb.title = 'Current class (source)';
+                } else {
+                    cb.disabled = false;
+                    cb.title = '';
+                }
+            });
+            document.getElementById('copyTopicsModal').classList.remove('hidden');
+        }
+
+        async function submitCopyTopics(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btnSubmitCopyTopics');
+            const orig = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = 'Copying...';
+
+            const ids = getSelectedLiveTopicIds();
+            const targetClasses = Array.from(document.querySelectorAll('#copyTopicsClassGrid input[name="copyTargetClass"]:checked')).map(cb => cb.value);
+
+            if (targetClasses.length === 0) {
+                btn.disabled = false;
+                btn.innerText = orig;
+                return Swal.fire('Select Target Class', 'Please select at least one class to copy topics into.', 'warning');
+            }
+
+            try {
+                const res = await fetch(`${apiBase}/topics/copy-to-classes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ topicIds: ids, targetClasses })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({ icon: 'success', title: 'Topics Copied!', text: data.message, timer: 1500, showConfirmButton: false });
+                    window.location.reload();
+                } else {
+                    Swal.fire('Error', data.error || 'Failed to copy topics', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', err.message || 'Network error', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = orig;
+            }
+        }
     </script>
 </body>
 </html>

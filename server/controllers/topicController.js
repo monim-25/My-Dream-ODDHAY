@@ -5,6 +5,218 @@ const User = require('../models/User');
 const Course = require('../models/Course');
 const { connectDB } = require('../config');
 
+// Escape regex special characters
+const escapeRegex = (s) => String(s || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Helper to automatically register/ensure a subject exists in AcademicClass
+const ensureSubjectInAcademicClass = async (clsName, subjectName, groupName) => {
+    try {
+        if (!clsName || !subjectName) return;
+        const cleanName = clsName.trim();
+        const cleanSub = subjectName.trim();
+        const ac = await AcademicClass.findOne({ 
+            name: new RegExp(`^${escapeRegex(cleanName)}$`, 'i'),
+            isArchived: { $ne: true }
+        });
+        if (!ac) return;
+
+        let modified = false;
+        if (!ac.subjects) ac.subjects = [];
+        if (!ac.subjects.some(s => s.toLowerCase() === cleanSub.toLowerCase())) {
+            ac.subjects.push(cleanSub);
+            modified = true;
+        }
+
+        const grp = groupName ? String(groupName).trim() : 'common';
+        if (ac.hasGroups && ac.groups && ac.groups.length > 0) {
+            if (grp.toLowerCase() === 'common' || grp.toLowerCase() === 'all' || grp.toLowerCase() === 'none') {
+                if (!ac.commonSubjects) ac.commonSubjects = [];
+                if (!ac.commonSubjects.some(s => s.toLowerCase() === cleanSub.toLowerCase())) {
+                    ac.commonSubjects.push(cleanSub);
+                    modified = true;
+                }
+            } else {
+                const targetGrp = ac.groups.find(g => g.name.toLowerCase() === grp.toLowerCase());
+                if (targetGrp) {
+                    if (!targetGrp.subjects) targetGrp.subjects = [];
+                    if (!targetGrp.subjects.some(s => s.toLowerCase() === cleanSub.toLowerCase())) {
+                        targetGrp.subjects.push(cleanSub);
+                        modified = true;
+                    }
+                }
+            }
+        } else {
+            if (!ac.commonSubjects) ac.commonSubjects = [];
+            if (!ac.commonSubjects.some(s => s.toLowerCase() === cleanSub.toLowerCase())) {
+                ac.commonSubjects.push(cleanSub);
+                modified = true;
+            }
+        }
+
+        if (modified) {
+            ac.markModified('subjects');
+            ac.markModified('commonSubjects');
+            ac.markModified('groups');
+            await ac.save();
+        }
+    } catch (err) {
+        console.warn('ensureSubjectInAcademicClass warning:', err.message);
+    }
+};
+
+// Add Subject across Multiple Classes simultaneously
+const addSubjectToClasses = async (req, res) => {
+    try {
+        await connectDB();
+        const { subjectName, classLevels, group } = req.body;
+
+        if (!subjectName || !subjectName.trim()) {
+            return res.status(400).json({ success: false, error: 'Subject name is required' });
+        }
+
+        let targetClasses = [];
+        if (Array.isArray(classLevels)) {
+            targetClasses = classLevels.map(c => String(c || '').trim()).filter(Boolean);
+        } else if (typeof classLevels === 'string') {
+            targetClasses = classLevels.split(',').map(c => c.trim()).filter(Boolean);
+        }
+
+        if (targetClasses.length === 0) {
+            return res.status(400).json({ success: false, error: 'Please select at least one class' });
+        }
+
+        const cleanSubject = subjectName.trim();
+        const cleanGroup = (group || 'common').trim();
+
+        const updatedClasses = [];
+        for (const clsName of targetClasses) {
+            const ac = await AcademicClass.findOne({ 
+                name: new RegExp(`^${escapeRegex(clsName)}$`, 'i'),
+                isArchived: { $ne: true }
+            });
+            if (!ac) continue;
+
+            let modified = false;
+            if (!ac.subjects) ac.subjects = [];
+            if (!ac.subjects.some(s => s.toLowerCase() === cleanSubject.toLowerCase())) {
+                ac.subjects.push(cleanSubject);
+                modified = true;
+            }
+
+            if (ac.hasGroups && ac.groups && ac.groups.length > 0) {
+                if (cleanGroup.toLowerCase() === 'common' || cleanGroup.toLowerCase() === 'all' || cleanGroup.toLowerCase() === 'none') {
+                    if (!ac.commonSubjects) ac.commonSubjects = [];
+                    if (!ac.commonSubjects.some(s => s.toLowerCase() === cleanSubject.toLowerCase())) {
+                        ac.commonSubjects.push(cleanSubject);
+                        modified = true;
+                    }
+                } else {
+                    const targetGroupObj = ac.groups.find(g => g.name.toLowerCase() === cleanGroup.toLowerCase());
+                    if (targetGroupObj) {
+                        if (!targetGroupObj.subjects) targetGroupObj.subjects = [];
+                        if (!targetGroupObj.subjects.some(s => s.toLowerCase() === cleanSubject.toLowerCase())) {
+                            targetGroupObj.subjects.push(cleanSubject);
+                            modified = true;
+                        }
+                    }
+                }
+            } else {
+                if (!ac.commonSubjects) ac.commonSubjects = [];
+                if (!ac.commonSubjects.some(s => s.toLowerCase() === cleanSubject.toLowerCase())) {
+                    ac.commonSubjects.push(cleanSubject);
+                    modified = true;
+                }
+            }
+
+            if (modified) {
+                ac.markModified('subjects');
+                ac.markModified('commonSubjects');
+                ac.markModified('groups');
+                await ac.save();
+                updatedClasses.push(ac.name);
+            }
+        }
+
+        if (req.app && req.app.get && req.app.get('clearAcademicCache')) {
+            try { req.app.get('clearAcademicCache')(); } catch(_) {}
+        }
+
+        return res.json({
+            success: true,
+            message: `Subject "${cleanSubject}" successfully added to ${targetClasses.length} class(es): ${targetClasses.join(', ')}`,
+            subject: cleanSubject,
+            updatedClasses
+        });
+    } catch (err) {
+        console.error('addSubjectToClasses Error:', err);
+        return res.status(500).json({ success: false, error: 'Server error: ' + err.message });
+    }
+};
+
+// Copy Selected Topics to Target Classes
+const copyTopicsToClasses = async (req, res) => {
+    try {
+        await connectDB();
+        const { topicIds, targetClasses } = req.body;
+
+        if (!Array.isArray(topicIds) || topicIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'Please select at least one topic to copy' });
+        }
+        if (!Array.isArray(targetClasses) || targetClasses.length === 0) {
+            return res.status(400).json({ success: false, error: 'Please select at least one target class' });
+        }
+
+        const sourceTopics = await Topic.find({ _id: { $in: topicIds }, isArchived: { $ne: true } }).lean();
+        if (sourceTopics.length === 0) {
+            return res.status(404).json({ success: false, error: 'No active source topics found to copy' });
+        }
+
+        let totalCopied = 0;
+        for (const targetClass of targetClasses) {
+            for (const st of sourceTopics) {
+                const existing = await Topic.findOne({
+                    classLevel: new RegExp(`^${escapeRegex(targetClass)}$`, 'i'),
+                    subject: new RegExp(`^${escapeRegex(st.subject)}$`, 'i'),
+                    name: new RegExp(`^${escapeRegex(st.name)}$`, 'i'),
+                    'chapter.name': new RegExp(`^${escapeRegex(st.chapter.name)}$`, 'i'),
+                    isArchived: { $ne: true }
+                });
+
+                if (!existing) {
+                    await Topic.create({
+                        name: st.name,
+                        code: st.code,
+                        classLevel: targetClass,
+                        group: st.group,
+                        subject: st.subject,
+                        chapter: st.chapter,
+                        difficulty: st.difficulty,
+                        keywords: st.keywords,
+                        description: st.description,
+                        order: st.order,
+                        status: 'approved',
+                        createdBy: req.session && req.session.user ? req.session.user._id : null
+                    });
+                    totalCopied++;
+                }
+            }
+
+            for (const st of sourceTopics) {
+                await ensureSubjectInAcademicClass(targetClass, st.subject, st.group);
+            }
+        }
+
+        return res.json({
+            success: true,
+            count: totalCopied,
+            message: `Successfully copied ${totalCopied} topic(s) to ${targetClasses.length} class(es): ${targetClasses.join(', ')}`
+        });
+    } catch (err) {
+        console.error('copyTopicsToClasses Error:', err);
+        return res.status(500).json({ success: false, error: 'Server error: ' + err.message });
+    }
+};
+
 // Default initial sample topics seed for rich initial UX if collection is empty
 const seedDefaultTopicsIfEmpty = async () => {
     try {
@@ -128,33 +340,46 @@ const getTopicsPage = async (req, res) => {
 
         const classes = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
         
-        let selectedClass = (req.query.classLevel || '').trim();
+        let rawClass = req.query.classLevels || req.query.classLevel || '';
+        let selectedClasses = [];
+        if (Array.isArray(rawClass)) {
+            selectedClasses = rawClass.map(s => String(s || '').trim()).filter(Boolean);
+        } else if (typeof rawClass === 'string' && rawClass.trim()) {
+            selectedClasses = rawClass.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        if (selectedClasses.length === 0 && classes.length > 0) {
+            selectedClasses = [classes[0].name];
+        }
+
+        let selectedClass = selectedClasses[0] || '';
         let selectedGroup = (req.query.group || 'all').trim();
         let selectedSubject = (req.query.subject || '').trim();
 
-        // Default to first active class if not specified
-        if (!selectedClass && classes.length > 0) {
-            selectedClass = classes[0].name;
-        }
-
         const currentClassObj = classes.find(c => c.name.toLowerCase() === selectedClass.toLowerCase()) || classes[0] || null;
 
-        // Resolve available subjects for current class
-        let availableSubjects = [];
-        if (currentClassObj) {
-            if (currentClassObj.hasGroups && currentClassObj.groups && currentClassObj.groups.length > 0) {
-                if (selectedGroup && selectedGroup !== 'all') {
-                    const grp = currentClassObj.groups.find(g => g.name.toLowerCase() === selectedGroup.toLowerCase());
-                    const grpSubs = grp ? grp.subjects : [];
-                    availableSubjects = Array.from(new Set([...(currentClassObj.commonSubjects || []), ...grpSubs]));
+        // Resolve available subjects across ALL selected classes
+        let availableSubjectsSet = new Set();
+        selectedClasses.forEach(clsName => {
+            const clsObj = classes.find(c => c.name.toLowerCase() === clsName.toLowerCase());
+            if (clsObj) {
+                if (clsObj.hasGroups && clsObj.groups && clsObj.groups.length > 0) {
+                    if (selectedGroup && selectedGroup !== 'all') {
+                        const grp = clsObj.groups.find(g => g.name.toLowerCase() === selectedGroup.toLowerCase());
+                        if (grp && grp.subjects) grp.subjects.forEach(s => availableSubjectsSet.add(s));
+                        if (clsObj.commonSubjects) clsObj.commonSubjects.forEach(s => availableSubjectsSet.add(s));
+                    } else {
+                        if (clsObj.commonSubjects) clsObj.commonSubjects.forEach(s => availableSubjectsSet.add(s));
+                        if (clsObj.subjects) clsObj.subjects.forEach(s => availableSubjectsSet.add(s));
+                        clsObj.groups.forEach(g => (g.subjects || []).forEach(s => availableSubjectsSet.add(s)));
+                    }
                 } else {
-                    const allGrpSubs = currentClassObj.groups.flatMap(g => g.subjects || []);
-                    availableSubjects = Array.from(new Set([...(currentClassObj.commonSubjects || []), ...(currentClassObj.subjects || []), ...allGrpSubs]));
+                    (clsObj.subjects || []).forEach(s => availableSubjectsSet.add(s));
+                    (clsObj.commonSubjects || []).forEach(s => availableSubjectsSet.add(s));
                 }
-            } else {
-                availableSubjects = currentClassObj.subjects || [];
             }
-        }
+        });
+        let availableSubjects = Array.from(availableSubjectsSet);
 
         // Default subject
         if (!selectedSubject && availableSubjects.length > 0) {
@@ -163,11 +388,13 @@ const getTopicsPage = async (req, res) => {
 
         // Active Topics Query (Only Approved topics go to Live Syllabus)
         const activeFilter = { isArchived: { $nin: [true, 'true', 1] }, status: { $nin: ['pending', 'rejected'] } };
-        if (selectedClass) {
-            activeFilter.classLevel = new RegExp(`^${selectedClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        if (selectedClasses.length === 1) {
+            activeFilter.classLevel = new RegExp(`^${escapeRegex(selectedClasses[0])}$`, 'i');
+        } else if (selectedClasses.length > 1) {
+            activeFilter.classLevel = { $in: selectedClasses.map(c => new RegExp(`^${escapeRegex(c)}$`, 'i')) };
         }
         if (selectedSubject) {
-            activeFilter.subject = new RegExp(`^${selectedSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+            activeFilter.subject = new RegExp(`^${escapeRegex(selectedSubject)}$`, 'i');
         }
         if (selectedGroup && selectedGroup !== 'all') {
             activeFilter.group = { $in: [selectedGroup, 'all', 'None', null] };
@@ -312,16 +539,31 @@ const getChaptersApi = async (req, res) => {
     }
 };
 
-// Create Single Topic
+// Create Single Topic (Supports Multiple Classes at once)
 const createTopic = async (req, res) => {
     try {
         await connectDB();
-        const { name, code, classLevel, group, subject, chapterName, chapterNumber, difficulty, keywords, description, order } = req.body;
+        const { name, code, classLevel, classLevels, group, subject, chapterName, chapterNumber, difficulty, keywords, description, order } = req.body;
 
         if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Topic name is required' });
-        if (!classLevel || !classLevel.trim()) return res.status(400).json({ success: false, error: 'Class level is required' });
         if (!subject || !subject.trim()) return res.status(400).json({ success: false, error: 'Subject is required' });
         if (!chapterName || !chapterName.trim()) return res.status(400).json({ success: false, error: 'Chapter name is required' });
+
+        // Normalize target classes (supports multiple classes at once!)
+        let targetClasses = [];
+        if (Array.isArray(classLevels) && classLevels.length > 0) {
+            targetClasses = classLevels.map(s => String(s || '').trim()).filter(Boolean);
+        } else if (Array.isArray(classLevel) && classLevel.length > 0) {
+            targetClasses = classLevel.map(s => String(s || '').trim()).filter(Boolean);
+        } else if (typeof classLevel === 'string' && classLevel.includes(',')) {
+            targetClasses = classLevel.split(',').map(s => s.trim()).filter(Boolean);
+        } else if (typeof classLevel === 'string' && classLevel.trim()) {
+            targetClasses = [classLevel.trim()];
+        }
+
+        if (targetClasses.length === 0) {
+            return res.status(400).json({ success: false, error: 'At least one class level is required' });
+        }
 
         const keywordsArray = Array.isArray(keywords) 
             ? keywords.map(s => String(s || '').trim()).filter(Boolean)
@@ -332,8 +574,10 @@ const createTopic = async (req, res) => {
 
         if (isTeacher) {
             const { assignedClasses, assignedSubjects } = await getTeacherAssignments(req.session.user._id);
-            if (assignedClasses.length > 0 && !matchesClass(classLevel, assignedClasses)) {
-                return res.status(403).json({ success: false, error: `You are not assigned to class "${classLevel}"` });
+            for (const cls of targetClasses) {
+                if (assignedClasses.length > 0 && !matchesClass(cls, assignedClasses)) {
+                    return res.status(403).json({ success: false, error: `You are not assigned to class "${cls}"` });
+                }
             }
             if (assignedSubjects.length > 0 && !matchesSubject(subject, assignedSubjects)) {
                 return res.status(403).json({ success: false, error: `You are not assigned to subject "${subject}"` });
@@ -351,7 +595,7 @@ const createTopic = async (req, res) => {
 
                 existingTopic.name = name.trim();
                 existingTopic.code = code ? code.trim() : (existingTopic.code || '');
-                existingTopic.classLevel = classLevel.trim();
+                existingTopic.classLevel = targetClasses[0];
                 existingTopic.group = group || 'None';
                 existingTopic.subject = subject.trim();
                 existingTopic.chapter = {
@@ -366,6 +610,39 @@ const createTopic = async (req, res) => {
                 existingTopic.rejectionReason = '';
                 existingTopic.updatedAt = new Date();
                 await existingTopic.save();
+                await ensureSubjectInAcademicClass(targetClasses[0], subject.trim(), group);
+
+                // Clone to other classes if multiple selected on edit
+                if (targetClasses.length > 1) {
+                    for (let i = 1; i < targetClasses.length; i++) {
+                        const extraCls = targetClasses[i];
+                        const dup = await Topic.findOne({
+                            name: new RegExp(`^${escapeRegex(name)}$`, 'i'),
+                            classLevel: new RegExp(`^${escapeRegex(extraCls)}$`, 'i'),
+                            subject: new RegExp(`^${escapeRegex(subject)}$`, 'i'),
+                            'chapter.name': new RegExp(`^${escapeRegex(chapterName)}$`, 'i'),
+                            isArchived: { $ne: true }
+                        });
+                        if (!dup) {
+                            await Topic.create({
+                                name: name.trim(),
+                                code: code ? code.trim() : '',
+                                classLevel: extraCls,
+                                group: group || 'None',
+                                subject: subject.trim(),
+                                chapter: { number: parseInt(chapterNumber, 10) || 1, name: chapterName.trim() },
+                                difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
+                                keywords: keywordsArray,
+                                description: description ? description.trim() : '',
+                                order: parseInt(order, 10) || 0,
+                                status: topicStatus,
+                                submittedBy: isTeacher ? req.session.user._id : null,
+                                createdBy: req.session && req.session.user ? req.session.user._id : null
+                            });
+                        }
+                        await ensureSubjectInAcademicClass(extraCls, subject.trim(), group);
+                    }
+                }
 
                 return res.json({
                     success: true,
@@ -375,35 +652,52 @@ const createTopic = async (req, res) => {
             }
         }
 
-        const newTopic = await Topic.create({
-            name: name.trim(),
-            code: code ? code.trim() : '',
-            classLevel: classLevel.trim(),
-            group: group || 'None',
-            subject: subject.trim(),
-            chapter: {
-                number: parseInt(chapterNumber, 10) || 1,
-                name: chapterName.trim()
-            },
-            difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
-            keywords: keywordsArray,
-            description: description ? description.trim() : '',
-            order: parseInt(order, 10) || 0,
-            status: topicStatus,
-            submittedBy: isTeacher ? req.session.user._id : null,
-            createdBy: req.session && req.session.user ? req.session.user._id : null
-        });
+        const createdTopics = [];
+        for (const cls of targetClasses) {
+            const existing = await Topic.findOne({
+                name: new RegExp(`^${escapeRegex(name)}$`, 'i'),
+                classLevel: new RegExp(`^${escapeRegex(cls)}$`, 'i'),
+                subject: new RegExp(`^${escapeRegex(subject)}$`, 'i'),
+                'chapter.name': new RegExp(`^${escapeRegex(chapterName)}$`, 'i'),
+                isArchived: { $ne: true }
+            });
+
+            if (existing) {
+                createdTopics.push(existing);
+            } else {
+                const newTopic = await Topic.create({
+                    name: name.trim(),
+                    code: code ? code.trim() : '',
+                    classLevel: cls,
+                    group: group || 'None',
+                    subject: subject.trim(),
+                    chapter: {
+                        number: parseInt(chapterNumber, 10) || 1,
+                        name: chapterName.trim()
+                    },
+                    difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
+                    keywords: keywordsArray,
+                    description: description ? description.trim() : '',
+                    order: parseInt(order, 10) || 0,
+                    status: topicStatus,
+                    submittedBy: isTeacher ? req.session.user._id : null,
+                    createdBy: req.session && req.session.user ? req.session.user._id : null
+                });
+                createdTopics.push(newTopic);
+            }
+            await ensureSubjectInAcademicClass(cls, subject.trim(), group);
+        }
 
         const successMsg = isTeacher 
-            ? `Topic "${newTopic.name}" submitted for Admin review and approval`
-            : `Topic "${newTopic.name}" created successfully`;
+            ? `Topic "${name.trim()}" submitted for Admin review across ${targetClasses.length} class(es): ${targetClasses.join(', ')}`
+            : `Topic "${name.trim()}" created successfully for ${targetClasses.length} class(es): ${targetClasses.join(', ')}`;
 
-        if (isTeacher) {
+        if (isTeacher && createdTopics.length > 0) {
             try {
                 const pushNotificationService = require('../services/pushNotificationService');
                 pushNotificationService.sendToRole('superadmin', {
                     title: 'New AI Topic Awaiting Approval',
-                    body: `Teacher ${req.session.user ? req.session.user.name : 'Teacher'} submitted "${newTopic.name}" (${newTopic.classLevel} - ${newTopic.subject}).`,
+                    body: `Teacher ${req.session.user ? req.session.user.name : 'Teacher'} submitted "${name.trim()}" (${targetClasses.join(', ')} - ${subject}).`,
                     url: '/superadmin/topics',
                     type: 'topic_review'
                 }).catch(() => {});
@@ -414,7 +708,10 @@ const createTopic = async (req, res) => {
             success: true,
             message: successMsg,
             isPending: isTeacher,
-            topic: newTopic
+            count: createdTopics.length,
+            classes: targetClasses,
+            topic: createdTopics[0],
+            topics: createdTopics
         });
     } catch (error) {
         console.error('createTopic Error:', error);
@@ -422,14 +719,29 @@ const createTopic = async (req, res) => {
     }
 };
 
-// Bulk Create Topics under a Chapter
+// Bulk Create Topics under a Chapter (Supports Multiple Classes at once)
 const bulkCreateTopics = async (req, res) => {
     try {
         await connectDB();
-        const { classLevel, group, subject, chapterName, chapterNumber, topicList, difficulty } = req.body;
+        const { classLevel, classLevels, group, subject, chapterName, chapterNumber, topicList, difficulty } = req.body;
 
-        if (!classLevel || !subject || !chapterName) {
-            return res.status(400).json({ success: false, error: 'Class, Subject, and Chapter are required' });
+        if (!subject || !chapterName) {
+            return res.status(400).json({ success: false, error: 'Subject and Chapter are required' });
+        }
+
+        let targetClasses = [];
+        if (Array.isArray(classLevels) && classLevels.length > 0) {
+            targetClasses = classLevels.map(s => String(s || '').trim()).filter(Boolean);
+        } else if (Array.isArray(classLevel) && classLevel.length > 0) {
+            targetClasses = classLevel.map(s => String(s || '').trim()).filter(Boolean);
+        } else if (typeof classLevel === 'string' && classLevel.includes(',')) {
+            targetClasses = classLevel.split(',').map(s => s.trim()).filter(Boolean);
+        } else if (typeof classLevel === 'string' && classLevel.trim()) {
+            targetClasses = [classLevel.trim()];
+        }
+
+        if (targetClasses.length === 0) {
+            return res.status(400).json({ success: false, error: 'At least one class level is required' });
         }
 
         let names = [];
@@ -449,8 +761,10 @@ const bulkCreateTopics = async (req, res) => {
 
         if (isTeacher) {
             const { assignedClasses, assignedSubjects } = await getTeacherAssignments(req.session.user._id);
-            if (assignedClasses.length > 0 && !matchesClass(classLevel, assignedClasses)) {
-                return res.status(403).json({ success: false, error: `You are not assigned to class "${classLevel}"` });
+            for (const cls of targetClasses) {
+                if (assignedClasses.length > 0 && !matchesClass(cls, assignedClasses)) {
+                    return res.status(403).json({ success: false, error: `You are not assigned to class "${cls}"` });
+                }
             }
             if (assignedSubjects.length > 0 && !matchesSubject(subject, assignedSubjects)) {
                 return res.status(403).json({ success: false, error: `You are not assigned to subject "${subject}"` });
@@ -458,35 +772,51 @@ const bulkCreateTopics = async (req, res) => {
         }
         const createdTopics = [];
 
-        for (let i = 0; i < names.length; i++) {
-            const name = names[i];
-            const topic = await Topic.create({
-                name,
-                classLevel: classLevel.trim(),
-                group: group || 'None',
-                subject: subject.trim(),
-                chapter: {
-                    number: chNum,
-                    name: chapterName.trim()
-                },
-                difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
-                order: i + 1,
-                status: topicStatus,
-                submittedBy: isTeacher ? req.session.user._id : null,
-                createdBy: req.session && req.session.user ? req.session.user._id : null
-            });
-            createdTopics.push(topic);
+        for (const cls of targetClasses) {
+            for (let i = 0; i < names.length; i++) {
+                const name = names[i];
+                const existing = await Topic.findOne({
+                    name: new RegExp(`^${escapeRegex(name)}$`, 'i'),
+                    classLevel: new RegExp(`^${escapeRegex(cls)}$`, 'i'),
+                    subject: new RegExp(`^${escapeRegex(subject)}$`, 'i'),
+                    'chapter.name': new RegExp(`^${escapeRegex(chapterName)}$`, 'i'),
+                    isArchived: { $ne: true }
+                });
+
+                if (!existing) {
+                    const topic = await Topic.create({
+                        name,
+                        classLevel: cls,
+                        group: group || 'None',
+                        subject: subject.trim(),
+                        chapter: {
+                            number: chNum,
+                            name: chapterName.trim()
+                        },
+                        difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
+                        order: i + 1,
+                        status: topicStatus,
+                        submittedBy: isTeacher ? req.session.user._id : null,
+                        createdBy: req.session && req.session.user ? req.session.user._id : null
+                    });
+                    createdTopics.push(topic);
+                } else {
+                    createdTopics.push(existing);
+                }
+            }
+            await ensureSubjectInAcademicClass(cls, subject.trim(), group);
         }
 
         const successMsg = isTeacher 
-            ? `${createdTopics.length} topics submitted for Admin review and approval`
-            : `${createdTopics.length} topics added to "${chapterName}" successfully`;
+            ? `${createdTopics.length} topics submitted for Admin review across ${targetClasses.length} class(es): ${targetClasses.join(', ')}`
+            : `${createdTopics.length} topics added to "${chapterName}" across ${targetClasses.length} class(es): ${targetClasses.join(', ')}`;
 
         res.json({
             success: true,
             message: successMsg,
             isPending: isTeacher,
             count: createdTopics.length,
+            classes: targetClasses,
             topics: createdTopics
         });
     } catch (error) {
@@ -956,19 +1286,25 @@ const getTeacherTopicsPage = async (req, res) => {
             classes = allClasses;
         }
 
-        let selectedClass = (req.query.classLevel || '').trim();
+        let rawClass = req.query.classLevels || req.query.classLevel || '';
+        let selectedClasses = [];
+        if (Array.isArray(rawClass)) {
+            selectedClasses = rawClass.map(s => String(s || '').trim()).filter(Boolean);
+        } else if (typeof rawClass === 'string' && rawClass.trim()) {
+            selectedClasses = rawClass.split(',').map(s => s.trim()).filter(Boolean);
+        }
+
+        if (!isSuperOrAdmin && assignedClasses.length > 0 && selectedClasses.length > 0) {
+            selectedClasses = selectedClasses.filter(c => matchesClass(c, assignedClasses));
+        }
+
+        if (selectedClasses.length === 0 && classes.length > 0) {
+            selectedClasses = [classes[0].name];
+        }
+
+        let selectedClass = selectedClasses[0] || '';
         let selectedGroup = (req.query.group || 'all').trim();
         let selectedSubject = (req.query.subject || '').trim();
-
-        // Default to first assigned class
-        if (classes.length > 0) {
-            const hasSel = classes.some(c => c.name.toLowerCase() === selectedClass.toLowerCase());
-            if (!hasSel) {
-                selectedClass = classes[0].name;
-            }
-        } else {
-            selectedClass = '';
-        }
 
         const currentClassObj = classes.find(c => c.name.toLowerCase() === selectedClass.toLowerCase()) || classes[0] || null;
 
@@ -1094,6 +1430,7 @@ const getTeacherTopicsPage = async (req, res) => {
             classes,
             currentClassObj,
             selectedClass,
+            selectedClasses,
             selectedGroup,
             selectedSubject,
             availableSubjects,
@@ -1155,5 +1492,7 @@ module.exports = {
     rejectTopic,
     bulkRejectTopics,
     getTeacherTopicsPage,
-    deletePendingTeacherTopic
+    deletePendingTeacherTopic,
+    addSubjectToClasses,
+    copyTopicsToClasses
 };

@@ -5286,6 +5286,8 @@ router.get('/topics', superAdminProtect, topicController.getTopicsPage);
 router.get('/api/topics', superAdminProtect, topicController.getTopicsApi);
 router.get('/api/chapters', superAdminProtect, topicController.getChaptersApi);
 router.post('/topics', superAdminProtect, topicController.createTopic);
+router.post('/topics/add-subject', superAdminProtect, topicController.addSubjectToClasses);
+router.post('/topics/copy-to-classes', superAdminProtect, topicController.copyTopicsToClasses);
 router.post('/topics/bulk', superAdminProtect, topicController.bulkCreateTopics);
 router.post('/topics/chapter/delete', superAdminProtect, topicController.deleteChapter);
 router.post('/topics/bulk-action', superAdminProtect, topicController.bulkActionTopics);

@@ -4816,6 +4816,8 @@ router.get('/topics', teacherProtect, topicController.getTeacherTopicsPage);
 router.get('/api/chapters', teacherProtect, topicController.getChaptersApi);
 router.get('/api/topics', teacherProtect, topicController.getTopicsApi);
 router.post('/topics', teacherProtect, topicController.createTopic);
+router.post('/topics/add-subject', teacherProtect, topicController.addSubjectToClasses);
+router.post('/topics/copy-to-classes', teacherProtect, topicController.copyTopicsToClasses);
 router.post('/topics/bulk', teacherProtect, topicController.bulkCreateTopics);
 router.delete('/topics/:id/pending', teacherProtect, topicController.deletePendingTeacherTopic);
 router.post('/topics/:id/delete-pending', teacherProtect, topicController.deletePendingTeacherTopic);
