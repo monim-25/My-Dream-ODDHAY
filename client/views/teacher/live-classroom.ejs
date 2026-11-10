@@ -1212,7 +1212,7 @@
 
                 <!-- Delete Confirmation Modal -->
                 <div id="deleteModal"
-                    class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-900/60 dark:bg-[#000]/80 backdrop-blur-sm">
+                    class="fixed inset-0 z-[300] hidden flex items-center justify-center p-4 bg-slate-900/60 dark:bg-[#000]/80 backdrop-blur-sm">
                     <div
                         class="w-full max-w-sm bg-white dark:bg-[#0b1120] border border-slate-200 dark:border-white/10 shadow-2xl p-6 relative rounded-none">
                         <h3 class="text-sm font-bold text-slate-800 dark:text-white mb-2">Delete Comment</h3>
@@ -2499,9 +2499,9 @@
                         const badgeText = isMentor ? 'Mentor' : '';
                         const dateDisplay = `${dateStr} <span class="text-slate-300 dark:text-white/10 mx-1">&bull;</span> <span class="live-timeago" data-ts="${new Date(c.createdAt).getTime()}">${timeAgo(c.createdAt)}</span>`;
                         const isModUser = <%= Boolean(isModerator) %>;
-                        const isAuthor = c.sender === currentUserId || (c.user && (c.user._id === currentUserId || c.user === currentUserId));
+                        const isAuthor = String(c.sender?._id || c.sender || c.user?._id || c.user || '') === String(currentUserId);
                         const canDelete = isAuthor || isModUser;
-                        const canEdit = isAuthor;
+                        const canEdit = isAuthor || isModUser;
                         const canHighlight = isModUser;
 
                         const repliesHTML = (c.replies || []).map(r => {
@@ -2510,7 +2510,9 @@
                             const isRMentor = r.user && r.user.role === 'teacher';
                             const rBadgeClass = isRMentor ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 dark:bg-white/5 text-slate-500';
                             const rBadgeText = isRMentor ? 'Mentor' : '';
-                            const isReplyAuthor = r.user && (r.user._id === currentUserId || r.user === currentUserId);
+                            const isReplyAuthor = String(r.user?._id || r.user || '') === String(currentUserId);
+                            const canReplyDelete = isReplyAuthor || isModUser;
+                            const canReplyEdit = isReplyAuthor || isModUser;
                             return `
                 <div class="flex gap-3">
                     <div class="size-8 rounded-full overflow-hidden shrink-0 border border-slate-200 dark:border-white/10 bg-slate-50">
@@ -2525,15 +2527,15 @@
                                 <button type="button" onclick="toggleCommentDropdown(event,'${r._id}')" class="p-0.5 hover:bg-slate-100 dark:hover:bg-white/5 text-black dark:text-white rounded-none transition-all flex items-center justify-center" title="Options">
                                     <span class="material-symbols-rounded text-sm leading-none" style="font-weight:800">more_vert</span>
                                 </button>
-                                <div id="dropdown-${r._id}" class="hidden absolute left-0 mt-1 w-28 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-lg rounded-none py-0.5 z-30">
-                                    ${isReplyAuthor ? `
-                                        <button type="button" onclick="closeAllDropdowns(); triggerEditReply('${c._id}','${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">edit</span> Edit</button>
+                                <div id="dropdown-${r._id}" class="hidden absolute left-0 top-full mt-1 w-28 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-xl rounded-none py-1 z-50">
+                                    ${canReplyEdit ? `
+                                        <button type="button" onclick="event.stopPropagation(); closeAllDropdowns(); triggerEditReply('${c._id}','${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5 cursor-pointer"><span class="material-symbols-rounded text-[14px]">edit</span> Edit</button>
                                     ` : ''}
-                                    ${(isReplyAuthor || isModUser) ? `
-                                        <button type="button" onclick="closeAllDropdowns(); triggerDeleteReply('${c._id}','${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">delete</span> Delete</button>
+                                    ${canReplyDelete ? `
+                                        <button type="button" onclick="event.stopPropagation(); closeAllDropdowns(); triggerDeleteReply('${c._id}','${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5 cursor-pointer"><span class="material-symbols-rounded text-[14px]">delete</span> Delete</button>
                                     ` : ''}
                                     ${!isReplyAuthor && !isModUser ? `
-                                        <button type="button" onclick="closeAllDropdowns(); triggerReportComment('${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5"><span class="material-symbols-rounded text-[14px]">flag</span> Report</button>
+                                        <button type="button" onclick="event.stopPropagation(); closeAllDropdowns(); triggerReportComment('${r._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5 cursor-pointer"><span class="material-symbols-rounded text-[14px]">flag</span> Report</button>
                                     ` : ''}
                                 </div>
                             </div>
@@ -2591,24 +2593,24 @@
                             <button type="button" onclick="toggleCommentDropdown(event,'${c._id}')" class="p-1 hover:bg-slate-100 dark:hover:bg-white/5 text-black dark:text-white rounded-none transition-all flex items-center justify-center" title="Options">
                                 <span class="material-symbols-rounded text-sm leading-none" style="font-weight:800">more_vert</span>
                             </button>
-                            <div id="dropdown-${c._id}" class="hidden absolute right-0 mt-1 w-32 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-lg rounded-none py-0.5 z-30">
+                            <div id="dropdown-${c._id}" class="hidden absolute right-0 top-full mt-1 w-32 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-xl rounded-none py-1 z-50">
                                 ${canHighlight ? `
-                                    <button type="button" onclick="closeAllDropdowns(); toggleCommentHighlight('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5">
+                                    <button type="button" onclick="event.stopPropagation(); closeAllDropdowns(); toggleCommentHighlight('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5 cursor-pointer">
                                         <span class="material-symbols-rounded text-[14px] text-amber-500">${c.highlighted ? 'explore_off' : 'push_pin'}</span> ${c.highlighted ? 'Unhighlight' : 'Highlight'}
                                     </button>
                                 ` : ''}
                                 ${canEdit ? `
-                                    <button type="button" onclick="closeAllDropdowns(); triggerEditComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5">
+                                    <button type="button" onclick="event.stopPropagation(); closeAllDropdowns(); triggerEditComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-1.5 cursor-pointer">
                                         <span class="material-symbols-rounded text-[14px]">edit</span> Edit
                                     </button>
                                 ` : ''}
                                 ${canDelete ? `
-                                    <button type="button" onclick="closeAllDropdowns(); triggerDeleteComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5">
+                                    <button type="button" onclick="event.stopPropagation(); closeAllDropdowns(); triggerDeleteComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5 cursor-pointer">
                                         <span class="material-symbols-rounded text-[14px]">delete</span> Delete
                                     </button>
                                 ` : ''}
                                 ${!isAuthor && !isModUser ? `
-                                    <button type="button" onclick="closeAllDropdowns(); triggerReportComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5">
+                                    <button type="button" onclick="event.stopPropagation(); closeAllDropdowns(); triggerReportComment('${c._id}')" class="w-full text-left px-2.5 py-1.5 text-[11px] font-bold text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20 flex items-center gap-1.5 cursor-pointer">
                                         <span class="material-symbols-rounded text-[14px]">flag</span> Report
                                     </button>
                                 ` : ''}
@@ -2847,17 +2849,20 @@
                     }
 
                     async function toggleCommentHighlight(commentId) {
-                        // Toggle locally first
                         const idx = liveComments.findIndex(c => c._id == commentId);
                         if (idx > -1) {
                             liveComments[idx].highlighted = !liveComments[idx].highlighted;
                             renderCommentsList(liveComments);
                         }
-                        if (typeof commentId === 'string' && commentId.startsWith('temp_')) return;
+                        if (typeof commentId === 'string' && commentId.startsWith('temp_')) {
+                            showLiveToast('Comment is syncing, please try in a moment', 'info');
+                            return;
+                        }
 
                         try {
                             const res = await fetch(`/api/live-comment/${commentId}/toggle-highlight`, {
-                                method: 'POST', headers: { 'Content-Type': 'application/json' }
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' }
                             });
                             const data = await res.json();
                             if (data.success) {
@@ -2866,21 +2871,35 @@
                                     liveComments[curIdx].highlighted = data.highlighted;
                                     renderCommentsList(liveComments);
                                 }
+                                showLiveToast(data.highlighted ? 'Comment highlighted' : 'Comment unhighlighted', 'push_pin');
                             } else {
-                                showLiveToast(data.error || 'Failed to update highlight', 'info');
+                                if (idx > -1) {
+                                    liveComments[idx].highlighted = !liveComments[idx].highlighted;
+                                    renderCommentsList(liveComments);
+                                }
+                                showLiveToast(data.error || 'Failed to update highlight', 'error');
                             }
                         } catch (err) {
+                            if (idx > -1) {
+                                liveComments[idx].highlighted = !liveComments[idx].highlighted;
+                                renderCommentsList(liveComments);
+                            }
                             showLiveToast('Failed to update highlight', 'error');
                         }
                     }
 
                     function toggleCommentDropdown(e, id) {
-                        e.stopPropagation();
+                        if (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
                         const dropdown = document.getElementById(`dropdown-${id}`);
                         if (dropdown) {
                             const isHidden = dropdown.classList.contains('hidden');
                             closeAllDropdowns();
-                            if (isHidden) dropdown.classList.remove('hidden');
+                            if (isHidden) {
+                                dropdown.classList.remove('hidden');
+                            }
                         }
                     }
 
@@ -2895,67 +2914,87 @@
                     function triggerDeleteComment(commentId) {
                         const modal = document.getElementById('deleteModal');
                         const modalText = document.getElementById('deleteModalText');
-                        if (modalText) modalText.innerText = 'Are you sure you want to delete this comment? This action is permanent and cannot be undone.';
                         const confirmBtn = document.getElementById('confirmDeleteBtn');
-                        if (confirmBtn) {
-                            confirmBtn.onclick = async () => {
-                                closeDeleteModal();
-                                liveComments = liveComments.filter(c => c._id != commentId);
-                                renderCommentsList(liveComments);
 
-                                if (typeof commentId === 'string' && commentId.startsWith('temp_')) return;
+                        const doDelete = async () => {
+                            liveComments = liveComments.filter(c => String(c._id) !== String(commentId));
+                            renderCommentsList(liveComments);
 
-                                try {
-                                    const res = await fetch(`/api/live-comment/${commentId}`, { method: 'DELETE' });
-                                    const data = await res.json();
-                                    if (!data.success) {
-                                        showLiveToast(data.error || 'Failed to delete comment', 'info');
-                                    }
-                                } catch (err) {
-                                    showLiveToast('Failed to delete comment', 'error');
+                            if (typeof commentId === 'string' && commentId.startsWith('temp_')) {
+                                showLiveToast('Comment deleted', 'delete');
+                                return;
+                            }
+
+                            try {
+                                const res = await fetch(`/api/live-comment/${commentId}`, { method: 'DELETE' });
+                                const data = await res.json();
+                                if (data.success) {
+                                    showLiveToast('Comment deleted', 'delete');
+                                } else {
+                                    showLiveToast(data.error || 'Failed to delete comment', 'info');
                                 }
-                            };
-                        }
-                        if (modal) {
+                            } catch (err) {
+                                showLiveToast('Failed to delete comment', 'error');
+                            }
+                        };
+
+                        if (modal && confirmBtn) {
+                            if (modalText) modalText.innerText = 'Are you sure you want to delete this comment? This action is permanent and cannot be undone.';
                             modal.classList.remove('hidden');
                             modal.style.display = 'flex';
+                            confirmBtn.onclick = () => {
+                                closeDeleteModal();
+                                doDelete();
+                            };
+                        } else {
+                            if (confirm('Are you sure you want to delete this comment?')) {
+                                doDelete();
+                            }
                         }
                     }
 
                     function triggerDeleteReply(commentId, replyId) {
                         const modal = document.getElementById('deleteModal');
                         const modalText = document.getElementById('deleteModalText');
-                        if (modalText) modalText.innerText = 'Are you sure you want to delete this reply? This action is permanent and cannot be undone.';
                         const confirmBtn = document.getElementById('confirmDeleteBtn');
-                        if (confirmBtn) {
-                            confirmBtn.onclick = async () => {
-                                closeDeleteModal();
-                                const cIdx = liveComments.findIndex(c => c._id == commentId);
-                                if (cIdx > -1 && liveComments[cIdx].replies) {
-                                    liveComments[cIdx].replies = liveComments[cIdx].replies.filter(r => r._id != replyId);
-                                    renderCommentsList(liveComments);
-                                }
 
-                                if (typeof replyId === 'string' && replyId.startsWith('temp_')) return;
+                        const doDeleteReply = async () => {
+                            const cIdx = liveComments.findIndex(c => String(c._id) === String(commentId));
+                            if (cIdx > -1 && liveComments[cIdx].replies) {
+                                liveComments[cIdx].replies = liveComments[cIdx].replies.filter(r => String(r._id) !== String(replyId));
+                                renderCommentsList(liveComments);
+                            }
 
-                                try {
-                                    const res = await fetch(`/api/live-comment/${commentId}/reply/${replyId}`, { method: 'DELETE' });
-                                    const data = await res.json();
-                                    if (data.success && data.comment) {
-                                        const idx = liveComments.findIndex(c => c._id == commentId);
-                                        if (idx > -1) {
-                                            liveComments[idx] = data.comment;
-                                            renderCommentsList(liveComments);
-                                        }
-                                    }
-                                } catch (err) {
-                                    showLiveToast('Failed to delete reply', 'error');
+                            if (typeof replyId === 'string' && replyId.startsWith('temp_')) {
+                                showLiveToast('Reply deleted', 'delete');
+                                return;
+                            }
+
+                            try {
+                                const res = await fetch(`/api/live-comment/${commentId}/reply/${replyId}`, { method: 'DELETE' });
+                                const data = await res.json();
+                                if (data.success) {
+                                    showLiveToast('Reply deleted', 'delete');
+                                } else {
+                                    showLiveToast(data.error || 'Failed to delete reply', 'info');
                                 }
-                            };
-                        }
-                        if (modal) {
+                            } catch (err) {
+                                showLiveToast('Failed to delete reply', 'error');
+                            }
+                        };
+
+                        if (modal && confirmBtn) {
+                            if (modalText) modalText.innerText = 'Are you sure you want to delete this reply? This action is permanent and cannot be undone.';
                             modal.classList.remove('hidden');
                             modal.style.display = 'flex';
+                            confirmBtn.onclick = () => {
+                                closeDeleteModal();
+                                doDeleteReply();
+                            };
+                        } else {
+                            if (confirm('Are you sure you want to delete this reply?')) {
+                                doDeleteReply();
+                            }
                         }
                     }
 
@@ -3020,6 +3059,7 @@
                                     liveComments[idx]._id = data.message._id;
                                     liveComments[idx].createdAt = data.message.createdAt;
                                     liveComments[idx].highlighted = true;
+                                    renderCommentsList(liveComments);
                                 }
                                 renderCommentsList(liveComments);
                             }
@@ -3071,7 +3111,7 @@
                         // Check if comment already exists (e.g. from optimistic UI render)
                         const existingIdx = liveComments.findIndex(c =>
                             c._id === msg._id ||
-                            (c._id && c._id.startsWith('temp_') && c.sender === msg.sender && c.text === msg.text)
+                            (c._id && typeof c._id === 'string' && c._id.startsWith('temp_') && String(c.sender) === String(msg.sender) && c.text === msg.text)
                         );
                         if (existingIdx !== -1) {
                             liveComments[existingIdx]._id = msg._id;
@@ -3865,6 +3905,7 @@
                                 if (idx !== -1) {
                                     liveComments[idx]._id = data.message._id;
                                     liveComments[idx].createdAt = data.message.createdAt;
+                                    renderCommentsList(liveComments);
                                 }
                             }
                         } catch (err) {

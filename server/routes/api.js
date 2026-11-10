@@ -873,7 +873,7 @@ router.post('/curriculum/node/:nodeId/toggle-comments', protect, async (req, res
         const user = req.session.user;
 
         // Security check: only teacher or admin/superadmin can toggle
-        if (!['teacher', 'admin', 'superadmin'].includes(user.role)) {
+        if (!['teacher', 'admin', 'superadmin', 'instructor'].includes(user.role)) {
             return res.status(403).json({ success: false, error: 'Unauthorized' });
         }
 
@@ -1186,7 +1186,7 @@ router.put('/live-comment/:msgId', protect, async (req, res) => {
         const message = await Message.findById(req.params.msgId);
         if (!message) return res.status(404).json({ success: false, error: 'Comment not found' });
 
-        const isModerator = ['teacher', 'admin', 'superadmin'].includes(req.session.user.role);
+        const isModerator = ['teacher', 'admin', 'superadmin', 'instructor'].includes(req.session.user.role);
 
         // Security check: Must be the original author or moderator
         if (message.sender.toString() !== req.session.user._id.toString() && !isModerator) {
@@ -1258,7 +1258,7 @@ router.delete('/live-comment/:msgId', protect, async (req, res) => {
         if (!message) return res.status(404).json({ success: false, error: 'Comment not found' });
 
         // Security check: Must be the original author or a moderator
-        const isModerator = ['teacher', 'admin', 'superadmin'].includes(req.session.user.role);
+        const isModerator = ['teacher', 'admin', 'superadmin', 'instructor'].includes(req.session.user.role);
         if (message.sender.toString() !== req.session.user._id.toString() && !isModerator) {
             return res.status(403).json({ success: false, error: 'Unauthorized to delete this comment' });
         }
