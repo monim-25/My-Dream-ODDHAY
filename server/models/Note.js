@@ -6,6 +6,8 @@ const noteSchema = new mongoose.Schema({
     classLevel: [{ type: String }],
     description: { type: String },
     chapter: { type: String },
+    topic: { type: String, trim: true },
+    topics: [{ type: String, trim: true }],
     parentFolderId: { type: String, default: null },
     accessType: { type: String, enum: ['Free', 'Paid'], default: 'Free' },
     price: { type: Number, default: 0 },

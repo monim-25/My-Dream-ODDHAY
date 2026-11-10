@@ -466,8 +466,19 @@ const getTopicsApi = async (req, res) => {
         const { classLevel, subject, chapter, group } = req.query;
 
         const filter = { isArchived: { $nin: [true, 'true', 1] }, status: { $nin: ['pending', 'rejected'] } };
-        if (classLevel && classLevel !== 'all') {
-            filter.classLevel = new RegExp(`^${classLevel.trim()}$`, 'i');
+        const rawClass = req.query.classLevels || classLevel || req.query['classLevels[]'] || req.query['classLevel[]'];
+        if (rawClass && rawClass !== 'all') {
+            let classList = [];
+            if (Array.isArray(rawClass)) {
+                classList = rawClass.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+            } else {
+                classList = String(rawClass).split(',').map(c => c.trim()).filter(Boolean);
+            }
+            if (classList.length === 1) {
+                filter.classLevel = new RegExp('^' + escapeRegex(classList[0]) + '$', 'i');
+            } else if (classList.length > 1) {
+                filter.classLevel = { $in: classList.map(c => new RegExp('^' + escapeRegex(c) + '$', 'i')) };
+            }
         }
         if (subject && subject !== 'all') {
             filter.subject = new RegExp(`^${subject.trim()}$`, 'i');

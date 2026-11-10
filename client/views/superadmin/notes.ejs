@@ -274,24 +274,87 @@
                         <label class="form-label">Title <span class="text-rose-500">*</span></label>
                         <input type="text" name="title" required placeholder="Physics Handnote — Chapter 01" class="form-input">
                     </div>
-                    <div class="grid grid-cols-3 gap-5">
+                    <!-- Target Classes Row (Multi-Class Selection) -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label class="form-label mb-0">Target Classes <span class="text-rose-500">*</span></label>
+                            <div class="flex items-center gap-1.5">
+                                <button type="button" onclick="selectAdminNoteClasses('all')" class="text-[10px] font-bold text-primary hover:underline px-1 py-0.5 rounded cursor-pointer">All</button>
+                                <span class="text-slate-300 dark:text-slate-600 text-[10px]">•</span>
+                                <button type="button" onclick="selectAdminNoteClasses('ssc')" class="text-[10px] font-bold text-primary hover:underline px-1 py-0.5 rounded cursor-pointer">9 & 10 (SSC)</button>
+                                <span class="text-slate-300 dark:text-slate-600 text-[10px]">•</span>
+                                <button type="button" onclick="selectAdminNoteClasses('hsc')" class="text-[10px] font-bold text-primary hover:underline px-1 py-0.5 rounded cursor-pointer">11 & 12 (HSC)</button>
+                                <span class="text-slate-300 dark:text-slate-600 text-[10px]">•</span>
+                                <button type="button" onclick="selectAdminNoteClasses('clear')" class="text-[10px] font-bold text-slate-400 hover:text-rose-500 px-1 py-0.5 rounded cursor-pointer">Clear</button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl" id="adminNoteClassesContainer">
+                            <% const adminClasses = ((typeof globalAcademicClasses !== 'undefined' ? globalAcademicClasses : []).map(c => c.name)); %>
+                            <% (adminClasses.length > 0 ? adminClasses : ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'HSC 1st Year', 'HSC 2nd Year']).forEach(c => { %>
+                                <label class="admin-note-class-card flex items-center gap-1.5 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-primary/50 dark:hover:border-primary/50 bg-white dark:bg-slate-900 cursor-pointer transition-colors text-[11px] select-none">
+                                    <input type="checkbox" name="classLevel[]" value="<%= c %>" class="accent-primary rounded size-3.5" onchange="onAdminNoteSubjectOrClassChange()">
+                                    <span class="font-medium text-slate-700 dark:text-slate-200 truncate"><%= c %></span>
+                                </label>
+                            <% }) %>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div class="space-y-1.5">
                             <label class="form-label">Subject <span class="text-rose-500">*</span></label>
-                            <select name="subject" id="noteSubject" required onchange="filterCourses()" class="form-input cursor-pointer">
+                            <select name="subject" id="noteSubject" required onchange="onAdminNoteSubjectOrClassChange()" class="form-input cursor-pointer">
                                 <option value="">Select Subject</option>
                                 <% ([...new Set((typeof globalAcademicClasses !== 'undefined' ? globalAcademicClasses : []).flatMap(c => c.subjects || []))]).forEach(s => { %><option value="<%= s %>"><%= s %></option><% }) %>
                             </select>
                         </div>
                         <div class="space-y-1.5">
-                            <label class="form-label">Class Level <span class="text-rose-500">*</span></label>
-                            <select name="classLevel" id="noteClassLevel" required onchange="filterCourses()" class="form-input cursor-pointer">
-                                <option value="">Select Class</option>
-                                <% ((typeof globalAcademicClasses !== 'undefined' ? globalAcademicClasses : []).map(c => c.name)).forEach(c => { %><option value="<%= c %>"><%= c %></option><% }) %>
-                            </select>
-                        </div>
-                        <div class="space-y-1.5">
                             <label class="form-label">Chapter</label>
-                            <input type="text" name="chapter" placeholder="Chapter 01" class="form-input">
+                            <input type="text" name="chapter" id="noteChapter" placeholder="Chapter 01" class="form-input">
+                        </div>
+                    </div>
+
+                    <!-- Topics Section (Dynamic & Required) -->
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between">
+                            <label class="form-label mb-0 flex items-center gap-1">
+                                <span class="material-symbols-rounded text-sm text-primary">bookmark</span>
+                                <span>Select Topic(s) <span class="text-rose-500">* (Required)</span></span>
+                            </label>
+                            <div class="flex items-center gap-1.5">
+                                <span id="adminNoteTopicCountBadge" class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-primary/10 text-primary hidden">0 selected</span>
+                                <button type="button" onclick="toggleAdminCustomTopicInput()" class="text-[10px] font-bold text-slate-400 hover:text-primary transition-colors flex items-center gap-0.5 cursor-pointer">
+                                    <span class="material-symbols-rounded text-xs">add</span>
+                                    <span>Custom Topic</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Hidden primary topic for backward compatibility -->
+                        <input type="hidden" name="topic" id="adminNotePrimaryTopicInput" value="">
+
+                        <div id="adminNoteTopicsWrapper" class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 min-h-[85px] max-h-48 overflow-y-auto">
+                            <div id="adminNoteTopicsEmptyState" class="py-4 text-center text-slate-400 text-xs flex flex-col items-center justify-center gap-1">
+                                <span class="material-symbols-rounded text-lg text-slate-300 dark:text-slate-600">info</span>
+                                <span>Please select a Subject and at least one Class above to load syllabus topics</span>
+                            </div>
+                            <div id="adminNoteTopicsLoading" class="hidden py-4 text-center text-primary text-xs flex items-center justify-center gap-1.5">
+                                <span class="material-symbols-rounded text-base animate-spin">progress_activity</span>
+                                <span>Loading syllabus topics...</span>
+                            </div>
+                            <div id="adminNoteTopicsList" class="hidden flex flex-wrap gap-1.5">
+                                <!-- Dynamic Topic Checkboxes / Pills will be injected here -->
+                            </div>
+                        </div>
+
+                        <!-- Optional custom topic input -->
+                        <div id="adminCustomTopicBox" class="hidden pt-1">
+                            <div class="flex items-center gap-2">
+                                <input type="text" id="adminCustomTopicInput" placeholder="Type custom topic name..."
+                                    class="flex-1 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-primary">
+                                <button type="button" onclick="addAdminCustomTopicPill()" class="px-3 py-1.5 bg-primary hover:bg-primary/90 text-white rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer">
+                                    Add
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <div class="grid grid-cols-2 gap-5">
@@ -561,6 +624,213 @@
 
         setTimeout(updateDynamicSubjects, 100);
     });
+
+        // Admin Note Topics and Multi-Class Logic
+        window.selectAdminNoteClasses = function(type) {
+            const cbs = document.querySelectorAll('#adminNoteClassesContainer input[name="classLevel[]"]');
+            if (type === 'all') cbs.forEach(cb => cb.checked = true);
+            else if (type === 'clear') cbs.forEach(cb => cb.checked = false);
+            else if (type === 'ssc') cbs.forEach(cb => { const val = cb.value.toLowerCase(); cb.checked = (val.includes('9') || val.includes('10') || val.includes('ssc')); });
+            else if (type === 'hsc') cbs.forEach(cb => { const val = cb.value.toLowerCase(); cb.checked = (val.includes('11') || val.includes('12') || val.includes('hsc')); });
+            
+            cbs.forEach(cb => {
+                const card = cb.closest('.admin-note-class-card');
+                if (card) {
+                    if (cb.checked) card.classList.add('bg-primary/10', 'border-primary', 'text-primary');
+                    else card.classList.remove('bg-primary/10', 'border-primary', 'text-primary');
+                }
+            });
+            onAdminNoteSubjectOrClassChange();
+        };
+
+        window.onAdminNoteSubjectOrClassChange = async function() {
+            const subjSelect = document.getElementById('noteSubject');
+            const subject = subjSelect ? subjSelect.value.trim() : '';
+            const checkedClasses = Array.from(document.querySelectorAll('#adminNoteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
+
+            document.querySelectorAll('#adminNoteClassesContainer input[name="classLevel[]"]').forEach(cb => {
+                const card = cb.closest('.admin-note-class-card');
+                if (card) {
+                    if (cb.checked) card.classList.add('bg-primary/10', 'border-primary', 'text-primary');
+                    else card.classList.remove('bg-primary/10', 'border-primary', 'text-primary');
+                }
+            });
+
+            const emptyState = document.getElementById('adminNoteTopicsEmptyState');
+            const loadingState = document.getElementById('adminNoteTopicsLoading');
+            const topicsList = document.getElementById('adminNoteTopicsList');
+            const countBadge = document.getElementById('adminNoteTopicCountBadge');
+
+            if (!subject || checkedClasses.length === 0) {
+                if (emptyState) {
+                    emptyState.classList.remove('hidden');
+                    emptyState.innerHTML = '<span class="material-symbols-rounded text-lg text-slate-300 dark:text-slate-600">info</span><span>Please select a Subject and at least one Class to load topics</span>';
+                }
+                if (loadingState) loadingState.classList.add('hidden');
+                if (topicsList) {
+                    topicsList.classList.add('hidden');
+                    topicsList.innerHTML = '';
+                }
+                if (countBadge) countBadge.classList.add('hidden');
+                return;
+            }
+
+            if (emptyState) emptyState.classList.add('hidden');
+            if (loadingState) loadingState.classList.remove('hidden');
+            if (topicsList) {
+                topicsList.classList.add('hidden');
+                topicsList.innerHTML = '';
+            }
+
+            try {
+                const queryParams = new URLSearchParams({
+                    subject: subject,
+                    classLevels: checkedClasses.join(',')
+                });
+                const res = await fetch('/api/topics?' + queryParams.toString(), {
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await res.json();
+
+                if (loadingState) loadingState.classList.add('hidden');
+
+                if (data.success && Array.isArray(data.topics) && data.topics.length > 0) {
+                    renderAdminNoteTopics(data.topics);
+                } else {
+                    if (emptyState) {
+                        emptyState.classList.remove('hidden');
+                        emptyState.innerHTML = '<div class="flex flex-col items-center gap-1 py-1"><span class="material-symbols-rounded text-amber-500 text-lg">playlist_remove</span><span class="text-[11px] text-slate-500">No syllabus topics registered for this subject & class.</span><span class="text-[10px] text-primary font-bold">Use "+ Custom Topic" to specify the topic.</span></div>';
+                    }
+                    const customBox = document.getElementById('adminCustomTopicBox');
+                    if (customBox) customBox.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error('Failed to load topics:', err);
+                if (loadingState) loadingState.classList.add('hidden');
+                if (emptyState) {
+                    emptyState.classList.remove('hidden');
+                    emptyState.innerHTML = '<span class="text-rose-500 text-xs">Error loading topics. You can enter a custom topic below.</span>';
+                }
+            }
+        };
+
+        function renderAdminNoteTopics(topics) {
+            const topicsList = document.getElementById('adminNoteTopicsList');
+            if (!topicsList) return;
+            topicsList.innerHTML = '';
+
+            const seen = new Set();
+            const uniqueTopics = [];
+            topics.forEach(t => {
+                const key = (t.name || '').trim().toLowerCase();
+                if (key && !seen.has(key)) {
+                    seen.add(key);
+                    uniqueTopics.push(t);
+                }
+            });
+
+            uniqueTopics.forEach(t => {
+                const chip = document.createElement('label');
+                chip.className = 'admin-topic-chip flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary/60 dark:hover:border-primary/60 bg-white dark:bg-slate-900 cursor-pointer text-xs select-none transition-all';
+                chip.innerHTML = '<input type="checkbox" name="topics[]" value="' + escapeHtml(t.name) + '" data-chapter="' + escapeHtml(t.chapter?.name || '') + '" class="accent-primary rounded size-3.5 cursor-pointer" onchange="syncAdminNoteTopicSelection()"><span class="font-medium text-slate-700 dark:text-slate-200 text-[11px] leading-tight">' + escapeHtml(t.name) + '</span>' + (t.chapter && t.chapter.name ? '<span class="text-[9px] px-1 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-400 truncate max-w-[100px]">' + escapeHtml(t.chapter.name) + '</span>' : '');
+                topicsList.appendChild(chip);
+            });
+
+            topicsList.classList.remove('hidden');
+            syncAdminNoteTopicSelection();
+        }
+
+        window.syncAdminNoteTopicSelection = function() {
+            const checkedBoxes = Array.from(document.querySelectorAll('#adminNoteTopicsList input[name="topics[]"]:checked'));
+            const badge = document.getElementById('adminNoteTopicCountBadge');
+            const primaryInput = document.getElementById('adminNotePrimaryTopicInput');
+            const chapterInput = document.getElementById('noteChapter');
+
+            if (badge) {
+                if (checkedBoxes.length > 0) {
+                    badge.textContent = checkedBoxes.length + ' selected';
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+
+            if (checkedBoxes.length > 0) {
+                if (primaryInput) primaryInput.value = checkedBoxes[0].value;
+                const chap = checkedBoxes[0].getAttribute('data-chapter');
+                if (chapterInput && chap && !chapterInput.value) chapterInput.value = chap;
+            } else {
+                if (primaryInput) primaryInput.value = '';
+            }
+
+            document.querySelectorAll('.admin-topic-chip').forEach(chip => {
+                const cb = chip.querySelector('input[type="checkbox"]');
+                if (cb && cb.checked) {
+                    chip.classList.add('bg-primary/5', 'dark:bg-primary/15', 'border-primary', 'dark:border-primary');
+                } else {
+                    chip.classList.remove('bg-primary/5', 'dark:bg-primary/15', 'border-primary', 'dark:border-primary');
+                }
+            });
+        };
+
+        window.toggleAdminCustomTopicInput = function() {
+            const box = document.getElementById('adminCustomTopicBox');
+            const input = document.getElementById('adminCustomTopicInput');
+            if (!box) return;
+            const isHidden = box.classList.contains('hidden');
+            if (isHidden) {
+                box.classList.remove('hidden');
+                if (input) input.focus();
+            } else {
+                box.classList.add('hidden');
+            }
+        };
+
+        window.addAdminCustomTopicPill = function() {
+            const input = document.getElementById('adminCustomTopicInput');
+            const val = input ? input.value.trim() : '';
+            if (!val) return;
+
+            const topicsList = document.getElementById('adminNoteTopicsList');
+            const emptyState = document.getElementById('adminNoteTopicsEmptyState');
+            if (emptyState) emptyState.classList.add('hidden');
+            if (topicsList) topicsList.classList.remove('hidden');
+
+            const chip = document.createElement('label');
+            chip.className = 'admin-topic-chip flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-primary bg-primary/10 text-primary cursor-pointer text-xs select-none transition-all';
+            chip.innerHTML = '<input type="checkbox" name="topics[]" value="' + escapeHtml(val) + '" checked class="accent-primary rounded size-3.5 cursor-pointer" onchange="syncAdminNoteTopicSelection()"><span class="font-bold text-[11px] leading-tight">' + escapeHtml(val) + '</span><span class="text-[9px] px-1 py-0.2 rounded bg-primary text-white">Custom</span>';
+            topicsList.prepend(chip);
+            input.value = '';
+            syncAdminNoteTopicSelection();
+        };
+
+        function escapeHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Form submit validation for admin/superadmin
+        document.addEventListener('DOMContentLoaded', () => {
+            const form = document.querySelector('form[action*="/add-note"]');
+            if (form) {
+                form.addEventListener('submit', (e) => {
+                    const checkedClasses = Array.from(form.querySelectorAll('input[name="classLevel[]"]:checked')).map(cb => cb.value);
+                    if (checkedClasses.length === 0) {
+                        e.preventDefault();
+                        return Swal.fire('Class Required', 'Please select at least one Target Class for this note.', 'warning');
+                    }
+                    const checkedTopics = Array.from(form.querySelectorAll('input[name="topics[]"]:checked')).map(cb => cb.value);
+                    const customVal = document.getElementById('adminCustomTopicInput')?.value.trim();
+                    if (checkedTopics.length === 0 && !customVal) {
+                        e.preventDefault();
+                        return Swal.fire('Topic Required', 'Please select or enter at least one Topic for this note.', 'warning');
+                    }
+                    if (checkedTopics.length === 0 && customVal) {
+                        window.addAdminCustomTopicPill();
+                    }
+                });
+            }
+        });
+
 </script>
 </body>
 </html>

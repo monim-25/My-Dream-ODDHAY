@@ -5947,6 +5947,12 @@ router.get('/api/questions/preview', protect, async (req, res) => {
     }
 });
 
+// GET /api/topics — Universal dynamic syllabus topics lookup
+router.get('/api/topics', protect, async (req, res) => {
+    const topicController = require('../controllers/topicController');
+    return topicController.getTopicsApi(req, res);
+});
+
 // POST /exams/custom-start — Create and start a custom exam session
 router.post('/exams/custom-start', protect, async (req, res) => {
     try {

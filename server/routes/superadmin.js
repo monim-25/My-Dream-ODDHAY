@@ -2508,14 +2508,33 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
 }, async (req, res) => {
     await connectDB();
     if (req.session.user.role === 'superadmin') return res.status(403).send('সুপার অ্যাডমিন কন্টেন্ট যোগ করতে পারবেন না।');
-    const { title, subject, chapter, description, accessType, course } = req.body;
-    const rawClassLevel = req.body.classLevel || req.body['classLevel[]'];
-    const classLevelArray = Array.isArray(rawClassLevel) ? rawClassLevel.filter(Boolean) : (rawClassLevel ? [rawClassLevel] : []);
+    const { title, subject, chapter, topic, topics, description, accessType, course } = req.body;
+    const rawClassLevel = req.body.classLevel || req.body['classLevel[]'] || req.body.classLevels || req.body['classLevels[]'];
+    let classLevelArray = [];
+    if (Array.isArray(rawClassLevel)) {
+        classLevelArray = rawClassLevel.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+    } else if (rawClassLevel) {
+        classLevelArray = String(rawClassLevel).split(',').map(c => c.trim()).filter(Boolean);
+    }
+
+    const rawTopics = topics || topic || req.body['topics[]'] || req.body['topic[]'];
+    let parsedTopics = [];
+    if (Array.isArray(rawTopics)) {
+        parsedTopics = rawTopics.flatMap(tp => String(tp).split(',')).map(tp => tp.trim()).filter(Boolean);
+    } else if (rawTopics) {
+        parsedTopics = String(rawTopics).split(',').map(tp => tp.trim()).filter(Boolean);
+    }
+    const primaryTopic = parsedTopics[0] || (typeof topic === 'string' ? topic.trim() : '');
+
     const { processUploadedFile } = require('../services/cloudinaryService');
     const fileUrl = req.file ? await processUploadedFile(req.file, 'notes') : null;
     const mongoose = require('mongoose');
     await new Note({
-        title, subject, classLevel: classLevelArray, chapter, description,
+        title, subject, classLevel: classLevelArray.length > 0 ? classLevelArray : ['Class 10'], 
+        chapter: chapter || '', 
+        topic: primaryTopic,
+        topics: parsedTopics.length > 0 ? parsedTopics : (primaryTopic ? [primaryTopic] : []),
+        description: description || '',
         accessType: accessType || 'Free',
         fileUrl,
         course: course && mongoose.Types.ObjectId.isValid(course) ? course : undefined,

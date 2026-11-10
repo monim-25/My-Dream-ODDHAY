@@ -2337,19 +2337,36 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
 }, async (req, res) => {
     try {
         await connectDB();
-        const { title, subject, classLevel, chapter, parentFolderId, description, accessType, course } = req.body;
+        const { title, subject, classLevel, chapter, topic, topics, parentFolderId, description, accessType, course } = req.body;
         const { processUploadedFile } = require('../services/cloudinaryService');
         const fileUrl = req.file ? await processUploadedFile(req.file, 'notes') : null;
         
         const noteCourseId = course && mongoose.Types.ObjectId.isValid(course) ? course : undefined;
 
-        const parsedClasses = Array.isArray(classLevel) ? classLevel : (classLevel ? [classLevel] : []);
+        const rawClasses = classLevel || req.body['classLevel[]'] || req.body.classLevels || req.body['classLevels[]'];
+        let parsedClasses = [];
+        if (Array.isArray(rawClasses)) {
+            parsedClasses = rawClasses.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+        } else if (rawClasses) {
+            parsedClasses = String(rawClasses).split(',').map(c => c.trim()).filter(Boolean);
+        }
+
+        const rawTopics = topics || topic || req.body['topics[]'] || req.body['topic[]'];
+        let parsedTopics = [];
+        if (Array.isArray(rawTopics)) {
+            parsedTopics = rawTopics.flatMap(tp => String(tp).split(',')).map(tp => tp.trim()).filter(Boolean);
+        } else if (rawTopics) {
+            parsedTopics = String(rawTopics).split(',').map(tp => tp.trim()).filter(Boolean);
+        }
+        const primaryTopic = parsedTopics[0] || (typeof topic === 'string' ? topic.trim() : '');
 
         const newNote = await new Note({
             title,
             subject: subject || 'General Academic',
             classLevel: parsedClasses.length > 0 ? parsedClasses : ['Class 10'],
             chapter: chapter || '',
+            topic: primaryTopic,
+            topics: parsedTopics.length > 0 ? parsedTopics : (primaryTopic ? [primaryTopic] : []),
             parentFolderId: parentFolderId && parentFolderId !== 'null' && parentFolderId !== '' ? parentFolderId : null,
             description: description || '',
             accessType: accessType || 'Free',
