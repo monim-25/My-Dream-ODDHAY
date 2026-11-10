@@ -11,3 +11,4 @@ const uploadChunkSchema = new mongoose.Schema({
 uploadChunkSchema.index({ uploadId: 1, chunkIndex: 1 }, { unique: true });
 
 module.exports = mongoose.model('UploadChunk', uploadChunkSchema);
+

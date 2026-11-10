@@ -1673,26 +1673,23 @@ const checkCrossClassTopic = async (req, res) => {
         }
 
         const cleanSubject = String(subject).trim();
-        const cleanTopic = String(topic).trim();
+        const rawTopicList = (Array.isArray(topic) ? topic : String(topic).split(','))
+            .map(t => String(t || '').trim())
+            .filter(Boolean);
+
+        if (rawTopicList.length === 0) {
+            return res.json({ success: true, hasCrossClass: false, matchingClasses: [], details: [] });
+        }
+
         const cleanChapter = chapter ? String(chapter).trim() : "";
 
-        // Find approved/active topics in syllabus with matching subject and topic name
-        const aliases = getSubjectAliases(cleanSubject);
-        const filter = {
-            isArchived: { $nin: [true, "true", 1] },
-            status: { $nin: ["pending", "rejected"] },
-            subject: new RegExp('^(?:' + aliases.map(escapeRegex).join('|') + ')$', 'i'),
-            name: new RegExp("^" + escapeRegex(cleanTopic) + "$", "i")
-        };
-
-        const matchingTopics = await Topic.find(filter).select("classLevel subject chapter name").lean();
-
-        // Helper to normalize chapter names for architecture matching
-        const normalizeChap = (str) => {
+        // Normalize string helper (removes parentheticals, chapter prefixes, extra spaces)
+        const normalizeText = (str) => {
             if (!str) return "";
             return String(str)
                 .toLowerCase()
                 .replace(/^(?:অধ্যায়|অধ্যায়|chapter|ch)[\s\d:.-]+/i, "")
+                .replace(/\([^\)]*\)/g, "")
                 .replace(/[\s\-_:]+/g, " ")
                 .trim();
         };
@@ -1702,11 +1699,32 @@ const checkCrossClassTopic = async (req, res) => {
             const c1 = String(chap1).trim().toLowerCase();
             const c2 = String(chap2).trim().toLowerCase();
             if (c1 === c2) return true;
-            const n1 = normalizeChap(c1);
-            const n2 = normalizeChap(c2);
+            const n1 = normalizeText(c1);
+            const n2 = normalizeText(c2);
             if (n1 && n2 && (n1 === n2 || n1.includes(n2) || n2.includes(n1))) return true;
             return false;
         };
+
+        const isTopicMatch = (t1, t2) => {
+            if (!t1 || !t2) return false;
+            const a = String(t1).trim().toLowerCase();
+            const b = String(t2).trim().toLowerCase();
+            if (a === b) return true;
+            const na = normalizeText(a);
+            const nb = normalizeText(b);
+            if (na && nb && (na === nb || na.includes(nb) || nb.includes(na))) return true;
+            return false;
+        };
+
+        // Find approved/active topics in syllabus with matching subject
+        const aliases = getSubjectAliases(cleanSubject);
+        const filter = {
+            isArchived: { $nin: [true, "true", 1] },
+            status: { $nin: ["pending", "rejected"] },
+            subject: new RegExp('^(?:' + aliases.map(escapeRegex).join('|') + ')$', 'i')
+        };
+
+        const matchingTopics = await Topic.find(filter).select("classLevel subject chapter name").lean();
 
         // Group by classLevel, filtering out currently selected classes
         const classMap = new Map();
@@ -1714,25 +1732,32 @@ const checkCrossClassTopic = async (req, res) => {
             const cls = (t.classLevel || "").trim();
             if (!cls) return;
             const clsLower = cls.toLowerCase();
-            const isCurrent = currentClasses.some(cc => cc === clsLower || cc.includes(clsLower) || clsLower.includes(cc));
-            if (!isCurrent) {
-                const tChapName = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : "";
+            
+            // Check if this class is already in currentClasses
+            const isCurrent = currentClasses.some(cc => cc === clsLower);
+            if (isCurrent) return;
 
-                // If chapter is provided, enforce strict architectural match (subject + chapter + topic)
-                if (cleanChapter && tChapName) {
-                    if (!isChapterMatch(cleanChapter, tChapName)) {
-                        return; // Chapter architecture did not match!
-                    }
-                }
+            // Check if topic matches any of the requested topics
+            const tName = (t.name || "").trim();
+            const matchedReqTopic = rawTopicList.some(reqT => isTopicMatch(reqT, tName));
+            if (!matchedReqTopic) return;
 
-                if (!classMap.has(cls)) {
-                    classMap.set(cls, {
-                        classLevel: cls,
-                        chapterName: tChapName || cleanChapter,
-                        topicName: t.name,
-                        subject: t.subject
-                    });
+            const tChapName = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : "";
+
+            // If chapter is provided, enforce architectural match
+            if (cleanChapter && tChapName) {
+                if (!isChapterMatch(cleanChapter, tChapName)) {
+                    return; // Chapter architecture did not match!
                 }
+            }
+
+            if (!classMap.has(cls)) {
+                classMap.set(cls, {
+                    classLevel: cls,
+                    chapterName: tChapName || cleanChapter,
+                    topicName: tName,
+                    subject: t.subject
+                });
             }
         });
 

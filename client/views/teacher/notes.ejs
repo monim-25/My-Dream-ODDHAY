@@ -607,7 +607,7 @@
                             <input type="hidden" name="chapter" id="noteChapterHidden" value="">
 
                             <!-- Select Chapter Dropdown (Visible only when not locked) -->
-                            <select id="noteChapter" onchange="onNoteChapterSelectChange(this.value)"
+                            <select id="noteChapter" onchange="onNoteChapterChange(this.value)"
                                 class="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 transition-all cursor-pointer">
                                 <option value="">Select Chapter</option>
                             </select>
@@ -624,12 +624,6 @@
                                     <span id="noteTopicCountBadge" class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-primary/10 text-primary hidden">0 selected</span>
                                 </div>
                             </div>
-
-                            <!-- Topic Dropdown (Scoped to Chapter) -->
-                            <select id="noteTopicDropdown" onchange="onNoteTopicDropdownSelect(this.value)"
-                                class="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-primary transition-all cursor-pointer">
-                                <option value="">Select a Topic from Chapter</option>
-                            </select>
 
                             <!-- Hidden primary topic for backward compatibility -->
                             <input type="hidden" name="topic" id="notePrimaryTopicInput" value="">
@@ -1916,14 +1910,26 @@
                 }
             };
 
-            window.onNoteChapterChange = function() {
-                const chapterSelect = document.getElementById('noteChapter');
-                const selectedChapter = chapterSelect ? chapterSelect.value.trim() : '';
-                const subjectHidden = document.getElementById('noteSubjectHidden');
-                const subjSelect = document.getElementById('noteSubject');
-                const subject = (subjectHidden && subjectHidden.value) ? subjectHidden.value.trim() : (subjSelect ? subjSelect.value.trim() : '');
+            function isSameChapterClient(c1, c2) {
+                if (!c1 || !c2) return false;
+                const a = String(c1).trim().toLowerCase();
+                const b = String(c2).trim().toLowerCase();
+                if (a === b) return true;
+                const norm = (s) => s.replace(/^(?:অধ্যায়|অধ্যায়|chapter|ch)[\s\d:.-]+/i, '').replace(/\([^\)]*\)/g, '').replace(/[\s\-_:]+/g, ' ').trim();
+                const na = norm(a);
+                const nb = norm(b);
+                if (na && nb && (na === nb || na.includes(nb) || nb.includes(na))) return true;
+                return false;
+            }
 
-                const topicDropdown = document.getElementById('noteTopicDropdown');
+            window.onNoteChapterChange = function(val) {
+                const chapterSelect = document.getElementById('noteChapter');
+                const chapterHidden = document.getElementById('noteChapterHidden');
+                if (val && chapterHidden) {
+                    chapterHidden.value = val;
+                }
+                const selectedChapter = (val || (chapterHidden && chapterHidden.value) || (chapterSelect ? chapterSelect.value : '')).trim();
+
                 const emptyState = document.getElementById('noteTopicsEmptyState');
                 const loadingState = document.getElementById('noteTopicsLoading');
                 const topicsList = document.getElementById('noteTopicsList');
@@ -1936,9 +1942,6 @@
                 if (syncPortal) syncPortal.classList.add('hidden');
 
                 if (!selectedChapter) {
-                    if (topicDropdown) {
-                        topicDropdown.innerHTML = '<option value="">Select a Topic from Chapter</option>';
-                    }
                     if (emptyState) {
                         emptyState.classList.remove('hidden');
                         emptyState.innerHTML = '<span class="material-symbols-rounded text-base text-slate-300 dark:text-slate-600">info</span><span>Please select a Chapter to view available topics</span>';
@@ -1951,26 +1954,9 @@
                     return;
                 }
 
-                // Filter topics by selected chapter
+                // Filter topics by selected chapter using flexible matcher
                 const allTopics = window._cachedSyllabusTopics || [];
-                const selChapLower = selectedChapter.toLowerCase();
-                const chapterTopics = allTopics.filter(t => t.chapter && t.chapter.name && t.chapter.name.trim().toLowerCase() === selChapLower);
-
-                // Populate Topic Dropdown
-                if (topicDropdown) {
-                    topicDropdown.innerHTML = '<option value="">Select a Topic from Chapter</option>';
-                    const seenNames = new Set();
-                    chapterTopics.forEach(t => {
-                        const tName = (t.name || '').trim();
-                        if (tName && !seenNames.has(tName.toLowerCase())) {
-                            seenNames.add(tName.toLowerCase());
-                            const opt = document.createElement('option');
-                            opt.value = tName;
-                            opt.textContent = tName;
-                            topicDropdown.appendChild(opt);
-                        }
-                    });
-                }
+                const chapterTopics = allTopics.filter(t => t.chapter && t.chapter.name && isSameChapterClient(t.chapter.name, selectedChapter));
 
                 if (chapterTopics.length > 0) {
                     renderNoteTopics(chapterTopics);
@@ -1991,61 +1977,25 @@
                     syncNoteTopicSelection();
                 }
             };
-
-            window.onNoteTopicDropdownSelect = function(val) {
-                val = (val || '').trim();
-                const primaryInput = document.getElementById('notePrimaryTopicInput');
-                if (primaryInput) primaryInput.value = val;
-
-                const topicsList = document.getElementById('noteTopicsList');
-                if (topicsList) {
-                    const cbs = topicsList.querySelectorAll('input[name="topics[]"]');
-                    let foundMatch = false;
-                    cbs.forEach(cb => {
-                        if (val && cb.value.trim().toLowerCase() === val.toLowerCase()) {
-                            cb.checked = true;
-                            foundMatch = true;
-                        } else {
-                            cb.checked = false;
-                        }
-                    });
-
-                    // If user selected a topic from dropdown that wasn't in topicsList chips, add a hidden checked input
-                    if (val && !foundMatch) {
-                        const hiddenCb = document.createElement('input');
-                        hiddenCb.type = 'checkbox';
-                        hiddenCb.name = 'topics[]';
-                        hiddenCb.value = val;
-                        hiddenCb.checked = true;
-                        hiddenCb.className = 'hidden note-topic-checkbox';
-                        topicsList.appendChild(hiddenCb);
-                    }
-                }
-
-                syncNoteTopicSelection(val);
-            };
+            window.onNoteChapterSelectChange = window.onNoteChapterChange; // Backward compat alias
 
             window.onNoteTopicChipChange = function(cb) {
-                if (cb.checked) {
-                    const topicDropdown = document.getElementById('noteTopicDropdown');
-                    if (topicDropdown) {
-                        const opt = Array.from(topicDropdown.options).find(o => o.value.trim().toLowerCase() === cb.value.trim().toLowerCase());
-                        if (opt) topicDropdown.value = opt.value;
+                const chip = cb ? cb.closest('.topic-select-chip') : null;
+                if (chip && cb) {
+                    if (cb.checked) {
+                        chip.classList.add('bg-primary/5', 'dark:bg-primary/15', 'border-primary', 'dark:border-primary');
+                    } else {
+                        chip.classList.remove('bg-primary/5', 'dark:bg-primary/15', 'border-primary', 'dark:border-primary');
                     }
-                    syncNoteTopicSelection(cb.value);
-                } else {
-                    syncNoteTopicSelection();
                 }
+                syncNoteTopicSelection();
             };
 
             function renderNoteTopics(topics) {
                 const topicsList = document.getElementById('noteTopicsList');
                 const emptyState = document.getElementById('noteTopicsEmptyState');
-                const topicDropdown = document.getElementById('noteTopicDropdown');
                 if (!topicsList) return;
                 topicsList.innerHTML = '';
-
-                const currentSelectedVal = (topicDropdown ? topicDropdown.value : '').trim().toLowerCase();
 
                 const seen = new Set();
                 const uniqueTopics = [];
@@ -2059,10 +2009,10 @@
 
                 uniqueTopics.forEach(t => {
                     const tName = (t.name || '').trim();
-                    const isChecked = Boolean(currentSelectedVal && tName.toLowerCase() === currentSelectedVal);
                     const chip = document.createElement('label');
-                    chip.className = 'topic-select-chip flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary/60 dark:hover:border-primary/60 bg-white dark:bg-slate-900 cursor-pointer text-xs select-none transition-all' + (isChecked ? ' bg-primary/5 dark:bg-primary/15 border-primary dark:border-primary' : '');
-                    chip.innerHTML = '<input type="checkbox" name="topics[]" value="' + escapeHtml(tName) + '" data-chapter="' + escapeHtml(t.chapter?.name || '') + '" ' + (isChecked ? 'checked' : '') + ' class="note-topic-checkbox accent-primary rounded size-3.5 cursor-pointer" onchange="onNoteTopicChipChange(this)"><span class="font-medium text-slate-700 dark:text-slate-200 text-[11px] leading-tight">' + escapeHtml(tName) + '</span>';
+                    chip.className = 'topic-select-chip flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary/60 dark:hover:border-primary/60 bg-white dark:bg-slate-900 cursor-pointer text-xs select-none transition-all';
+                    chip.innerHTML = '<input type="checkbox" name="topics[]" value="' + escapeHtml(tName) + '" data-chapter="' + escapeHtml(t.chapter?.name || '') + '" class="note-topic-checkbox accent-primary rounded size-4 cursor-pointer" onchange="onNoteTopicChipChange(this)">' +
+                        '<span class="font-medium text-slate-700 dark:text-slate-200 text-xs leading-tight">' + escapeHtml(tName) + '</span>';
                     topicsList.appendChild(chip);
                 });
 
@@ -2071,30 +2021,28 @@
                 syncNoteTopicSelection();
             }
 
-            window.syncNoteTopicSelection = function(preferredVal) {
-                const topicDropdown = document.getElementById('noteTopicDropdown');
+            window.syncNoteTopicSelection = function() {
                 const primaryInput = document.getElementById('notePrimaryTopicInput');
                 const badge = document.getElementById('noteTopicCountBadge');
                 const checkedBoxes = Array.from(document.querySelectorAll('#noteTopicsList input[name="topics[]"]:checked'));
 
-                let activeVal = (preferredVal || (checkedBoxes[0] ? checkedBoxes[0].value : '') || (topicDropdown ? topicDropdown.value : '')).trim();
-
-                if (activeVal) {
-                    if (primaryInput) primaryInput.value = activeVal;
-                    if (topicDropdown && topicDropdown.value !== activeVal) {
-                        const opt = Array.from(topicDropdown.options).find(o => o.value.trim().toLowerCase() === activeVal.toLowerCase());
-                        if (opt) topicDropdown.value = opt.value;
-                    }
-
-                    if (badge) {
-                        badge.textContent = Math.max(1, checkedBoxes.length) + ' selected';
+                if (badge) {
+                    if (checkedBoxes.length > 0) {
+                        badge.textContent = checkedBoxes.length + ' selected';
                         badge.classList.remove('hidden');
+                    } else {
+                        badge.classList.add('hidden');
                     }
+                }
+
+                if (checkedBoxes.length > 0) {
+                    const selectedTopicNames = checkedBoxes.map(b => b.value.trim()).filter(Boolean);
+                    if (primaryInput) primaryInput.value = selectedTopicNames[0] || '';
 
                     const subjectHidden = document.getElementById('noteSubjectHidden');
                     const subjSelect = document.getElementById('noteSubject');
                     const subject = (subjectHidden && subjectHidden.value) ? subjectHidden.value.trim() : (subjSelect ? subjSelect.value.trim() : '');
-                    
+
                     const chapterHidden = document.getElementById('noteChapterHidden');
                     const chapterSelect = document.getElementById('noteChapter');
                     const chapter = (chapterHidden && chapterHidden.value) ? chapterHidden.value.trim() : (chapterSelect ? chapterSelect.value.trim() : '');
@@ -2107,11 +2055,9 @@
                         checkedClasses = Array.from(document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
                     }
 
-                    checkAndRenderCrossClassSync(subject, activeVal, chapter, checkedClasses);
+                    checkAndRenderCrossClassSync(subject, selectedTopicNames, chapter, checkedClasses);
                 } else {
                     if (primaryInput) primaryInput.value = '';
-                    if (topicDropdown) topicDropdown.value = '';
-                    if (badge) badge.classList.add('hidden');
                     const syncPortal = document.getElementById('crossClassSyncPortal');
                     if (syncPortal) syncPortal.classList.add('hidden');
                 }
@@ -2126,12 +2072,13 @@
                 });
             };
 
-            async function checkAndRenderCrossClassSync(subject, topicName, chapterName, checkedClasses) {
+            async function checkAndRenderCrossClassSync(subject, topicNames, chapterName, checkedClasses) {
                 const portal = document.getElementById('crossClassSyncPortal');
                 const container = document.getElementById('crossClassListContainer');
                 if (!portal || !container) return;
 
-                if (!subject || !topicName) {
+                const topicsParam = Array.isArray(topicNames) ? topicNames.join(',') : String(topicNames || '').trim();
+                if (!subject || !topicsParam) {
                     portal.classList.add('hidden');
                     container.innerHTML = '';
                     return;
@@ -2140,7 +2087,7 @@
                 try {
                     const query = new URLSearchParams({
                         subject: subject,
-                        topic: topicName,
+                        topic: topicsParam,
                         chapter: chapterName || '',
                         currentClasses: checkedClasses.join(',')
                     }).toString();
@@ -2389,13 +2336,9 @@
                     }
 
                     // 2. Validate Topics (Required from approved syllabus)
-                    const topicDropdown = document.getElementById('noteTopicDropdown');
                     const primaryInput = document.getElementById('notePrimaryTopicInput');
-                    let checkedTopics = Array.from(addNoteForm.querySelectorAll('input[name="topics[]"]:checked')).map(cb => cb.value.trim()).filter(Boolean);
+                    let checkedTopics = Array.from(addNoteForm.querySelectorAll('#noteTopicsList input[name="topics[]"]:checked')).map(cb => cb.value.trim()).filter(Boolean);
 
-                    if (checkedTopics.length === 0 && topicDropdown && topicDropdown.value.trim()) {
-                        checkedTopics = [topicDropdown.value.trim()];
-                    }
                     if (checkedTopics.length === 0 && primaryInput && primaryInput.value.trim()) {
                         checkedTopics = [primaryInput.value.trim()];
                     }
