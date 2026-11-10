@@ -682,7 +682,7 @@
                                     Select PDF file
                                 </div>
                                 <p id="noteFileSizePreview" class="text-[10px] text-slate-400 mt-0.5">
-                                    Max 50MB
+                                    Max 25MB
                                 </p>
                             </label>
                             <input type="file" id="noteFileInput" name="note" accept="application/pdf" required class="sr-only" onchange="handleNoteFileSelected(this)">
@@ -1040,7 +1040,7 @@
 
             if (!file) {
                 if (nameEl) nameEl.textContent = 'Select PDF file';
-                if (sizeEl) sizeEl.textContent = 'Max 50MB';
+                if (sizeEl) sizeEl.textContent = 'Max 25MB';
                 if (dropzone) {
                     dropzone.classList.remove('border-emerald-500', 'bg-emerald-50/10');
                     dropzone.classList.add('border-slate-200', 'dark:border-slate-700');
@@ -1048,11 +1048,19 @@
                 return;
             }
 
+            if (file.size > 25 * 1024 * 1024) {
+                showCustomAlert('File size exceeds the 25MB maximum limit. Please select a file under 25MB.', 'warning', 'File Too Large');
+                input.value = '';
+                if (nameEl) nameEl.textContent = 'Select PDF file';
+                if (sizeEl) sizeEl.textContent = 'Max 25MB';
+                return;
+            }
+
             if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
                 showCustomAlert('Please select a valid PDF file.', 'warning', 'Invalid File');
                 input.value = '';
                 if (nameEl) nameEl.textContent = 'Tap to choose PDF document';
-                if (sizeEl) sizeEl.textContent = 'PDF document only (up to 50MB)';
+                if (sizeEl) sizeEl.textContent = 'PDF document only (up to 25MB)';
                 return;
             }
 
@@ -1264,7 +1272,7 @@
             const iconBox = document.getElementById('noteFileIconBox');
             const dropzone = document.getElementById('noteFileDropzone');
             if (nameEl) nameEl.textContent = 'Select PDF file';
-            if (sizeEl) sizeEl.textContent = 'Max 50MB';
+            if (sizeEl) sizeEl.textContent = 'Max 25MB';
             if (dropzone) {
                 dropzone.classList.remove('border-emerald-500', 'bg-emerald-50/10');
                 dropzone.classList.add('border-slate-200', 'dark:border-slate-700');
@@ -2176,7 +2184,7 @@
                 }
             }
 
-            // Direct browser-to-Cloudinary upload helper (bypasses Vercel 4.5MB request payload limit)
+            // Direct browser-to-Cloudinary upload helper (for files <= 10MB)
             async function uploadFileDirectlyToCloudinary(file, onProgress) {
                 const endpoints = ['/api/cloudinary-signature?folder=notes', '/teacher/api/cloudinary-signature?folder=notes'];
                 let sigData = null;
@@ -2244,6 +2252,101 @@
 
                     xhr.send(formData);
                 });
+            }
+
+            // Chunked upload helper for large files (supports up to 25MB, bypassing Vercel 4.5MB & Cloudinary 10MB limits)
+            async function uploadFileInChunks(file, onProgress) {
+                const chunkSize = 2 * 1024 * 1024; // 2MB slices safely under Vercel payload limit
+                const totalChunks = Math.ceil(file.size / chunkSize);
+                const uploadId = 'up_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+
+                for (let index = 0; index < totalChunks; index++) {
+                    const start = index * chunkSize;
+                    const end = Math.min(start + chunkSize, file.size);
+                    const chunkBlob = file.slice(start, end);
+
+                    const formData = new FormData();
+                    formData.append('uploadId', uploadId);
+                    formData.append('chunkIndex', String(index));
+                    formData.append('totalChunks', String(totalChunks));
+                    formData.append('chunk', chunkBlob, file.name);
+
+                    let chunkUploaded = false;
+                    let lastErr = null;
+                    for (let attempt = 0; attempt < 3; attempt++) {
+                        try {
+                            const res = await fetch('/api/upload-chunk', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            if (res.ok) {
+                                const json = await res.json();
+                                if (json && json.success) {
+                                    chunkUploaded = true;
+                                    break;
+                                }
+                            }
+                        } catch (err) {
+                            lastErr = err;
+                        }
+                    }
+
+                    if (!chunkUploaded) {
+                        throw new Error(`Failed to upload chunk ${index + 1} of ${totalChunks}: ` + (lastErr?.message || 'Network error'));
+                    }
+
+                    if (typeof onProgress === 'function') {
+                        const percent = Math.round(((index + 1) / (totalChunks + 1)) * 100);
+                        onProgress(percent);
+                    }
+                }
+
+                // Finalize assembly into MongoDB GridFS
+                const completeRes = await fetch('/api/upload-complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        uploadId,
+                        filename: file.name,
+                        mimeType: file.type || 'application/pdf',
+                        totalChunks
+                    })
+                });
+
+                if (!completeRes.ok) {
+                    throw new Error('Server failed to assemble uploaded chunks.');
+                }
+
+                const completeJson = await completeRes.json();
+                if (!completeJson || !completeJson.success || !completeJson.fileUrl) {
+                    throw new Error(completeJson?.message || 'Failed to finalize uploaded file.');
+                }
+
+                if (typeof onProgress === 'function') {
+                    onProgress(100);
+                }
+
+                return completeJson.fileUrl;
+            }
+
+            // Universal smart uploader (handles up to 25MB seamlessly)
+            async function uploadNoteFile(file, onProgress) {
+                if (file.size > 25 * 1024 * 1024) {
+                    throw new Error('File exceeds the 25MB maximum limit.');
+                }
+
+                // If file is <= 10MB, try direct Cloudinary upload first
+                if (file.size <= 10485760) {
+                    try {
+                        return await uploadFileDirectlyToCloudinary(file, onProgress);
+                    } catch (err) {
+                        console.warn('Direct Cloudinary upload failed, falling back to chunked storage:', err);
+                        return await uploadFileInChunks(file, onProgress);
+                    }
+                }
+
+                // If file is > 10MB (Cloudinary free tier limit is 10MB), use chunked storage directly
+                return await uploadFileInChunks(file, onProgress);
             }
 
             const addNoteForm = document.getElementById('addNoteForm');
@@ -2338,7 +2441,7 @@
                             submitBtn.innerHTML = '<span class="material-symbols-rounded text-base leading-none animate-spin">cloud_upload</span><span id="btnUploadProgressText">Uploading PDF (0%)...</span>';
                         }
 
-                        directUrl = await uploadFileDirectlyToCloudinary(file, (percent) => {
+                        directUrl = await uploadNoteFile(file, (percent) => {
                             const progEl = document.getElementById('btnUploadProgressText');
                             if (progEl) progEl.textContent = `Uploading PDF (${percent}%)...`;
                         });

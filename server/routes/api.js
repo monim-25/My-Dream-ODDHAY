@@ -30,6 +30,142 @@ router.get('/cloudinary-signature', (req, res) => {
     }
 });
 
+// Memory storage for incoming 2MB chunks
+const chunkMemoryUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 }
+});
+
+// POST /api/upload-chunk — Receives a 2MB chunk and stores in MongoDB UploadChunk collection
+router.post('/upload-chunk', chunkMemoryUpload.single('chunk'), async (req, res) => {
+    try {
+        const mongoose = require('mongoose');
+        if (mongoose.connection.readyState !== 1) await connectDB();
+
+        const { uploadId, chunkIndex, totalChunks } = req.body;
+        if (!uploadId || chunkIndex === undefined || !req.file) {
+            return res.status(400).json({ success: false, message: 'Missing chunk data' });
+        }
+
+        const UploadChunk = require('../models/UploadChunk');
+        await UploadChunk.findOneAndUpdate(
+            { uploadId: String(uploadId).trim(), chunkIndex: parseInt(chunkIndex, 10) },
+            {
+                uploadId: String(uploadId).trim(),
+                chunkIndex: parseInt(chunkIndex, 10),
+                totalChunks: parseInt(totalChunks, 10),
+                data: req.file.buffer
+            },
+            { upsert: true, new: true }
+        );
+
+        res.json({ success: true, index: parseInt(chunkIndex, 10) });
+    } catch (err) {
+        console.error('Error saving upload chunk:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// POST /api/upload-complete — Assembles chunks into MongoDB GridFS and returns permanent fileUrl
+router.post('/upload-complete', express.json(), async (req, res) => {
+    try {
+        const mongoose = require('mongoose');
+        if (mongoose.connection.readyState !== 1) await connectDB();
+
+        const { uploadId, filename, mimeType, totalChunks } = req.body;
+        if (!uploadId || !filename || !totalChunks) {
+            return res.status(400).json({ success: false, message: 'Missing completion parameters' });
+        }
+
+        const UploadChunk = require('../models/UploadChunk');
+        const chunks = await UploadChunk.find({ uploadId: String(uploadId).trim() }).sort({ chunkIndex: 1 }).lean();
+
+        if (chunks.length !== parseInt(totalChunks, 10)) {
+            return res.status(400).json({
+                success: false,
+                message: `Incomplete chunks. Received ${chunks.length} of ${totalChunks}.`
+            });
+        }
+
+        const { GridFSBucket } = require('mongodb');
+        const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'notes_files' });
+        const cleanName = path.basename(filename);
+        const uploadStream = bucket.openUploadStream(cleanName, {
+            contentType: mimeType || 'application/pdf'
+        });
+        const fileId = uploadStream.id;
+
+        for (const c of chunks) {
+            uploadStream.write(c.data);
+        }
+        uploadStream.end();
+
+        await new Promise((resolve, reject) => {
+            uploadStream.on('finish', resolve);
+            uploadStream.on('error', reject);
+        });
+
+        // Clean up temporary chunks
+        await UploadChunk.deleteMany({ uploadId: String(uploadId).trim() }).catch(() => {});
+
+        const fileUrl = `/api/files/raw/${fileId}/${encodeURIComponent(cleanName)}`;
+        res.json({ success: true, fileUrl, fileId: String(fileId) });
+    } catch (err) {
+        console.error('Error completing chunked upload:', err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+// GET /api/files/raw/:fileId/:filename? — Stream large file directly from MongoDB GridFS with HTTP Range support
+router.get('/files/raw/:fileId/:filename?', async (req, res) => {
+    try {
+        const mongoose = require('mongoose');
+        if (mongoose.connection.readyState !== 1) await connectDB();
+
+        const { fileId } = req.params;
+        const { ObjectId, GridFSBucket } = require('mongodb');
+        if (!ObjectId.isValid(fileId)) return res.status(404).send('File not found');
+
+        const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'notes_files' });
+        const filesCol = mongoose.connection.db.collection('notes_files.files');
+        const fileDoc = await filesCol.findOne({ _id: new ObjectId(fileId) });
+        if (!fileDoc) return res.status(404).send('File not found');
+
+        const fileSize = fileDoc.length;
+        const range = req.headers.range;
+        const contentType = fileDoc.contentType || 'application/pdf';
+
+        res.set('Accept-Ranges', 'bytes');
+        res.set('Cache-Control', 'public, max-age=31536000, immutable');
+        res.set('Content-Disposition', `inline; filename="${encodeURIComponent(fileDoc.filename)}"`);
+
+        if (range) {
+            const parts = range.replace(/bytes=/, "").split("-");
+            const start = parseInt(parts[0], 10);
+            const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+            const chunksize = (end - start) + 1;
+            res.status(206);
+            res.set({
+                'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                'Content-Length': chunksize,
+                'Content-Type': contentType
+            });
+            const downloadStream = bucket.openDownloadStream(new ObjectId(fileId), { start, end: end + 1 });
+            downloadStream.pipe(res);
+        } else {
+            res.set({
+                'Content-Length': fileSize,
+                'Content-Type': contentType
+            });
+            const downloadStream = bucket.openDownloadStream(new ObjectId(fileId));
+            downloadStream.pipe(res);
+        }
+    } catch (err) {
+        console.error('GridFS stream error:', err);
+        res.status(500).send('Error streaming file');
+    }
+});
+
 // ---- Push Notification API ----
 router.get('/push/vapid-public-key', (req, res) => res.json({ publicKey: pushNotificationService.getPublicKey() }));
 

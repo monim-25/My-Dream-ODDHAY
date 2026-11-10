@@ -1042,8 +1042,59 @@
             return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
-        // Direct browser-to-Cloudinary upload helper (bypasses Vercel 4.5MB request payload limit)
-        async function uploadFileDirectlyToCloudinary(file, onProgress) {
+        // Chunked upload helper for large files (supports up to 25MB)
+        async function uploadFileInChunks(file, onProgress) {
+            const chunkSize = 2 * 1024 * 1024;
+            const totalChunks = Math.ceil(file.size / chunkSize);
+            const uploadId = 'up_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+
+            for (let index = 0; index < totalChunks; index++) {
+                const start = index * chunkSize;
+                const end = Math.min(start + chunkSize, file.size);
+                const chunkBlob = file.slice(start, end);
+
+                const formData = new FormData();
+                formData.append('uploadId', uploadId);
+                formData.append('chunkIndex', String(index));
+                formData.append('totalChunks', String(totalChunks));
+                formData.append('chunk', chunkBlob, file.name);
+
+                let chunkUploaded = false;
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        const res = await fetch('/api/upload-chunk', { method: 'POST', body: formData });
+                        if (res.ok) {
+                            const json = await res.json();
+                            if (json && json.success) { chunkUploaded = true; break; }
+                        }
+                    } catch (e) {}
+                }
+                if (!chunkUploaded) throw new Error(`Chunk ${index + 1} upload failed`);
+                if (typeof onProgress === 'function') onProgress(Math.round(((index + 1) / (totalChunks + 1)) * 100));
+            }
+
+            const completeRes = await fetch('/api/upload-complete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uploadId, filename: file.name, mimeType: file.type || 'application/pdf', totalChunks })
+            });
+            if (!completeRes.ok) throw new Error('Failed to assemble chunks on server.');
+            const completeJson = await completeRes.json();
+            if (!completeJson || !completeJson.fileUrl) throw new Error('Invalid file URL returned.');
+            return completeJson.fileUrl;
+        }
+
+        async function uploadNoteFile(file, onProgress) {
+            if (file.size > 25 * 1024 * 1024) throw new Error('File exceeds 25MB maximum limit.');
+            if (file.size <= 10485760) {
+                try {
+                    return await uploadFileDirectlyToCloudinary(file, onProgress);
+                } catch (e) {
+                    return await uploadFileInChunks(file, onProgress);
+                }
+            }
+            return await uploadFileInChunks(file, onProgress);
+        }
             const endpoints = ['/api/cloudinary-signature?folder=notes', '/admin/api/cloudinary-signature?folder=notes'];
             let sigData = null;
             for (const ep of endpoints) {
@@ -1147,7 +1198,7 @@
                         }
 
                         try {
-                            const directUrl = await uploadFileDirectlyToCloudinary(file);
+                            const directUrl = await uploadNoteFile(file);
                             if (directUrl) {
                                 let urlInput = form.querySelector('input[name="fileUrl"]');
                                 if (!urlInput) {
