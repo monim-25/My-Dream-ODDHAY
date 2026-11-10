@@ -2352,13 +2352,15 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
         
         const noteCourseId = course && mongoose.Types.ObjectId.isValid(course) ? course : undefined;
 
-        const rawClasses = classLevel || req.body['classLevel[]'] || req.body.classLevels || req.body['classLevels[]'];
-        let parsedClasses = [];
-        if (Array.isArray(rawClasses)) {
-            parsedClasses = rawClasses.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
-        } else if (rawClasses) {
-            parsedClasses = String(rawClasses).split(',').map(c => c.trim()).filter(Boolean);
-        }
+        const extractList = (val) => {
+            if (!val) return [];
+            if (Array.isArray(val)) return val.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+            return String(val).split(',').map(c => c.trim()).filter(Boolean);
+        };
+        const baseClasses = extractList(classLevel || req.body['classLevel[]'] || req.body.classLevels || req.body['classLevels[]']);
+        const syncClasses = extractList(req.body.syncClasses || req.body['syncClasses[]']);
+        let parsedClasses = [...new Set([...baseClasses, ...syncClasses])];
+        if (parsedClasses.length === 0) parsedClasses = ['Class 10'];
 
         const rawTopics = topics || topic || req.body['topics[]'] || req.body['topic[]'];
         let parsedTopics = [];
@@ -2381,6 +2383,12 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
             if (chapFolder) {
                 resolvedParentFolderId = String(chapFolder._id);
             }
+        }
+
+        // Auto-ensure syllabus Subject and Chapter folders exist for ALL target and synced classes
+        if (chapter && subject && parsedClasses.length > 0) {
+            const { ensureSyllabusFoldersForChapter } = require('../controllers/topicController');
+            await ensureSyllabusFoldersForChapter(parsedClasses, subject, chapter, req.session?.user?._id).catch(() => {});
         }
 
         const newNote = await new Note({
@@ -4861,6 +4869,7 @@ const topicController = require('../controllers/topicController');
 router.get('/topics', teacherProtect, topicController.getTeacherTopicsPage);
 router.get('/api/chapters', teacherProtect, topicController.getChaptersApi);
 router.get('/api/topics', teacherProtect, topicController.getTopicsApi);
+router.get('/api/topics/cross-class-check', teacherProtect, topicController.checkCrossClassTopic);
 router.post('/topics', teacherProtect, topicController.createTopic);
 router.post('/topics/add-subject', teacherProtect, topicController.addSubjectToClasses);
 router.post('/topics/copy-to-classes', teacherProtect, topicController.copyTopicsToClasses);

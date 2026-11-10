@@ -5953,6 +5953,12 @@ router.get('/api/topics', async (req, res) => {
     return topicController.getTopicsApi(req, res);
 });
 
+// GET /api/topics/cross-class-check
+router.get('/api/topics/cross-class-check', async (req, res) => {
+    const topicController = require('../controllers/topicController');
+    return topicController.checkCrossClassTopic(req, res);
+});
+
 // POST /exams/custom-start — Create and start a custom exam session
 router.post('/exams/custom-start', protect, async (req, res) => {
     try {

@@ -10,6 +10,7 @@ const topicController = require('../controllers/topicController');
 
 // GET /api/topics — Universal syllabus topics endpoint
 router.get('/topics', async (req, res) => topicController.getTopicsApi(req, res));
+router.get('/topics/cross-class-check', async (req, res) => topicController.checkCrossClassTopic(req, res));
 
 // ---- Push Notification API ----
 router.get('/push/vapid-public-key', (req, res) => res.json({ publicKey: pushNotificationService.getPublicKey() }));

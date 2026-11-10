@@ -1617,6 +1617,71 @@ const deletePendingTeacherTopic = async (req, res) => {
     }
 };
 
+// API: Check if a topic (with same subject & chapter) exists in other classes syllabus
+const checkCrossClassTopic = async (req, res) => {
+    try {
+        if (mongoose.connection && mongoose.connection.readyState !== 1) {
+            try { await connectDB(); } catch (e) {}
+        }
+        const { subject, topic, chapter } = req.query;
+        const currentClassesRaw = req.query.currentClasses || req.query.currentClass || "";
+        let currentClasses = [];
+        if (Array.isArray(currentClassesRaw)) {
+            currentClasses = currentClassesRaw.flatMap(c => String(c).split(",")).map(c => c.trim().toLowerCase()).filter(Boolean);
+        } else if (currentClassesRaw) {
+            currentClasses = String(currentClassesRaw).split(",").map(c => c.trim().toLowerCase()).filter(Boolean);
+        }
+
+        if (!subject || !topic) {
+            return res.json({ success: true, hasCrossClass: false, matchingClasses: [], details: [] });
+        }
+
+        const cleanSubject = String(subject).trim();
+        const cleanTopic = String(topic).trim();
+
+        // Find approved/active topics in syllabus with matching subject and topic name
+        const filter = {
+            isArchived: { $nin: [true, "true", 1] },
+            status: { $nin: ["pending", "rejected"] },
+            subject: new RegExp("^" + escapeRegex(cleanSubject) + "$", "i"),
+            name: new RegExp("^" + escapeRegex(cleanTopic) + "$", "i")
+        };
+
+        const matchingTopics = await Topic.find(filter).select("classLevel subject chapter name").lean();
+
+        // Group by classLevel, filtering out currently selected classes
+        const classMap = new Map();
+        matchingTopics.forEach(t => {
+            const cls = (t.classLevel || "").trim();
+            if (!cls) return;
+            const clsLower = cls.toLowerCase();
+            const isCurrent = currentClasses.some(cc => cc === clsLower || cc.includes(clsLower) || clsLower.includes(cc));
+            if (!isCurrent) {
+                if (!classMap.has(cls)) {
+                    classMap.set(cls, {
+                        classLevel: cls,
+                        chapterName: (t.chapter && t.chapter.name) ? t.chapter.name : (chapter || ""),
+                        topicName: t.name
+                    });
+                }
+            }
+        });
+
+        const matchingDetails = Array.from(classMap.values());
+        const matchingClasses = Array.from(classMap.keys());
+
+        res.json({
+            success: true,
+            hasCrossClass: matchingClasses.length > 0,
+            matchingClasses,
+            details: matchingDetails
+        });
+    } catch (error) {
+        console.error("checkCrossClassTopic Error:", error);
+        res.status(200).json({ success: true, hasCrossClass: false, matchingClasses: [], details: [] });
+    }
+};
+
 module.exports = {
     ensureSyllabusFoldersForChapter,
     syncAllSyllabusFolders,
@@ -1638,5 +1703,6 @@ module.exports = {
     getTeacherTopicsPage,
     deletePendingTeacherTopic,
     addSubjectToClasses,
-    copyTopicsToClasses
+    copyTopicsToClasses,
+    checkCrossClassTopic
 };

@@ -2509,13 +2509,15 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
     await connectDB();
     if (req.session.user.role === 'superadmin') return res.status(403).send('সুপার অ্যাডমিন কন্টেন্ট যোগ করতে পারবেন না।');
     const { title, subject, chapter, topic, topics, description, accessType, course } = req.body;
-    const rawClassLevel = req.body.classLevel || req.body['classLevel[]'] || req.body.classLevels || req.body['classLevels[]'];
-    let classLevelArray = [];
-    if (Array.isArray(rawClassLevel)) {
-        classLevelArray = rawClassLevel.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
-    } else if (rawClassLevel) {
-        classLevelArray = String(rawClassLevel).split(',').map(c => c.trim()).filter(Boolean);
-    }
+    const extractList = (val) => {
+        if (!val) return [];
+        if (Array.isArray(val)) return val.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+        return String(val).split(',').map(c => c.trim()).filter(Boolean);
+    };
+    const baseClasses = extractList(req.body.classLevel || req.body['classLevel[]'] || req.body.classLevels || req.body['classLevels[]']);
+    const syncClasses = extractList(req.body.syncClasses || req.body['syncClasses[]']);
+    let classLevelArray = [...new Set([...baseClasses, ...syncClasses])];
+    if (classLevelArray.length === 0) classLevelArray = ['Class 10'];
 
     const rawTopics = topics || topic || req.body['topics[]'] || req.body['topic[]'];
     let parsedTopics = [];
@@ -2543,6 +2545,10 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
     const { processUploadedFile } = require('../services/cloudinaryService');
     const fileUrl = req.file ? await processUploadedFile(req.file, 'notes') : null;
     const mongoose = require('mongoose');
+    if (chapter && subject && classLevelArray.length > 0) {
+        const { ensureSyllabusFoldersForChapter } = require('../controllers/topicController');
+        await ensureSyllabusFoldersForChapter(classLevelArray, subject, chapter, req.session?.user?._id).catch(() => {});
+    }
     await new Note({
         title, subject, classLevel: classLevelArray.length > 0 ? classLevelArray : ['Class 10'], 
         chapter: chapter || '', 
@@ -5318,6 +5324,7 @@ const topicController = require('../controllers/topicController');
 
 router.get('/topics', superAdminProtect, topicController.getTopicsPage);
 router.get('/api/topics', superAdminProtect, topicController.getTopicsApi);
+router.get('/api/topics/cross-class-check', superAdminProtect, topicController.checkCrossClassTopic);
 router.get('/api/chapters', superAdminProtect, topicController.getChaptersApi);
 router.post('/topics', superAdminProtect, topicController.createTopic);
 router.post('/topics/add-subject', superAdminProtect, topicController.addSubjectToClasses);
