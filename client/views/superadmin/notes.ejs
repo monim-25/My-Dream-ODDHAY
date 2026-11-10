@@ -1059,11 +1059,14 @@
                 } catch (err) {}
             }
 
-            if (!sigData) return null;
+            if (!sigData) throw new Error('Could not obtain upload credentials from server.');
+
+            const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+            const resourceType = isPdf ? 'raw' : 'auto';
 
             return new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
-                const url = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/auto/upload`;
+                const url = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/${resourceType}/upload`;
                 xhr.open('POST', url, true);
 
                 xhr.upload.onprogress = (e) => {
@@ -1155,9 +1158,16 @@
                                 }
                                 urlInput.value = directUrl;
                                 fileInput.disabled = true;
+                            } else {
+                                throw new Error('Cloud storage did not return a valid file URL.');
                             }
                         } catch (err) {
-                            console.warn('Direct upload fallback:', err);
+                            console.error('Direct upload failed:', err);
+                            if (submitBtn) {
+                                submitBtn.disabled = false;
+                                submitBtn.innerHTML = 'Upload Note';
+                            }
+                            return Swal.fire('Upload Failed', err.message || 'File upload failed. Please try again.', 'error');
                         }
                     }
 

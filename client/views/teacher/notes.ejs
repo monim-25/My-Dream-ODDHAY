@@ -572,7 +572,7 @@
                             </select>
                         </div>
 
-                        <!-- Chapter Row (Dynamic & Auto-selected from current folder) -->
+                        <!-- Chapter Row (Dynamic & Auto-selected / Locked from current folder) -->
                         <div>
                             <div class="flex items-center justify-between mb-1">
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
@@ -580,7 +580,21 @@
                                 </label>
                                 <span id="noteChapterBadge" class="text-[10px] font-bold text-amber-600 dark:text-amber-400"></span>
                             </div>
-                            <select name="chapter" id="noteChapter" required onchange="onNoteChapterChange()"
+
+                            <!-- Locked Chapter Card (Shown when inside a specific chapter folder) -->
+                            <div id="noteChapterLockedNotice" class="hidden flex items-center justify-between px-3 py-2 rounded-xl bg-amber-50 dark:bg-amber-900/25 border border-amber-200 dark:border-amber-800 text-xs font-semibold text-amber-700 dark:text-amber-300">
+                                <div class="flex items-center gap-1.5 truncate">
+                                    <span class="material-symbols-rounded text-base text-amber-600 dark:text-amber-400 leading-none">lock</span>
+                                    <span>Chapter: <strong id="lockedChapterText" class="font-bold"></strong></span>
+                                </div>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-800/60 text-amber-800 dark:text-amber-200 font-bold shrink-0">Current Folder</span>
+                            </div>
+
+                            <!-- Hidden chapter input to guarantee submission when dropdown is locked/hidden -->
+                            <input type="hidden" name="chapter" id="noteChapterHidden" value="">
+
+                            <!-- Select Chapter Dropdown (Visible only when not locked) -->
+                            <select id="noteChapter" onchange="onNoteChapterSelectChange(this.value)"
                                 class="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 transition-all cursor-pointer">
                                 <option value="">Select Chapter</option>
                             </select>
@@ -1135,6 +1149,32 @@
                 }
             }
 
+            // Handle Chapter UI & Context Locking
+            const isInsideChapterFolder = Boolean(presetChapter || detectedChapter || (window.folderNavStack && window.folderNavStack.length >= 2));
+            const activeChapterVal = (presetChapter || detectedChapter || (window.folderNavStack && window.folderNavStack.length >= 2 ? window.folderNavStack[1].name : '') || window.activeChapterFilter || '').trim();
+
+            window._initialNoteChapter = activeChapterVal;
+
+            const chapterLockedNotice = document.getElementById('noteChapterLockedNotice');
+            const lockedChapterText = document.getElementById('lockedChapterText');
+            const chapterHidden = document.getElementById('noteChapterHidden');
+            const chapterSelect = document.getElementById('noteChapter');
+
+            if (chapterHidden) chapterHidden.value = activeChapterVal;
+
+            if (chapterSelect) {
+                if (isInsideChapterFolder && activeChapterVal) {
+                    chapterSelect.classList.add('hidden');
+                    if (chapterLockedNotice) {
+                        chapterLockedNotice.classList.remove('hidden');
+                        if (lockedChapterText) lockedChapterText.textContent = activeChapterVal;
+                    }
+                } else {
+                    chapterSelect.classList.remove('hidden');
+                    if (chapterLockedNotice) chapterLockedNotice.classList.add('hidden');
+                }
+            }
+
             if (parentFolderInput) parentFolderInput.value = activeParentId;
             if (courseInput) courseInput.value = activeCourse;
 
@@ -1172,7 +1212,12 @@
 
             // Reset file preview
             const fileInput = document.getElementById('noteFileInput');
-            if (fileInput) fileInput.value = '';
+            if (fileInput) {
+                fileInput.value = '';
+                fileInput.disabled = false;
+            }
+            const existingUrlInput = document.getElementById('addNoteForm')?.querySelector('input[name="fileUrl"]');
+            if (existingUrlInput) existingUrlInput.remove();
             const nameEl = document.getElementById('noteFileNamePreview');
             const sizeEl = document.getElementById('noteFileSizePreview');
             const iconBox = document.getElementById('noteFileIconBox');
@@ -2089,11 +2134,15 @@
                     } catch (err) {}
                 }
 
-                if (!sigData) return null;
+                if (!sigData) throw new Error('Could not obtain upload credentials from server.');
+
+                // Determine resource type: for PDF and documents, Cloudinary requires 'raw' upload endpoint
+                const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                const resourceType = isPdf ? 'raw' : 'auto';
 
                 return new Promise((resolve, reject) => {
                     const xhr = new XMLHttpRequest();
-                    const url = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/auto/upload`;
+                    const url = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/${resourceType}/upload`;
                     xhr.open('POST', url, true);
 
                     xhr.upload.onprogress = (e) => {
@@ -2107,21 +2156,30 @@
                         if (xhr.status >= 200 && xhr.status < 300) {
                             try {
                                 const resp = JSON.parse(xhr.responseText);
-                                resolve(resp.secure_url || resp.url);
+                                if (resp.secure_url || resp.url) {
+                                    resolve(resp.secure_url || resp.url);
+                                } else {
+                                    reject(new Error(resp.error?.message || 'Invalid upload response'));
+                                }
                             } catch (err) {
                                 reject(err);
                             }
                         } else {
-                            reject(new Error('Cloudinary upload status: ' + xhr.status));
+                            try {
+                                const errJson = JSON.parse(xhr.responseText);
+                                reject(new Error(errJson.error?.message || ('Cloudinary upload error: ' + xhr.status)));
+                            } catch (e) {
+                                reject(new Error('Cloudinary upload error status: ' + xhr.status));
+                            }
                         }
                     };
 
-                    xhr.onerror = () => reject(new Error('Cloudinary network error'));
+                    xhr.onerror = () => reject(new Error('Network error during file upload'));
 
                     const formData = new FormData();
                     formData.append('file', file);
                     formData.append('api_key', sigData.apiKey);
-                    formData.append('timestamp', sigData.timestamp);
+                    formData.append('timestamp', String(sigData.timestamp));
                     formData.append('signature', sigData.signature);
                     formData.append('folder', sigData.folder);
 
@@ -2191,34 +2249,32 @@
                     }
 
                     try {
-                        // Direct upload to Cloudinary to bypass Vercel 4.5MB Serverless Function payload limit (413)
                         let directUrl = null;
-                        try {
-                            if (submitBtn) {
-                                submitBtn.innerHTML = '<span class="material-symbols-rounded text-base leading-none animate-spin">cloud_upload</span><span id="btnUploadProgressText">Uploading PDF (0%)...</span>';
-                            }
-                            directUrl = await uploadFileDirectlyToCloudinary(file, (percent) => {
-                                const progEl = document.getElementById('btnUploadProgressText');
-                                if (progEl) progEl.textContent = `Uploading PDF (${percent}%)...`;
-                            });
-                        } catch (uploadErr) {
-                            console.warn('Direct upload error, falling back to server upload:', uploadErr);
+                        if (submitBtn) {
+                            submitBtn.innerHTML = '<span class="material-symbols-rounded text-base leading-none animate-spin">cloud_upload</span><span id="btnUploadProgressText">Uploading PDF (0%)...</span>';
                         }
 
-                        if (directUrl) {
-                            // Inject direct Cloudinary URL into form
-                            let fileUrlInput = addNoteForm.querySelector('input[name="fileUrl"]');
-                            if (!fileUrlInput) {
-                                fileUrlInput = document.createElement('input');
-                                fileUrlInput.type = 'hidden';
-                                fileUrlInput.name = 'fileUrl';
-                                addNoteForm.appendChild(fileUrlInput);
-                            }
-                            fileUrlInput.value = directUrl;
+                        directUrl = await uploadFileDirectlyToCloudinary(file, (percent) => {
+                            const progEl = document.getElementById('btnUploadProgressText');
+                            if (progEl) progEl.textContent = `Uploading PDF (${percent}%)...`;
+                        });
 
-                            // Disable raw file input so no heavy binary is posted to Vercel
-                            fileInput.disabled = true;
+                        if (!directUrl) {
+                            throw new Error('Cloud storage upload did not return a valid file URL.');
                         }
+
+                        // Inject direct Cloudinary URL into form
+                        let fileUrlInput = addNoteForm.querySelector('input[name="fileUrl"]');
+                        if (!fileUrlInput) {
+                            fileUrlInput = document.createElement('input');
+                            fileUrlInput.type = 'hidden';
+                            fileUrlInput.name = 'fileUrl';
+                            addNoteForm.appendChild(fileUrlInput);
+                        }
+                        fileUrlInput.value = directUrl;
+
+                        // IMPORTANT: Disable raw file input so ZERO binary payload is posted to Vercel!
+                        fileInput.disabled = true;
 
                         if (submitBtn) {
                             submitBtn.innerHTML = '<span class="material-symbols-rounded text-base leading-none animate-spin">save</span><span>Saving Note...</span>';
@@ -2226,8 +2282,8 @@
 
                         addNoteForm.submit();
                     } catch (err) {
-                        console.error('Note submission failed:', err);
-                        showCustomAlert('Upload failed: ' + (err.message || 'Please check your connection'), 'error', 'Upload Failed');
+                        console.error('Note upload failed:', err);
+                        showCustomAlert('File upload failed: ' + (err.message || 'Please check your connection'), 'error', 'Upload Failed');
                         if (submitBtn) {
                             submitBtn.disabled = false;
                             submitBtn.innerHTML = '<span class="material-symbols-rounded text-sm leading-none">cloud_upload</span><span>Upload Note</span>';
