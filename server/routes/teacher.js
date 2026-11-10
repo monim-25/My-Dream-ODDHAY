@@ -2025,6 +2025,10 @@ router.get('/notes', teacherProtect, async (req, res) => {
         const search = req.query.q || '';
         const authorFilter = req.query.author || '';
 
+        // Sync approved syllabus topics into Subject folders and Chapter subfolders in Notes
+        const { syncAllSyllabusFolders } = require('../controllers/topicController');
+        await syncAllSyllabusFolders().catch(() => {});
+
         // 1. Get user courses where teacher is instructor or permitted, or matching subjects/classes or specified courseLink
         // 1. Get teacher's strictly assigned subjects & classes
         const teacherContext = await getTeacherAssignedContext(user._id);
@@ -2362,6 +2366,20 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
         }
         const primaryTopic = parsedTopics[0] || (typeof topic === 'string' ? topic.trim() : '');
 
+        let resolvedParentFolderId = parentFolderId && parentFolderId !== 'null' && parentFolderId !== '' ? parentFolderId : null;
+        if (!resolvedParentFolderId && chapter && subject && parsedClasses.length > 0) {
+            const Folder = require('../models/Folder');
+            const escFunc = (s) => String(s || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const chapFolder = await Folder.findOne({
+                name: new RegExp('^' + escFunc(chapter.trim()) + '$', 'i'),
+                classLevel: { $in: parsedClasses.map(c => new RegExp('^' + escFunc(c) + '$', 'i')) },
+                parentId: { $ne: null }
+            }).lean();
+            if (chapFolder) {
+                resolvedParentFolderId = String(chapFolder._id);
+            }
+        }
+
         const newNote = await new Note({
             title,
             subject: subject || 'General Academic',
@@ -2369,7 +2387,7 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
             chapter: chapter || '',
             topic: primaryTopic,
             topics: parsedTopics.length > 0 ? parsedTopics : (primaryTopic ? [primaryTopic] : []),
-            parentFolderId: parentFolderId && parentFolderId !== 'null' && parentFolderId !== '' ? parentFolderId : null,
+            parentFolderId: resolvedParentFolderId,
             description: description || '',
             accessType: accessType || 'Free',
             fileUrl,

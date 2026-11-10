@@ -3,10 +3,91 @@ const Topic = require('../models/Topic');
 const AcademicClass = require('../models/AcademicClass');
 const User = require('../models/User');
 const Course = require('../models/Course');
+const Folder = require('../models/Folder');
 const { connectDB } = require('../config');
 
 // Escape regex special characters
 const escapeRegex = (s) => String(s || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Automatically ensure that the Subject folder and Chapter subfolder exist in Notes for the specified classes
+const ensureSyllabusFoldersForChapter = async (targetClasses, subjectName, chapterName, userId = null) => {
+    if (!subjectName || !chapterName || !targetClasses) return;
+    const cleanSubject = String(subjectName).trim();
+    const cleanChapter = String(chapterName).trim();
+    if (!cleanSubject || !cleanChapter) return;
+
+    const classes = Array.isArray(targetClasses) ? targetClasses : [targetClasses];
+
+    for (const rawCls of classes) {
+        const cls = String(rawCls || '').trim();
+        if (!cls) continue;
+
+        try {
+            // 1. Ensure Top-level Subject Folder for this class (parentId: null)
+            let subjectFolder = await Folder.findOne({
+                name: new RegExp('^' + escapeRegex(cleanSubject) + '$', 'i'),
+                classLevel: new RegExp('^' + escapeRegex(cls) + '$', 'i'),
+                $or: [{ parentId: null }, { parentId: '' }, { parentId: 'null' }]
+            });
+
+            if (!subjectFolder) {
+                subjectFolder = await Folder.create({
+                    name: cleanSubject,
+                    subject: cleanSubject,
+                    classLevel: cls,
+                    parentId: null,
+                    addedBy: userId || null
+                });
+            }
+
+            // 2. Ensure Chapter Subfolder under this Subject Folder for this class
+            let chapterFolder = await Folder.findOne({
+                name: new RegExp('^' + escapeRegex(cleanChapter) + '$', 'i'),
+                classLevel: new RegExp('^' + escapeRegex(cls) + '$', 'i'),
+                parentId: String(subjectFolder._id)
+            });
+
+            if (!chapterFolder) {
+                chapterFolder = await Folder.create({
+                    name: cleanChapter,
+                    subject: cleanSubject,
+                    classLevel: cls,
+                    parentId: String(subjectFolder._id),
+                    addedBy: userId || null
+                });
+            }
+        } catch (err) {
+            console.error('ensureSyllabusFoldersForChapter error for ' + cls + ' - ' + cleanSubject + ' - ' + cleanChapter + ':', err.message);
+        }
+    }
+};
+
+// Sync all existing approved topics into Subject folders and Chapter subfolders in Notes
+const syncAllSyllabusFolders = async () => {
+    try {
+        const approvedTopics = await Topic.find({
+            isArchived: { $ne: true },
+            status: { $nin: ['pending', 'rejected'] },
+            'chapter.name': { $exists: true, $ne: '' }
+        }).select('classLevel subject chapter createdBy submittedBy').lean();
+
+        const seen = new Set();
+        for (const t of approvedTopics) {
+            const cls = (t.classLevel || '').trim();
+            const subj = (t.subject || '').trim();
+            const chap = (t.chapter?.name || '').trim();
+            if (!cls || !subj || !chap) continue;
+            const key = cls.toLowerCase() + ':::' + subj.toLowerCase() + ':::' + chap.toLowerCase();
+            if (!seen.has(key)) {
+                seen.add(key);
+                await ensureSyllabusFoldersForChapter([cls], subj, chap, t.createdBy || t.submittedBy);
+            }
+        }
+    } catch (err) {
+        console.error('syncAllSyllabusFolders error:', err.message);
+    }
+};
+
 
 // Helper to automatically register/ensure a subject exists in AcademicClass
 const ensureSubjectInAcademicClass = async (clsName, subjectName, groupName) => {
@@ -481,10 +562,10 @@ const getTopicsApi = async (req, res) => {
             }
         }
         if (subject && subject !== 'all') {
-            filter.subject = new RegExp(`^${subject.trim()}$`, 'i');
+            filter.subject = new RegExp('^' + escapeRegex(subject.trim()) + '$', 'i');
         }
         if (chapter && chapter !== 'all') {
-            filter['chapter.name'] = new RegExp(`^${chapter.trim()}$`, 'i');
+            filter['chapter.name'] = new RegExp('^' + escapeRegex(chapter.trim()) + '$', 'i');
         }
         if (group && group !== 'all') {
             filter.group = { $in: [group, 'all', 'None', null] };
@@ -699,6 +780,9 @@ const createTopic = async (req, res) => {
             await ensureSubjectInAcademicClass(cls, subject.trim(), group);
         }
 
+        // Ensure Subject folder and Chapter subfolder exist in Notes for these classes
+        await ensureSyllabusFoldersForChapter(targetClasses, subject.trim(), chapterName.trim(), req.session && req.session.user ? req.session.user._id : null);
+
         const successMsg = isTeacher 
             ? `Topic "${name.trim()}" submitted for Admin review across ${targetClasses.length} class(es): ${targetClasses.join(', ')}`
             : `Topic "${name.trim()}" created successfully for ${targetClasses.length} class(es): ${targetClasses.join(', ')}`;
@@ -817,6 +901,9 @@ const bulkCreateTopics = async (req, res) => {
             }
             await ensureSubjectInAcademicClass(cls, subject.trim(), group);
         }
+
+        // Ensure Subject folder and Chapter subfolder exist in Notes for these classes
+        await ensureSyllabusFoldersForChapter(targetClasses, subject.trim(), chapterName.trim(), req.session && req.session.user ? req.session.user._id : null);
 
         const successMsg = isTeacher 
             ? `${createdTopics.length} topics submitted for Admin review across ${targetClasses.length} class(es): ${targetClasses.join(', ')}`
@@ -1055,6 +1142,7 @@ const approveTopic = async (req, res) => {
         }, { new: true });
 
         if (!topic) return res.status(404).json({ success: false, error: 'Topic not found' });
+        await ensureSyllabusFoldersForChapter([topic.classLevel], topic.subject, topic.chapter?.name, topic.createdBy || topic.submittedBy);
 
         res.json({
             success: true,
@@ -1077,6 +1165,7 @@ const bulkApproveTopics = async (req, res) => {
         }
 
         const validIds = topicIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+        const topicsToApprove = await Topic.find({ _id: { $in: validIds } }).select('classLevel subject chapter createdBy submittedBy').lean();
         const result = await Topic.updateMany(
             { _id: { $in: validIds } },
             { 
@@ -1088,6 +1177,10 @@ const bulkApproveTopics = async (req, res) => {
                 } 
             }
         );
+
+        for (const t of topicsToApprove) {
+            await ensureSyllabusFoldersForChapter([t.classLevel], t.subject, t.chapter?.name, t.createdBy || t.submittedBy);
+        }
 
         res.json({
             success: true,
@@ -1487,6 +1580,8 @@ const deletePendingTeacherTopic = async (req, res) => {
 };
 
 module.exports = {
+    ensureSyllabusFoldersForChapter,
+    syncAllSyllabusFolders,
     getTopicsPage,
     getTopicsApi,
     getChaptersApi,

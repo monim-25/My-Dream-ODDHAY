@@ -2749,6 +2749,20 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
     }
     const primaryTopic = parsedTopics[0] || (typeof topic === 'string' ? topic.trim() : '');
 
+    let resolvedParentFolderId = (req.body.parentFolderId && req.body.parentFolderId !== 'null' && req.body.parentFolderId !== '') ? req.body.parentFolderId : null;
+    if (!resolvedParentFolderId && chapter && subject && classLevelArray.length > 0) {
+        const Folder = require('../models/Folder');
+        const escFunc = (s) => String(s || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const chapFolder = await Folder.findOne({
+            name: new RegExp('^' + escFunc(chapter.trim()) + '$', 'i'),
+            classLevel: { $in: classLevelArray.map(c => new RegExp('^' + escFunc(c) + '$', 'i')) },
+            parentId: { $ne: null }
+        }).lean();
+        if (chapFolder) {
+            resolvedParentFolderId = String(chapFolder._id);
+        }
+    }
+
     const { processUploadedFile } = require('../services/cloudinaryService');
     const fileUrl = req.file ? await processUploadedFile(req.file, 'notes') : null;
     const mongoose = require('mongoose');
@@ -2761,6 +2775,7 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
         accessType: accessType || 'Free',
         fileUrl,
         course: course && mongoose.Types.ObjectId.isValid(course) ? course : undefined,
+        parentFolderId: resolvedParentFolderId,
         addedBy: req.session.user._id
     }).save();
     res.redirect('/admin/notes?success=Note uploaded successfully');
