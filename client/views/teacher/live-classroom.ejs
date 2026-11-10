@@ -953,6 +953,12 @@
                         localVideoTrack.play('local-cam-mini-player');
                     }
                 }
+            } else if (!isScreenSharing && localVideoTrack && !isVideoMuted) {
+                const mainPlayer = document.getElementById('main-player');
+                if (mainPlayer && !mainPlayer.querySelector('video')) {
+                    mainPlayer.innerHTML = '';
+                    localVideoTrack.play('main-player');
+                }
             }
         } else {
             // For student:
@@ -1148,22 +1154,36 @@
 
             // 3. Setup tracks based on role
             if (isModerator) {
-                try {
-                    if (!localAudioTrack) {
+                // Audio track
+                if (!localAudioTrack) {
+                    try {
                         localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+                    } catch (audioErr) {
+                        console.warn("Could not create microphone track:", audioErr);
                     }
-                } catch (audioErr) {
-                    console.warn("Could not create microphone track:", audioErr);
                 }
 
-                try {
-                    if (!localVideoTrack) {
+                // Video track with adaptive fallback
+                if (!localVideoTrack) {
+                    try {
                         localVideoTrack = await AgoraRTC.createCameraVideoTrack({
-                            encoderConfig: { width: 1280, height: 720, frameRate: 30 }
+                            encoderConfig: '720p_1'
                         });
+                    } catch (vErr1) {
+                        console.warn("720p camera failed, falling back to 480p:", vErr1);
+                        try {
+                            localVideoTrack = await AgoraRTC.createCameraVideoTrack({
+                                encoderConfig: '480p_1'
+                            });
+                        } catch (vErr2) {
+                            console.warn("480p camera failed, falling back to default:", vErr2);
+                            try {
+                                localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+                            } catch (vErr3) {
+                                console.error("Could not access camera track:", vErr3);
+                            }
+                        }
                     }
-                } catch (videoErr) {
-                    console.warn("Could not create camera track:", videoErr);
                 }
 
                 const tracksToPublish = [];
@@ -1171,11 +1191,31 @@
                 if (localAudioTrack && !alreadyPublished.includes(localAudioTrack)) tracksToPublish.push(localAudioTrack);
                 if (localVideoTrack && !alreadyPublished.includes(localVideoTrack)) tracksToPublish.push(localVideoTrack);
                 if (tracksToPublish.length > 0) {
-                    await client.publish(tracksToPublish);
+                    try {
+                        await client.publish(tracksToPublish);
+                    } catch (pubErr) {
+                        console.error("Failed to publish tracks:", pubErr);
+                    }
                 }
 
-                if (localVideoTrack) {
-                    localVideoTrack.play('main-player');
+                const mainPlayer = document.getElementById('main-player');
+                if (mainPlayer) {
+                    mainPlayer.innerHTML = '';
+                    if (localVideoTrack) {
+                        localVideoTrack.play('main-player');
+                    } else {
+                        mainPlayer.innerHTML = `
+                            <div class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-400 p-6 text-center">
+                                <span class="material-symbols-rounded text-5xl text-rose-500 mb-3 animate-pulse">videocam_off</span>
+                                <h4 class="text-white text-base font-bold mb-1">ক্যামেরা চালু করা যায়নি</h4>
+                                <p class="text-xs text-slate-400 max-w-sm mb-4">ব্রাউজারে ক্যামেরা পারমিশন দেওয়া আছে কিনা চেক করুন অথবা নিচের বাটনে চাপ দিন।</p>
+                                <button type="button" onclick="toggleVideo()" class="px-5 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-bold rounded-full transition-all flex items-center gap-1.5 shadow-md">
+                                    <span class="material-symbols-rounded text-base">refresh</span>
+                                    <span>ক্যামেরা অন করুন</span>
+                                </button>
+                            </div>
+                        `;
+                    }
                 }
             } else {
                 // Students join as viewers immediately without mandatory camera/mic activation
@@ -1203,15 +1243,15 @@
                     btnVideo.innerHTML = '<span class="material-symbols-rounded text-xl">videocam_off</span>';
                 }
             } else {
-                isAudioMuted = false;
-                isVideoMuted = false;
+                isAudioMuted = !localAudioTrack;
+                isVideoMuted = !localVideoTrack;
                 if (btnAudio) {
-                    btnAudio.classList.remove('active');
-                    btnAudio.innerHTML = '<span class="material-symbols-rounded text-xl">mic</span>';
+                    btnAudio.classList.toggle('active', isAudioMuted);
+                    btnAudio.innerHTML = `<span class="material-symbols-rounded text-xl">${isAudioMuted ? 'mic_off' : 'mic'}</span>`;
                 }
                 if (btnVideo) {
-                    btnVideo.classList.remove('active');
-                    btnVideo.innerHTML = '<span class="material-symbols-rounded text-xl">videocam</span>';
+                    btnVideo.classList.toggle('active', isVideoMuted);
+                    btnVideo.innerHTML = `<span class="material-symbols-rounded text-xl">${isVideoMuted ? 'videocam_off' : 'videocam'}</span>`;
                 }
             }
 
@@ -1487,11 +1527,17 @@
         
         try {
             if (!localVideoTrack) {
-                // Create local video track on-demand
+                // Create local video track on-demand with multi-step fallback
                 if (btn) btn.innerHTML = '<span class="material-symbols-rounded text-xl animate-spin">sync</span>';
-                localVideoTrack = await AgoraRTC.createCameraVideoTrack({
-                    encoderConfig: { width: 640, height: 480, frameRate: 24 }
-                });
+                try {
+                    localVideoTrack = await AgoraRTC.createCameraVideoTrack({ encoderConfig: '720p_1' });
+                } catch (_) {
+                    try {
+                        localVideoTrack = await AgoraRTC.createCameraVideoTrack({ encoderConfig: '480p_1' });
+                    } catch (__) {
+                        localVideoTrack = await AgoraRTC.createCameraVideoTrack();
+                    }
+                }
                 if (client && client.connectionState === 'CONNECTED' && !(client.localTracks || []).includes(localVideoTrack)) {
                     await client.publish([localVideoTrack]);
                 }
@@ -1506,19 +1552,39 @@
                 btn.innerHTML = `<span class="material-symbols-rounded text-xl">${isVideoMuted ? 'videocam_off' : 'videocam'}</span>`;
             }
 
-            // Dynamically hide/show local camera overlay
-            const overlay = document.getElementById('local-cam-overlay');
-            if (overlay) {
+            const mainPlayer = document.getElementById('main-player');
+            if (isModerator && !isScreenSharing) {
                 if (isVideoMuted) {
-                    overlay.classList.add('hidden');
-                } else {
-                    if (!isModerator || isScreenSharing) {
-                        overlay.classList.remove('hidden');
-                        if (typeof updateVideoLayout === 'function') updateVideoLayout();
+                    if (mainPlayer) {
+                        mainPlayer.innerHTML = `
+                            <div class="absolute inset-0 flex flex-col items-center justify-center bg-slate-950 text-slate-400">
+                                <div class="size-20 rounded-full bg-slate-800 flex items-center justify-center mb-3 text-slate-500 border border-white/10">
+                                    <span class="material-symbols-rounded text-4xl">videocam_off</span>
+                                </div>
+                                <p class="text-sm font-semibold text-slate-300"><%= user.name %></p>
+                                <p class="text-xs text-slate-500 mt-1">Camera is turned off</p>
+                            </div>
+                        `;
+                    }
+                } else if (localVideoTrack) {
+                    if (mainPlayer) {
+                        mainPlayer.innerHTML = '';
+                        localVideoTrack.play('main-player');
                     }
                 }
-            } else if (isModerator && !isScreenSharing && localVideoTrack) {
-                localVideoTrack.play('main-player');
+            } else {
+                const overlay = document.getElementById('local-cam-overlay');
+                if (overlay) {
+                    if (isVideoMuted) {
+                        overlay.classList.add('hidden');
+                    } else {
+                        overlay.classList.remove('hidden');
+                        const miniPlayer = document.getElementById('local-cam-mini-player');
+                        if (miniPlayer && localVideoTrack && !miniPlayer.querySelector('video')) {
+                            localVideoTrack.play('local-cam-mini-player');
+                        }
+                    }
+                }
             }
         } catch (err) {
             console.error("Error toggling video track:", err);
@@ -1540,9 +1606,14 @@
                 localScreenTrack = null;
 
                 // Republish camera to Agora so remote users see host again
-                await client.publish(localVideoTrack);
-                // Move camera back to main player
-                localVideoTrack.play('main-player');
+                if (localVideoTrack) {
+                    try { await client.publish([localVideoTrack]); } catch(_) {}
+                    const mainPlayer = document.getElementById('main-player');
+                    if (mainPlayer) {
+                        mainPlayer.innerHTML = '';
+                        localVideoTrack.play('main-player');
+                    }
+                }
             } catch(e) { console.warn('Screen share stop error:', e); }
 
             // Hide the camera overlay
