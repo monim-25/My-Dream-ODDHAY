@@ -1359,7 +1359,7 @@
                         }
                         showLiveToast('লাইভ ক্লাস সমাপ্ত করা হচ্ছে...', 'stop_circle');
 
-                        const hasRecorded = (typeof isRecordingLive !== 'undefined' && isRecordingLive) || (typeof CHANNEL !== 'undefined' && localStorage.getItem('hasRecordedSomething_' + CHANNEL) === 'true');
+                        const hasRecorded = (typeof isRecordingLive !== 'undefined' && isRecordingLive) || (typeof CHANNEL !== 'undefined' && localStorage.getItem('hasRecordedSomething_' + CHANNEL) === 'true') || (typeof recordedChunks !== 'undefined' && recordedChunks && recordedChunks.length > 0);
 
                         var st = (typeof startTime !== 'undefined' && startTime) ? startTime : Date.now();
                         var elapsed = Math.max(0, Math.floor((Date.now() - st) / 1000));
@@ -1379,67 +1379,80 @@
 
                         let finalVideoPath = '';
 
-                        // Upload recorded chunks if they exist
-                        if (hasRecorded && typeof mediaRecorder !== 'undefined' && mediaRecorder) {
-                            if (typeof _recAnimFrame !== 'undefined' && _recAnimFrame) {
-                                cancelAnimationFrame(_recAnimFrame); _recAnimFrame = null;
-                            }
-                            if (typeof _recAudioCtx !== 'undefined' && _recAudioCtx && _recAudioCtx.state !== 'closed') {
-                                try { _recAudioCtx.close(); } catch (e) { }
-                            }
-
-                            const performUpload = async () => {
-                                if (typeof recordedChunks === 'undefined' || !recordedChunks || recordedChunks.length === 0) {
-                                    return '';
-                                }
-                                const mimeType = (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'video/webm';
-                                const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
-                                const blob = new Blob(recordedChunks, { type: mimeType });
-                                if (blob.size === 0) return '';
-                                const formData = new FormData();
-                                formData.append('video', blob, 'live_recording.' + ext);
-                                try {
-                                    showLiveToast('রেকর্ডিং ফাইল আপলোড ও প্রসেসিং হচ্ছে... অনুগ্রহ করে একটু অপেক্ষা করুন', 'cloud_upload');
-                                const upRes = await Promise.race([
-                                    fetch('/api/live/upload-recording', {
-                                        method: 'POST',
-                                        body: formData,
-                                        credentials: 'same-origin'
-                                    }),
-                                    new Promise((_, reject) => setTimeout(() => reject(new Error('Upload timeout')), 60000))
-                                ]);
-                                    const upData = await upRes.json();
-                                    return upData.videoPath || '';
-                                } catch (err) {
-                                    console.error('Upload fetch failed:', err);
-                                    return '';
-                                }
-                            };
-
+                        // 1. Safely stop MediaRecorder if active and collect all remaining chunks
+                        if (typeof mediaRecorder !== 'undefined' && mediaRecorder) {
                             try {
                                 if (mediaRecorder.state !== 'inactive') {
-                                    finalVideoPath = await new Promise((resolve) => {
-                                        const timeout = setTimeout(async () => {
-                                            resolve(await performUpload());
-                                        }, 10000);
-                                        mediaRecorder.onstop = async () => {
-                                            clearTimeout(timeout);
-                                            resolve(await performUpload());
+                                    await new Promise((resolve) => {
+                                        const fallbackTimer = setTimeout(() => {
+                                            console.warn('Recorder stop timeout fallback');
+                                            resolve();
+                                        }, 4000);
+
+                                        mediaRecorder.onstop = () => {
+                                            clearTimeout(fallbackTimer);
+                                            resolve();
                                         };
+
                                         try {
-                                            if (typeof mediaRecorder.requestData === 'function' && mediaRecorder.state !== 'inactive') {
+                                            if (typeof mediaRecorder.requestData === 'function') {
                                                 mediaRecorder.requestData();
                                             }
                                             mediaRecorder.stop();
-                                        } catch (e) {
-                                            resolve(performUpload());
+                                        } catch (err) {
+                                            clearTimeout(fallbackTimer);
+                                            resolve();
                                         }
                                     });
-                                } else {
-                                    finalVideoPath = await performUpload();
                                 }
                             } catch (e) {
                                 console.warn('Recorder stop error:', e);
+                            }
+                        }
+
+                        // 2. Safely cleanup canvas animation and audio context AFTER recorder stop
+                        if (typeof _recAnimFrame !== 'undefined' && _recAnimFrame) {
+                            cancelAnimationFrame(_recAnimFrame); _recAnimFrame = null;
+                        }
+                        if (typeof _recAudioCtx !== 'undefined' && _recAudioCtx && _recAudioCtx.state !== 'closed') {
+                            try { _recAudioCtx.close(); } catch (e) { }
+                        }
+
+                        // 3. Upload recorded chunks if they exist
+                        if (typeof recordedChunks !== 'undefined' && recordedChunks && recordedChunks.length > 0) {
+                            const mimeType = (typeof mediaRecorder !== 'undefined' && mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'video/webm';
+                            const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+                            const blob = new Blob(recordedChunks, { type: mimeType });
+
+                            if (blob.size > 0) {
+                                try {
+                                    showLiveToast('রেকর্ডিং ফাইল আপলোড ও প্রসেসিং হচ্ছে... অনুগ্রহ করে একটু অপেক্ষা করুন', 'cloud_upload');
+                                    const formData = new FormData();
+                                    formData.append('video', blob, 'live_recording_' + Date.now() + '.' + ext);
+                                    formData.append('roomId', (typeof CHANNEL !== 'undefined' ? CHANNEL : '<%= roomId %>'));
+                                    formData.append('courseId', '<%= courseId %>');
+                                    formData.append('liveNodeId', '<%= liveNodeId %>');
+                                    formData.append('duration', recDurationStr);
+
+                                    const upRes = await Promise.race([
+                                        fetch('/api/live/upload-recording', {
+                                            method: 'POST',
+                                            body: formData,
+                                            credentials: 'same-origin'
+                                        }),
+                                        new Promise((_, reject) => setTimeout(() => reject(new Error('Upload timeout')), 90000))
+                                    ]);
+
+                                    if (upRes && upRes.ok) {
+                                        const upData = await upRes.json();
+                                        if (upData && upData.videoPath) {
+                                            finalVideoPath = upData.videoPath;
+                                            console.log('Live recording uploaded successfully:', finalVideoPath);
+                                        }
+                                    }
+                                } catch (err) {
+                                    console.error('Upload fetch failed:', err);
+                                }
                             }
                         }
 
@@ -1455,6 +1468,7 @@
 
                         // Make API request to end the class and save
                         try {
+                            const hasValidRecording = Boolean(finalVideoPath && finalVideoPath.length > 0);
                             const res = await Promise.race([
                                 fetch('/api/live/end', {
                                     method: 'POST',
@@ -1465,7 +1479,7 @@
                                         liveNodeId: '<%= liveNodeId %>',
                                         folderId: (typeof FOLDER_ID !== 'undefined' ? FOLDER_ID : '<%= typeof folderId !== "undefined" ? folderId : "" %>'),
                                         duration: recDurationStr,
-                                        isRecorded: Boolean(hasRecorded && finalVideoPath),
+                                        isRecorded: hasValidRecording,
                                         videoPath: finalVideoPath
                                     })
                                 }),
@@ -1963,6 +1977,16 @@
                                 }, 1000);
                             }
 
+                            // Auto-start recording for host so live session is always reliably captured
+                            if (isModerator && typeof toggleRecordingStatus === 'function') {
+                                setTimeout(() => {
+                                    if (!mediaRecorder && client && client.connectionState === 'CONNECTED') {
+                                        console.log('[Auto-Record] Auto-starting host recording...');
+                                        toggleRecordingStatus();
+                                    }
+                                }, 2500);
+                            }
+
                             // 8. Subscribe to any remote users already active in channel
                             if (client.remoteUsers && client.remoteUsers.length > 0) {
                                 for (const rUser of client.remoteUsers) {
@@ -2019,6 +2043,9 @@
 
                                 if (mediaType === "audio") {
                                     user.audioTrack.play();
+                                    if (typeof window._mixAudioTrackToRecording === 'function') {
+                                        window._mixAudioTrackToRecording(user.audioTrack);
+                                    }
                                 }
                             } catch (err) {
                                 console.warn("Failed to subscribe to remote user:", err);
@@ -2173,6 +2200,9 @@
                                     await publishTracksTogether([localAudioTrack]);
                                 }
                                 isAudioMuted = false;
+                                if (typeof window._mixAudioTrackToRecording === 'function') {
+                                    window._mixAudioTrackToRecording(localAudioTrack);
+                                }
                             } else {
                                 isAudioMuted = !isAudioMuted;
                                 await localAudioTrack.setMuted(isAudioMuted);
@@ -3606,13 +3636,20 @@
                                     }
                                     const audioDest = _recAudioCtx.createMediaStreamDestination();
 
-                                    const mixTrack = (mediaStreamTrack) => {
-                                        if (!mediaStreamTrack) return;
+                                    window._recAudioDest = audioDest;
+                                    window._mixAudioTrackToRecording = (mediaStreamTrack) => {
+                                        if (!mediaStreamTrack || !_recAudioCtx || !window._recAudioDest) return;
                                         try {
-                                            const src = _recAudioCtx.createMediaStreamSource(new MediaStream([mediaStreamTrack]));
-                                            src.connect(audioDest);
+                                            const aTrack = typeof mediaStreamTrack.getMediaStreamTrack === 'function'
+                                                ? mediaStreamTrack.getMediaStreamTrack()
+                                                : (mediaStreamTrack._mediaStreamTrack || mediaStreamTrack);
+                                            if (aTrack && aTrack.kind === 'audio') {
+                                                const src = _recAudioCtx.createMediaStreamSource(new MediaStream([aTrack]));
+                                                src.connect(window._recAudioDest);
+                                            }
                                         } catch (e) { console.warn('Audio mix error:', e); }
                                     };
+                                    const mixTrack = window._mixAudioTrackToRecording;
 
                                     // Local mic
                                     if (localAudioTrack) {

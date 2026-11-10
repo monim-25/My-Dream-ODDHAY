@@ -6236,14 +6236,64 @@ const videoStorage = multer.diskStorage({
 });
 const uploadVideo = multer({ storage: videoStorage });
 
-// Upload Live Class Recording
+// Upload Live Class Recording (ultra-fast disk save + optional fast Cloudinary race + background update)
 router.post('/api/live/upload-recording', protect, uploadVideo.single('video'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No video file provided' });
         console.log('[/api/live/upload-recording] File received:', req.file.filename, req.file.size, 'bytes');
-        const videoPath = await processUploadedFile(req.file, 'videos');
-        console.log('[/api/live/upload-recording] Saved videoPath:', videoPath);
-        res.json({ success: true, videoPath });
+
+        // Immediate local path - ultra-fast, permanently saved on disk, and seekable
+        const localVideoPath = `/uploads/videos/${req.file.filename}`;
+        let finalVideoPath = localVideoPath;
+
+        try {
+            const { isConfigured, uploadToCloudinary } = require('../services/cloudinaryService');
+            if (isConfigured()) {
+                const cloudPromise = uploadToCloudinary(req.file.path, 'videos');
+                const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(null), 5000));
+                const cloudResult = await Promise.race([cloudPromise, timeoutPromise]);
+
+                if (cloudResult && cloudResult.url) {
+                    finalVideoPath = cloudResult.url;
+                    console.log('[/api/live/upload-recording] Fast Cloudinary upload succeeded:', finalVideoPath);
+                } else {
+                    console.log('[/api/live/upload-recording] Cloudinary slow/pending; immediately returning local path:', localVideoPath);
+                    // Background Cloudinary upload so user never waits or times out
+                    cloudPromise.then(async (bgResult) => {
+                        if (bgResult && bgResult.url && (req.body.courseId || req.body.roomId)) {
+                            try {
+                                const CourseModel = require('../models/Course');
+                                const cId = req.body.courseId;
+                                const rId = req.body.roomId;
+                                const nId = req.body.liveNodeId;
+                                const searchConditions = [];
+                                if (rId) {
+                                    searchConditions.push({ 'curriculumNodes.meetingUrl': rId });
+                                    searchConditions.push({ 'curriculumNodes._id': rId });
+                                }
+                                const c = cId ? await CourseModel.findById(cId) : (searchConditions.length > 0 ? await CourseModel.findOne({ $or: searchConditions }) : null);
+                                if (c && c.curriculumNodes) {
+                                    const n = (nId && c.curriculumNodes.id(nId)) || c.curriculumNodes.find(x => x.videoPath === localVideoPath || x.meetingUrl === rId);
+                                    if (n) {
+                                        n.videoPath = bgResult.url;
+                                        c.markModified('curriculumNodes');
+                                        await c.save();
+                                        console.log('[/api/live/upload-recording] Background Cloudinary update saved for node:', n.name);
+                                    }
+                                }
+                            } catch (bgErr) {
+                                console.warn('[/api/live/upload-recording] Background save error:', bgErr.message);
+                            }
+                        }
+                    }).catch(e => console.warn('Background upload failed:', e.message));
+                }
+            }
+        } catch (cErr) {
+            console.warn('Cloudinary upload check error, falling back to local path:', cErr.message);
+        }
+
+        console.log('[/api/live/upload-recording] Returning videoPath:', finalVideoPath);
+        res.json({ success: true, videoPath: finalVideoPath });
     } catch (err) {
         console.error('[/api/live/upload-recording] Error:', err);
         res.status(500).json({ error: 'Failed to upload video' });
@@ -6386,11 +6436,10 @@ router.post('/api/live/end', protect, async (req, res) => {
 
                 if (hasRealRecording) {
                     node.isRecorded = true;
-                    node.type = 'video'; // Convert to playable video lesson in curriculum
                     node.videoPath = recordingVideoPath;
                     node.duration = recordingDuration;
                     savedVideoPath = recordingVideoPath;
-                    console.log('[/api/live/end] Success! Live class saved as video lesson:', node.name, node.videoPath);
+                    console.log('[/api/live/end] Success! Live class saved as recorded class:', node.name, node.videoPath);
                 } else if (node.isRecorded && node.videoPath) {
                     console.log('[/api/live/end] Node already recorded, preserving video lesson:', node.name, node.videoPath);
                     savedVideoPath = node.videoPath;
@@ -6408,7 +6457,6 @@ router.post('/api/live/end', protect, async (req, res) => {
                     n.isEnded = true;
                     if (hasRealRecording) {
                         n.isRecorded = true;
-                        n.type = 'video';
                         n.videoPath = recordingVideoPath;
                         n.duration = recordingDuration;
                     }
