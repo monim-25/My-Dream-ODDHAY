@@ -808,6 +808,7 @@
         
         // Upload recorded chunks if they exist
         if (hasRecorded && typeof mediaRecorder !== 'undefined' && mediaRecorder) {
+            showLiveToast('রেকর্ডিং ফাইল প্রসেস ও আপলোড করা হচ্ছে... অনুগ্রহ করে একটু অপেক্ষা করুন', 'cloud_upload');
             if (typeof _recAnimFrame !== 'undefined' && _recAnimFrame) {
                 cancelAnimationFrame(_recAnimFrame); _recAnimFrame = null;
             }
@@ -817,24 +818,30 @@
 
             const performUpload = async () => {
                 if (typeof recordedChunks === 'undefined' || !recordedChunks || recordedChunks.length === 0) {
+                    console.warn('performUpload: recordedChunks is empty');
                     return '';
                 }
                 const mimeType = (mediaRecorder && mediaRecorder.mimeType) ? mediaRecorder.mimeType : 'video/webm';
                 const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
                 const blob = new Blob(recordedChunks, { type: mimeType });
-                if (blob.size === 0) return '';
+                if (blob.size === 0) {
+                    console.warn('performUpload: blob size is 0');
+                    return '';
+                }
+                const mb = (blob.size / 1024 / 1024).toFixed(1);
+                console.log('performUpload: uploading blob of size', blob.size, 'bytes (' + mb + ' MB)');
+                showLiveToast('রেকর্ডিং আপলোড হচ্ছে (' + mb + ' MB)... অনুগ্রহ করে অপেক্ষা করুন', 'cloud_upload');
+
                 const formData = new FormData();
-                formData.append('video', blob, 'live_recording.' + ext);
+                formData.append('video', blob, 'live_recording_' + Date.now() + '.' + ext);
                 try {
-                    const upRes = await Promise.race([
-                        fetch('/api/live/upload-recording', { 
-                            method: 'POST', 
-                            body: formData,
-                            credentials: 'same-origin'
-                        }),
-                        new Promise((_, reject) => setTimeout(() => reject(new Error('Upload timeout')), 8000))
-                    ]);
+                    const upRes = await fetch('/api/live/upload-recording', { 
+                        method: 'POST', 
+                        body: formData,
+                        credentials: 'same-origin'
+                    });
                     const upData = await upRes.json();
+                    console.log('performUpload response:', upData);
                     return upData.videoPath || '';
                 } catch(err) { 
                     console.error('Upload fetch failed:', err);
@@ -845,12 +852,16 @@
             try {
                 if (mediaRecorder.state !== 'inactive') {
                     finalVideoPath = await new Promise((resolve) => {
-                        const timeout = setTimeout(async () => {
+                        let isResolved = false;
+                        const safeResolve = async () => {
+                            if (isResolved) return;
+                            isResolved = true;
                             resolve(await performUpload());
-                        }, 5000);
-                        mediaRecorder.onstop = async () => {
+                        };
+                        const timeout = setTimeout(safeResolve, 15000);
+                        mediaRecorder.onstop = () => {
                             clearTimeout(timeout);
-                            resolve(await performUpload());
+                            safeResolve();
                         };
                         try {
                             if (typeof mediaRecorder.requestData === 'function' && mediaRecorder.state !== 'inactive') {
@@ -858,7 +869,7 @@
                             }
                             mediaRecorder.stop();
                         } catch(e) { 
-                            resolve(performUpload()); 
+                            safeResolve(); 
                         }
                     });
                 } else {
@@ -881,21 +892,24 @@
 
         // Make API request to end the class and save
         try {
-            const res = await Promise.race([
-                fetch('/api/live/end', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        roomId: (typeof CHANNEL !== 'undefined' ? CHANNEL : '<%= roomId %>'),
-                        duration: recDurationStr,
-                        isRecorded: Boolean(hasRecorded && finalVideoPath),
-                        videoPath: finalVideoPath
-                    })
-                }),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('End API timeout')), 5000))
-            ]);
+            showLiveToast('রেকর্ডিং কারিকুলামে সংরক্ষণ করা হচ্ছে...', 'save');
+            const res = await fetch('/api/live/end', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    roomId: (typeof CHANNEL !== 'undefined' ? CHANNEL : '<%= roomId %>'),
+                    duration: recDurationStr,
+                    isRecorded: Boolean(hasRecorded && finalVideoPath),
+                    videoPath: finalVideoPath
+                })
+            });
             const data = await res.json();
-            leaveAgoraChannel(data?.courseId || '<%= courseId %>', data?.folderId, true);
+            if (data && data.success && finalVideoPath) {
+                showLiveToast('রেকর্ডিং সফলভাবে সংরক্ষিত হয়েছে!', 'check_circle');
+            }
+            setTimeout(() => {
+                leaveAgoraChannel(data?.courseId || '<%= courseId %>', data?.folderId, true);
+            }, 800);
         } catch (err) {
             console.error('Live end error:', err);
             leaveAgoraChannel('<%= courseId %>', null, true);

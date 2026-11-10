@@ -6232,10 +6232,12 @@ const uploadVideo = multer({ storage: videoStorage });
 router.post('/api/live/upload-recording', protect, uploadVideo.single('video'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No video file provided' });
+        console.log('[/api/live/upload-recording] File received:', req.file.filename, req.file.size, 'bytes');
         const videoPath = await processUploadedFile(req.file, 'videos');
+        console.log('[/api/live/upload-recording] Saved videoPath:', videoPath);
         res.json({ success: true, videoPath });
     } catch (err) {
-        console.error(err);
+        console.error('[/api/live/upload-recording] Error:', err);
         res.status(500).json({ error: 'Failed to upload video' });
     }
 });
@@ -6339,10 +6341,16 @@ router.post('/api/live/end', protect, async (req, res) => {
         let savedVideoPath = null;
         let savedFolderId = null;
 
-        // Only consider it recorded if an actual recording video file was uploaded
-        const hasRealRecording = Boolean((isRecorded === true || isRecorded === 'true') && uploadedVideoPath && uploadedVideoPath.startsWith('/uploads/'));
-        const recordingVideoPath = hasRealRecording ? uploadedVideoPath : null;
+        // Accept ANY valid uploaded video path (Cloudinary https:// URL, local /uploads/ path, or relative)
+        const hasRealRecording = Boolean(
+            (isRecorded === true || isRecorded === 'true') &&
+            typeof uploadedVideoPath === 'string' &&
+            uploadedVideoPath.trim().length > 0 &&
+            (uploadedVideoPath.startsWith('/uploads/') || uploadedVideoPath.startsWith('http://') || uploadedVideoPath.startsWith('https://') || uploadedVideoPath.startsWith('uploads/'))
+        );
+        const recordingVideoPath = hasRealRecording ? uploadedVideoPath.trim() : null;
         const recordingDuration = duration || '00:00:00';
+        console.log('[/api/live/end] hasRealRecording:', hasRealRecording, 'recordingVideoPath:', recordingVideoPath);
 
         // 1. Try curriculumNodes (new format)
         if (course.curriculumNodes && course.curriculumNodes.length > 0) {
@@ -6363,13 +6371,11 @@ router.post('/api/live/end', protect, async (req, res) => {
                     savedVideoPath = recordingVideoPath;
                     console.log('[/api/live/end] Success! Live class saved as video lesson:', node.name, node.videoPath);
                 } else if (node.isRecorded && node.videoPath) {
-                    // Node was already saved as a recorded lesson! Only reset isLive, DO NOT DELETE!
                     node.isLive = false;
                     console.log('[/api/live/end] Node already recorded, preserving video lesson:', node.name, node.videoPath);
                 } else {
-                    // Unrecorded live class -> remove node completely so it is ended forever and no fake file is saved
-                    course.curriculumNodes = course.curriculumNodes.filter(n => n._id.toString() !== node._id.toString());
-                    console.log('[/api/live/end] Unrecorded live class ended and removed:', node.name);
+                    node.isLive = false;
+                    console.log('[/api/live/end] Live class ended without recording:', node.name);
                 }
                 course.markModified('curriculumNodes');
                 await course.save();
