@@ -12,9 +12,11 @@ const uploadAnswerMulter = multer({
     storage: multer.diskStorage({
         destination: (req, file, cb) => {
             const fs = require('fs');
-            const dir = path.join(__dirname, '../../uploads/qa');
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            cb(null, dir);
+            const primaryDest = path.join(process.cwd(), 'client/public/uploads/qa');
+            const secondaryDest = path.join(process.cwd(), 'public/uploads/qa');
+            try { fs.mkdirSync(primaryDest, { recursive: true }); } catch (e) { }
+            try { fs.mkdirSync(secondaryDest, { recursive: true }); } catch (e) { }
+            cb(null, primaryDest);
         },
         filename: (req, file, cb) => {
             const ext = path.extname(file.originalname) || '.jpg';
@@ -1500,6 +1502,14 @@ router.post('/qa/:id/answer', teacherProtect, (req, res, next) => {
             } catch (upErr) {
                 console.error('Cloudinary answer image upload error:', upErr);
                 answerImageUrl = '/uploads/qa/' + req.file.filename;
+            }
+            if (answerImageUrl && answerImageUrl.startsWith('/uploads/')) {
+                try {
+                    const sec = path.join(process.cwd(), 'public/uploads/qa', req.file.filename);
+                    if (!fs.existsSync(sec) && req.file.path && fs.existsSync(req.file.path)) {
+                        fs.copyFileSync(req.file.path, sec);
+                    }
+                } catch (e) { }
             }
         }
 

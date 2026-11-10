@@ -150,23 +150,32 @@ const staticCacheOpts = {
 app.use(express.static(path.join(clientPath, 'public'), staticCacheOpts));
 app.use(express.static(path.join(process.cwd(), 'public'), staticCacheOpts));
 
-// Smart fallback for uploads stored in category subfolders (thumbnails, avatars, routines, videos, notes)
+// Smart fallback for uploads stored in category subfolders (qa, thumbnails, avatars, routines, videos, notes)
 app.use('/uploads', (req, res, next) => {
     const rawPath = req.path.replace(/^\//, '');
     if (!rawPath || rawPath.includes('..')) return next();
     
-    const uploadsDir = path.join(clientPath, 'public/uploads');
-    const directFile = path.join(uploadsDir, rawPath);
-    if (fs.existsSync(directFile) && fs.statSync(directFile).isFile()) {
-        return res.sendFile(directFile);
+    const baseDirs = [
+        path.join(clientPath, 'public/uploads'),
+        path.join(process.cwd(), 'public/uploads'),
+        path.join(process.cwd(), 'uploads')
+    ];
+
+    for (const base of baseDirs) {
+        const directFile = path.join(base, rawPath);
+        if (fs.existsSync(directFile) && fs.statSync(directFile).isFile()) {
+            return res.sendFile(directFile);
+        }
     }
     
     // Check inside subfolders if not found directly
-    const subfolders = ['thumbnails', 'avatars', 'videos', 'notes', 'routines', 'questions', 'messages', 'evaluations', 'user-notes'];
-    for (const sub of subfolders) {
-        const candidate = path.join(uploadsDir, sub, rawPath);
-        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-            return res.sendFile(candidate);
+    const subfolders = ['qa', 'thumbnails', 'avatars', 'videos', 'notes', 'routines', 'questions', 'messages', 'evaluations', 'user-notes'];
+    for (const base of baseDirs) {
+        for (const sub of subfolders) {
+            const candidate = path.join(base, sub, rawPath);
+            if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+                return res.sendFile(candidate);
+            }
         }
     }
     next();
