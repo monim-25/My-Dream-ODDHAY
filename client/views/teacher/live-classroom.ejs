@@ -664,22 +664,76 @@
     <span id="liveToastText">Class link copied to clipboard! You can share it with students.</span>
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+    if (typeof io === 'undefined') {
+        document.write('<script src="/socket.io/socket.io.js"><\/script>');
+    }
+</script>
 <script>
     // ==========================================
-    // 0. SOCKET.IO INITIALIZATION (Top of script)
+    // 0. BULLETPROOF SOCKET.IO INITIALIZATION
     // ==========================================
-    const socket = window.socket || (typeof io === 'function' ? io() : null);
+    let realSocket = null;
+    try {
+        if (typeof io === 'function') {
+            realSocket = io({
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionAttempts: Infinity,
+                reconnectionDelay: 1000
+            });
+        }
+    } catch (err) {
+        console.warn('Socket.io connection initialization error:', err);
+    }
+
+    const socketListeners = {};
+    const socket = {
+        get connected() {
+            return !!(realSocket && realSocket.connected);
+        },
+        emit: function(event, ...args) {
+            if (realSocket && typeof realSocket.emit === 'function') {
+                try {
+                    return realSocket.emit(event, ...args);
+                } catch (e) {
+                    console.warn('Socket emit error for ' + event + ':', e);
+                }
+            }
+        },
+        on: function(event, callback) {
+            if (!socketListeners[event]) socketListeners[event] = [];
+            socketListeners[event].push(callback);
+            if (realSocket && typeof realSocket.on === 'function') {
+                try {
+                    realSocket.on(event, callback);
+                } catch (e) {
+                    console.warn('Socket on error for ' + event + ':', e);
+                }
+            }
+        },
+        off: function(event, callback) {
+            if (socketListeners[event]) {
+                socketListeners[event] = socketListeners[event].filter(cb => cb !== callback);
+            }
+            if (realSocket && typeof realSocket.off === 'function') {
+                try {
+                    realSocket.off(event, callback);
+                } catch (e) {}
+            }
+        }
+    };
     window.socket = socket;
 
     function emitSocketJoin() {
-        if (!socket) return;
         socket.emit('user:join', { userId: '<%= user._id %>', name: '<%= user.name %>', role: '<%= user.role %>' });
         socket.emit('room:join', '<%= roomId %>');
     }
-    if (socket) {
+
+    if (realSocket) {
         emitSocketJoin();
-        socket.on('connect', emitSocketJoin);
+        realSocket.on('connect', emitSocketJoin);
     }
 
     function filterLivePlaylist() {
@@ -2263,6 +2317,18 @@
     })();
 
     socket.on('message:new', function(msg) {
+        // Check if comment already exists (e.g. from optimistic UI render)
+        const existingIdx = liveComments.findIndex(c => 
+            c._id === msg._id || 
+            (c._id && c._id.startsWith('temp_') && c.sender === msg.sender && c.text === msg.text)
+        );
+        if (existingIdx !== -1) {
+            liveComments[existingIdx]._id = msg._id;
+            liveComments[existingIdx].createdAt = msg.createdAt || liveComments[existingIdx].createdAt;
+            renderCommentsList(liveComments);
+            return;
+        }
+
         // Normalize msg into comment-card shape
         const comment = {
             _id: msg._id,
@@ -2274,18 +2340,50 @@
             text: msg.text,
             createdAt: msg.createdAt || new Date().toISOString(),
             highlighted: !!msg.highlighted,
-            replies: []
+            replies: msg.replies || []
         };
         liveComments.unshift(comment);
-        // Memory cap: prevent unbounded growth; keep 500 most recent
         if (liveComments.length > 500) {
             liveComments = liveComments.slice(0, 500);
         }
         renderCommentsList(liveComments);
-        // Scroll to top so the newest/highlighted comment is visible
         const list = document.getElementById('commentsList');
         if (list) list.scrollTop = 0;
     });
+
+    // Fallback polling for live comments if WebSockets is offline
+    setInterval(async function pollLiveComments() {
+        if (!socket.connected) {
+            try {
+                const res = await fetch('/api/live-comment?room=<%= roomId %>');
+                const data = await res.json();
+                if (data.success && data.messages && data.messages.length > 0) {
+                    let changed = false;
+                    data.messages.forEach(function(m) {
+                        if (!liveComments.some(c => c._id === m._id)) {
+                            liveComments.push({
+                                _id: m._id,
+                                sender: m.sender,
+                                senderName: m.senderName,
+                                senderRole: m.senderRole,
+                                userName: m.senderName,
+                                userAvatar: m.userAvatar || null,
+                                text: m.text,
+                                createdAt: m.createdAt || new Date().toISOString(),
+                                highlighted: !!m.highlighted,
+                                replies: m.replies || []
+                            });
+                            changed = true;
+                        }
+                    });
+                    if (changed) {
+                        liveComments.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                        renderCommentsList(liveComments);
+                    }
+                }
+            } catch (_) {}
+        }
+    }, 6000);
 
     socket.on('message:error', function(data) {
         alert(data.error || 'Failed to send message');
@@ -2709,6 +2807,9 @@
 
                 // 2. Audio context — mix local + all remote audio
                 _recAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (_recAudioCtx.state === 'suspended') {
+                    try { await _recAudioCtx.resume(); } catch(e) {}
+                }
                 const audioDest = _recAudioCtx.createMediaStreamDestination();
 
                 const mixTrack = (mediaStreamTrack) => {
@@ -2759,7 +2860,15 @@
                     options = { mimeType: 'video/webm', videoBitsPerSecond: TARGET_BITRATE };
                 }
 
-                mediaRecorder = new MediaRecorder(finalStream, options);
+                try {
+                    mediaRecorder = new MediaRecorder(finalStream, options);
+                } catch (mErr1) {
+                    try {
+                        mediaRecorder = new MediaRecorder(finalStream);
+                    } catch (mErr2) {
+                        throw new Error('Recording not supported: ' + mErr2.message);
+                    }
+                }
                 recordedChunks = [];
                 recordingStream = finalStream;
                 recordingElapsedSeconds = 0;
@@ -2857,12 +2966,15 @@
             clearInterval(recordingInterval);
         }
 
-        socket.emit('host:toggle_recording', { 
-            room: '<%= roomId %>', 
-            isRecording: isRecordingLive, 
-            isPaused: (!isRecordingLive && localStorage.getItem('hasRecordedSomething_' + CHANNEL) === 'true'),
-            startTime: recordingStartTime 
-        });
+        try {
+            socket.emit('host:toggle_recording', { 
+                room: '<%= roomId %>', 
+                isRecording: isRecordingLive, 
+                isPaused: (!isRecordingLive && localStorage.getItem('hasRecordedSomething_' + CHANNEL) === 'true'),
+                startTime: recordingStartTime 
+            });
+        } catch(e) {}
+        showLiveToast(isRecordingLive ? 'রেকর্ডিং শুরু হয়েছে' : 'রেকর্ডিং পজ করা হয়েছে', isRecordingLive ? 'radio_button_checked' : 'pause_circle');
     }
     <% } %>
 
@@ -2945,23 +3057,65 @@
         setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 3000);
     });
 
-    function postComment() {
+    async function postComment() {
         const input = document.getElementById('commentInput');
         if (!input) return;
         const text = input.value.trim();
         if (!text) return;
-        if (socket) {
-            emitSocketJoin();
-            socket.emit('message:send', { 
-                room: '<%= roomId %>', 
-                text: text,
-                userId: '<%= user._id %>',
-                userName: '<%= user.name %>',
-                userRole: '<%= user.role %>'
-            });
-        }
         input.value = '';
         input.style.height = 'auto';
+
+        // 1. Optimistic local render: Author sees comment instantly
+        const tempId = 'temp_' + Date.now();
+        const optimisticComment = {
+            _id: tempId,
+            sender: '<%= user._id %>',
+            senderName: '<%= user.name %>',
+            senderRole: '<%= user.role %>',
+            userName: '<%= user.name %>',
+            userAvatar: null,
+            text: text,
+            createdAt: new Date().toISOString(),
+            highlighted: false,
+            replies: []
+        };
+        liveComments.unshift(optimisticComment);
+        if (liveComments.length > 500) liveComments = liveComments.slice(0, 500);
+        renderCommentsList(liveComments);
+        const list = document.getElementById('commentsList');
+        if (list) list.scrollTop = 0;
+
+        // 2. Broadcast via socket
+        emitSocketJoin();
+        socket.emit('message:send', { 
+            room: '<%= roomId %>', 
+            text: text,
+            userId: '<%= user._id %>',
+            userName: '<%= user.name %>',
+            userRole: '<%= user.role %>'
+        });
+
+        // 3. Guaranteed persistence via REST API
+        try {
+            const res = await fetch('/api/live-comment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    room: '<%= roomId %>',
+                    text: text
+                })
+            });
+            const data = await res.json();
+            if (data.success && data.message) {
+                const idx = liveComments.findIndex(c => c._id === tempId);
+                if (idx !== -1) {
+                    liveComments[idx]._id = data.message._id;
+                    liveComments[idx].createdAt = data.message.createdAt;
+                }
+            }
+        } catch (err) {
+            console.warn('HTTP comment send error:', err);
+        }
     }
 
     <% if (isModerator && locals.liveNodeId) { %>

@@ -1059,6 +1059,57 @@ router.get('/live-comment', protect, async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
+// POST a new live comment (guaranteed HTTP persistence fallback)
+router.post('/live-comment', protect, async (req, res) => {
+    try {
+        await connectDB();
+        const Message = require('../models/Message');
+        const { room, text, receiverId, highlighted } = req.body;
+        const user = req.session.user;
+        if (!user || !user._id) return res.status(401).json({ success: false, error: 'Unauthorized' });
+        if (!text || !text.trim()) return res.status(400).json({ success: false, error: 'Comment text cannot be empty' });
+
+        const isModerator = (user.role === 'teacher' || user.role === 'admin' || user.role === 'superadmin');
+        const lockedRooms = req.app.get('lockedRooms') || new Set();
+        if (!isModerator && lockedRooms.has(room)) {
+            return res.status(403).json({ success: false, error: 'Comments are currently disabled for this class.' });
+        }
+
+        const senderAvatar = user.profileImage || user.profilePicture || null;
+        const msg = await Message.create({
+            sender: user._id,
+            senderName: user.name,
+            senderRole: user.role || 'student',
+            receiver: receiverId || null,
+            room: room || 'global',
+            text: text.trim().substring(0, 1000),
+            highlighted: !!highlighted
+        });
+
+        const msgData = {
+            _id: msg._id,
+            sender: user._id,
+            senderName: user.name,
+            senderRole: user.role || 'student',
+            userAvatar: senderAvatar,
+            text: msg.text,
+            room: msg.room,
+            createdAt: msg.createdAt,
+            highlighted: msg.highlighted,
+            replies: []
+        };
+
+        const io = req.app.get('io');
+        if (io) {
+            io.to(room || 'global').emit('message:new', msgData);
+        }
+
+        res.json({ success: true, message: msgData });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 // POST reply to a live comment
 router.post('/live-comment/:msgId/reply', protect, async (req, res) => {
     try {

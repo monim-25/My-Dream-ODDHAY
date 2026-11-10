@@ -603,6 +603,7 @@ setInterval(async () => {
 const onlineUsers = new Map();
 app.set('onlineUsers', onlineUsers);
 const lockedRooms = new Set();
+app.set('lockedRooms', lockedRooms);
 const Message = require('./models/Message');
 const raisedHandsByRoom = new Map();
 const roomParticipants = new Map();
