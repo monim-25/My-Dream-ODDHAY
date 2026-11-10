@@ -666,6 +666,13 @@
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
+    // ==========================================
+    // 0. SOCKET.IO INITIALIZATION (Top of script)
+    // ==========================================
+    const socket = io();
+    socket.emit('user:join', { userId: '<%= user._id %>', name: '<%= user.name %>', role: '<%= user.role %>' });
+    socket.emit('room:join', '<%= roomId %>');
+
     function filterLivePlaylist() {
         var val = (document.getElementById('livePlaylistSearch').value || '').toLowerCase();
             document.querySelectorAll('#livePlaylistContainer [data-name]').forEach(function(el) {
@@ -938,6 +945,33 @@
     let agoraUidToSocketId = {};
     let audioOnlySpeakingContainers = {};
 
+    // Safe track publishing helpers to prevent CAN_NOT_PUBLISH_MULTIPLE_VIDEO_TRACKS / CAN_NOT_PUBLISH_MULTIPLE_AUDIO_TRACKS
+    async function publishLocalVideo(track) {
+        if (!client || client.connectionState !== 'CONNECTED' || !track) return;
+        const currentVideos = (client.localTracks || []).filter(t => t.trackMediaType === 'video');
+        if (currentVideos.length > 0) {
+            try { await client.unpublish(currentVideos); } catch (_) {}
+        }
+        try {
+            await client.publish([track]);
+        } catch (err) {
+            console.warn("Publish video error:", err);
+        }
+    }
+
+    async function publishLocalAudio(track) {
+        if (!client || client.connectionState !== 'CONNECTED' || !track) return;
+        const currentAudios = (client.localTracks || []).filter(t => t.trackMediaType === 'audio');
+        if (currentAudios.length > 0) {
+            try { await client.unpublish(currentAudios); } catch (_) {}
+        }
+        try {
+            await client.publish([track]);
+        } catch (err) {
+            console.warn("Publish audio error:", err);
+        }
+    }
+
     // Initialize listeners immediately so no remote events are missed
     setupAgoraListeners();
 
@@ -1194,17 +1228,8 @@
                     }
                 }
 
-                const tracksToPublish = [];
-                const alreadyPublished = client.localTracks || [];
-                if (localAudioTrack && !alreadyPublished.includes(localAudioTrack)) tracksToPublish.push(localAudioTrack);
-                if (localVideoTrack && !alreadyPublished.includes(localVideoTrack)) tracksToPublish.push(localVideoTrack);
-                if (tracksToPublish.length > 0) {
-                    try {
-                        await client.publish(tracksToPublish);
-                    } catch (pubErr) {
-                        console.error("Failed to publish tracks:", pubErr);
-                    }
-                }
+                if (localAudioTrack) await publishLocalAudio(localAudioTrack);
+                if (localVideoTrack) await publishLocalVideo(localVideoTrack);
 
                 const mainPlayer = document.getElementById('main-player');
                 if (mainPlayer) {
@@ -1501,9 +1526,7 @@
                 // Create local audio track on-demand
                 if (btn) btn.innerHTML = '<span class="material-symbols-rounded text-xl animate-spin">sync</span>';
                 localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-                if (client && client.connectionState === 'CONNECTED' && !(client.localTracks || []).includes(localAudioTrack)) {
-                    await client.publish([localAudioTrack]);
-                }
+                await publishLocalAudio(localAudioTrack);
                 isAudioMuted = false;
             } else {
                 isAudioMuted = !isAudioMuted;
@@ -1520,7 +1543,7 @@
             }
         } catch (err) {
             console.error("Error toggling audio track:", err);
-            alert("Could not access microphone: " + (err.message || "Permission denied"));
+            showLiveToast("Microphone access failed: " + (err.message || "Permission denied"), "mic_off");
             isAudioMuted = true;
             if (btn) {
                 btn.classList.add('active');
@@ -1546,9 +1569,7 @@
                         localVideoTrack = await AgoraRTC.createCameraVideoTrack();
                     }
                 }
-                if (client && client.connectionState === 'CONNECTED' && !(client.localTracks || []).includes(localVideoTrack)) {
-                    await client.publish([localVideoTrack]);
-                }
+                await publishLocalVideo(localVideoTrack);
                 isVideoMuted = false;
             } else {
                 isVideoMuted = !isVideoMuted;
@@ -1596,7 +1617,7 @@
             }
         } catch (err) {
             console.error("Error toggling video track:", err);
-            alert("Could not access camera: " + (err.message || "Permission denied"));
+            showLiveToast("Camera access failed: " + (err.message || "Permission denied"), "videocam_off");
             isVideoMuted = true;
             if (btn) {
                 btn.classList.add('active');
@@ -1615,7 +1636,7 @@
 
                 // Republish camera to Agora so remote users see host again
                 if (localVideoTrack) {
-                    try { await client.publish([localVideoTrack]); } catch(_) {}
+                    await publishLocalVideo(localVideoTrack);
                     const mainPlayer = document.getElementById('main-player');
                     if (mainPlayer) {
                         mainPlayer.innerHTML = '';
@@ -1645,8 +1666,7 @@
                 }, 'disable');
 
                 // Unpublish camera from Agora, publish screen instead
-                await client.unpublish(localVideoTrack);
-                await client.publish(localScreenTrack);
+                await publishLocalVideo(localScreenTrack);
 
                 // Screen → main player (large)
                 localScreenTrack.play('main-player');
@@ -2196,9 +2216,6 @@
     // ==========================================
     // SOCKET.IO — real-time comment delivery
     // ==========================================
-    const socket = io();
-    socket.emit('user:join', { userId: '<%= user._id %>', name: '<%= user.name %>', role: '<%= user.role %>' });
-    socket.emit('room:join', '<%= roomId %>');
 
     // ── Live time-ago ticker: update all rendered timestamps every 30s ──
     setInterval(function() {
@@ -2610,8 +2627,8 @@
             const containerEl = document.getElementById('agora-video-container');
             const videoEl = mainPlayer ? mainPlayer.querySelector('video') : null;
 
-            if (!videoEl) {
-                alert('ক্লাসে যোগ দিন প্রথমে! (No active video — please join the class first.)');
+            if (!client || client.connectionState !== 'CONNECTED') {
+                showLiveToast('লাইভ ক্লাসে যোগ দেওয়ার পর রেকর্ডিং শুরু করুন', 'info');
                 return;
             }
 
