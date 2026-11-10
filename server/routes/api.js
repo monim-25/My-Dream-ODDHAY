@@ -96,7 +96,10 @@ router.post('/upload-complete', express.json(), async (req, res) => {
         const fileId = uploadStream.id;
 
         for (const c of chunks) {
-            uploadStream.write(c.data);
+            const buf = Buffer.isBuffer(c.data)
+                ? c.data
+                : (c.data && c.data.buffer ? Buffer.from(c.data.buffer) : Buffer.from(c.data));
+            uploadStream.write(buf);
         }
         uploadStream.end();
 

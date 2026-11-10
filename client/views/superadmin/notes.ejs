@@ -1078,7 +1078,14 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ uploadId, filename: file.name, mimeType: file.type || 'application/pdf', totalChunks })
             });
-            if (!completeRes.ok) throw new Error('Failed to assemble chunks on server.');
+            if (!completeRes.ok) {
+                let errMsg = 'Server failed to assemble uploaded chunks.';
+                try {
+                    const errJson = await completeRes.json();
+                    if (errJson && errJson.message) errMsg = errJson.message;
+                } catch (e) {}
+                throw new Error(errMsg);
+            }
             const completeJson = await completeRes.json();
             if (!completeJson || !completeJson.fileUrl) throw new Error('Invalid file URL returned.');
             return completeJson.fileUrl;
