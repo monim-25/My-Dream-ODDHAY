@@ -2259,8 +2259,10 @@ router.get('/notes', teacherProtect, async (req, res) => {
                 author: authorFilter,
                 totalNotes: totalCount
             },
-            subjects: assignedSubjects.length > 0 ? assignedSubjects : (rawUserSubjects.length > 0 ? rawUserSubjects : ['General Academic']),
-            classes: allClasses,
+            subjects: (rawUserSubjects && rawUserSubjects.length > 0) ? rawUserSubjects : (assignedSubjects.length > 0 ? assignedSubjects : ['General Academic']),
+            classes: (rawUserClasses && rawUserClasses.length > 0) ? rawUserClasses : allClasses,
+            assignedClasses: (rawUserClasses && rawUserClasses.length > 0) ? rawUserClasses : (teacherContext.hasStrictClass ? teacherContext.rawAssignedClasses : allClasses),
+            assignedSubjects: (rawUserSubjects && rawUserSubjects.length > 0) ? rawUserSubjects : (teacherContext.hasStrictSubject ? teacherContext.assignedSubjects : ['General Academic']),
             assignedCourses: userCourses,
             userCourses: userCourses,
             active: 'notes'

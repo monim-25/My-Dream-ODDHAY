@@ -509,34 +509,35 @@
                                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 transition-all placeholder:text-slate-400">
                         </div>
 
-                        <!-- Target Classes Row (Multi-Class Selection) -->
+                        <!-- Target Classes Row (Multi-Class Selection - Assigned Only) -->
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                                     Target Classes <span class="text-rose-500">*</span>
                                 </label>
-                                <div class="flex items-center gap-1.5">
-                                    <button type="button" onclick="selectNoteClasses('all')" class="text-[10px] font-bold text-primary hover:underline px-1 py-0.5 rounded cursor-pointer">All</button>
-                                    <span class="text-slate-300 dark:text-slate-600 text-[10px]">•</span>
-                                    <button type="button" onclick="selectNoteClasses('ssc')" class="text-[10px] font-bold text-primary hover:underline px-1 py-0.5 rounded cursor-pointer">9 & 10 (SSC)</button>
-                                    <span class="text-slate-300 dark:text-slate-600 text-[10px]">•</span>
-                                    <button type="button" onclick="selectNoteClasses('hsc')" class="text-[10px] font-bold text-primary hover:underline px-1 py-0.5 rounded cursor-pointer">11 & 12 (HSC)</button>
-                                    <span class="text-slate-300 dark:text-slate-600 text-[10px]">•</span>
-                                    <button type="button" onclick="selectNoteClasses('clear')" class="text-[10px] font-bold text-slate-400 hover:text-rose-500 px-1 py-0.5 rounded cursor-pointer">Clear</button>
-                                </div>
                             </div>
                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl" id="noteClassesContainer">
-                                <% const classOptions = (locals.classes && locals.classes.length > 0) ? locals.classes : ['Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'HSC 1st Year', 'HSC 2nd Year', 'Admission']; %>
-                                <% classOptions.forEach(c => { %>
-                                    <label class="note-class-card flex items-center gap-1.5 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-primary/50 dark:hover:border-primary/50 bg-white dark:bg-slate-900 cursor-pointer transition-colors text-[11px] select-none">
-                                        <input type="checkbox" name="classLevel[]" value="<%= c %>" class="note-class-checkbox accent-primary rounded size-3.5" onchange="onNoteSubjectOrClassChange()">
-                                        <span class="font-medium text-slate-700 dark:text-slate-200 truncate"><%= c %></span>
-                                    </label>
-                                <% }); %>
+                                <% 
+                                    const strictlyAssignedClasses = (locals.assignedClasses && locals.assignedClasses.length > 0) 
+                                        ? locals.assignedClasses 
+                                        : ((locals.classes && locals.classes.length > 0) ? locals.classes : []);
+                                %>
+                                <% if (strictlyAssignedClasses.length === 0) { %>
+                                    <div class="col-span-full py-2 text-center text-xs text-amber-500">
+                                        No assigned classes found.
+                                    </div>
+                                <% } else { %>
+                                    <% strictlyAssignedClasses.forEach(c => { %>
+                                        <label class="note-class-card flex items-center gap-1.5 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-primary/50 dark:hover:border-primary/50 bg-white dark:bg-slate-900 cursor-pointer transition-colors text-[11px] select-none">
+                                            <input type="checkbox" name="classLevel[]" value="<%= c %>" class="note-class-checkbox accent-primary rounded size-3.5" onchange="onNoteSubjectOrClassChange()">
+                                            <span class="font-medium text-slate-700 dark:text-slate-200 truncate"><%= c %></span>
+                                        </label>
+                                    <% }); %>
+                                <% } %>
                             </div>
                         </div>
 
-                        <!-- Subject Row -->
+                        <!-- Subject Row (Assigned Only) -->
                         <div>
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                                 Subject <span class="text-rose-500">*</span>
@@ -544,7 +545,12 @@
                             <select name="subject" id="noteSubject" required onchange="onNoteSubjectOrClassChange()"
                                 class="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 transition-all cursor-pointer">
                                 <option value="">Select Subject</option>
-                                <% subList.forEach(s => { %>
+                                <% 
+                                    const strictlyAssignedSubjects = (locals.assignedSubjects && locals.assignedSubjects.length > 0) 
+                                        ? locals.assignedSubjects 
+                                        : (subList.length > 0 ? subList : []);
+                                %>
+                                <% strictlyAssignedSubjects.forEach(s => { %>
                                     <option value="<%= s %>"><%= s %></option>
                                 <% }) %>
                             </select>
@@ -993,7 +999,7 @@
             if (chapterInput) chapterInput.value = activeChapter;
             if (courseInput) courseInput.value = activeCourse;
 
-            // Auto-check class from filter or default to Class 9 & 10
+            // Only check class if matching active filter or if teacher has exactly 1 assigned class
             const classCheckboxes = document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]');
             const activeClassFilter = window.activeClass || urlParams.get('class') || '';
             let hasAnyChecked = false;
@@ -1001,14 +1007,11 @@
                 if (activeClassFilter && activeClassFilter !== 'all' && cb.value.toLowerCase() === activeClassFilter.toLowerCase()) {
                     cb.checked = true;
                     hasAnyChecked = true;
-                } else if (!activeClassFilter || activeClassFilter === 'all') {
-                    if (cb.value.includes('9') || cb.value.includes('10')) {
-                        cb.checked = true;
-                        hasAnyChecked = true;
-                    }
+                } else {
+                    cb.checked = false;
                 }
             });
-            if (!hasAnyChecked && classCheckboxes.length > 0) {
+            if (!hasAnyChecked && classCheckboxes.length === 1) {
                 classCheckboxes[0].checked = true;
             }
             if (window.onNoteSubjectOrClassChange) window.onNoteSubjectOrClassChange();
