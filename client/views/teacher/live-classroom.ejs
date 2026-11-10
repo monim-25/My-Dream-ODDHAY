@@ -669,9 +669,18 @@
     // ==========================================
     // 0. SOCKET.IO INITIALIZATION (Top of script)
     // ==========================================
-    const socket = io();
-    socket.emit('user:join', { userId: '<%= user._id %>', name: '<%= user.name %>', role: '<%= user.role %>' });
-    socket.emit('room:join', '<%= roomId %>');
+    const socket = window.socket || (typeof io === 'function' ? io() : null);
+    window.socket = socket;
+
+    function emitSocketJoin() {
+        if (!socket) return;
+        socket.emit('user:join', { userId: '<%= user._id %>', name: '<%= user.name %>', role: '<%= user.role %>' });
+        socket.emit('room:join', '<%= roomId %>');
+    }
+    if (socket) {
+        emitSocketJoin();
+        socket.on('connect', emitSocketJoin);
+    }
 
     function filterLivePlaylist() {
         var val = (document.getElementById('livePlaylistSearch').value || '').toLowerCase();
@@ -935,6 +944,8 @@
     let localScreenTrack = null;
     let isAudioMuted = false;
     let isVideoMuted = false;
+    let isAudioPublished = false;
+    let isVideoPublished = false;
     let isScreenSharing = false;
     let isAutoJoining = false;
     let isJoiningInProgress = false;
@@ -945,30 +956,19 @@
     let agoraUidToSocketId = {};
     let audioOnlySpeakingContainers = {};
 
-    // Safe track publishing helpers to prevent CAN_NOT_PUBLISH_MULTIPLE_VIDEO_TRACKS / CAN_NOT_PUBLISH_MULTIPLE_AUDIO_TRACKS
-    async function publishLocalVideo(track) {
-        if (!client || client.connectionState !== 'CONNECTED' || !track) return;
-        const currentVideos = (client.localTracks || []).filter(t => t.trackMediaType === 'video');
-        if (currentVideos.length > 0) {
-            try { await client.unpublish(currentVideos); } catch (_) {}
-        }
+    // Safe track publishing helper that batches tracks together
+    async function publishTracksTogether(tracks) {
+        if (!client || client.connectionState !== 'CONNECTED' || !tracks || tracks.length === 0) return;
+        const validTracks = tracks.filter(Boolean);
+        if (validTracks.length === 0) return;
         try {
-            await client.publish([track]);
+            await client.publish(validTracks);
+            validTracks.forEach(t => {
+                if (t === localAudioTrack) isAudioPublished = true;
+                if (t === localVideoTrack || t === localScreenTrack) isVideoPublished = true;
+            });
         } catch (err) {
-            console.warn("Publish video error:", err);
-        }
-    }
-
-    async function publishLocalAudio(track) {
-        if (!client || client.connectionState !== 'CONNECTED' || !track) return;
-        const currentAudios = (client.localTracks || []).filter(t => t.trackMediaType === 'audio');
-        if (currentAudios.length > 0) {
-            try { await client.unpublish(currentAudios); } catch (_) {}
-        }
-        try {
-            await client.publish([track]);
-        } catch (err) {
-            console.warn("Publish audio error:", err);
+            console.warn("Publish tracks error:", err);
         }
     }
 
@@ -1187,8 +1187,15 @@
                 client.enableAudioVolumeIndicator();
             } catch (_) {}
 
+            // Immediately activate UI so the live session is visually open!
+            document.getElementById('prejoin-screen')?.classList.add('hidden');
+            document.getElementById('agora-controls')?.classList.remove('hidden');
+            document.getElementById('btn-reaction-toggle')?.classList.remove('hidden');
+            const btnFs = document.getElementById('btn-fullscreen');
+            if (btnFs) btnFs.classList.remove('hidden');
+
             // Broadcast Agora UID via Socket.io
-            if (typeof socket !== 'undefined' && uid) {
+            if (socket && uid) {
                 socket.emit('user:set_agora_uid', { room: '<%= roomId %>', agoraUid: uid });
             }
 
@@ -1228,8 +1235,13 @@
                     }
                 }
 
-                if (localAudioTrack) await publishLocalAudio(localAudioTrack);
-                if (localVideoTrack) await publishLocalVideo(localVideoTrack);
+                // Batch publish audio and video together
+                const tracksToPublish = [];
+                if (localAudioTrack && !isAudioPublished) tracksToPublish.push(localAudioTrack);
+                if (localVideoTrack && !isVideoPublished) tracksToPublish.push(localVideoTrack);
+                if (tracksToPublish.length > 0) {
+                    await publishTracksTogether(tracksToPublish);
+                }
 
                 const mainPlayer = document.getElementById('main-player');
                 if (mainPlayer) {
@@ -1254,13 +1266,6 @@
                 // Students join as viewers immediately without mandatory camera/mic activation
                 updateVideoLayout();
             }
-
-            // 6. Setup UI
-            document.getElementById('prejoin-screen')?.classList.add('hidden');
-            document.getElementById('agora-controls')?.classList.remove('hidden');
-            document.getElementById('btn-reaction-toggle')?.classList.remove('hidden');
-            const btnFs = document.getElementById('btn-fullscreen');
-            if (btnFs) btnFs.classList.remove('hidden');
 
             const btnAudio = document.getElementById('btn-audio');
             const btnVideo = document.getElementById('btn-video');
@@ -1523,10 +1528,11 @@
         
         try {
             if (!localAudioTrack) {
-                // Create local audio track on-demand
                 if (btn) btn.innerHTML = '<span class="material-symbols-rounded text-xl animate-spin">sync</span>';
                 localAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
-                await publishLocalAudio(localAudioTrack);
+                if (!isAudioPublished && client && client.connectionState === 'CONNECTED') {
+                    await publishTracksTogether([localAudioTrack]);
+                }
                 isAudioMuted = false;
             } else {
                 isAudioMuted = !isAudioMuted;
@@ -1558,7 +1564,6 @@
         
         try {
             if (!localVideoTrack) {
-                // Create local video track on-demand with multi-step fallback
                 if (btn) btn.innerHTML = '<span class="material-symbols-rounded text-xl animate-spin">sync</span>';
                 try {
                     localVideoTrack = await AgoraRTC.createCameraVideoTrack({ encoderConfig: '720p_1' });
@@ -1569,7 +1574,9 @@
                         localVideoTrack = await AgoraRTC.createCameraVideoTrack();
                     }
                 }
-                await publishLocalVideo(localVideoTrack);
+                if (!isVideoPublished && client && client.connectionState === 'CONNECTED') {
+                    await publishTracksTogether([localVideoTrack]);
+                }
                 isVideoMuted = false;
             } else {
                 isVideoMuted = !isVideoMuted;
@@ -1636,7 +1643,7 @@
 
                 // Republish camera to Agora so remote users see host again
                 if (localVideoTrack) {
-                    await publishLocalVideo(localVideoTrack);
+                    await publishTracksTogether([localVideoTrack]);
                     const mainPlayer = document.getElementById('main-player');
                     if (mainPlayer) {
                         mainPlayer.innerHTML = '';
@@ -1666,7 +1673,10 @@
                 }, 'disable');
 
                 // Unpublish camera from Agora, publish screen instead
-                await publishLocalVideo(localScreenTrack);
+                if (localVideoTrack && isVideoPublished) {
+                    try { await client.unpublish([localVideoTrack]); isVideoPublished = false; } catch(_) {}
+                }
+                await publishTracksTogether([localScreenTrack]);
 
                 // Screen → main player (large)
                 localScreenTrack.play('main-player');
@@ -2937,9 +2947,19 @@
 
     function postComment() {
         const input = document.getElementById('commentInput');
+        if (!input) return;
         const text = input.value.trim();
         if (!text) return;
-        socket.emit('message:send', { room: '<%= roomId %>', text });
+        if (socket) {
+            emitSocketJoin();
+            socket.emit('message:send', { 
+                room: '<%= roomId %>', 
+                text: text,
+                userId: '<%= user._id %>',
+                userName: '<%= user.name %>',
+                userRole: '<%= user.role %>'
+            });
+        }
         input.value = '';
         input.style.height = 'auto';
     }

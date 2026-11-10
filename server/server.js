@@ -681,15 +681,18 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('room:lock_status', { roomId, isLocked: !!lock });
     });
 
-    socket.on('message:send', async ({ room, text, receiverId, highlighted }) => {
+    socket.on('message:send', async ({ room, text, receiverId, highlighted, userId, userName, userRole }) => {
         try {
-            if (!socket.userId || !text?.trim()) return;
-            const isModerator = (socket.userRole === 'teacher' || socket.userRole === 'admin' || socket.userRole === 'superadmin');
+            const senderId = socket.userId || userId;
+            const senderName = socket.userName || userName || 'User';
+            const senderRole = socket.userRole || userRole || 'student';
+            if (!senderId || !text?.trim()) return;
+            const isModerator = (senderRole === 'teacher' || senderRole === 'admin' || senderRole === 'superadmin');
             if (!isModerator && lockedRooms.has(room)) {
                 return socket.emit('message:error', { error: 'Comments are currently disabled for this class.' });
             }
-            const msg = await Message.create({ sender: socket.userId, senderName: socket.userName, senderRole: socket.userRole, receiver: receiverId || null, room: room || 'global', text: text.trim().substring(0, 1000), highlighted: !!highlighted });
-            const msgData = { _id: msg._id, sender: socket.userId, senderName: socket.userName, senderRole: socket.userRole, text: msg.text, room: msg.room, createdAt: msg.createdAt, highlighted: msg.highlighted };
+            const msg = await Message.create({ sender: senderId, senderName: senderName, senderRole: senderRole, receiver: receiverId || null, room: room || 'global', text: text.trim().substring(0, 1000), highlighted: !!highlighted });
+            const msgData = { _id: msg._id, sender: senderId, senderName: senderName, senderRole: senderRole, text: msg.text, room: msg.room, createdAt: msg.createdAt, highlighted: msg.highlighted };
             io.to(room || 'global').emit('message:new', msgData);
             if (receiverId) {
                 const receiverSocket = Array.from(onlineUsers.values()).find(u => u.userId === receiverId);
