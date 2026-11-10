@@ -6403,14 +6403,40 @@ router.post('/api/live/end', protect, async (req, res) => {
         let savedVideoPath = null;
         let savedFolderId = folderId || null;
 
+        let candidateVideoPath = uploadedVideoPath;
+
+        // Fail-safe: If uploadedVideoPath was not provided or empty, search for any live recording uploaded in the last 15 minutes
+        if (!candidateVideoPath || typeof candidateVideoPath !== 'string' || candidateVideoPath.trim().length === 0) {
+            try {
+                const videosDir = path.join(__dirname, '../../client/public/uploads/videos');
+                if (fs.existsSync(videosDir)) {
+                    const files = fs.readdirSync(videosDir)
+                        .filter(f => f.includes('live-recording') || f.includes('live_recording'))
+                        .map(f => {
+                            try {
+                                const st = fs.statSync(path.join(videosDir, f));
+                                return { name: f, time: st.mtime.getTime(), size: st.size };
+                            } catch (_) { return null; }
+                        })
+                        .filter(f => f && f.size > 1000 && (Date.now() - f.time) < 15 * 60 * 1000)
+                        .sort((a, b) => b.time - a.time);
+                    if (files.length > 0) {
+                        candidateVideoPath = `/uploads/videos/${files[0].name}`;
+                        console.log('[/api/live/end] Fail-safe matched recent recording file:', candidateVideoPath);
+                    }
+                }
+            } catch (fsErr) {
+                console.warn('[/api/live/end] Fail-safe scan error:', fsErr);
+            }
+        }
+
         // Accept ANY valid uploaded video path (Cloudinary https:// URL, local /uploads/ path, or relative)
         const hasRealRecording = Boolean(
-            (isRecorded === true || isRecorded === 'true') &&
-            typeof uploadedVideoPath === 'string' &&
-            uploadedVideoPath.trim().length > 0 &&
-            (uploadedVideoPath.startsWith('/uploads/') || uploadedVideoPath.startsWith('http://') || uploadedVideoPath.startsWith('https://') || uploadedVideoPath.startsWith('uploads/'))
+            typeof candidateVideoPath === 'string' &&
+            candidateVideoPath.trim().length > 0 &&
+            (candidateVideoPath.startsWith('/uploads/') || candidateVideoPath.startsWith('http://') || candidateVideoPath.startsWith('https://') || candidateVideoPath.startsWith('uploads/'))
         );
-        const recordingVideoPath = hasRealRecording ? uploadedVideoPath.trim() : null;
+        const recordingVideoPath = hasRealRecording ? candidateVideoPath.trim() : null;
         const recordingDuration = duration || '00:00:00';
         console.log('[/api/live/end] hasRealRecording:', hasRealRecording, 'recordingVideoPath:', recordingVideoPath);
 

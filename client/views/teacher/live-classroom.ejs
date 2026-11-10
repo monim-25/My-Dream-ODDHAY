@@ -1979,12 +1979,14 @@
 
                             // Auto-start recording for host so live session is always reliably captured
                             if (isModerator && typeof toggleRecordingStatus === 'function') {
-                                setTimeout(() => {
-                                    if (!mediaRecorder && client && client.connectionState === 'CONNECTED') {
+                                const tryAutoRecord = () => {
+                                    if (!mediaRecorder) {
                                         console.log('[Auto-Record] Auto-starting host recording...');
                                         toggleRecordingStatus();
                                     }
-                                }, 2500);
+                                };
+                                setTimeout(tryAutoRecord, 1500);
+                                setTimeout(tryAutoRecord, 3500);
                             }
 
                             // 8. Subscribe to any remote users already active in channel
@@ -3590,70 +3592,56 @@
                         async function toggleRecordingStatus() {
                             if (!mediaRecorder) {
                                 // ── START recording (first time) ──
-                                const mainPlayer = document.getElementById('main-player');
                                 const containerEl = document.getElementById('agora-video-container');
-                                const videoEl = mainPlayer ? mainPlayer.querySelector('video') : null;
-
-                                if (!client || client.connectionState !== 'CONNECTED') {
-                                    showLiveToast('লাইভ ক্লাসে যোগ দেওয়ার পর রেকর্ডিং শুরু করুন', 'info');
-                                    return;
-                                }
 
                                 try {
-                                    // 1. Canvas at minimum 1280×720 for quality recording
+                                    // 1. Setup Canvas (1280x720) with live drawing loop
                                     _recCanvas = document.createElement('canvas');
                                     _recCanvas.width = Math.max(containerEl ? containerEl.clientWidth : 1280, 1280);
                                     _recCanvas.height = Math.max(containerEl ? containerEl.clientHeight : 720, 720);
-                                    const ctx = _recCanvas.getContext('2d');
+                                    const ctx = _recCanvas.getContext('2d', { alpha: false });
 
-                                    // Draw loop — runs on every animation frame
                                     function drawLiveFrame() {
                                         _recAnimFrame = requestAnimationFrame(drawLiveFrame);
                                         if (!_recCanvas) return;
-                                        ctx.fillStyle = '#000';
+                                        ctx.fillStyle = '#0b1120';
                                         ctx.fillRect(0, 0, _recCanvas.width, _recCanvas.height);
 
-                                        // 1. Query the main video element dynamically on every frame to support screen share toggles
+                                        // Query main video element dynamically on every frame (supports screen share toggles)
                                         const currentMainPlayer = document.getElementById('main-player');
                                         const currentVideoEl = currentMainPlayer ? currentMainPlayer.querySelector('video') : null;
                                         if (currentVideoEl && currentVideoEl.readyState >= 2) {
                                             try { ctx.drawImage(currentVideoEl, 0, 0, _recCanvas.width, _recCanvas.height); } catch (e) { }
                                         }
 
-                                        // Setup positions for small tiles (top-right side column)
                                         let rx = _recCanvas.width - 170, ry = 10;
 
-                                        // 2. Draw local host camera overlay (if screen sharing and overlay is active)
+                                        // Host camera overlay when screen sharing
                                         const localCamOverlay = document.getElementById('local-cam-overlay');
                                         if (localCamOverlay && !localCamOverlay.classList.contains('hidden')) {
                                             const localCamVid = localCamOverlay.querySelector('video');
                                             if (localCamVid && localCamVid.readyState >= 2) {
                                                 try {
                                                     ctx.drawImage(localCamVid, rx, ry, 160, 120);
-                                                    // Amber border for the host
-                                                    ctx.strokeStyle = 'rgba(245,158,11,0.5)';
+                                                    ctx.strokeStyle = 'rgba(245,158,11,0.6)';
                                                     ctx.lineWidth = 2;
                                                     ctx.strokeRect(rx, ry, 160, 120);
-
-                                                    // Small "You (Host)" label
                                                     ctx.fillStyle = 'rgba(0,0,0,0.6)';
                                                     ctx.fillRect(rx + 2, ry + 120 - 20, 60, 18);
                                                     ctx.fillStyle = '#fff';
                                                     ctx.font = 'bold 9px sans-serif';
                                                     ctx.fillText('You (Host)', rx + 6, ry + 120 - 7);
-
                                                     ry += 130;
                                                 } catch (e) { }
                                             }
                                         }
 
-                                        // 3. Draw remote small tiles top-right (excluding host if they are screen sharing, already handled)
+                                        // Remote small tiles
                                         const remoteVids = document.querySelectorAll('#remote-playerlist video');
                                         remoteVids.forEach(rv => {
                                             if (rv.readyState >= 2) {
                                                 try {
                                                     ctx.drawImage(rv, rx, ry, 160, 120);
-                                                    // subtle border
                                                     ctx.strokeStyle = 'rgba(255,255,255,0.2)';
                                                     ctx.lineWidth = 2;
                                                     ctx.strokeRect(rx, ry, 160, 120);
@@ -3664,66 +3652,87 @@
                                     }
                                     drawLiveFrame();
 
-                                    // 2. Audio context — mix local + all remote audio
-                                    _recAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                                    if (_recAudioCtx.state === 'suspended') {
-                                        try { await _recAudioCtx.resume(); } catch (e) { }
+                                    // 2. Audio mixing: use AudioContext with continuous audio clock + silent generator so Chrome never stalls
+                                    try {
+                                        _recAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                                        if (_recAudioCtx.state === 'suspended') {
+                                            _recAudioCtx.resume().catch(() => {});
+                                        }
+                                    } catch (acErr) {
+                                        console.warn('AudioContext creation error:', acErr);
                                     }
-                                    const audioDest = _recAudioCtx.createMediaStreamDestination();
 
-                                    window._recAudioDest = audioDest;
-                                    window._mixAudioTrackToRecording = (mediaStreamTrack) => {
-                                        if (!mediaStreamTrack || !_recAudioCtx || !window._recAudioDest) return;
+                                    let audioTracks = [];
+                                    if (_recAudioCtx) {
+                                        const audioDest = _recAudioCtx.createMediaStreamDestination();
+                                        window._recAudioDest = audioDest;
+
+                                        // Add a silent oscillator so audioDest ALWAYS has continuous active PCM data packets
                                         try {
-                                            const aTrack = typeof mediaStreamTrack.getMediaStreamTrack === 'function'
-                                                ? mediaStreamTrack.getMediaStreamTrack()
-                                                : (mediaStreamTrack._mediaStreamTrack || mediaStreamTrack);
-                                            if (aTrack && aTrack.kind === 'audio') {
-                                                const src = _recAudioCtx.createMediaStreamSource(new MediaStream([aTrack]));
-                                                src.connect(window._recAudioDest);
-                                            }
-                                        } catch (e) { console.warn('Audio mix error:', e); }
-                                    };
-                                    const mixTrack = window._mixAudioTrackToRecording;
+                                            const osc = _recAudioCtx.createOscillator();
+                                            const silence = _recAudioCtx.createGain();
+                                            silence.gain.value = 0.0001; // inaudible
+                                            osc.connect(silence);
+                                            silence.connect(audioDest);
+                                            osc.start();
+                                        } catch (_) {}
 
-                                    // Local mic
-                                    if (localAudioTrack) {
-                                        const aTrack = typeof localAudioTrack.getMediaStreamTrack === 'function'
+                                        window._mixAudioTrackToRecording = (track) => {
+                                            if (!track || !_recAudioCtx || !window._recAudioDest) return;
+                                            try {
+                                                const aTrack = typeof track.getMediaStreamTrack === 'function'
+                                                    ? track.getMediaStreamTrack()
+                                                    : (track._mediaStreamTrack || track);
+                                                if (aTrack && aTrack.kind === 'audio') {
+                                                    const src = _recAudioCtx.createMediaStreamSource(new MediaStream([aTrack]));
+                                                    src.connect(window._recAudioDest);
+                                                }
+                                            } catch (e) { console.warn('Audio mix error:', e); }
+                                        };
+
+                                        // Connect local microphone
+                                        if (localAudioTrack) {
+                                            window._mixAudioTrackToRecording(localAudioTrack);
+                                        }
+
+                                        // Connect any active remote audio
+                                        if (client && client.remoteUsers) {
+                                            client.remoteUsers.forEach(ru => {
+                                                if (ru.audioTrack) window._mixAudioTrackToRecording(ru.audioTrack);
+                                            });
+                                        }
+
+                                        if (audioDest.stream.getAudioTracks().length > 0) {
+                                            audioTracks = audioDest.stream.getAudioTracks();
+                                        }
+                                    }
+
+                                    // Fallback: if AudioContext failed, attach raw microphone directly
+                                    if (audioTracks.length === 0 && localAudioTrack) {
+                                        const rawMic = typeof localAudioTrack.getMediaStreamTrack === 'function'
                                             ? localAudioTrack.getMediaStreamTrack()
                                             : localAudioTrack._mediaStreamTrack;
-                                        mixTrack(aTrack);
+                                        if (rawMic) audioTracks.push(rawMic);
                                     }
 
-                                    // Remote participants
-                                    if (client && client.remoteUsers) {
-                                        client.remoteUsers.forEach(ru => {
-                                            if (ru.audioTrack) {
-                                                const rATrack = typeof ru.audioTrack.getMediaStreamTrack === 'function'
-                                                    ? ru.audioTrack.getMediaStreamTrack()
-                                                    : ru.audioTrack._mediaStreamTrack;
-                                                mixTrack(rATrack);
-                                            }
-                                        });
-                                    }
-
-                                    // 3. Combine canvas video + mixed audio into one stream
+                                    // 3. Assemble combined stream
                                     const canvasStream = _recCanvas.captureStream(30);
                                     const finalStream = new MediaStream([
                                         ...canvasStream.getVideoTracks(),
-                                        ...audioDest.stream.getAudioTracks()
+                                        ...audioTracks
                                     ]);
 
-                                    // Pick best codec — target ≥720p quality (4.5 Mbps video)
-                                    const TARGET_BITRATE = 4500000; // 4.5 Mbps
+                                    // 4. Codec selection (WebM VP9/VP8 or MP4)
+                                    const TARGET_BITRATE = 3500000; // 3.5 Mbps for smooth recording
                                     let options = {};
                                     if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
-                                        options = { mimeType: 'video/webm;codecs=vp9,opus', videoBitsPerSecond: TARGET_BITRATE, audioBitsPerSecond: 128000 };
+                                        options = { mimeType: 'video/webm;codecs=vp9,opus', videoBitsPerSecond: TARGET_BITRATE };
                                     } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-                                        options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: TARGET_BITRATE, audioBitsPerSecond: 128000 };
-                                    } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-                                        options = { mimeType: 'video/mp4', videoBitsPerSecond: TARGET_BITRATE, audioBitsPerSecond: 128000 };
+                                        options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: TARGET_BITRATE };
                                     } else if (MediaRecorder.isTypeSupported('video/webm')) {
                                         options = { mimeType: 'video/webm', videoBitsPerSecond: TARGET_BITRATE };
+                                    } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+                                        options = { mimeType: 'video/mp4', videoBitsPerSecond: TARGET_BITRATE };
                                     }
 
                                     try {
@@ -3735,6 +3744,7 @@
                                             throw new Error('Recording not supported: ' + mErr2.message);
                                         }
                                     }
+
                                     recordedChunks = [];
                                     recordingStream = finalStream;
                                     recordingElapsedSeconds = 0;
@@ -3743,6 +3753,7 @@
                                     mediaRecorder.ondataavailable = (e) => {
                                         if (e.data && e.data.size > 0) {
                                             recordedChunks.push(e.data);
+                                            console.log('[MediaRecorder] Chunk recorded, size:', e.data.size, 'total chunks:', recordedChunks.length);
                                         }
                                     };
 
@@ -3750,17 +3761,18 @@
                                         console.error('MediaRecorder error:', e);
                                     };
 
-                                    mediaRecorder.start(1000); // 1-second slices so data flows continuously
+                                    // Start with 1-second time slices
+                                    mediaRecorder.start(1000);
                                     isRecordingLive = true;
+                                    console.log('[MediaRecorder] Recording started successfully! MimeType:', mediaRecorder.mimeType);
 
                                 } catch (err) {
                                     console.error('Recording start failed:', err);
-                                    // Cancel the animation frame if we failed
                                     if (_recAnimFrame) { cancelAnimationFrame(_recAnimFrame); _recAnimFrame = null; }
                                     _recCanvas = null;
-                                    if (_recAudioCtx) { _recAudioCtx.close(); _recAudioCtx = null; }
+                                    if (_recAudioCtx) { try { _recAudioCtx.close(); } catch(e){} _recAudioCtx = null; }
                                     mediaRecorder = null;
-                                    alert('রেকর্ডিং শুরু করতে সমস্যা হয়েছে।\nError: ' + err.message);
+                                    showLiveToast('রেকর্ডিং শুরু করা যায়নি: ' + err.message, 'error');
                                     return;
                                 }
 
@@ -4176,7 +4188,7 @@
                             document.addEventListener('DOMContentLoaded', () => {
                                 const headerTitleEl = document.getElementById('headerPageTitle');
                                 if (headerTitleEl) {
-                                    const fullTitle = <% - JSON.stringify(locals.liveTitle || (course ? course.title : 'Live Class')) %>;
+                                    const fullTitle = <%- JSON.stringify(locals.liveTitle || (course ? course.title : 'Live Class')) %>;
                                     const words = (fullTitle || '').trim().split(/\s+/);
                                     headerTitleEl.innerText = words.length > 5 ? words.slice(0, 5).join(' ') + '...' : fullTitle;
                                     headerTitleEl.title = fullTitle;
