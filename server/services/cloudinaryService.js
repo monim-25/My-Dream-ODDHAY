@@ -139,6 +139,29 @@ function getSafeUploadDestination(subfolder = 'uploads') {
     };
 }
 
+/**
+ * Generate upload signature for direct browser-to-Cloudinary upload
+ * Bypasses Vercel's 4.5MB request payload limit (FUNCTION_PAYLOAD_TOO_LARGE)
+ * @param {string} folder - subfolder name, e.g. 'notes', 'videos', 'qa'
+ */
+function getUploadSignature(folder = 'notes') {
+    if (!isConfigured) return null;
+    const timestamp = Math.round(new Date().getTime() / 1000);
+    const targetFolder = `oddhay/${folder}`;
+    const paramsToSign = {
+        timestamp: timestamp,
+        folder: targetFolder
+    };
+    const signature = cloudinary.utils.api_sign_request(paramsToSign, cloudinary.config().api_secret);
+    return {
+        signature,
+        timestamp,
+        apiKey: cloudinary.config().api_key,
+        cloudName: cloudinary.config().cloud_name,
+        folder: targetFolder
+    };
+}
+
 module.exports = {
     cloudinary,
     isConfigured: () => isConfigured,
@@ -146,5 +169,6 @@ module.exports = {
     deleteFromCloudinary,
     processUploadedFile,
     processUploadedFiles,
-    getSafeUploadDestination
+    getSafeUploadDestination,
+    getUploadSignature
 };

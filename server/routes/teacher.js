@@ -2341,6 +2341,23 @@ router.post('/folder/:id/delete', teacherProtect, async (req, res) => {
     }
 });
 
+router.get('/api/cloudinary-signature', teacherProtect, (req, res) => {
+    try {
+        const { getUploadSignature, isConfigured } = require('../services/cloudinaryService');
+        if (!isConfigured()) {
+            return res.status(200).json({ success: false, error: 'Cloudinary not configured' });
+        }
+        const folder = req.query.folder || 'notes';
+        const sigData = getUploadSignature(folder);
+        if (!sigData) {
+            return res.status(500).json({ success: false, error: 'Failed to generate signature' });
+        }
+        res.json({ success: true, ...sigData });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 router.post('/add-note', teacherProtect, (req, res, next) => {
     const upload = router.upload;
     if (upload) upload.single('note')(req, res, next);
@@ -2348,9 +2365,9 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
 }, async (req, res) => {
     try {
         await connectDB();
-        const { title, subject, classLevel, chapter, topic, topics, parentFolderId, description, accessType, course } = req.body;
+        const { title, subject, classLevel, chapter, topic, topics, parentFolderId, description, accessType, course, fileUrl: bodyFileUrl, filePath: bodyFilePath } = req.body;
         const { processUploadedFile } = require('../services/cloudinaryService');
-        const fileUrl = req.file ? await processUploadedFile(req.file, 'notes') : null;
+        const fileUrl = (req.file ? await processUploadedFile(req.file, 'notes') : null) || bodyFileUrl || bodyFilePath || null;
         
         const noteCourseId = course && mongoose.Types.ObjectId.isValid(course) ? course : undefined;
 

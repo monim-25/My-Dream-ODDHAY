@@ -5959,6 +5959,24 @@ router.get('/api/topics/cross-class-check', async (req, res) => {
     return topicController.checkCrossClassTopic(req, res);
 });
 
+// GET /api/cloudinary-signature — Direct browser upload signature (bypasses Vercel 4.5MB payload limit)
+router.get('/api/cloudinary-signature', (req, res) => {
+    try {
+        const { getUploadSignature, isConfigured } = require('../services/cloudinaryService');
+        if (!isConfigured()) {
+            return res.status(200).json({ success: false, error: 'Cloudinary not configured' });
+        }
+        const folder = req.query.folder || 'notes';
+        const sigData = getUploadSignature(folder);
+        if (!sigData) {
+            return res.status(500).json({ success: false, error: 'Failed to generate signature' });
+        }
+        res.json({ success: true, ...sigData });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // POST /exams/custom-start — Create and start a custom exam session
 router.post('/exams/custom-start', protect, async (req, res) => {
     try {

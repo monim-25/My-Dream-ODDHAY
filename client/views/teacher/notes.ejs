@@ -2072,13 +2072,71 @@
                 }
             }
 
+            // Direct browser-to-Cloudinary upload helper (bypasses Vercel 4.5MB request payload limit)
+            async function uploadFileDirectlyToCloudinary(file, onProgress) {
+                const endpoints = ['/api/cloudinary-signature?folder=notes', '/teacher/api/cloudinary-signature?folder=notes'];
+                let sigData = null;
+                for (const ep of endpoints) {
+                    try {
+                        const r = await fetch(ep, { headers: { 'Accept': 'application/json' } });
+                        if (r.ok) {
+                            const j = await r.json();
+                            if (j && j.success && j.signature) {
+                                sigData = j;
+                                break;
+                            }
+                        }
+                    } catch (err) {}
+                }
+
+                if (!sigData) return null;
+
+                return new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    const url = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/auto/upload`;
+                    xhr.open('POST', url, true);
+
+                    xhr.upload.onprogress = (e) => {
+                        if (e.lengthComputable && typeof onProgress === 'function') {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            onProgress(percent);
+                        }
+                    };
+
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            try {
+                                const resp = JSON.parse(xhr.responseText);
+                                resolve(resp.secure_url || resp.url);
+                            } catch (err) {
+                                reject(err);
+                            }
+                        } else {
+                            reject(new Error('Cloudinary upload status: ' + xhr.status));
+                        }
+                    };
+
+                    xhr.onerror = () => reject(new Error('Cloudinary network error'));
+
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('api_key', sigData.apiKey);
+                    formData.append('timestamp', sigData.timestamp);
+                    formData.append('signature', sigData.signature);
+                    formData.append('folder', sigData.folder);
+
+                    xhr.send(formData);
+                });
+            }
+
             const addNoteForm = document.getElementById('addNoteForm');
             if (addNoteForm) {
-                addNoteForm.addEventListener('submit', function(e) {
+                addNoteForm.addEventListener('submit', async function(e) {
+                    e.preventDefault();
+
                     // 1. Validate Classes
                     const checkedClasses = Array.from(addNoteForm.querySelectorAll('input[name="classLevel[]"]:checked')).map(cb => cb.value);
                     if (checkedClasses.length === 0) {
-                        e.preventDefault();
                         showCustomAlert('Please select at least one Target Class for this note.', 'warning', 'Class Required');
                         const classesBox = document.getElementById('noteClassesContainer');
                         if (classesBox) classesBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2098,7 +2156,6 @@
                     }
 
                     if (checkedTopics.length === 0) {
-                        e.preventDefault();
                         showCustomAlert('Please select at least one syllabus Topic for this note. If none exist, add them from Syllabus & Topics first.', 'warning', 'Topic Required');
                         const topicsBox = document.getElementById('noteTopicsWrapper');
                         if (topicsBox) topicsBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2118,20 +2175,64 @@
                     // 3. Validate PDF
                     const fileInput = document.getElementById('noteFileInput');
                     if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-                        e.preventDefault();
                         showCustomAlert('Please attach a PDF document file.', 'warning', 'Missing File');
                         return;
                     }
                     const file = fileInput.files[0];
                     if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-                        e.preventDefault();
                         showCustomAlert('Only PDF files are supported.', 'warning', 'Invalid File Type');
                         return;
                     }
+
                     const submitBtn = document.getElementById('addNoteSubmitBtn');
                     if (submitBtn) {
                         submitBtn.disabled = true;
-                        submitBtn.innerHTML = '<span class="material-symbols-rounded text-base leading-none animate-spin">progress_activity</span><span>Uploading Note...</span>';
+                        submitBtn.innerHTML = '<span class="material-symbols-rounded text-base leading-none animate-spin">progress_activity</span><span>Preparing upload...</span>';
+                    }
+
+                    try {
+                        // Direct upload to Cloudinary to bypass Vercel 4.5MB Serverless Function payload limit (413)
+                        let directUrl = null;
+                        try {
+                            if (submitBtn) {
+                                submitBtn.innerHTML = '<span class="material-symbols-rounded text-base leading-none animate-spin">cloud_upload</span><span id="btnUploadProgressText">Uploading PDF (0%)...</span>';
+                            }
+                            directUrl = await uploadFileDirectlyToCloudinary(file, (percent) => {
+                                const progEl = document.getElementById('btnUploadProgressText');
+                                if (progEl) progEl.textContent = `Uploading PDF (${percent}%)...`;
+                            });
+                        } catch (uploadErr) {
+                            console.warn('Direct upload error, falling back to server upload:', uploadErr);
+                        }
+
+                        if (directUrl) {
+                            // Inject direct Cloudinary URL into form
+                            let fileUrlInput = addNoteForm.querySelector('input[name="fileUrl"]');
+                            if (!fileUrlInput) {
+                                fileUrlInput = document.createElement('input');
+                                fileUrlInput.type = 'hidden';
+                                fileUrlInput.name = 'fileUrl';
+                                addNoteForm.appendChild(fileUrlInput);
+                            }
+                            fileUrlInput.value = directUrl;
+
+                            // Disable raw file input so no heavy binary is posted to Vercel
+                            fileInput.disabled = true;
+                        }
+
+                        if (submitBtn) {
+                            submitBtn.innerHTML = '<span class="material-symbols-rounded text-base leading-none animate-spin">save</span><span>Saving Note...</span>';
+                        }
+
+                        addNoteForm.submit();
+                    } catch (err) {
+                        console.error('Note submission failed:', err);
+                        showCustomAlert('Upload failed: ' + (err.message || 'Please check your connection'), 'error', 'Upload Failed');
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = '<span class="material-symbols-rounded text-sm leading-none">cloud_upload</span><span>Upload Note</span>';
+                        }
+                        if (fileInput) fileInput.disabled = false;
                     }
                 });
             }

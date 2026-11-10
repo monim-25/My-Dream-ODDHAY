@@ -2543,7 +2543,7 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
     }
 
     const { processUploadedFile } = require('../services/cloudinaryService');
-    const fileUrl = req.file ? await processUploadedFile(req.file, 'notes') : null;
+    const fileUrl = (req.file ? await processUploadedFile(req.file, 'notes') : null) || req.body.fileUrl || req.body.filePath || null;
     const mongoose = require('mongoose');
     if (chapter && subject && classLevelArray.length > 0) {
         const { ensureSyllabusFoldersForChapter } = require('../controllers/topicController');

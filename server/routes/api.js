@@ -12,6 +12,24 @@ const topicController = require('../controllers/topicController');
 router.get('/topics', async (req, res) => topicController.getTopicsApi(req, res));
 router.get('/topics/cross-class-check', async (req, res) => topicController.checkCrossClassTopic(req, res));
 
+// GET /api/cloudinary-signature — Direct browser upload signature (bypasses Vercel 4.5MB payload limit)
+router.get('/cloudinary-signature', (req, res) => {
+    try {
+        const { getUploadSignature, isConfigured } = require('../services/cloudinaryService');
+        if (!isConfigured()) {
+            return res.status(200).json({ success: false, error: 'Cloudinary not configured' });
+        }
+        const folder = req.query.folder || 'notes';
+        const sigData = getUploadSignature(folder);
+        if (!sigData) {
+            return res.status(500).json({ success: false, error: 'Failed to generate signature' });
+        }
+        res.json({ success: true, ...sigData });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // ---- Push Notification API ----
 router.get('/push/vapid-public-key', (req, res) => res.json({ publicKey: pushNotificationService.getPublicKey() }));
 

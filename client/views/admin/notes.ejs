@@ -1081,14 +1081,72 @@
             return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
-        // Form submit validation for admin/superadmin
+        // Direct browser-to-Cloudinary upload helper (bypasses Vercel 4.5MB request payload limit)
+        async function uploadFileDirectlyToCloudinary(file, onProgress) {
+            const endpoints = ['/api/cloudinary-signature?folder=notes', '/admin/api/cloudinary-signature?folder=notes'];
+            let sigData = null;
+            for (const ep of endpoints) {
+                try {
+                    const r = await fetch(ep, { headers: { 'Accept': 'application/json' } });
+                    if (r.ok) {
+                        const j = await r.json();
+                        if (j && j.success && j.signature) {
+                            sigData = j;
+                            break;
+                        }
+                    }
+                } catch (err) {}
+            }
+
+            if (!sigData) return null;
+
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                const url = `https://api.cloudinary.com/v1_1/${sigData.cloudName}/auto/upload`;
+                xhr.open('POST', url, true);
+
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable && typeof onProgress === 'function') {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        onProgress(percent);
+                    }
+                };
+
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const resp = JSON.parse(xhr.responseText);
+                            resolve(resp.secure_url || resp.url);
+                        } catch (err) {
+                            reject(err);
+                        }
+                    } else {
+                        reject(new Error('Cloudinary upload status: ' + xhr.status));
+                    }
+                };
+
+                xhr.onerror = () => reject(new Error('Cloudinary network error'));
+
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('api_key', sigData.apiKey);
+                formData.append('timestamp', sigData.timestamp);
+                formData.append('signature', sigData.signature);
+                formData.append('folder', sigData.folder);
+
+                xhr.send(formData);
+            });
+        }
+
+        // Form submit validation and direct upload for admin
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.querySelector('form[action*="/add-note"]');
             if (form) {
-                form.addEventListener('submit', (e) => {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+
                     const checkedClasses = Array.from(form.querySelectorAll('input[name="classLevel[]"]:checked')).map(cb => cb.value);
                     if (checkedClasses.length === 0) {
-                        e.preventDefault();
                         return Swal.fire('Class Required', 'Please select at least one Target Class for this note.', 'warning');
                     }
                     const topicDropdown = document.getElementById('adminNoteTopicDropdown');
@@ -1102,7 +1160,6 @@
                     }
 
                     if (checkedTopics.length === 0) {
-                        e.preventDefault();
                         return Swal.fire('Topic Required', 'Please select at least one syllabus Topic for this note. If none exist, add them from Syllabus & Topics first.', 'warning');
                     }
 
@@ -1114,6 +1171,36 @@
                         hiddenInput.value = checkedTopics[0];
                         form.appendChild(hiddenInput);
                     }
+
+                    const fileInput = form.querySelector('input[type="file"][name="note"]') || form.querySelector('input[type="file"]');
+                    const submitBtn = form.querySelector('button[type="submit"]');
+
+                    if (fileInput && fileInput.files && fileInput.files[0]) {
+                        const file = fileInput.files[0];
+                        if (submitBtn) {
+                            submitBtn.disabled = true;
+                            submitBtn.innerHTML = '<span class="material-symbols-rounded animate-spin text-sm">progress_activity</span> Uploading...';
+                        }
+
+                        try {
+                            const directUrl = await uploadFileDirectlyToCloudinary(file);
+                            if (directUrl) {
+                                let urlInput = form.querySelector('input[name="fileUrl"]');
+                                if (!urlInput) {
+                                    urlInput = document.createElement('input');
+                                    urlInput.type = 'hidden';
+                                    urlInput.name = 'fileUrl';
+                                    form.appendChild(urlInput);
+                                }
+                                urlInput.value = directUrl;
+                                fileInput.disabled = true;
+                            }
+                        } catch (err) {
+                            console.warn('Direct upload fallback:', err);
+                        }
+                    }
+
+                    form.submit();
                 });
             }
         });
