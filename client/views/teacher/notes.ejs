@@ -1091,6 +1091,15 @@
             let detectedClass = '';
             let detectedFolderId = window.activeFolderIdFilter || '';
 
+            const knownSubjects = (Array.isArray(window.assignedSubjects) ? window.assignedSubjects : []).map(s => String(s || '').trim().toLowerCase());
+            const isSubjectName = (name) => {
+                if (!name) return false;
+                const n = String(name).trim().toLowerCase();
+                if (knownSubjects.includes(n)) return true;
+                const common = ['bangla', 'english', 'physics', 'mathematics', 'higher mathematics', 'math', 'chemistry', 'biology', 'ict', 'general academic', 'accounting', 'finance', 'economics', 'তথ্য ও যোগাযোগ প্রযুক্তি', 'পদার্থবিজ্ঞান', 'রসায়ন', 'গণিত', 'উচ্চতর গণিত', 'জীববিজ্ঞান', 'বাংলা'];
+                return common.includes(n);
+            };
+
             if (detectedFolderId && window.customFolders) {
                 const curFolder = window.customFolders.find(f => String(f._id) === String(detectedFolderId));
                 if (curFolder) {
@@ -1100,32 +1109,60 @@
                         detectedSubject = curFolder.subject || (parentFolder ? (parentFolder.subject || parentFolder.name) : '');
                         detectedClass = curFolder.classLevel || (parentFolder ? parentFolder.classLevel : '') || window.activeClass || '';
                     } else {
-                        detectedSubject = curFolder.subject || curFolder.name;
+                        // Top level folder: check if it represents a Subject or a Chapter
+                        if (isSubjectName(curFolder.name)) {
+                            detectedSubject = curFolder.name;
+                        } else if (curFolder.subject && curFolder.name.trim().toLowerCase() !== curFolder.subject.trim().toLowerCase()) {
+                            detectedChapter = curFolder.name;
+                            detectedSubject = curFolder.subject;
+                        } else {
+                            detectedChapter = curFolder.name;
+                            detectedSubject = curFolder.subject || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : '');
+                        }
                         detectedClass = curFolder.classLevel || window.activeClass || '';
                     }
                 }
             }
 
-            if (!detectedSubject && window.folderNavStack && window.folderNavStack.length > 0) {
+            if (window.folderNavStack && window.folderNavStack.length > 0) {
                 if (window.folderNavStack.length >= 2) {
-                    detectedSubject = window.folderNavStack[0].name;
-                    detectedChapter = window.folderNavStack[1].name;
+                    if (!detectedSubject) detectedSubject = window.folderNavStack[0].name;
+                    if (!detectedChapter) detectedChapter = window.folderNavStack[1].name;
                 } else if (window.folderNavStack.length === 1) {
-                    detectedSubject = window.folderNavStack[0].name;
+                    const topFolder = window.folderNavStack[0].name;
+                    if (isSubjectName(topFolder)) {
+                        if (!detectedSubject) detectedSubject = topFolder;
+                    } else {
+                        if (!detectedChapter) detectedChapter = topFolder;
+                        if (!detectedSubject && window.activeSubject && window.activeSubject !== 'all') {
+                            detectedSubject = window.activeSubject;
+                        }
+                    }
                 }
-                detectedClass = window.activeClass || '';
+                if (!detectedClass) detectedClass = window.activeClass || '';
+            }
+
+            // Fallback for activeChapterFilter: if window.activeChapterFilter is set, and it's not a subject name
+            if (!detectedChapter && window.activeChapterFilter && window.activeChapterFilter !== 'all') {
+                if (!isSubjectName(window.activeChapterFilter)) {
+                    detectedChapter = window.activeChapterFilter.trim();
+                } else if (!detectedSubject) {
+                    detectedSubject = window.activeChapterFilter.trim();
+                }
             }
 
             const urlParams = new URLSearchParams(window.location.search);
             const urlSubj = (urlParams.get('subject') && urlParams.get('subject') !== 'all') ? urlParams.get('subject') : '';
             const isInsideSubjectFolder = Boolean(presetSubject || detectedSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all'));
             const activeSubj = (presetSubject || detectedSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : (window.assignedSubjects && window.assignedSubjects[0] ? window.assignedSubjects[0] : 'General Academic'))).trim();
-            const activeChapter = (presetChapter || detectedChapter || window.activeChapterFilter || '').trim();
+            const activeChapterVal = (presetChapter || detectedChapter || '').trim();
             const activeClass = (detectedClass || (window.activeClass && window.activeClass !== 'all' ? window.activeClass : '') || urlParams.get('class') || '').trim();
             const activeParentId = detectedFolderId || '';
             const activeCourse = presetCourseId || window.activeCourseId || '';
 
-            window._initialNoteChapter = activeChapter;
+            const isInsideChapterFolder = Boolean(activeChapterVal && activeChapterVal.toLowerCase() !== activeSubj.toLowerCase());
+
+            window._initialNoteChapter = isInsideChapterFolder ? activeChapterVal : '';
 
             // Handle Subject UI & Context Locking
             const lockedNotice = document.getElementById('noteSubjectLockedNotice');
@@ -1165,17 +1202,12 @@
             }
 
             // Handle Chapter UI & Context Locking
-            const isInsideChapterFolder = Boolean(presetChapter || detectedChapter || (window.folderNavStack && window.folderNavStack.length >= 2));
-            const activeChapterVal = (presetChapter || detectedChapter || (window.folderNavStack && window.folderNavStack.length >= 2 ? window.folderNavStack[1].name : '') || window.activeChapterFilter || '').trim();
-
-            window._initialNoteChapter = activeChapterVal;
-
             const chapterLockedNotice = document.getElementById('noteChapterLockedNotice');
             const lockedChapterText = document.getElementById('lockedChapterText');
             const chapterHidden = document.getElementById('noteChapterHidden');
             const chapterSelect = document.getElementById('noteChapter');
 
-            if (chapterHidden) chapterHidden.value = activeChapterVal;
+            if (chapterHidden) chapterHidden.value = isInsideChapterFolder ? activeChapterVal : '';
 
             if (chapterSelect) {
                 if (isInsideChapterFolder && activeChapterVal) {
@@ -1885,50 +1917,100 @@
                             chapterSelect.appendChild(opt);
                         });
 
-                        // Auto-select chapter if opening from within a chapter folder
-                        if (window._initialNoteChapter) {
-                            const targetChap = window._initialNoteChapter.trim().toLowerCase();
-                            const matched = sortedChapters.find(c => c.name.toLowerCase() === targetChap);
+                        // Auto-select chapter if opening from within a chapter folder or if chapter was selected
+                        const chapterHidden = document.getElementById('noteChapterHidden');
+                        const lockedChapterText = document.getElementById('lockedChapterText');
+                        const chapToSelect = window._initialNoteChapter || (chapterHidden ? chapterHidden.value : '') || '';
+                        if (chapToSelect) {
+                            let matched = sortedChapters.find(c => c.name.toLowerCase() === chapToSelect.trim().toLowerCase());
+                            if (!matched) {
+                                matched = sortedChapters.find(c => isSameChapterClient(c.name, chapToSelect));
+                            }
                             if (matched) {
                                 chapterSelect.value = matched.name;
+                                if (chapterHidden) chapterHidden.value = matched.name;
+                                if (lockedChapterText) lockedChapterText.textContent = matched.name;
                             } else {
                                 const customOpt = document.createElement('option');
-                                customOpt.value = window._initialNoteChapter;
-                                customOpt.textContent = window._initialNoteChapter + ' (Current Folder)';
+                                customOpt.value = chapToSelect;
+                                customOpt.textContent = chapToSelect + ' (Current Folder)';
                                 chapterSelect.appendChild(customOpt);
-                                chapterSelect.value = window._initialNoteChapter;
+                                chapterSelect.value = chapToSelect;
+                                if (chapterHidden) chapterHidden.value = chapToSelect;
+                                if (lockedChapterText) lockedChapterText.textContent = chapToSelect;
                             }
                         }
                     }
 
                     if (loadingState) loadingState.classList.add('hidden');
-                    window.onNoteChapterChange();
+                    const chapterHidden = document.getElementById('noteChapterHidden');
+                    const chapForChange = (chapterSelect && chapterSelect.value) ? chapterSelect.value : (chapterHidden ? chapterHidden.value : (window._initialNoteChapter || ''));
+                    window.onNoteChapterChange(chapForChange);
                 } catch (err) {
                     console.error('Failed to load syllabus:', err);
                     if (loadingState) loadingState.classList.add('hidden');
-                    window.onNoteChapterChange();
+                    const chapterHidden = document.getElementById('noteChapterHidden');
+                    const chapForChange = (chapterSelect && chapterSelect.value) ? chapterSelect.value : (chapterHidden ? chapterHidden.value : (window._initialNoteChapter || ''));
+                    window.onNoteChapterChange(chapForChange);
                 }
             };
 
             function isSameChapterClient(c1, c2) {
                 if (!c1 || !c2) return false;
-                const a = String(c1).trim().toLowerCase();
-                const b = String(c2).trim().toLowerCase();
-                if (a === b) return true;
-                const norm = (s) => s.replace(/^(?:অধ্যায়|অধ্যায়|chapter|ch)[\s\d:.-]+/i, '').replace(/\([^\)]*\)/g, '').replace(/[\s\-_:]+/g, ' ').trim();
-                const na = norm(a);
-                const nb = norm(b);
-                if (na && nb && (na === nb || na.includes(nb) || nb.includes(na))) return true;
+                const s1 = String(c1).trim();
+                const s2 = String(c2).trim();
+                if (s1.toLowerCase() === s2.toLowerCase()) return true;
+
+                const unifyYa = s => s.replace(/\u09AF\u09BC/g, '\u09DF');
+                const u1 = unifyYa(s1).toLowerCase();
+                const u2 = unifyYa(s2).toLowerCase();
+                if (u1 === u2) return true;
+
+                const clean = s => unifyYa(s)
+                    .toLowerCase()
+                    .replace(/^(?:অধ্যায়|অধ্যায়|chapter|ch)[\s\d০-৯:.-]+/i, '')
+                    .replace(/[\s\-_:]+/g, ' ')
+                    .trim();
+
+                const n1 = clean(s1);
+                const n2 = clean(s2);
+                if (n1 && n2 && (n1 === n2 || n1.includes(n2) || n2.includes(n1))) return true;
+
+                const stripParen = s => clean(s.replace(/\([^\)]*\)/g, ' '));
+                const sp1 = stripParen(s1);
+                const sp2 = stripParen(s2);
+                if (sp1 && sp2 && (sp1 === sp2 || sp1.includes(sp2) || sp2.includes(sp1))) return true;
+
+                const getParenContent = s => {
+                    const m = s.match(/\(([^\)]+)\)/);
+                    return m ? clean(m[1]) : '';
+                };
+                const p1 = getParenContent(s1);
+                const p2 = getParenContent(s2);
+                if (p1 && (p1 === n2 || p1.includes(n2) || n2.includes(p1))) return true;
+                if (p2 && (p2 === n1 || p2.includes(n1) || n1.includes(p2))) return true;
+
                 return false;
             }
 
             window.onNoteChapterChange = function(val) {
                 const chapterSelect = document.getElementById('noteChapter');
                 const chapterHidden = document.getElementById('noteChapterHidden');
+                const chapterLockedNotice = document.getElementById('noteChapterLockedNotice');
+                const lockedChapterText = document.getElementById('lockedChapterText');
+
                 if (val && chapterHidden) {
                     chapterHidden.value = val;
                 }
-                const selectedChapter = (val || (chapterHidden && chapterHidden.value) || (chapterSelect ? chapterSelect.value : '')).trim();
+                const selectedChapter = (val || (chapterHidden && chapterHidden.value) || (chapterSelect ? chapterSelect.value : '') || window._initialNoteChapter || '').trim();
+
+                // If inside a locked chapter folder, enforce lock notice visibility and keep select hidden
+                if (window._initialNoteChapter && selectedChapter) {
+                    if (chapterLockedNotice) chapterLockedNotice.classList.remove('hidden');
+                    if (chapterSelect) chapterSelect.classList.add('hidden');
+                    if (lockedChapterText) lockedChapterText.textContent = selectedChapter;
+                    if (chapterHidden) chapterHidden.value = selectedChapter;
+                }
 
                 const emptyState = document.getElementById('noteTopicsEmptyState');
                 const loadingState = document.getElementById('noteTopicsLoading');
@@ -1954,9 +2036,12 @@
                     return;
                 }
 
-                // Filter topics by selected chapter using flexible matcher
+                // Filter topics by selected chapter using enhanced flexible matcher
                 const allTopics = window._cachedSyllabusTopics || [];
-                const chapterTopics = allTopics.filter(t => t.chapter && t.chapter.name && isSameChapterClient(t.chapter.name, selectedChapter));
+                const chapterTopics = allTopics.filter(t => {
+                    const chapName = (typeof t.chapter === 'string') ? t.chapter : (t.chapter?.name || '');
+                    return chapName && isSameChapterClient(chapName, selectedChapter);
+                });
 
                 if (chapterTopics.length > 0) {
                     renderNoteTopics(chapterTopics);
@@ -2334,8 +2419,21 @@
 
                     const chapterHidden = document.getElementById('noteChapterHidden');
                     const chapterSelect = document.getElementById('noteChapter');
-                    if (chapterHidden && !chapterHidden.value && chapterSelect) {
-                        chapterHidden.value = chapterSelect.value;
+                    if (chapterHidden) {
+                        if (!chapterHidden.value && chapterSelect && chapterSelect.value) {
+                            chapterHidden.value = chapterSelect.value;
+                        } else if (!chapterHidden.value && window._initialNoteChapter) {
+                            chapterHidden.value = window._initialNoteChapter;
+                        }
+                    }
+
+                    if (!chapterHidden || !chapterHidden.value.trim()) {
+                        showCustomAlert('Please select a Chapter for this note.', 'warning', 'Chapter Required');
+                        if (chapterSelect) {
+                            chapterSelect.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            chapterSelect.focus();
+                        }
+                        return;
                     }
 
                     // 2. Validate Topics (Required from approved syllabus)
