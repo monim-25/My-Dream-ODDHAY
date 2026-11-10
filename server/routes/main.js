@@ -6,7 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { connectDB, protect, parentProtect, adminProtect, User, Course, Quiz, Book, Note, QuestionBank, QA, Notification, RoutineTask, Question, Message, VideoAsset, Setting } = require('../config');
-const { processUploadedFile, processUploadedFiles } = require('../services/cloudinaryService');
+const { processUploadedFile, processUploadedFiles, getSafeUploadDestination } = require('../services/cloudinaryService');
 const { getProfileCompletion } = require('../utils/profileCompletion');
 
 // ---- Dashboard ----
@@ -1325,13 +1325,7 @@ router.get('/profile', protect, async (req, res) => {
 
 // --- Multer setup for avatar uploads ---
 const avatarStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const primaryDest = path.join(process.cwd(), 'client/public/uploads/avatars');
-        const secondaryDest = path.join(process.cwd(), 'public/uploads/avatars');
-        try { fs.mkdirSync(primaryDest, { recursive: true }); } catch (e) { }
-        try { fs.mkdirSync(secondaryDest, { recursive: true }); } catch (e) { }
-        cb(null, primaryDest);
-    },
+    destination: getSafeUploadDestination('avatars'),
     filename: (req, file, cb) => {
         const ext = path.extname(file.originalname) || '.jpg';
         cb(null, 'avatar-' + (req.session.userId || Date.now()) + '-' + Date.now() + ext);
@@ -3200,13 +3194,7 @@ router.get('/question-bank/view/:id', protect, async (req, res) => {
 
 // --- Multer setup for Student Written Exam Answer attachments ---
 const writtenAnswerStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const primaryDest = path.join(process.cwd(), 'client/public/uploads/written-answers');
-        const secondaryDest = path.join(process.cwd(), 'public/uploads/written-answers');
-        try { fs.mkdirSync(primaryDest, { recursive: true }); } catch (e) { }
-        try { fs.mkdirSync(secondaryDest, { recursive: true }); } catch (e) { }
-        cb(null, primaryDest);
-    },
+    destination: getSafeUploadDestination('written-answers'),
     filename: (req, file, cb) => {
         const ext = path.extname(file.originalname) || '.jpg';
         cb(null, 'ans-' + Date.now() + '-' + Math.round(Math.random() * 1e5) + ext);
@@ -4117,13 +4105,7 @@ router.get('/qa', protect, async (req, res) => {
 
 // --- Multer setup for Q&A image attachments ---
 const qaImageStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const primaryDest = path.join(process.cwd(), 'client/public/uploads/qa');
-        const secondaryDest = path.join(process.cwd(), 'public/uploads/qa');
-        try { fs.mkdirSync(primaryDest, { recursive: true }); } catch (e) { }
-        try { fs.mkdirSync(secondaryDest, { recursive: true }); } catch (e) { }
-        cb(null, primaryDest);
-    },
+    destination: getSafeUploadDestination('qa'),
     filename: (req, file, cb) => {
         const ext = path.extname(file.originalname) || '.jpg';
         cb(null, 'qa-' + Date.now() + '-' + Math.round(Math.random() * 1e4) + ext);

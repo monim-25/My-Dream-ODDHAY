@@ -5,19 +5,12 @@ const path = require('path');
 const mongoose = require('mongoose');
 const multer = require('multer');
 const { connectDB, teacherProtect, Course, Quiz, Note, Folder, QuestionBank, QA, User, Question, SystemLog } = require('../config');
-const { processUploadedFile, processUploadedFiles } = require('../services/cloudinaryService');
+const { processUploadedFile, processUploadedFiles, getSafeUploadDestination } = require('../services/cloudinaryService');
 
 // Multer storage for QA answer image attachments
 const uploadAnswerMulter = multer({
     storage: multer.diskStorage({
-        destination: (req, file, cb) => {
-            const fs = require('fs');
-            const primaryDest = path.join(process.cwd(), 'client/public/uploads/qa');
-            const secondaryDest = path.join(process.cwd(), 'public/uploads/qa');
-            try { fs.mkdirSync(primaryDest, { recursive: true }); } catch (e) { }
-            try { fs.mkdirSync(secondaryDest, { recursive: true }); } catch (e) { }
-            cb(null, primaryDest);
-        },
+        destination: getSafeUploadDestination('qa'),
         filename: (req, file, cb) => {
             const ext = path.extname(file.originalname) || '.jpg';
             cb(null, 'qa-ans-' + Date.now() + '-' + Math.round(Math.random() * 1e4) + ext);
@@ -28,14 +21,7 @@ const uploadAnswerMulter = multer({
 
 // Multer storage for Teacher Profile Avatar uploads
 const avatarStorage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const fs = require('fs');
-        const primaryDest = path.join(process.cwd(), 'client/public/uploads/avatars');
-        const secondaryDest = path.join(process.cwd(), 'public/uploads/avatars');
-        try { fs.mkdirSync(primaryDest, { recursive: true }); } catch (e) { }
-        try { fs.mkdirSync(secondaryDest, { recursive: true }); } catch (e) { }
-        cb(null, primaryDest);
-    },
+    destination: getSafeUploadDestination('avatars'),
     filename: (req, file, cb) => {
         const ext = path.extname(file.originalname) || '.jpg';
         const userId = (req.session && req.session.user && req.session.user._id) ? req.session.user._id : 'teacher';
@@ -1486,7 +1472,12 @@ router.get('/qa', teacherProtect, async (req, res) => {
 // Answer a Q&A with optional Image Attachment
 router.post('/qa/:id/answer', teacherProtect, (req, res, next) => {
     uploadAnswerMulter.single('image')(req, res, (err) => {
-        if (err) console.error('Answer image upload error:', err);
+        if (err) {
+            console.error('[QA Answer Image Upload Error]:', err.message);
+            if (req.xhr || req.headers.accept?.includes('application/json')) {
+                return res.status(400).json({ success: false, message: 'Image upload failed: ' + err.message });
+            }
+        }
         next();
     });
 }, async (req, res) => {

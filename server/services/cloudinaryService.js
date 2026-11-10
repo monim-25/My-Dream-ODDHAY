@@ -106,11 +106,45 @@ async function processUploadedFiles(filesArray, folder = 'uploads') {
     return results;
 }
 
+const os = require('os');
+
+/**
+ * Universal safe destination resolver for Multer diskStorage.
+ * Seamlessly handles Vercel / serverless (read-only filesystem except /tmp)
+ * and local environments (client/public/uploads/).
+ *
+ * @param {string} subfolder - target subfolder, e.g. 'qa', 'avatars', 'notes'
+ * @returns {Function} Multer destination callback function (req, file, cb)
+ */
+function getSafeUploadDestination(subfolder = 'uploads') {
+    return (req, file, cb) => {
+        let dest = path.join('/tmp', 'uploads', subfolder);
+        // Only attempt local project public uploads if not running on Vercel / serverless
+        if (!process.env.VERCEL) {
+            try {
+                const local = path.join(process.cwd(), 'client/public/uploads', subfolder);
+                fs.mkdirSync(local, { recursive: true });
+                dest = local;
+            } catch (e) {
+                // Read-only filesystem or other error, fallback to os.tmpdir()
+                dest = path.join(os.tmpdir(), 'uploads', subfolder);
+            }
+        }
+        try {
+            fs.mkdirSync(dest, { recursive: true });
+            cb(null, dest);
+        } catch (err) {
+            cb(null, os.tmpdir());
+        }
+    };
+}
+
 module.exports = {
     cloudinary,
     isConfigured: () => isConfigured,
     uploadToCloudinary,
     deleteFromCloudinary,
     processUploadedFile,
-    processUploadedFiles
+    processUploadedFiles,
+    getSafeUploadDestination
 };
