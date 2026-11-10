@@ -508,13 +508,26 @@
                                 class="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 transition-all placeholder:text-slate-400">
                         </div>
 
-                        <!-- Target Classes Row (Multi-Class Selection - Assigned Only) -->
+                        <!-- Target Classes Row (Multi-Class Selection - Assigned Only & Context-Locked) -->
                         <div>
                             <div class="flex items-center justify-between mb-1.5">
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                                     Target Classes <span class="text-rose-500">*</span>
                                 </label>
                             </div>
+
+                            <!-- Locked Class Card (Shown when inside a specific class folder) -->
+                            <div id="noteClassLockedNotice" class="hidden flex items-center justify-between px-3 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-900/25 border border-indigo-200 dark:border-indigo-800 text-xs font-semibold text-indigo-700 dark:text-indigo-300 mb-1.5">
+                                <div class="flex items-center gap-1.5 truncate">
+                                    <span class="material-symbols-rounded text-base text-indigo-600 dark:text-indigo-400 leading-none">lock</span>
+                                    <span>Class: <strong id="lockedClassText" class="font-bold"></strong></span>
+                                </div>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-800/60 text-indigo-800 dark:text-indigo-200 font-bold shrink-0">Current Folder</span>
+                            </div>
+
+                            <!-- Hidden field to guarantee target class POST even when checkbox container is hidden/locked -->
+                            <input type="hidden" name="classLevel[]" id="noteClassHidden" value="" disabled>
+
                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl" id="noteClassesContainer">
                                 <% 
                                     const strictlyAssignedClasses = (locals.assignedClasses && locals.assignedClasses.length > 0) 
@@ -636,19 +649,19 @@
                             </div>
                         </div>
 
-                        <!-- Cross-Class Auto-Sync Portal (Shown when same topic exists in other classes) -->
+                        <!-- Cross-Class Auto-Sync Portal (Shown when same subject, chapter & topic exist in other classes) -->
                         <div id="crossClassSyncPortal" class="hidden p-3 rounded-xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 space-y-2 transition-all">
                             <div class="flex items-center justify-between">
                                 <div class="flex items-center gap-1.5 text-emerald-800 dark:text-emerald-300 font-bold text-xs">
-                                    <span class="material-symbols-rounded text-base text-emerald-600 dark:text-emerald-400">sync_saved_locally</span>
-                                    <span>Same Topic Found in Other Classes</span>
+                                    <span class="material-symbols-rounded text-base text-emerald-600 dark:text-emerald-400">auto_awesome</span>
+                                    <span>Similar Architecture Matched</span>
                                 </div>
-                                <span class="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 text-[10px] font-bold">Auto-Sync Enabled</span>
+                                <span class="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 text-[10px] font-bold">Auto-Sync Suggested</span>
                             </div>
                             <p class="text-[11px] text-emerald-700 dark:text-emerald-300/90 leading-tight">
-                                This syllabus topic also exists in the following class(es). Check the classes where this note should be automatically saved into their respective subject & chapter folders:
+                                The exact same <strong>Subject, Chapter & Topic</strong> architecture exists in the following class(es). Check the classes where this note should be automatically saved:
                             </p>
-                            <div id="crossClassListContainer" class="flex flex-wrap gap-1.5 pt-0.5">
+                            <div id="crossClassListContainer" class="flex flex-wrap gap-2 pt-0.5">
                                 <!-- Dynamically injected cross-class checkboxes -->
                             </div>
                         </div>
@@ -1178,6 +1191,34 @@
             if (parentFolderInput) parentFolderInput.value = activeParentId;
             if (courseInput) courseInput.value = activeCourse;
 
+            // Handle Class UI & Context Locking
+            const isInsideClassFolder = Boolean(activeClass && activeClass.toLowerCase() !== 'all');
+            const classLockedNotice = document.getElementById('noteClassLockedNotice');
+            const lockedClassText = document.getElementById('lockedClassText');
+            const classHidden = document.getElementById('noteClassHidden');
+            const classesContainer = document.getElementById('noteClassesContainer');
+
+            if (classHidden) {
+                if (isInsideClassFolder) {
+                    classHidden.disabled = false;
+                    classHidden.value = activeClass;
+                } else {
+                    classHidden.disabled = true;
+                    classHidden.value = '';
+                }
+            }
+
+            if (isInsideClassFolder) {
+                if (classesContainer) classesContainer.classList.add('hidden');
+                if (classLockedNotice) {
+                    classLockedNotice.classList.remove('hidden');
+                    if (lockedClassText) lockedClassText.textContent = activeClass;
+                }
+            } else {
+                if (classesContainer) classesContainer.classList.remove('hidden');
+                if (classLockedNotice) classLockedNotice.classList.add('hidden');
+            }
+
             // Auto-check target class matching active folder / filter
             const classCheckboxes = document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]');
             let hasAnyChecked = false;
@@ -1191,7 +1232,7 @@
                     cb.checked = false;
                 }
             });
-            if (!hasAnyChecked && classCheckboxes.length > 0) {
+            if (!hasAnyChecked && classCheckboxes.length > 0 && !isInsideClassFolder) {
                 classCheckboxes[0].checked = true;
             }
 
@@ -1756,7 +1797,14 @@
                 const subjectHidden = document.getElementById('noteSubjectHidden');
                 const subjSelect = document.getElementById('noteSubject');
                 const subject = (subjectHidden && subjectHidden.value) ? subjectHidden.value.trim() : (subjSelect ? subjSelect.value.trim() : '');
-                const checkedClasses = Array.from(document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
+                
+                const classHidden = document.getElementById('noteClassHidden');
+                let checkedClasses = [];
+                if (classHidden && !classHidden.disabled && classHidden.value) {
+                    checkedClasses = [classHidden.value.trim()];
+                } else {
+                    checkedClasses = Array.from(document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
+                }
 
                 // Sync card borders
                 document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]').forEach(cb => {
@@ -2038,9 +2086,18 @@
                     const subjectHidden = document.getElementById('noteSubjectHidden');
                     const subjSelect = document.getElementById('noteSubject');
                     const subject = (subjectHidden && subjectHidden.value) ? subjectHidden.value.trim() : (subjSelect ? subjSelect.value.trim() : '');
+                    
+                    const chapterHidden = document.getElementById('noteChapterHidden');
                     const chapterSelect = document.getElementById('noteChapter');
-                    const chapter = chapterSelect ? chapterSelect.value.trim() : '';
-                    const checkedClasses = Array.from(document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
+                    const chapter = (chapterHidden && chapterHidden.value) ? chapterHidden.value.trim() : (chapterSelect ? chapterSelect.value.trim() : '');
+
+                    const classHidden = document.getElementById('noteClassHidden');
+                    let checkedClasses = [];
+                    if (classHidden && !classHidden.disabled && classHidden.value) {
+                        checkedClasses = [classHidden.value.trim()];
+                    } else {
+                        checkedClasses = Array.from(document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
+                    }
 
                     checkAndRenderCrossClassSync(subject, activeVal, chapter, checkedClasses);
                 } else {
@@ -2100,10 +2157,12 @@
                         container.innerHTML = '';
                         data.details.forEach(item => {
                             const label = document.createElement('label');
-                            label.className = 'flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 text-xs font-semibold text-slate-800 dark:text-slate-100 cursor-pointer shadow-xs hover:border-emerald-500 transition-colors select-none';
-                            label.innerHTML = '<input type="checkbox" name="syncClasses[]" value="' + escapeHtml(item.classLevel) + '" checked class="accent-emerald-600 rounded size-3.5 cursor-pointer">' +
-                                '<span class="font-bold text-emerald-800 dark:text-emerald-300">' + escapeHtml(item.classLevel) + '</span>' +
-                                '<span class="text-[10px] text-slate-500 dark:text-slate-400 font-normal truncate max-w-[130px]">(' + escapeHtml(item.chapterName || '') + ')</span>';
+                            label.className = 'flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 text-xs font-semibold text-slate-800 dark:text-slate-100 cursor-pointer shadow-xs hover:border-emerald-500 transition-colors select-none';
+                            label.innerHTML = '<input type="checkbox" name="syncClasses[]" value="' + escapeHtml(item.classLevel) + '" checked class="accent-emerald-600 rounded size-4 cursor-pointer">' +
+                                '<div class="flex flex-col min-w-0">' +
+                                    '<span class="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1"><span class="material-symbols-rounded text-sm">school</span>' + escapeHtml(item.classLevel) + '</span>' +
+                                    '<span class="text-[10px] text-slate-500 dark:text-slate-400 font-normal truncate">Matched: ' + escapeHtml(item.chapterName || '') + ' &bull; ' + escapeHtml(item.topicName || '') + '</span>' +
+                                '</div>';
                             container.appendChild(label);
                         });
                         portal.classList.remove('hidden');
@@ -2193,12 +2252,37 @@
                     e.preventDefault();
 
                     // 1. Validate Classes
-                    const checkedClasses = Array.from(addNoteForm.querySelectorAll('input[name="classLevel[]"]:checked')).map(cb => cb.value);
+                    const classHidden = document.getElementById('noteClassHidden');
+                    let checkedClasses = [];
+                    if (classHidden && !classHidden.disabled && classHidden.value.trim()) {
+                        checkedClasses = [classHidden.value.trim()];
+                    } else {
+                        checkedClasses = Array.from(addNoteForm.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim()).filter(Boolean);
+                    }
+
                     if (checkedClasses.length === 0) {
                         showCustomAlert('Please select at least one Target Class for this note.', 'warning', 'Class Required');
                         const classesBox = document.getElementById('noteClassesContainer');
                         if (classesBox) classesBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         return;
+                    }
+
+                    // Ensure hidden class input is set and enabled if locked
+                    if (classHidden && !classHidden.disabled && checkedClasses.length > 0) {
+                        classHidden.value = checkedClasses[0];
+                    }
+
+                    // Also ensure locked / chosen subject & chapter hidden inputs are set
+                    const subjectHidden = document.getElementById('noteSubjectHidden');
+                    const subjSelect = document.getElementById('noteSubject');
+                    if (subjectHidden && !subjectHidden.value && subjSelect) {
+                        subjectHidden.value = subjSelect.value;
+                    }
+
+                    const chapterHidden = document.getElementById('noteChapterHidden');
+                    const chapterSelect = document.getElementById('noteChapter');
+                    if (chapterHidden && !chapterHidden.value && chapterSelect) {
+                        chapterHidden.value = chapterSelect.value;
                     }
 
                     // 2. Validate Topics (Required from approved syllabus)

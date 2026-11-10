@@ -1674,6 +1674,7 @@ const checkCrossClassTopic = async (req, res) => {
 
         const cleanSubject = String(subject).trim();
         const cleanTopic = String(topic).trim();
+        const cleanChapter = chapter ? String(chapter).trim() : "";
 
         // Find approved/active topics in syllabus with matching subject and topic name
         const aliases = getSubjectAliases(cleanSubject);
@@ -1686,6 +1687,27 @@ const checkCrossClassTopic = async (req, res) => {
 
         const matchingTopics = await Topic.find(filter).select("classLevel subject chapter name").lean();
 
+        // Helper to normalize chapter names for architecture matching
+        const normalizeChap = (str) => {
+            if (!str) return "";
+            return String(str)
+                .toLowerCase()
+                .replace(/^(?:অধ্যায়|অধ্যায়|chapter|ch)[\s\d:.-]+/i, "")
+                .replace(/[\s\-_:]+/g, " ")
+                .trim();
+        };
+
+        const isChapterMatch = (chap1, chap2) => {
+            if (!chap1 || !chap2) return false;
+            const c1 = String(chap1).trim().toLowerCase();
+            const c2 = String(chap2).trim().toLowerCase();
+            if (c1 === c2) return true;
+            const n1 = normalizeChap(c1);
+            const n2 = normalizeChap(c2);
+            if (n1 && n2 && (n1 === n2 || n1.includes(n2) || n2.includes(n1))) return true;
+            return false;
+        };
+
         // Group by classLevel, filtering out currently selected classes
         const classMap = new Map();
         matchingTopics.forEach(t => {
@@ -1694,11 +1716,21 @@ const checkCrossClassTopic = async (req, res) => {
             const clsLower = cls.toLowerCase();
             const isCurrent = currentClasses.some(cc => cc === clsLower || cc.includes(clsLower) || clsLower.includes(cc));
             if (!isCurrent) {
+                const tChapName = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : "";
+
+                // If chapter is provided, enforce strict architectural match (subject + chapter + topic)
+                if (cleanChapter && tChapName) {
+                    if (!isChapterMatch(cleanChapter, tChapName)) {
+                        return; // Chapter architecture did not match!
+                    }
+                }
+
                 if (!classMap.has(cls)) {
                     classMap.set(cls, {
                         classLevel: cls,
-                        chapterName: (t.chapter && t.chapter.name) ? t.chapter.name : (chapter || ""),
-                        topicName: t.name
+                        chapterName: tChapName || cleanChapter,
+                        topicName: t.name,
+                        subject: t.subject
                     });
                 }
             }
