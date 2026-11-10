@@ -2232,6 +2232,8 @@ router.get('/notes', teacherProtect, async (req, res) => {
         const dbCustomFolders = await Folder.find({
             $or: [
                 { addedBy: user._id },
+                { isSyllabusFolder: true },
+                { isSystem: true },
                 { subject: { $in: assignedSubjects } }
             ]
         }).lean();

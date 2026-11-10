@@ -536,12 +536,29 @@
                             </div>
                         </div>
 
-                        <!-- Subject Row (Assigned Only) -->
+                        <!-- Subject Row (Assigned Only & Context-Locked) -->
                         <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                                Subject <span class="text-rose-500">*</span>
-                            </label>
-                            <select name="subject" id="noteSubject" required onchange="onNoteSubjectOrClassChange()"
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                    Subject <span class="text-rose-500">*</span>
+                                </label>
+                                <span id="noteSubjectBadge" class="text-[10px] font-bold text-blue-600 dark:text-blue-400 hidden"></span>
+                            </div>
+
+                            <!-- Locked Subject Card (Shown when inside a specific subject folder) -->
+                            <div id="noteSubjectLockedNotice" class="hidden flex items-center justify-between px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-800 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                                <div class="flex items-center gap-1.5 truncate">
+                                    <span class="material-symbols-rounded text-base text-blue-600 dark:text-blue-400 leading-none">lock</span>
+                                    <span>Subject: <strong id="lockedSubjectText" class="font-bold"></strong></span>
+                                </div>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-800/60 text-blue-800 dark:text-blue-200 font-bold shrink-0">Current Folder</span>
+                            </div>
+
+                            <!-- Hidden field to guarantee subject POST even when dropdown is hidden/locked -->
+                            <input type="hidden" name="subject" id="noteSubjectHidden" value="">
+
+                            <!-- Select Subject Dropdown (Visible only when not inside a subject folder) -->
+                            <select id="noteSubject" onchange="onNoteSubjectSelectChange(this.value)"
                                 class="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 transition-all cursor-pointer">
                                 <option value="">Select Subject</option>
                                 <% 
@@ -751,6 +768,44 @@
     <%- include('../partials/app-scripts') %>
 
     <script>
+        function escapeHtml(str) {
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function getSubjectAliases(subj) {
+            if (!subj) return [];
+            const s = String(subj).trim();
+            const map = {
+                'physics': ['Physics', 'পদার্থবিজ্ঞান', 'পদার্থ বিজ্ঞান', 'পদার্থ'],
+                'পদার্থবিজ্ঞান': ['Physics', 'পদার্থবিজ্ঞান', 'পদার্থ বিজ্ঞান', 'পদার্থ'],
+                'পদার্থ বিজ্ঞান': ['Physics', 'পদার্থবিজ্ঞান', 'পদার্থ বিজ্ঞান', 'পদার্থ'],
+                'chemistry': ['Chemistry', 'রসায়ন', 'রসায়ন'],
+                'রসায়ন': ['Chemistry', 'রসায়ন', 'রসায়ন'],
+                'রসায়ন': ['Chemistry', 'রসায়ন', 'রসায়ন'],
+                'biology': ['Biology', 'জীববিজ্ঞান', 'জীব বিজ্ঞান'],
+                'জীববিজ্ঞান': ['Biology', 'জীববিজ্ঞান', 'জীব বিজ্ঞান'],
+                'জীব বিজ্ঞান': ['Biology', 'জীববিজ্ঞান', 'জীব বিজ্ঞান'],
+                'higher math': ['Higher Math', 'Higher Mathematics', 'উচ্চতর গণিত'],
+                'higher mathematics': ['Higher Math', 'Higher Mathematics', 'উচ্চতর গণিত'],
+                'উচ্চতর গণিত': ['Higher Math', 'Higher Mathematics', 'উচ্চতর গণিত'],
+                'general math': ['General Math', 'Mathematics', 'Math', 'সাধারণ গণিত', 'গণিত'],
+                'mathematics': ['General Math', 'Mathematics', 'Math', 'সাধারণ গণিত', 'গণিত'],
+                'math': ['General Math', 'Mathematics', 'Math', 'সাধারণ গণিত', 'গণিত'],
+                'সাধারণ গণিত': ['General Math', 'Mathematics', 'Math', 'সাধারণ গণিত', 'গণিত'],
+                'গণিত': ['General Math', 'Mathematics', 'Math', 'সাধারণ গণিত', 'গণিত'],
+                'bangla': ['Bangla', 'বাংলা', 'বাংলা ১ম পত্র', 'বাংলা ২য় পত্র', 'Bangla 1st Paper', 'Bangla 2nd Paper'],
+                'বাংলা': ['Bangla', 'বাংলা', 'বাংলা ১ম পত্র', 'বাংলা ২য় পত্র', 'Bangla 1st Paper', 'Bangla 2nd Paper'],
+                'english': ['English', 'ইংরেজি', 'English 1st Paper', 'English 2nd Paper'],
+                'ইংরেজি': ['English', 'ইংরেজি', 'English 1st Paper', 'English 2nd Paper'],
+                'ict': ['ICT', 'তথ্য ও যোগাযোগ প্রযুক্তি', 'আইসিটি'],
+                'তথ্য ও যোগাযোগ প্রযুক্তি': ['ICT', 'তথ্য ও যোগাযোগ প্রযুক্তি', 'আইসিটি'],
+                'আইসিটি': ['ICT', 'তথ্য ও যোগাযোগ প্রযুক্তি', 'আইসিটি']
+            };
+            const key = s.toLowerCase();
+            if (map[key]) return map[key];
+            return [s];
+        }
+
         window.customFolders = <%- JSON.stringify(customFolders || []) %>;
         window.activeClass = <%- JSON.stringify(activeClass || 'all') %>;
         window.activeSubject = <%- JSON.stringify(activeSubject || 'all') %>;
@@ -1033,15 +1088,53 @@
             }
 
             const urlParams = new URLSearchParams(window.location.search);
-            const activeSubj = presetSubject || detectedSubject || urlParams.get('subject') || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : (window.assignedSubjects && window.assignedSubjects[0] ? window.assignedSubjects[0] : 'General Academic'));
-            const activeChapter = presetChapter || detectedChapter || window.activeChapterFilter || '';
-            const activeClass = detectedClass || window.activeClass || urlParams.get('class') || '';
+            const urlSubj = (urlParams.get('subject') && urlParams.get('subject') !== 'all') ? urlParams.get('subject') : '';
+            const isInsideSubjectFolder = Boolean(presetSubject || detectedSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all'));
+            const activeSubj = (presetSubject || detectedSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : (window.assignedSubjects && window.assignedSubjects[0] ? window.assignedSubjects[0] : 'General Academic'))).trim();
+            const activeChapter = (presetChapter || detectedChapter || window.activeChapterFilter || '').trim();
+            const activeClass = (detectedClass || (window.activeClass && window.activeClass !== 'all' ? window.activeClass : '') || urlParams.get('class') || '').trim();
             const activeParentId = detectedFolderId || '';
             const activeCourse = presetCourseId || window.activeCourseId || '';
 
             window._initialNoteChapter = activeChapter;
 
-            if (subjInput && activeSubj) subjInput.value = activeSubj;
+            // Handle Subject UI & Context Locking
+            const lockedNotice = document.getElementById('noteSubjectLockedNotice');
+            const lockedText = document.getElementById('lockedSubjectText');
+            const subjectHidden = document.getElementById('noteSubjectHidden');
+
+            if (subjectHidden) subjectHidden.value = activeSubj;
+
+            if (subjInput) {
+                let match = Array.from(subjInput.options).find(o => o.value.trim().toLowerCase() === activeSubj.toLowerCase());
+                if (!match) {
+                    const aliases = (typeof getSubjectAliases === 'function') ? getSubjectAliases(activeSubj) : [activeSubj];
+                    match = Array.from(subjInput.options).find(o => aliases.some(a => a.toLowerCase() === o.value.trim().toLowerCase()));
+                }
+                if (match) {
+                    subjInput.value = match.value;
+                    if (subjectHidden) subjectHidden.value = match.value;
+                } else if (activeSubj) {
+                    const opt = document.createElement('option');
+                    opt.value = activeSubj;
+                    opt.textContent = activeSubj;
+                    subjInput.appendChild(opt);
+                    subjInput.value = activeSubj;
+                }
+
+                if (isInsideSubjectFolder && activeSubj) {
+                    // Lock subject: hide dropdown so no different subject can be chosen, show locked card!
+                    subjInput.classList.add('hidden');
+                    if (lockedNotice) {
+                        lockedNotice.classList.remove('hidden');
+                        if (lockedText) lockedText.textContent = activeSubj;
+                    }
+                } else {
+                    subjInput.classList.remove('hidden');
+                    if (lockedNotice) lockedNotice.classList.add('hidden');
+                }
+            }
+
             if (parentFolderInput) parentFolderInput.value = activeParentId;
             if (courseInput) courseInput.value = activeCourse;
 
@@ -1608,9 +1701,16 @@
                 return { success: true, count: 0, topics: [], chapters: [] };
             }
 
+            window.onNoteSubjectSelectChange = function(val) {
+                const subjectHidden = document.getElementById('noteSubjectHidden');
+                if (subjectHidden) subjectHidden.value = val;
+                onNoteSubjectOrClassChange();
+            };
+
             window.onNoteSubjectOrClassChange = async function() {
+                const subjectHidden = document.getElementById('noteSubjectHidden');
                 const subjSelect = document.getElementById('noteSubject');
-                const subject = subjSelect ? subjSelect.value.trim() : '';
+                const subject = (subjectHidden && subjectHidden.value) ? subjectHidden.value.trim() : (subjSelect ? subjSelect.value.trim() : '');
                 const checkedClasses = Array.from(document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
 
                 // Sync card borders
@@ -1718,9 +1818,9 @@
             window.onNoteChapterChange = function() {
                 const chapterSelect = document.getElementById('noteChapter');
                 const selectedChapter = chapterSelect ? chapterSelect.value.trim() : '';
+                const subjectHidden = document.getElementById('noteSubjectHidden');
                 const subjSelect = document.getElementById('noteSubject');
-                const subject = subjSelect ? subjSelect.value.trim() : '';
-                const checkedClasses = Array.from(document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
+                const subject = (subjectHidden && subjectHidden.value) ? subjectHidden.value.trim() : (subjSelect ? subjSelect.value.trim() : '');
 
                 const topicDropdown = document.getElementById('noteTopicDropdown');
                 const emptyState = document.getElementById('noteTopicsEmptyState');
@@ -1758,11 +1858,16 @@
                 // Populate Topic Dropdown
                 if (topicDropdown) {
                     topicDropdown.innerHTML = '<option value="">Select a Topic from Chapter</option>';
+                    const seenNames = new Set();
                     chapterTopics.forEach(t => {
-                        const opt = document.createElement('option');
-                        opt.value = t.name;
-                        opt.textContent = t.name;
-                        topicDropdown.appendChild(opt);
+                        const tName = (t.name || '').trim();
+                        if (tName && !seenNames.has(tName.toLowerCase())) {
+                            seenNames.add(tName.toLowerCase());
+                            const opt = document.createElement('option');
+                            opt.value = tName;
+                            opt.textContent = tName;
+                            topicDropdown.appendChild(opt);
+                        }
                     });
                 }
 
@@ -1787,30 +1892,59 @@
             };
 
             window.onNoteTopicDropdownSelect = function(val) {
-                if (!val) return;
+                val = (val || '').trim();
+                const primaryInput = document.getElementById('notePrimaryTopicInput');
+                if (primaryInput) primaryInput.value = val;
+
                 const topicsList = document.getElementById('noteTopicsList');
                 if (topicsList) {
                     const cbs = topicsList.querySelectorAll('input[name="topics[]"]');
+                    let foundMatch = false;
                     cbs.forEach(cb => {
-                        cb.checked = (cb.value === val);
+                        if (val && cb.value.trim().toLowerCase() === val.toLowerCase()) {
+                            cb.checked = true;
+                            foundMatch = true;
+                        } else {
+                            cb.checked = false;
+                        }
                     });
+
+                    // If user selected a topic from dropdown that wasn't in topicsList chips, add a hidden checked input
+                    if (val && !foundMatch) {
+                        const hiddenCb = document.createElement('input');
+                        hiddenCb.type = 'checkbox';
+                        hiddenCb.name = 'topics[]';
+                        hiddenCb.value = val;
+                        hiddenCb.checked = true;
+                        hiddenCb.className = 'hidden note-topic-checkbox';
+                        topicsList.appendChild(hiddenCb);
+                    }
                 }
-                syncNoteTopicSelection();
 
-                const subjSelect = document.getElementById('noteSubject');
-                const subject = subjSelect ? subjSelect.value.trim() : '';
-                const chapterSelect = document.getElementById('noteChapter');
-                const chapter = chapterSelect ? chapterSelect.value.trim() : '';
-                const checkedClasses = Array.from(document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
+                syncNoteTopicSelection(val);
+            };
 
-                checkAndRenderCrossClassSync(subject, val, chapter, checkedClasses);
+            window.onNoteTopicChipChange = function(cb) {
+                if (cb.checked) {
+                    const topicDropdown = document.getElementById('noteTopicDropdown');
+                    if (topicDropdown) {
+                        const opt = Array.from(topicDropdown.options).find(o => o.value.trim().toLowerCase() === cb.value.trim().toLowerCase());
+                        if (opt) topicDropdown.value = opt.value;
+                    }
+                    syncNoteTopicSelection(cb.value);
+                } else {
+                    syncNoteTopicSelection();
+                }
             };
 
             function renderNoteTopics(topics) {
                 const topicsList = document.getElementById('noteTopicsList');
                 const emptyState = document.getElementById('noteTopicsEmptyState');
+                const topicDropdown = document.getElementById('noteTopicDropdown');
                 if (!topicsList) return;
                 topicsList.innerHTML = '';
+
+                const currentSelectedVal = (topicDropdown ? topicDropdown.value : '').trim().toLowerCase();
 
                 const seen = new Set();
                 const uniqueTopics = [];
@@ -1823,9 +1957,11 @@
                 });
 
                 uniqueTopics.forEach(t => {
+                    const tName = (t.name || '').trim();
+                    const isChecked = Boolean(currentSelectedVal && tName.toLowerCase() === currentSelectedVal);
                     const chip = document.createElement('label');
-                    chip.className = 'topic-select-chip flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary/60 dark:hover:border-primary/60 bg-white dark:bg-slate-900 cursor-pointer text-xs select-none transition-all';
-                    chip.innerHTML = '<input type="checkbox" name="topics[]" value="' + escapeHtml(t.name) + '" data-chapter="' + escapeHtml(t.chapter?.name || '') + '" class="note-topic-checkbox accent-primary rounded size-3.5 cursor-pointer" onchange="syncNoteTopicSelection()"><span class="font-medium text-slate-700 dark:text-slate-200 text-[11px] leading-tight">' + escapeHtml(t.name) + '</span>';
+                    chip.className = 'topic-select-chip flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary/60 dark:hover:border-primary/60 bg-white dark:bg-slate-900 cursor-pointer text-xs select-none transition-all' + (isChecked ? ' bg-primary/5 dark:bg-primary/15 border-primary dark:border-primary' : '');
+                    chip.innerHTML = '<input type="checkbox" name="topics[]" value="' + escapeHtml(tName) + '" data-chapter="' + escapeHtml(t.chapter?.name || '') + '" ' + (isChecked ? 'checked' : '') + ' class="note-topic-checkbox accent-primary rounded size-3.5 cursor-pointer" onchange="onNoteTopicChipChange(this)"><span class="font-medium text-slate-700 dark:text-slate-200 text-[11px] leading-tight">' + escapeHtml(tName) + '</span>';
                     topicsList.appendChild(chip);
                 });
 
@@ -1834,38 +1970,38 @@
                 syncNoteTopicSelection();
             }
 
-            window.syncNoteTopicSelection = function() {
-                const checkedBoxes = Array.from(document.querySelectorAll('#noteTopicsList input[name="topics[]"]:checked'));
-                const badge = document.getElementById('noteTopicCountBadge');
-                const primaryInput = document.getElementById('notePrimaryTopicInput');
+            window.syncNoteTopicSelection = function(preferredVal) {
                 const topicDropdown = document.getElementById('noteTopicDropdown');
+                const primaryInput = document.getElementById('notePrimaryTopicInput');
+                const badge = document.getElementById('noteTopicCountBadge');
+                const checkedBoxes = Array.from(document.querySelectorAll('#noteTopicsList input[name="topics[]"]:checked'));
 
-                if (badge) {
-                    if (checkedBoxes.length > 0) {
-                        badge.textContent = checkedBoxes.length + ' selected';
+                let activeVal = (preferredVal || (checkedBoxes[0] ? checkedBoxes[0].value : '') || (topicDropdown ? topicDropdown.value : '')).trim();
+
+                if (activeVal) {
+                    if (primaryInput) primaryInput.value = activeVal;
+                    if (topicDropdown && topicDropdown.value !== activeVal) {
+                        const opt = Array.from(topicDropdown.options).find(o => o.value.trim().toLowerCase() === activeVal.toLowerCase());
+                        if (opt) topicDropdown.value = opt.value;
+                    }
+
+                    if (badge) {
+                        badge.textContent = Math.max(1, checkedBoxes.length) + ' selected';
                         badge.classList.remove('hidden');
-                    } else {
-                        badge.classList.add('hidden');
-                    }
-                }
-
-                if (checkedBoxes.length > 0) {
-                    const primaryVal = checkedBoxes[0].value;
-                    if (primaryInput) primaryInput.value = primaryVal;
-                    if (topicDropdown && topicDropdown.value !== primaryVal) {
-                        topicDropdown.value = primaryVal;
                     }
 
+                    const subjectHidden = document.getElementById('noteSubjectHidden');
                     const subjSelect = document.getElementById('noteSubject');
-                    const subject = subjSelect ? subjSelect.value.trim() : '';
+                    const subject = (subjectHidden && subjectHidden.value) ? subjectHidden.value.trim() : (subjSelect ? subjSelect.value.trim() : '');
                     const chapterSelect = document.getElementById('noteChapter');
                     const chapter = chapterSelect ? chapterSelect.value.trim() : '';
                     const checkedClasses = Array.from(document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
 
-                    checkAndRenderCrossClassSync(subject, primaryVal, chapter, checkedClasses);
+                    checkAndRenderCrossClassSync(subject, activeVal, chapter, checkedClasses);
                 } else {
                     if (primaryInput) primaryInput.value = '';
                     if (topicDropdown) topicDropdown.value = '';
+                    if (badge) badge.classList.add('hidden');
                     const syncPortal = document.getElementById('crossClassSyncPortal');
                     if (syncPortal) syncPortal.classList.add('hidden');
                 }
@@ -1950,7 +2086,16 @@
                     }
 
                     // 2. Validate Topics (Required from approved syllabus)
-                    const checkedTopics = Array.from(addNoteForm.querySelectorAll('input[name="topics[]"]:checked')).map(cb => cb.value);
+                    const topicDropdown = document.getElementById('noteTopicDropdown');
+                    const primaryInput = document.getElementById('notePrimaryTopicInput');
+                    let checkedTopics = Array.from(addNoteForm.querySelectorAll('input[name="topics[]"]:checked')).map(cb => cb.value.trim()).filter(Boolean);
+
+                    if (checkedTopics.length === 0 && topicDropdown && topicDropdown.value.trim()) {
+                        checkedTopics = [topicDropdown.value.trim()];
+                    }
+                    if (checkedTopics.length === 0 && primaryInput && primaryInput.value.trim()) {
+                        checkedTopics = [primaryInput.value.trim()];
+                    }
 
                     if (checkedTopics.length === 0) {
                         e.preventDefault();
@@ -1958,6 +2103,16 @@
                         const topicsBox = document.getElementById('noteTopicsWrapper');
                         if (topicsBox) topicsBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         return;
+                    }
+
+                    // Ensure at least one input[name="topics[]"] is in the form with the selected topic
+                    let existingTopicCb = addNoteForm.querySelector('input[name="topics[]"][value="' + checkedTopics[0].replace(/"/g, '\\"') + '"]');
+                    if (!existingTopicCb) {
+                        const hiddenInput = document.createElement('input');
+                        hiddenInput.type = 'hidden';
+                        hiddenInput.name = 'topics[]';
+                        hiddenInput.value = checkedTopics[0];
+                        addNoteForm.appendChild(hiddenInput);
                     }
 
                     // 3. Validate PDF

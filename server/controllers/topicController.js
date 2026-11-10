@@ -10,6 +10,41 @@ const { normalizeClass, getLinkedClasses } = require('../utils/academicHelper');
 // Escape regex special characters
 const escapeRegex = (s) => String(s || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// Bilingual English & Bengali Subject Aliases
+const getSubjectAliases = (subj) => {
+    if (!subj) return [];
+    const s = String(subj).trim();
+    const map = {
+        'physics': ['Physics', 'পদার্থবিজ্ঞান', 'পদার্থ বিজ্ঞান', 'পদার্থ'],
+        'পদার্থবিজ্ঞান': ['Physics', 'পদার্থবিজ্ঞান', 'পদার্থ বিজ্ঞান', 'পদার্থ'],
+        'পদার্থ বিজ্ঞান': ['Physics', 'পদার্থবিজ্ঞান', 'পদার্থ বিজ্ঞান', 'পদার্থ'],
+        'chemistry': ['Chemistry', 'রসায়ন', 'রসায়ন'],
+        'রসায়ন': ['Chemistry', 'রসায়ন', 'রসায়ন'],
+        'রসায়ন': ['Chemistry', 'রসায়ন', 'রসায়ন'],
+        'biology': ['Biology', 'জীববিজ্ঞান', 'জীব বিজ্ঞান'],
+        'জীববিজ্ঞান': ['Biology', 'জীববিজ্ঞান', 'জীব বিজ্ঞান'],
+        'জীব বিজ্ঞান': ['Biology', 'জীববিজ্ঞান', 'জীব বিজ্ঞান'],
+        'higher math': ['Higher Math', 'Higher Mathematics', 'উচ্চতর গণিত'],
+        'higher mathematics': ['Higher Math', 'Higher Mathematics', 'উচ্চতর গণিত'],
+        'উচ্চতর গণিত': ['Higher Math', 'Higher Mathematics', 'উচ্চতর গণিত'],
+        'general math': ['General Math', 'Mathematics', 'Math', 'সাধারণ গণিত', 'গণিত'],
+        'mathematics': ['General Math', 'Mathematics', 'Math', 'সাধারণ গণিত', 'গণিত'],
+        'math': ['General Math', 'Mathematics', 'Math', 'সাধারণ গণিত', 'গণিত'],
+        'সাধারণ গণিত': ['General Math', 'Mathematics', 'Math', 'সাধারণ গণিত', 'গণিত'],
+        'গণিত': ['General Math', 'Mathematics', 'Math', 'সাধারণ গণিত', 'গণিত'],
+        'bangla': ['Bangla', 'বাংলা', 'বাংলা ১ম পত্র', 'বাংলা ২য় পত্র', 'Bangla 1st Paper', 'Bangla 2nd Paper'],
+        'বাংলা': ['Bangla', 'বাংলা', 'বাংলা ১ম পত্র', 'বাংলা ২য় পত্র', 'Bangla 1st Paper', 'Bangla 2nd Paper'],
+        'english': ['English', 'ইংরেজি', 'English 1st Paper', 'English 2nd Paper'],
+        'ইংরেজি': ['English', 'ইংরেজি', 'English 1st Paper', 'English 2nd Paper'],
+        'ict': ['ICT', 'তথ্য ও যোগাযোগ প্রযুক্তি', 'আইসিটি'],
+        'তথ্য ও যোগাযোগ প্রযুক্তি': ['ICT', 'তথ্য ও যোগাযোগ প্রযুক্তি', 'আইসিটি'],
+        'আইসিটি': ['ICT', 'তথ্য ও যোগাযোগ প্রযুক্তি', 'আইসিটি']
+    };
+    const key = s.toLowerCase();
+    if (map[key]) return map[key];
+    return [s];
+};
+
 // Automatically ensure that the Subject folder and Chapter subfolder exist in Notes for the specified classes
 const ensureSyllabusFoldersForChapter = async (targetClasses, subjectName, chapterName, userId = null) => {
     if (!subjectName || !chapterName || !targetClasses) return;
@@ -594,7 +629,8 @@ const getTopicsApi = async (req, res) => {
             }
         }
         if (subject && subject !== 'all') {
-            filter.subject = new RegExp('^' + escapeRegex(subject.trim()) + '$', 'i');
+            const aliases = getSubjectAliases(subject);
+            filter.subject = new RegExp('^(?:' + aliases.map(escapeRegex).join('|') + ')$', 'i');
         }
         if (chapter && chapter !== 'all') {
             filter['chapter.name'] = new RegExp('^' + escapeRegex(chapter.trim()) + '$', 'i');
@@ -1640,10 +1676,11 @@ const checkCrossClassTopic = async (req, res) => {
         const cleanTopic = String(topic).trim();
 
         // Find approved/active topics in syllabus with matching subject and topic name
+        const aliases = getSubjectAliases(cleanSubject);
         const filter = {
             isArchived: { $nin: [true, "true", 1] },
             status: { $nin: ["pending", "rejected"] },
-            subject: new RegExp("^" + escapeRegex(cleanSubject) + "$", "i"),
+            subject: new RegExp('^(?:' + aliases.map(escapeRegex).join('|') + ')$', 'i'),
             name: new RegExp("^" + escapeRegex(cleanTopic) + "$", "i")
         };
 

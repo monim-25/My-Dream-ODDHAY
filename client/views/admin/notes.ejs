@@ -869,28 +869,57 @@
             };
 
             window.onAdminNoteTopicDropdownSelect = function(val) {
-                if (!val) return;
+                val = (val || '').trim();
+                const primaryInput = document.getElementById('adminNotePrimaryTopicInput');
+                if (primaryInput) primaryInput.value = val;
+
                 const topicsList = document.getElementById('adminNoteTopicsList');
                 if (topicsList) {
                     const cbs = topicsList.querySelectorAll('input[name="topics[]"]');
-                    cbs.forEach(cb => { cb.checked = (cb.value === val); });
+                    let foundMatch = false;
+                    cbs.forEach(cb => {
+                        if (val && cb.value.trim().toLowerCase() === val.toLowerCase()) {
+                            cb.checked = true;
+                            foundMatch = true;
+                        } else {
+                            cb.checked = false;
+                        }
+                    });
+
+                    if (val && !foundMatch) {
+                        const hiddenCb = document.createElement('input');
+                        hiddenCb.type = 'checkbox';
+                        hiddenCb.name = 'topics[]';
+                        hiddenCb.value = val;
+                        hiddenCb.checked = true;
+                        hiddenCb.className = 'hidden';
+                        topicsList.appendChild(hiddenCb);
+                    }
                 }
-                syncAdminNoteTopicSelection();
+                syncAdminNoteTopicSelection(val);
+            };
 
-                const subjSelect = document.getElementById('noteSubject') || document.getElementById('adminNoteSubject');
-                const subject = subjSelect ? subjSelect.value.trim() : '';
-                const chapterSelect = document.getElementById('noteChapter');
-                const chapter = chapterSelect ? chapterSelect.value.trim() : '';
-                const checkedClasses = Array.from(document.querySelectorAll('#adminNoteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
-
-                checkAndRenderAdminCrossClassSync(subject, val, chapter, checkedClasses);
+            window.onAdminNoteTopicChipChange = function(cb) {
+                if (cb.checked) {
+                    const topicDropdown = document.getElementById('adminNoteTopicDropdown');
+                    if (topicDropdown) {
+                        const opt = Array.from(topicDropdown.options).find(o => o.value.trim().toLowerCase() === cb.value.trim().toLowerCase());
+                        if (opt) topicDropdown.value = opt.value;
+                    }
+                    syncAdminNoteTopicSelection(cb.value);
+                } else {
+                    syncAdminNoteTopicSelection();
+                }
             };
 
             function renderAdminNoteTopics(topics) {
                 const topicsList = document.getElementById('adminNoteTopicsList');
                 const emptyState = document.getElementById('adminNoteTopicsEmptyState');
+                const topicDropdown = document.getElementById('adminNoteTopicDropdown');
                 if (!topicsList) return;
                 topicsList.innerHTML = '';
+
+                const currentSelectedVal = (topicDropdown ? topicDropdown.value : '').trim().toLowerCase();
 
                 const seen = new Set();
                 const uniqueTopics = [];
@@ -903,9 +932,11 @@
                 });
 
                 uniqueTopics.forEach(t => {
+                    const tName = t.name.trim();
+                    const isChecked = Boolean(currentSelectedVal && tName.toLowerCase() === currentSelectedVal);
                     const chip = document.createElement('label');
-                    chip.className = 'admin-topic-chip flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary/60 dark:hover:border-primary/60 bg-white dark:bg-slate-900 cursor-pointer text-xs select-none transition-all';
-                    chip.innerHTML = '<input type="checkbox" name="topics[]" value="' + escapeHtml(t.name) + '" data-chapter="' + escapeHtml(t.chapter?.name || '') + '" class="accent-primary rounded size-3.5 cursor-pointer" onchange="syncAdminNoteTopicSelection()"><span class="font-medium text-slate-700 dark:text-slate-200 text-[11px] leading-tight">' + escapeHtml(t.name) + '</span>';
+                    chip.className = 'admin-topic-chip flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary/60 dark:hover:border-primary/60 bg-white dark:bg-slate-900 cursor-pointer text-xs select-none transition-all' + (isChecked ? ' bg-primary/5 dark:bg-primary/15 border-primary dark:border-primary' : '');
+                    chip.innerHTML = '<input type="checkbox" name="topics[]" value="' + escapeHtml(tName) + '" data-chapter="' + escapeHtml(t.chapter?.name || '') + '" ' + (isChecked ? 'checked' : '') + ' class="accent-primary rounded size-3.5 cursor-pointer" onchange="onAdminNoteTopicChipChange(this)"><span class="font-medium text-slate-700 dark:text-slate-200 text-[11px] leading-tight">' + escapeHtml(tName) + '</span>';
                     topicsList.appendChild(chip);
                 });
 
@@ -914,25 +945,25 @@
                 syncAdminNoteTopicSelection();
             }
 
-            window.syncAdminNoteTopicSelection = function() {
-                const checkedBoxes = Array.from(document.querySelectorAll('#adminNoteTopicsList input[name="topics[]"]:checked'));
-                const badge = document.getElementById('adminNoteTopicCountBadge');
-                const primaryInput = document.getElementById('adminNotePrimaryTopicInput');
+            window.syncAdminNoteTopicSelection = function(preferredVal) {
                 const topicDropdown = document.getElementById('adminNoteTopicDropdown');
+                const primaryInput = document.getElementById('adminNotePrimaryTopicInput');
+                const badge = document.getElementById('adminNoteTopicCountBadge');
+                const checkedBoxes = Array.from(document.querySelectorAll('#adminNoteTopicsList input[name="topics[]"]:checked'));
 
-                if (badge) {
-                    if (checkedBoxes.length > 0) {
-                        badge.textContent = checkedBoxes.length + ' selected';
-                        badge.classList.remove('hidden');
-                    } else {
-                        badge.classList.add('hidden');
+                let activeVal = (preferredVal || (checkedBoxes[0] ? checkedBoxes[0].value : '') || (topicDropdown ? topicDropdown.value : '')).trim();
+
+                if (activeVal) {
+                    if (primaryInput) primaryInput.value = activeVal;
+                    if (topicDropdown && topicDropdown.value !== activeVal) {
+                        const opt = Array.from(topicDropdown.options).find(o => o.value.trim().toLowerCase() === activeVal.toLowerCase());
+                        if (opt) topicDropdown.value = opt.value;
                     }
-                }
 
-                if (checkedBoxes.length > 0) {
-                    const primaryVal = checkedBoxes[0].value;
-                    if (primaryInput) primaryInput.value = primaryVal;
-                    if (topicDropdown && topicDropdown.value !== primaryVal) topicDropdown.value = primaryVal;
+                    if (badge) {
+                        badge.textContent = Math.max(1, checkedBoxes.length) + ' selected';
+                        badge.classList.remove('hidden');
+                    }
 
                     const subjSelect = document.getElementById('noteSubject') || document.getElementById('adminNoteSubject');
                     const subject = subjSelect ? subjSelect.value.trim() : '';
@@ -940,10 +971,11 @@
                     const chapter = chapterSelect ? chapterSelect.value.trim() : '';
                     const checkedClasses = Array.from(document.querySelectorAll('#adminNoteClassesContainer input[name="classLevel[]"]:checked')).map(cb => cb.value.trim());
 
-                    checkAndRenderAdminCrossClassSync(subject, primaryVal, chapter, checkedClasses);
+                    checkAndRenderAdminCrossClassSync(subject, activeVal, chapter, checkedClasses);
                 } else {
                     if (primaryInput) primaryInput.value = '';
                     if (topicDropdown) topicDropdown.value = '';
+                    if (badge) badge.classList.add('hidden');
                     const syncPortal = document.getElementById('adminCrossClassSyncPortal');
                     if (syncPortal) syncPortal.classList.add('hidden');
                 }
@@ -1059,10 +1091,28 @@
                         e.preventDefault();
                         return Swal.fire('Class Required', 'Please select at least one Target Class for this note.', 'warning');
                     }
-                    const checkedTopics = Array.from(form.querySelectorAll('input[name="topics[]"]:checked')).map(cb => cb.value);
+                    const topicDropdown = document.getElementById('adminNoteTopicDropdown');
+                    const primaryInput = document.getElementById('adminNotePrimaryTopicInput');
+                    let checkedTopics = Array.from(form.querySelectorAll('input[name="topics[]"]:checked')).map(cb => cb.value.trim()).filter(Boolean);
+                    if (checkedTopics.length === 0 && topicDropdown && topicDropdown.value.trim()) {
+                        checkedTopics = [topicDropdown.value.trim()];
+                    }
+                    if (checkedTopics.length === 0 && primaryInput && primaryInput.value.trim()) {
+                        checkedTopics = [primaryInput.value.trim()];
+                    }
+
                     if (checkedTopics.length === 0) {
                         e.preventDefault();
                         return Swal.fire('Topic Required', 'Please select at least one syllabus Topic for this note. If none exist, add them from Syllabus & Topics first.', 'warning');
+                    }
+
+                    let existingTopicCb = form.querySelector('input[name="topics[]"][value="' + checkedTopics[0].replace(/"/g, '\\"') + '"]');
+                    if (!existingTopicCb) {
+                        const hiddenInput = document.createElement('input');
+                        hiddenInput.type = 'hidden';
+                        hiddenInput.name = 'topics[]';
+                        hiddenInput.value = checkedTopics[0];
+                        form.appendChild(hiddenInput);
                     }
                 });
             }
