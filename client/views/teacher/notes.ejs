@@ -822,6 +822,10 @@
                 event.stopPropagation();
                 event.preventDefault();
             }
+            const targetFolder = (window.customFolders || []).find(f => String(f._id) === String(folderId));
+            if (targetFolder && (targetFolder.isSyllabusFolder || targetFolder.isSystem)) {
+                return showCustomAlert('Auto-generated syllabus folders cannot be deleted from the notes portal.', 'warning', 'Protected Folder');
+            }
             showCustomConfirm({
                 title: 'Delete Folder',
                 subtitle: 'Permanent deletion',
@@ -1205,11 +1209,11 @@
                     if (matchesClass) {
                         if (!isInsideSubfolder) {
                             if (!f.parentId || f.parentId === 'null' || f.parentId === 'undefined' || f.parentId === '') {
-                                foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: null });
+                                foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: null, isSyllabusFolder: Boolean(f.isSyllabusFolder || f.isSystem) });
                             }
                         } else {
                             if (window.activeFolderIdFilter && String(f.parentId) === String(window.activeFolderIdFilter)) {
-                                foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: f.parentId });
+                                foldersMap.set(f.name.trim().toLowerCase(), { _id: f._id, name: f.name, parentId: f.parentId, isSyllabusFolder: Boolean(f.isSyllabusFolder || f.isSystem) });
                             }
                         }
                     }
@@ -1410,7 +1414,8 @@
                             };
 
                             let deleteBtnHtml = '';
-                            if (f._id) {
+                            // Only allow delete button on user-created custom folders, NOT on auto-generated syllabus folders
+                            if (f._id && !f.isSyllabusFolder) {
                                 deleteBtnHtml = `
                                     <button type="button" onclick="deleteCustomFolder(event, '${f._id}')" class="size-7 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-500/10 flex items-center justify-center transition-all z-10 shrink-0 cursor-pointer" title="Delete Folder">
                                         <span class="material-symbols-rounded text-base leading-none">delete</span>

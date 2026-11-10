@@ -2321,7 +2321,10 @@ router.post('/folder/:id/delete', teacherProtect, async (req, res) => {
         if (!folder) {
             return res.status(404).json({ success: false, error: 'Folder not found' });
         }
-        if (folder.addedBy.toString() !== req.session.user._id.toString()) {
+        if (folder.isSyllabusFolder || folder.isSystem) {
+            return res.status(403).json({ success: false, error: 'Auto-generated syllabus folders cannot be deleted from the notes portal.' });
+        }
+        if (folder.addedBy && folder.addedBy.toString() !== req.session.user._id.toString()) {
             return res.status(403).json({ success: false, error: 'Permission denied' });
         }
         await Folder.findByIdAndDelete(folderId);
@@ -2509,7 +2512,12 @@ router.post('/notes/bulk-action', teacherProtect, async (req, res) => {
                 await Note.deleteMany({ _id: { $in: itemIds }, addedBy: req.session.user._id });
             }
             if (folderIds && folderIds.length > 0) {
-                await Folder.deleteMany({ _id: { $in: folderIds }, addedBy: req.session.user._id });
+                await Folder.deleteMany({ 
+                    _id: { $in: folderIds }, 
+                    addedBy: req.session.user._id,
+                    isSyllabusFolder: { $ne: true },
+                    isSystem: { $ne: true }
+                });
             }
         }
         res.json({ success: true });

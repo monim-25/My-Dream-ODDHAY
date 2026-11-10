@@ -36,8 +36,14 @@ const ensureSyllabusFoldersForChapter = async (targetClasses, subjectName, chapt
                     subject: cleanSubject,
                     classLevel: cls,
                     parentId: null,
+                    isSyllabusFolder: true,
+                    isSystem: true,
                     addedBy: userId || null
                 });
+            } else if (!subjectFolder.isSyllabusFolder || !subjectFolder.isSystem) {
+                subjectFolder.isSyllabusFolder = true;
+                subjectFolder.isSystem = true;
+                await subjectFolder.save().catch(() => {});
             }
 
             // 2. Ensure Chapter Subfolder under this Subject Folder for this class
@@ -53,8 +59,14 @@ const ensureSyllabusFoldersForChapter = async (targetClasses, subjectName, chapt
                     subject: cleanSubject,
                     classLevel: cls,
                     parentId: String(subjectFolder._id),
+                    isSyllabusFolder: true,
+                    isSystem: true,
                     addedBy: userId || null
                 });
+            } else if (!chapterFolder.isSyllabusFolder || !chapterFolder.isSystem) {
+                chapterFolder.isSyllabusFolder = true;
+                chapterFolder.isSystem = true;
+                await chapterFolder.save().catch(() => {});
             }
         } catch (err) {
             console.error('ensureSyllabusFoldersForChapter error for ' + cls + ' - ' + cleanSubject + ' - ' + cleanChapter + ':', err.message);
