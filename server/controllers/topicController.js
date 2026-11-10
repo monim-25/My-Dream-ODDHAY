@@ -570,7 +570,7 @@ const getTopicsApi = async (req, res) => {
             if (classList.length === 1) {
                 filter.classLevel = new RegExp('^' + escapeRegex(classList[0]) + '$', 'i');
             } else if (classList.length > 1) {
-                filter.classLevel = { $in: classList.map(c => new RegExp('^' + escapeRegex(c) + '$', 'i')) };
+                filter.classLevel = new RegExp('^(?:' + classList.map(escapeRegex).join('|') + ')$', 'i');
             }
         }
         if (subject && subject !== 'all') {

@@ -2392,7 +2392,7 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
             topics: parsedTopics.length > 0 ? parsedTopics : (primaryTopic ? [primaryTopic] : []),
             parentFolderId: resolvedParentFolderId,
             description: description || '',
-            accessType: accessType || 'Free',
+            accessType: 'Free', // Set up from SuperAdmin panel later; teacher cannot configure
             fileUrl,
             course: noteCourseId,
             addedBy: req.session.user._id

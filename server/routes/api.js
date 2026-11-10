@@ -6,6 +6,10 @@ const fs = require('fs');
 const multer = require('multer');
 const { connectDB, protect, adminProtect, superAdminProtect, User, Notification, NotificationLog, Message } = require('../config');
 const pushNotificationService = require('../services/pushNotificationService');
+const topicController = require('../controllers/topicController');
+
+// GET /api/topics — Universal syllabus topics endpoint
+router.get('/topics', async (req, res) => topicController.getTopicsApi(req, res));
 
 // ---- Push Notification API ----
 router.get('/push/vapid-public-key', (req, res) => res.json({ publicKey: pushNotificationService.getPublicKey() }));

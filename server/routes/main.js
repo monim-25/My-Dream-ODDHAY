@@ -5947,8 +5947,8 @@ router.get('/api/questions/preview', protect, async (req, res) => {
     }
 });
 
-// GET /api/topics — Universal dynamic syllabus topics lookup
-router.get('/api/topics', protect, async (req, res) => {
+// GET /api/topics — Universal dynamic syllabus topics lookup (public catalog)
+router.get('/api/topics', async (req, res) => {
     const topicController = require('../controllers/topicController');
     return topicController.getTopicsApi(req, res);
 });
