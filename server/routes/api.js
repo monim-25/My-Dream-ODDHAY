@@ -1175,29 +1175,40 @@ router.post('/live-comment/:msgId/toggle-highlight', protect, async (req, res) =
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
-// PUT update live comment text
+// PUT update live comment text and highlighted status
 router.put('/live-comment/:msgId', protect, async (req, res) => {
     try {
         await connectDB();
         const Message = require('../models/Message');
-        const { text } = req.body;
+        const { text, highlighted } = req.body;
         if (!text || !text.trim()) return res.status(400).json({ success: false, error: 'Text cannot be empty' });
 
         const message = await Message.findById(req.params.msgId);
         if (!message) return res.status(404).json({ success: false, error: 'Comment not found' });
 
-        // Security check: Must be the original author
-        if (message.sender.toString() !== req.session.user._id.toString()) {
+        const isModerator = ['teacher', 'admin', 'superadmin'].includes(req.session.user.role);
+
+        // Security check: Must be the original author or moderator
+        if (message.sender.toString() !== req.session.user._id.toString() && !isModerator) {
             return res.status(403).json({ success: false, error: 'Unauthorized to edit this comment' });
         }
 
         message.text = text.trim();
+        if (typeof highlighted !== 'undefined' && isModerator) {
+            message.highlighted = Boolean(highlighted);
+        }
         await message.save();
 
         const io = req.app.get('io');
-        if (io) io.to(message.room).emit('message:update', { commentId: message._id.toString(), text: message.text });
+        if (io) {
+            io.to(message.room).emit('message:update', {
+                commentId: message._id.toString(),
+                text: message.text,
+                highlighted: message.highlighted
+            });
+        }
 
-        res.json({ success: true });
+        res.json({ success: true, text: message.text, highlighted: message.highlighted });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 

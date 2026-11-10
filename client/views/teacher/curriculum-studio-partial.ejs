@@ -503,6 +503,10 @@
     } else if (initialHash && initialHash.startsWith('#video-')) {
         pendingVideoNodeId = initialHash.replace('#video-', '');
     }
+    const initialUrlParams = new URLSearchParams(window.location.search);
+    if (!currentFolderId && initialUrlParams.get('folderId')) {
+        currentFolderId = initialUrlParams.get('folderId');
+    }
 
     function filterPlaylist() {
         const input = document.getElementById('playlistSearchInput');
@@ -825,30 +829,42 @@
                 } else if (node.type === 'liveClass') {
                     icon = 'podcasts';
                     const isScheduled = node.date && new Date(node.date) > new Date();
-                    const isEnded = node.videoPath || node.isRecorded;
+                    const isEnded = node.videoPath || node.isRecorded || node.isEnded || (node.isLive === false && !isScheduled);
                     
                     if (isEnded) {
-                        typeLabel = 'Recorded Class';
-                        icon = 'play_circle';
-                        detailHtml = node.duration ? `<span class="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-md font-mono font-medium">${node.duration}</span>` : `<span class="text-[10px] text-slate-500 font-medium">Recorded</span>`;
+                        if (node.videoPath) {
+                            typeLabel = 'Recorded Class';
+                            icon = 'play_circle';
+                            detailHtml = node.duration ? `<span class="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-500/10 text-blue-500 rounded-md font-mono font-medium">${node.duration}</span>` : `<span class="text-[10px] text-slate-500 font-medium">Recorded</span>`;
+                        } else {
+                            typeLabel = 'Live Class';
+                            icon = 'podcasts';
+                            detailHtml = `<span class="text-[10px] text-slate-400 font-medium">Class Ended</span>`;
+                        }
                     } else if (isScheduled) {
                         typeLabel = 'Scheduled Live';
                         const liveRoomId = (node.meetingUrl && !node.meetingUrl.startsWith('http')) ? node.meetingUrl : (node._id || node.meetingUrl);
+                        const folderParam = node.parentId ? `?folderId=${node.parentId}` : '';
                         detailHtml = `
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-[10px] text-slate-500 font-medium countdown-timer" data-time="${node.date}"></span>
-                                <a href="/live/${liveRoomId}" target="_blank" class="text-[9px] text-primary hover:underline flex items-center gap-0.5 font-medium"><span class="material-symbols-rounded text-xs">link</span>Join</a>
+                                <a href="/live/${liveRoomId}${folderParam}" target="_blank" class="text-[9px] text-primary hover:underline flex items-center gap-0.5 font-medium"><span class="material-symbols-rounded text-xs">link</span>Join</a>
+                            </div>
+                        `;
+                    } else if (node.isLive === true) {
+                        typeLabel = 'Live Class';
+                        const liveRoomId = (node.meetingUrl && !node.meetingUrl.startsWith('http')) ? node.meetingUrl : (node._id || node.meetingUrl);
+                        const folderParam = node.parentId ? `?folderId=${node.parentId}` : '';
+                        detailHtml = `
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="text-[10px] text-rose-500 font-medium animate-pulse">Live Now</span>
+                                <a href="/live/${liveRoomId}${folderParam}" target="_blank" class="text-[9px] text-primary hover:underline flex items-center gap-0.5 font-medium"><span class="material-symbols-rounded text-xs">link</span>Join</a>
                             </div>
                         `;
                     } else {
                         typeLabel = 'Live Class';
-                        const liveRoomId = (node.meetingUrl && !node.meetingUrl.startsWith('http')) ? node.meetingUrl : (node._id || node.meetingUrl);
-                        detailHtml = `
-                            <div class="flex flex-wrap items-center gap-2">
-                                <span class="text-[10px] text-rose-500 font-medium">Live Now</span>
-                                <a href="/live/${liveRoomId}" target="_blank" class="text-[9px] text-primary hover:underline flex items-center gap-0.5 font-medium"><span class="material-symbols-rounded text-xs">link</span>Join</a>
-                            </div>
-                        `;
+                        icon = 'podcasts';
+                        detailHtml = `<span class="text-[10px] text-slate-400 font-medium">Not Live</span>`;
                     }
                 } else if (node.type === 'quiz') {
                     icon = 'psychology';
@@ -1564,13 +1580,14 @@
                     const liveMode = document.getElementById('liveMode')?.value;
                     if (type === 'liveClass' && liveMode === 'instant' && res.node) {
                         const targetRoom = (res.node.meetingUrl && !res.node.meetingUrl.startsWith('http')) ? res.node.meetingUrl : (res.node._id || res.node.meetingUrl);
+                        const parentFolder = res.node.parentId || currentFolderId || '';
                         if (statusText) {
                             statusText.innerText = 'Entering Live Classroom...';
                             statusText.classList.remove('animate-pulse');
                             statusText.classList.add('text-emerald-500');
                         }
                         setTimeout(() => {
-                            window.location.href = `/live/${targetRoom}`;
+                            window.location.href = `/live/${targetRoom}${parentFolder ? '?folderId=' + parentFolder : ''}`;
                         }, 800);
                         return;
                     }
@@ -1906,8 +1923,13 @@
                 window.open(`/teacher/quiz-details/${qId}`, '_blank');
                 return;
             } else if (node.type === 'liveClass') {
-                const targetRoom = (node.meetingUrl && !node.meetingUrl.startsWith('http')) ? node.meetingUrl : (node._id || node.meetingUrl);
-                window.location.href = `/live/${targetRoom}`;
+                if (node.isLive === true) {
+                    const targetRoom = (node.meetingUrl && !node.meetingUrl.startsWith('http')) ? node.meetingUrl : (node._id || node.meetingUrl);
+                    const parentFolder = node.parentId || currentFolderId || '';
+                    window.location.href = `/live/${targetRoom}${parentFolder ? '?folderId=' + parentFolder : ''}`;
+                    return;
+                }
+                alert('This live class has ended and has no recorded video.');
                 return;
             }
             alert('This item does not have a valid video attached.');

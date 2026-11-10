@@ -6188,6 +6188,13 @@ router.get('/live/:roomId', protect, async (req, res) => {
             }
         }
 
+        let liveFolderId = '';
+        if (liveNode && liveNode.parentId) {
+            liveFolderId = liveNode.parentId.toString();
+        } else if (req.query && req.query.folderId) {
+            liveFolderId = req.query.folderId.toString();
+        }
+
         const effectiveRoomId = (liveNode && liveNode._id) ? liveNode._id.toString() : (liveNode && liveNode.meetingUrl && !liveNode.meetingUrl.startsWith('http') ? liveNode.meetingUrl : roomId);
 
         res.render('teacher/live-classroom', {
@@ -6196,6 +6203,7 @@ router.get('/live/:roomId', protect, async (req, res) => {
             isModerator,
             course: course || null,
             courseId: course ? course._id.toString() : '',
+            folderId: liveFolderId,
             liveNodeId,
             liveTitle: liveTitle || (course ? course.title : 'Live Class'),
             liveDescription,
@@ -6293,10 +6301,8 @@ router.get('/api/video/stream', protect, async (req, res) => {
 router.post('/api/live/end', protect, async (req, res) => {
     try {
         await connectDB();
-        const { roomId, duration, isRecorded, videoPath: uploadedVideoPath } = req.body;
-        if (!roomId) {
-            return res.status(400).json({ error: 'Room ID is required' });
-        }
+        const { roomId, duration, isRecorded, videoPath: uploadedVideoPath, courseId, liveNodeId, folderId } = req.body;
+        if (!roomId) return res.status(400).json({ error: 'Room ID is required' });
 
         const user = req.session.user;
         const isModerator = ['teacher', 'admin', 'superadmin'].includes(user.role);
@@ -6304,7 +6310,7 @@ router.post('/api/live/end', protect, async (req, res) => {
             return res.status(403).json({ error: 'Only instructors can end live classes' });
         }
 
-        console.log('[/api/live/end] Request:', { roomId, duration, isRecorded, uploadedVideoPath });
+        console.log('[/api/live/end] Request:', { roomId, duration, isRecorded, uploadedVideoPath, courseId, liveNodeId, folderId });
         const isObjectId = /^[0-9a-fA-F]{24}$/.test(roomId);
         const courseQuery = {
             $or: [
@@ -6317,7 +6323,13 @@ router.post('/api/live/end', protect, async (req, res) => {
             courseQuery.$or.push({ 'chapters.liveClasses._id': roomId });
         }
 
-        let course = await Course.findOne(courseQuery);
+        let course = null;
+        if (courseId) {
+            course = await Course.findById(courseId);
+        }
+        if (!course) {
+            course = await Course.findOne(courseQuery);
+        }
         if (!course) {
             course = await Course.findOne({
                 $or: [
@@ -6331,15 +6343,15 @@ router.post('/api/live/end', protect, async (req, res) => {
             console.warn('[/api/live/end] Standalone room or course not found for roomId:', roomId);
             const io = req.app.get('io');
             if (io) {
-                io.to(roomId).emit('live:ended', { roomId });
+                io.to(roomId).emit('live:ended', { roomId, folderId: folderId || null });
             }
-            return res.json({ success: true, message: 'Class ended' });
+            return res.json({ success: true, message: 'Class ended', folderId: folderId || null });
         }
 
         let updated = false;
-        let savedNodeId = null;
+        let savedNodeId = liveNodeId || null;
         let savedVideoPath = null;
-        let savedFolderId = null;
+        let savedFolderId = folderId || null;
 
         // Accept ANY valid uploaded video path (Cloudinary https:// URL, local /uploads/ path, or relative)
         const hasRealRecording = Boolean(
@@ -6352,18 +6364,27 @@ router.post('/api/live/end', protect, async (req, res) => {
         const recordingDuration = duration || '00:00:00';
         console.log('[/api/live/end] hasRealRecording:', hasRealRecording, 'recordingVideoPath:', recordingVideoPath);
 
-        // 1. Try curriculumNodes (new format)
+        // 1. Try curriculumNodes (modern format)
         if (course.curriculumNodes && course.curriculumNodes.length > 0) {
-            let node = course.curriculumNodes.find(n => (n.meetingUrl === roomId || n._id.toString() === roomId));
+            let node = null;
+            if (liveNodeId) {
+                node = course.curriculumNodes.id(liveNodeId) || course.curriculumNodes.find(n => n._id.toString() === liveNodeId);
+            }
+            if (!node) {
+                node = course.curriculumNodes.find(n => (n.meetingUrl === roomId || n._id.toString() === roomId));
+            }
             if (!node) {
                 node = course.curriculumNodes.find(n => (n.meetingUrl && n.meetingUrl.includes(roomId)) || n.isLive === true);
             }
+
             if (node) {
                 savedNodeId = node._id.toString();
-                savedFolderId = node.parentId ? node.parentId.toString() : null;
+                if (node.parentId) savedFolderId = node.parentId.toString();
+
+                node.isLive = false;
+                node.isEnded = true;
 
                 if (hasRealRecording) {
-                    node.isLive = false;
                     node.isRecorded = true;
                     node.type = 'video'; // Convert to playable video lesson in curriculum
                     node.videoPath = recordingVideoPath;
@@ -6371,54 +6392,75 @@ router.post('/api/live/end', protect, async (req, res) => {
                     savedVideoPath = recordingVideoPath;
                     console.log('[/api/live/end] Success! Live class saved as video lesson:', node.name, node.videoPath);
                 } else if (node.isRecorded && node.videoPath) {
-                    node.isLive = false;
                     console.log('[/api/live/end] Node already recorded, preserving video lesson:', node.name, node.videoPath);
+                    savedVideoPath = node.videoPath;
                 } else {
-                    node.isLive = false;
                     console.log('[/api/live/end] Live class ended without recording:', node.name);
                 }
-                course.markModified('curriculumNodes');
-                await course.save();
-                updated = true;
             }
+
+            // Also ensure ALL nodes in this course matching this room or marked isLive are set to not live
+            course.curriculumNodes.forEach(n => {
+                const matchId = (liveNodeId && n._id && n._id.toString() === liveNodeId) || (n._id && n._id.toString() === roomId);
+                const matchMeeting = n.meetingUrl === roomId || (n.meetingUrl && roomId.length >= 6 && n.meetingUrl.includes(roomId));
+                if (matchId || matchMeeting || (n.isLive === true && n._id.toString() === savedNodeId)) {
+                    n.isLive = false;
+                    n.isEnded = true;
+                    if (hasRealRecording) {
+                        n.isRecorded = true;
+                        n.type = 'video';
+                        n.videoPath = recordingVideoPath;
+                        n.duration = recordingDuration;
+                    }
+                }
+            });
+
+            course.markModified('curriculumNodes');
+            await course.save();
+            updated = true;
         }
 
         // 2. Try chapters (legacy format)
-        if (!updated && course.chapters && course.chapters.length > 0) {
+        if (course.chapters && course.chapters.length > 0) {
             for (let i = 0; i < course.chapters.length; i++) {
                 const chapter = course.chapters[i];
-                const liveIndex = chapter.liveClasses ? chapter.liveClasses.findIndex(lc => lc.meetingUrl === roomId || lc._id.toString() === roomId) : -1;
-                if (liveIndex !== -1) {
-                    const lc = chapter.liveClasses[liveIndex];
+                if (chapter.liveClasses) {
+                    const liveIndex = chapter.liveClasses.findIndex(lc => lc.meetingUrl === roomId || lc._id.toString() === roomId || (liveNodeId && lc._id.toString() === liveNodeId));
+                    if (liveIndex !== -1) {
+                        const lc = chapter.liveClasses[liveIndex];
+                        chapter.liveClasses.splice(liveIndex, 1);
 
-                    // Remove from liveClasses
-                    chapter.liveClasses.splice(liveIndex, 1);
+                        if (hasRealRecording) {
+                            const recClass = {
+                                title: lc.title || 'Recorded Live Class',
+                                videoPath: recordingVideoPath,
+                                description: 'Recorded live class session.',
+                                instructor: user.name || 'Instructor',
+                                duration: recordingDuration,
+                                accessType: 'paid',
+                                views: 0
+                            };
+                            if (!chapter.recordedClasses) chapter.recordedClasses = [];
+                            chapter.recordedClasses.push(recClass);
+                            savedVideoPath = recordingVideoPath;
+                        }
 
-                    if (hasRealRecording) {
-                        const recClass = {
-                            title: lc.title || 'Recorded Live Class',
-                            videoPath: recordingVideoPath,
-                            description: 'Recorded live class session.',
-                            instructor: user.name || 'Instructor',
-                            duration: recordingDuration,
-                            accessType: 'paid',
-                            views: 0
-                        };
-                        if (!chapter.recordedClasses) chapter.recordedClasses = [];
-                        chapter.recordedClasses.push(recClass);
-                        savedVideoPath = recordingVideoPath;
+                        course.markModified('chapters');
+                        await course.save();
+                        updated = true;
+                        break;
                     }
-
-                    await course.save();
-                    updated = true;
-                    break;
                 }
             }
         }
 
         const io = req.app.get('io');
         if (io) {
-            io.to(roomId).emit('live:ended', { roomId });
+            io.to(roomId).emit('live:ended', {
+                roomId,
+                courseId: course ? course._id.toString() : null,
+                folderId: savedFolderId
+            });
         }
 
         res.json({
@@ -6434,9 +6476,6 @@ router.post('/api/live/end', protect, async (req, res) => {
     }
 });
 
-// ==========================================
-// AGORA TOKEN GENERATION
-// ==========================================
 router.get('/api/agora/token', protect, async (req, res) => {
     try {
         const { RtcTokenBuilder, RtcRole } = require('agora-access-token');
