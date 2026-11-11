@@ -2649,8 +2649,7 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
             user,
             stats: {
                 totalBanks: totalCount,
-                paidCount: stats.paidCount || 0,
-                freeCount: stats.freeCount || 0,
+                subjectCount: (stats.subjects || []).filter(Boolean).length,
                 globalCount: stats.globalCount || 0,
                 courseCount: stats.courseCount || 0,
                 pendingCount,
