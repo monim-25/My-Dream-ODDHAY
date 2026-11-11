@@ -1153,16 +1153,39 @@
                     }
                 }
 
+                // If detectedChapter is known but detectedSubject is not, resolve subject from customFolders or noteCards
+                if (!detectedSubject && detectedChapter && window.customFolders) {
+                    const cf = window.customFolders.find(f => f.name && f.name.toLowerCase() === detectedChapter.toLowerCase());
+                    if (cf) {
+                        if (cf.subject) detectedSubject = cf.subject;
+                        else if (cf.parentId) {
+                            const pf = window.customFolders.find(f => String(f._id) === String(cf.parentId));
+                            if (pf) detectedSubject = pf.subject || pf.name;
+                        }
+                    }
+                }
+
+                if (!detectedSubject && detectedChapter) {
+                    const noteCard = document.querySelector(`.note-card[data-chapter-name="${detectedChapter.replace(/"/g, '\\"')}"]`);
+                    if (noteCard) {
+                        detectedSubject = noteCard.getAttribute('data-subject') || '';
+                    }
+                }
+
+                if (!detectedSubject && window.assignedSubjects && window.assignedSubjects.length === 1) {
+                    detectedSubject = window.assignedSubjects[0];
+                }
+
                 const urlParams = new URLSearchParams(window.location.search);
                 const urlSubj = (urlParams.get('subject') && urlParams.get('subject') !== 'all') ? urlParams.get('subject') : '';
-                const isInsideSubjectFolder = Boolean(presetSubject || detectedSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all'));
-                const activeSubj = (presetSubject || detectedSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : (window.assignedSubjects && window.assignedSubjects[0] ? window.assignedSubjects[0] : 'General Academic'))).trim();
                 const activeChapterVal = (presetChapter || detectedChapter || '').trim();
                 const activeClass = (detectedClass || (window.activeClass && window.activeClass !== 'all' ? window.activeClass : '') || urlParams.get('class') || '').trim();
                 const activeParentId = detectedFolderId || '';
                 const activeCourse = presetCourseId || window.activeCourseId || '';
 
-                const isInsideChapterFolder = Boolean(activeChapterVal && activeChapterVal.toLowerCase() !== activeSubj.toLowerCase());
+                const isInsideChapterFolder = Boolean(activeChapterVal && (!detectedSubject || activeChapterVal.toLowerCase() !== detectedSubject.toLowerCase()));
+                const isInsideSubjectFolder = Boolean(presetSubject || detectedSubject || urlSubj || isInsideChapterFolder || (window.activeSubject && window.activeSubject !== 'all') || (window.folderNavStack && window.folderNavStack.length > 0) || Boolean(window.activeFolderIdFilter) || (window.assignedSubjects && window.assignedSubjects.length === 1));
+                const activeSubj = (presetSubject || detectedSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : (window.assignedSubjects && window.assignedSubjects[0] ? window.assignedSubjects[0] : 'General Academic'))).trim();
 
                 window._initialNoteChapter = isInsideChapterFolder ? activeChapterVal : '';
 
