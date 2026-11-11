@@ -2479,17 +2479,15 @@ router.post('/note/:id/edit', teacherProtect, async (req, res) => {
         await connectDB();
         const note = await Note.findById(req.params.id);
         if (!note) return res.status(404).send('Note not found');
-        if (note.addedBy.toString() !== req.session.user._id.toString()) {
+        const isOwner = note.addedBy && note.addedBy.toString() === req.session.user._id.toString();
+        const isSuperAdmin = req.session.user && req.session.user.role === 'superadmin';
+        if (!isOwner && !isSuperAdmin) {
             return res.status(403).send('Not authorized to edit this note');
         }
-        const { title, subject, classLevel, chapter, description, accessType, course } = req.body;
-        note.title = title || note.title;
-        note.subject = subject || note.subject;
-        note.classLevel = classLevel || note.classLevel;
-        note.chapter = chapter || '';
-        note.description = description || '';
-        note.accessType = accessType || note.accessType;
-        note.course = course && mongoose.Types.ObjectId.isValid(course) ? course : note.course;
+        const { title } = req.body;
+        if (title && typeof title === 'string' && title.trim()) {
+            note.title = title.trim();
+        }
         note.updatedAt = new Date();
         await note.save();
         res.redirect(`/teacher/note-details/${note._id}?success=Note updated`);
