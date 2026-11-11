@@ -3,8 +3,11 @@ const mongoose = require('mongoose');
 const quizSchema = new mongoose.Schema({
     title: { type: String, required: true },
     course: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
-    subject: { type: String }, // For Model Tests - shows which subject the exam is about
-    classLevel: { type: String }, // For Model Tests
+    subject: { type: String },    // Subject the exam covers (all exam types)
+    classLevel: { type: String }, // Class level (all exam types)
+    chapter: { type: String },    // Syllabus chapter
+    topic: { type: String },      // Primary topic
+    topics: [{ type: String }],   // All selected topics
     duration: { type: Number, default: 10 }, // Duration in minutes
     questions: [{
         questionType: { type: String, enum: ['MCQ', 'Short', 'Medium', 'Comprehension'], default: 'MCQ' },
@@ -23,9 +26,6 @@ const quizSchema = new mongoose.Schema({
         board: { type: String },
         year: { type: String }
     }],
-    chapter: { type: String },
-    topic: { type: String },
-    topics: [{ type: String }],
     accessType: { type: String, enum: ['Free', 'Paid'], default: 'Free' },
     scheduledAt: { type: Date }, // Time when the exam becomes joinable
     expiresAt: { type: Date },   // Time when the exam disappears (12h window)
@@ -36,6 +36,7 @@ const quizSchema = new mongoose.Schema({
 // High-performance indexes for live model tests, student exams, and queries
 quizSchema.index({ course: 1 });
 quizSchema.index({ classLevel: 1, subject: 1 });
+quizSchema.index({ classLevel: 1, subject: 1, chapter: 1, topic: 1 });
 quizSchema.index({ scheduledAt: 1, expiresAt: 1 });
 quizSchema.index({ createdAt: -1 });
 

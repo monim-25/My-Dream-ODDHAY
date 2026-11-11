@@ -3069,19 +3069,10 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         
         const isModelTest = req.body.isModelTest === 'true';
         const courseId = isModelTest ? undefined : (req.body.courseId || undefined);
-        
-        // Access type is always determined by backend — teacher cannot choose
-        let accessType = 'Free';
-        if (courseId) {
-            const linkedCourse = await Course.findById(courseId);
-            if (linkedCourse) {
-                accessType = (linkedCourse.accessType && linkedCourse.accessType.toLowerCase() === 'paid') ? 'Paid' : 'Free';
-            }
-        }
 
         // Extract chapter / topic / topics / syncClasses
         const chapter = req.body.chapter || '';
-        const topic = req.body.topic || '';
+        const topic   = req.body.topic   || '';
         const rawTopics = req.body['topics[]'] || req.body.topics;
         let topics = [];
         if (Array.isArray(rawTopics)) topics = rawTopics.map(t => t.trim()).filter(Boolean);
@@ -3091,21 +3082,39 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         let syncClasses = [];
         if (Array.isArray(rawSync)) syncClasses = rawSync.map(s => s.trim()).filter(Boolean);
         else if (rawSync) syncClasses = String(rawSync).split(',').map(s => s.trim()).filter(Boolean);
+
+        // Fetch linked course once (if course-linked) — used for accessType, subject, classLevel
+        let linkedCourse = null;
+        if (courseId) {
+            linkedCourse = await Course.findById(courseId).select('subject classLevel accessType');
+        }
+
+        // Access type is always determined by backend — teacher cannot choose
+        let accessType = 'Free';
+        if (linkedCourse) {
+            accessType = (linkedCourse.accessType && linkedCourse.accessType.toLowerCase() === 'paid') ? 'Paid' : 'Free';
+        }
+
+        // Resolve subject & classLevel for ALL exam types
+        let resolvedSubject = req.body.subject || '';
+        let resolvedClass   = req.body.classLevel || '';
+        if (!isModelTest && linkedCourse) {
+            resolvedSubject = resolvedSubject || (Array.isArray(linkedCourse.subject) ? linkedCourse.subject[0] : linkedCourse.subject) || '';
+            resolvedClass   = resolvedClass   || (Array.isArray(linkedCourse.classLevel) ? linkedCourse.classLevel[0] : linkedCourse.classLevel) || '';
+        }
         
         const quizData = {
-            title: req.body.title,
-            course: courseId,
-            duration: parseInt(req.body.duration) || 10,
+            title:      req.body.title,
+            course:     courseId,
+            subject:    resolvedSubject,
+            classLevel: resolvedClass,
+            duration:   parseInt(req.body.duration) || 10,
             accessType: accessType,
-            questions: [],
-            addedBy: req.session.user._id
+            questions:  [],
+            addedBy:    req.session.user._id
         };
 
-        if (isModelTest) {
-            quizData.subject = req.body.subject || '';
-            quizData.classLevel = req.body.classLevel || '';
-        }
-        // Always store chapter/topic/topics regardless of exam type
+        // Always store chapter / topic / topics regardless of exam type
         if (chapter) quizData.chapter = chapter;
         if (topic)   quizData.topic   = topic;
         if (topics.length > 0) quizData.topics = topics;
