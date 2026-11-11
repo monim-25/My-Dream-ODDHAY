@@ -23,6 +23,9 @@ const quizSchema = new mongoose.Schema({
         board: { type: String },
         year: { type: String }
     }],
+    chapter: { type: String },
+    topic: { type: String },
+    topics: [{ type: String }],
     accessType: { type: String, enum: ['Free', 'Paid'], default: 'Free' },
     scheduledAt: { type: Date }, // Time when the exam becomes joinable
     expiresAt: { type: Date },   // Time when the exam disappears (12h window)

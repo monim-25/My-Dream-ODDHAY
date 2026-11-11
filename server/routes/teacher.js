@@ -2875,6 +2875,26 @@ router.get('/make-quiz', teacherProtect, async (req, res) => {
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
         const subjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].filter(Boolean).sort();
         const classes = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].filter(Boolean).sort();
+
+        // Build class -> subjects map so frontend can filter subjects by selected class
+        const classSubjectMap = {};
+        userCourses.forEach(c => {
+            const classArr = Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel];
+            const subArr   = Array.isArray(c.subject)    ? c.subject    : [c.subject];
+            classArr.filter(Boolean).forEach(cls => {
+                if (!classSubjectMap[cls]) classSubjectMap[cls] = new Set();
+                subArr.filter(Boolean).forEach(sub => classSubjectMap[cls].add(sub));
+            });
+        });
+        // Also add teacher's raw assigned subjects to every assigned class
+        teacherContext.rawAssignedClasses.forEach(cls => {
+            if (!classSubjectMap[cls]) classSubjectMap[cls] = new Set();
+            teacherContext.rawAssignedSubjects.forEach(sub => classSubjectMap[cls].add(sub));
+        });
+        const classSubjectMapJSON = {};
+        Object.keys(classSubjectMap).forEach(cls => {
+            classSubjectMapJSON[cls] = [...classSubjectMap[cls]].sort();
+        });
         
         const questionBanks = await QuestionBank.find({ addedBy: user._id }).select('subject classLevel board year _id');
         
@@ -2884,6 +2904,7 @@ router.get('/make-quiz', teacherProtect, async (req, res) => {
             courses: userCourses,
             subjects: subjects,
             classes: classes,
+            classSubjectMap: classSubjectMapJSON,
             questionBanks: questionBanks,
             user: req.session.user,
             active: 'quizzes',
@@ -2920,6 +2941,25 @@ router.get('/course/:id/edit/make-quiz', teacherProtect, async (req, res) => {
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
         const subjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].filter(Boolean).sort();
         const classes = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].filter(Boolean).sort();
+
+        // Build class -> subjects map
+        const classSubjectMap = {};
+        userCourses.forEach(c => {
+            const classArr = Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel];
+            const subArr   = Array.isArray(c.subject)    ? c.subject    : [c.subject];
+            classArr.filter(Boolean).forEach(cls => {
+                if (!classSubjectMap[cls]) classSubjectMap[cls] = new Set();
+                subArr.filter(Boolean).forEach(sub => classSubjectMap[cls].add(sub));
+            });
+        });
+        teacherContext.rawAssignedClasses.forEach(cls => {
+            if (!classSubjectMap[cls]) classSubjectMap[cls] = new Set();
+            teacherContext.rawAssignedSubjects.forEach(sub => classSubjectMap[cls].add(sub));
+        });
+        const classSubjectMapJSON = {};
+        Object.keys(classSubjectMap).forEach(cls => {
+            classSubjectMapJSON[cls] = [...classSubjectMap[cls]].sort();
+        });
         
         const questionBanks = await QuestionBank.find({ addedBy: user._id }).select('subject classLevel board year _id');
         
@@ -2930,6 +2970,7 @@ router.get('/course/:id/edit/make-quiz', teacherProtect, async (req, res) => {
             courses: userCourses,
             subjects: subjects,
             classes: classes,
+            classSubjectMap: classSubjectMapJSON,
             questionBanks: questionBanks,
             user: req.session.user,
             active: 'courses',
@@ -3029,16 +3070,27 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         const isModelTest = req.body.isModelTest === 'true';
         const courseId = isModelTest ? undefined : (req.body.courseId || undefined);
         
-        let accessType = req.body.accessType || 'Free';
+        // Access type is always determined by backend — teacher cannot choose
+        let accessType = 'Free';
         if (courseId) {
             const linkedCourse = await Course.findById(courseId);
             if (linkedCourse) {
                 accessType = (linkedCourse.accessType && linkedCourse.accessType.toLowerCase() === 'paid') ? 'Paid' : 'Free';
             }
-        } else {
-            if (accessType.toLowerCase() === 'paid') accessType = 'Paid';
-            else accessType = 'Free';
         }
+
+        // Extract chapter / topic / topics / syncClasses
+        const chapter = req.body.chapter || '';
+        const topic = req.body.topic || '';
+        const rawTopics = req.body['topics[]'] || req.body.topics;
+        let topics = [];
+        if (Array.isArray(rawTopics)) topics = rawTopics.map(t => t.trim()).filter(Boolean);
+        else if (rawTopics) topics = String(rawTopics).split(',').map(t => t.trim()).filter(Boolean);
+
+        const rawSync = req.body['syncClasses[]'] || req.body.syncClasses;
+        let syncClasses = [];
+        if (Array.isArray(rawSync)) syncClasses = rawSync.map(s => s.trim()).filter(Boolean);
+        else if (rawSync) syncClasses = String(rawSync).split(',').map(s => s.trim()).filter(Boolean);
         
         const quizData = {
             title: req.body.title,
@@ -3050,9 +3102,13 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         };
 
         if (isModelTest) {
-            quizData.subject = req.body.subject;
-            quizData.classLevel = req.body.classLevel;
+            quizData.subject = req.body.subject || '';
+            quizData.classLevel = req.body.classLevel || '';
         }
+        // Always store chapter/topic/topics regardless of exam type
+        if (chapter) quizData.chapter = chapter;
+        if (topic)   quizData.topic   = topic;
+        if (topics.length > 0) quizData.topics = topics;
 
         const mcqCount = parseInt(req.body.mcqCount) || 0;
         const shortCount = parseInt(req.body.shortCount) || 0;
@@ -3147,6 +3203,19 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         }
 
         const quiz = await new Quiz(quizData).save();
+
+        // Cross-class sync: duplicate quiz for each synced class (excluding the primary class)
+        const primaryClass = quizData.classLevel || '';
+        const extraClasses = syncClasses.filter(sc => sc && sc !== primaryClass);
+        for (const syncCls of extraClasses) {
+            const syncQuizData = Object.assign({}, quizData, {
+                classLevel: syncCls,
+                // questions array reference is shared, create a new object
+                questions: quizData.questions.map(q => Object.assign({}, q))
+            });
+            delete syncQuizData._id;
+            await new Quiz(syncQuizData).save();
+        }
         
         if (req.body.activeFlow === 'courses' && courseId) {
             res.redirect(`/teacher/course/${courseId}/quiz/${quiz._id}`);

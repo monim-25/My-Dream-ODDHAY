@@ -117,24 +117,14 @@
                             <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-4 sm:mb-6 flex items-center gap-2">
                                 <span class="material-symbols-rounded text-[20px] text-blue-500">quiz</span> Exam Identification
                             </h3>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
-                                <div class="col-span-2">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-6">
+                                <div class="sm:col-span-2">
                                     <label class="form-label">Exam Title</label>
                                     <input type="text" name="title" required placeholder="e.g Physics Mock Test 01" class="form-input" value="<%= prefilledTitle %>">
                                 </div>
-                                <div class="col-span-1">
+                                <div class="sm:col-span-1">
                                     <label class="form-label">Duration (Minutes)</label>
                                     <input type="number" name="duration" required value="10" min="1" class="form-input">
-                                </div>
-                                <div class="col-span-1">
-                                    <label class="form-label">Access Model</label>
-                                    <div class="relative">
-                                        <select name="accessType" id="accessType" class="form-input cursor-pointer pr-8 appearance-none">
-                                            <option value="Free">Free Access</option>
-                                            <option value="Paid">Premium (Paid)</option>
-                                        </select>
-                                        <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -145,6 +135,7 @@
                                 <span class="material-symbols-rounded text-[20px] text-emerald-500">account_tree</span> Logic & Routing
                             </h3>
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
+                                <!-- Exam Type -->
                                 <div class="col-span-1">
                                     <label class="form-label">Exam Type</label>
                                     <div class="relative">
@@ -155,6 +146,7 @@
                                         <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
                                     </div>
                                 </div>
+                                <!-- Class Level -->
                                 <div class="col-span-1">
                                     <label class="form-label">Class Level</label>
                                     <div class="relative">
@@ -167,6 +159,7 @@
                                         <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
                                     </div>
                                 </div>
+                                <!-- Course Link (Course-Linked mode) -->
                                 <div id="courseContainer" class="col-span-2">
                                     <label class="form-label">Link to Course</label>
                                     <div class="relative">
@@ -179,10 +172,11 @@
                                         <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
                                     </div>
                                 </div>
+                                <!-- Subject (Model Test mode — filtered by class) -->
                                 <div id="subjectContainer" class="col-span-2 md:col-span-1 hidden">
                                     <label class="form-label">Subject</label>
                                     <div class="relative">
-                                        <select name="subject" class="form-input cursor-pointer pr-8 appearance-none">
+                                        <select name="subject" id="quizSubject" onchange="onQuizSubjectOrClassChange()" class="form-input cursor-pointer pr-8 appearance-none">
                                             <option value="">-- Select Subject --</option>
                                             <% (subjects || []).forEach(sub => { %>
                                                 <option value="<%= sub %>" <%= sub === selectedSubject ? 'selected' : '' %>><%= sub %></option>
@@ -191,6 +185,57 @@
                                         <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
                                     </div>
                                 </div>
+                            </div>
+
+                            <!-- Chapter & Topics (always visible once class+subject resolved) -->
+                            <div id="quizSyllabusWrapper" class="mt-4 sm:mt-6 hidden">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-6 mb-4">
+                                    <!-- Chapter -->
+                                    <div>
+                                        <label class="form-label flex items-center gap-1.5">Chapter
+                                            <span id="quizChapterBadge" class="hidden text-[10px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 rounded-full"></span>
+                                        </label>
+                                        <div class="relative">
+                                            <select name="chapter" id="quizChapter" onchange="onQuizChapterChange(this.value)" class="form-input cursor-pointer pr-8 appearance-none">
+                                                <option value="">Select Chapter</option>
+                                            </select>
+                                            <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
+                                        </div>
+                                    </div>
+                                    <!-- Topic count badge -->
+                                    <div class="flex flex-col justify-end">
+                                        <label class="form-label flex items-center gap-1.5">Topics
+                                            <span id="quizTopicCountBadge" class="hidden text-[10px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full"></span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Topics list -->
+                                <div id="quizTopicsWrapper" class="mt-1">
+                                    <div id="quizTopicsEmptyState" class="flex items-center gap-2 text-xs text-slate-400 dark:text-slate-500 py-2">
+                                        <span class="material-symbols-rounded text-base text-slate-300 dark:text-slate-600">info</span>
+                                        <span>Select a Class and Subject to load syllabus chapters</span>
+                                    </div>
+                                    <div id="quizTopicsLoading" class="hidden flex items-center gap-2 text-xs text-slate-400 py-2">
+                                        <span class="material-symbols-rounded animate-spin text-base text-primary">progress_activity</span>
+                                        <span>Loading topics…</span>
+                                    </div>
+                                    <div id="quizTopicsList" class="hidden flex flex-wrap gap-2 mt-2"></div>
+                                    <!-- Hidden primary topic input -->
+                                    <input type="hidden" name="topic" id="quizPrimaryTopicInput">
+                                </div>
+                            </div>
+
+                            <!-- Cross-class auto-sync portal -->
+                            <div id="crossClassSyncPortal" class="hidden mt-4 p-4 rounded-xl border border-emerald-300/70 dark:border-emerald-700/60 bg-emerald-50/60 dark:bg-emerald-900/15">
+                                <div class="flex items-start gap-2 mb-2">
+                                    <span class="material-symbols-rounded text-emerald-600 dark:text-emerald-400 text-lg shrink-0 mt-0.5">sync_alt</span>
+                                    <div>
+                                        <p class="text-xs font-bold text-emerald-800 dark:text-emerald-300">Auto-Sync Suggested</p>
+                                        <p class="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">The same Subject, Chapter & Topic architecture exists in the following class(es). Check the classes where this exam should be automatically saved:</p>
+                                    </div>
+                                </div>
+                                <div id="crossClassListContainer" class="flex flex-wrap gap-2 mt-2"></div>
                             </div>
                         </div>
 
@@ -320,40 +365,289 @@
     <script>
         const allCourses = Array.from(document.querySelectorAll('#courseId option')).slice(1);
         const preSelectedCourseId = '<%= selectedCourseId %>';
+        // Class -> subjects map from server
+        const CLASS_SUBJECT_MAP = <%- JSON.stringify(typeof classSubjectMap !== 'undefined' ? classSubjectMap : {}) %>;
 
+        // ─── Utility ─────────────────────────────────────────────────────────────
+        function escapeHtml(str) {
+            return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        // ─── Syllabus fetch (same multi-endpoint approach as notes.ejs) ───────────
+        async function fetchTopicsSafely(subject, classList) {
+            const endpoints = ['/teacher/api/topics', '/api/topics'];
+            const query = new URLSearchParams({ subject, classLevels: classList.join(',') }).toString();
+            for (const ep of endpoints) {
+                try {
+                    const res = await fetch(ep + '?' + query, { headers: { 'Accept': 'application/json' } });
+                    if (!res.ok) continue;
+                    const ct = res.headers.get('content-type') || '';
+                    if (!ct.includes('application/json')) continue;
+                    const json = await res.json();
+                    if (json && (json.success || Array.isArray(json.topics))) return json;
+                } catch (e) { console.warn('Topic endpoint error:', ep, e); }
+            }
+            return { success: true, count: 0, topics: [], chapters: [] };
+        }
+
+        // ─── Filter subject dropdown by selected class ────────────────────────────
+        function filterSubjectsByClass(cls) {
+            const subjSelect = document.getElementById('quizSubject');
+            if (!subjSelect) return;
+            const available = CLASS_SUBJECT_MAP[cls] || [];
+            const allSubjects = <%- JSON.stringify(typeof subjects !== 'undefined' ? subjects : []) %>;
+            const list = available.length > 0 ? available : allSubjects;
+            const current = subjSelect.value;
+            subjSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+            list.forEach(sub => {
+                const opt = document.createElement('option');
+                opt.value = sub;
+                opt.textContent = sub;
+                if (sub === current) opt.selected = true;
+                subjSelect.appendChild(opt);
+            });
+            // If previous value no longer in list, trigger change
+            if (!list.includes(current)) onQuizSubjectOrClassChange();
+        }
+
+        // ─── Subject / Class change → load chapters ───────────────────────────────
+        window.onQuizSubjectOrClassChange = async function() {
+            const isModelTest = document.getElementById('isModelTest').value === 'true';
+            const classLevel = document.getElementById('classLevel').value;
+            let subject = '';
+            if (isModelTest) {
+                const qs = document.getElementById('quizSubject');
+                subject = qs ? qs.value.trim() : '';
+            } else {
+                const courseSelect = document.getElementById('courseId');
+                const selOpt = courseSelect.options[courseSelect.selectedIndex];
+                subject = selOpt ? (selOpt.getAttribute('data-subject') || '') : '';
+            }
+
+            const syllabusWrapper = document.getElementById('quizSyllabusWrapper');
+            const chapterSelect  = document.getElementById('quizChapter');
+            const emptyState     = document.getElementById('quizTopicsEmptyState');
+            const loadingState   = document.getElementById('quizTopicsLoading');
+            const topicsList     = document.getElementById('quizTopicsList');
+            const syncPortal     = document.getElementById('crossClassSyncPortal');
+            const badge          = document.getElementById('quizChapterBadge');
+
+            if (syncPortal) syncPortal.classList.add('hidden');
+
+            if (!subject || !classLevel) {
+                if (syllabusWrapper) syllabusWrapper.classList.add('hidden');
+                return;
+            }
+
+            if (syllabusWrapper) syllabusWrapper.classList.remove('hidden');
+            if (emptyState) { emptyState.classList.remove('hidden'); emptyState.innerHTML = '<span class="material-symbols-rounded text-base text-slate-300">info</span><span>Select a Chapter to view topics</span>'; }
+            if (loadingState) loadingState.classList.remove('hidden');
+            if (topicsList) { topicsList.classList.add('hidden'); topicsList.innerHTML = ''; }
+            if (badge) { badge.textContent = ''; badge.classList.add('hidden'); }
+
+            try {
+                const data = await fetchTopicsSafely(subject, [classLevel]);
+                window._quizCachedTopics = Array.isArray(data.topics) ? data.topics : [];
+
+                // Populate chapters
+                if (chapterSelect) {
+                    const chapMap = new Map();
+                    window._quizCachedTopics.forEach(t => {
+                        const cName = (typeof t.chapter === 'string') ? t.chapter : (t.chapter?.name || '');
+                        const cNum  = (typeof t.chapter === 'object' && t.chapter) ? (parseInt(t.chapter.number, 10) || 999) : 999;
+                        if (cName.trim() && !chapMap.has(cName.trim().toLowerCase()))
+                            chapMap.set(cName.trim().toLowerCase(), { name: cName.trim(), number: cNum });
+                    });
+                    (data.chapters || []).forEach(c => {
+                        if (c && !chapMap.has(c.trim().toLowerCase()))
+                            chapMap.set(c.trim().toLowerCase(), { name: c.trim(), number: 999 });
+                    });
+                    const sorted = Array.from(chapMap.values()).sort((a,b) => a.number - b.number);
+                    chapterSelect.innerHTML = '<option value="">Select Chapter</option>';
+                    sorted.forEach(ch => {
+                        const opt = document.createElement('option');
+                        opt.value = ch.name;
+                        opt.textContent = ch.name;
+                        chapterSelect.appendChild(opt);
+                    });
+                }
+            } catch (err) {
+                console.error('Failed to load chapters:', err);
+            } finally {
+                if (loadingState) loadingState.classList.add('hidden');
+            }
+            onQuizChapterChange(chapterSelect ? chapterSelect.value : '');
+        };
+
+        // ─── Chapter change → render topic chips ─────────────────────────────────
+        window.onQuizChapterChange = function(val) {
+            const chapterSelect = document.getElementById('quizChapter');
+            if (chapterSelect && val) chapterSelect.value = val;
+            const chapter = val || (chapterSelect ? chapterSelect.value : '');
+
+            const badge      = document.getElementById('quizChapterBadge');
+            const emptyState = document.getElementById('quizTopicsEmptyState');
+            const topicsList = document.getElementById('quizTopicsList');
+            const syncPortal = document.getElementById('crossClassSyncPortal');
+
+            if (badge) { badge.textContent = chapter || ''; badge.classList.toggle('hidden', !chapter); }
+            if (syncPortal) syncPortal.classList.add('hidden');
+
+            if (!chapter) {
+                if (emptyState) { emptyState.classList.remove('hidden'); emptyState.innerHTML = '<span class="material-symbols-rounded text-base text-slate-300">info</span><span>Please select a Chapter to view available topics</span>'; }
+                if (topicsList) { topicsList.classList.add('hidden'); topicsList.innerHTML = ''; }
+                syncQuizTopicSelection();
+                return;
+            }
+
+            const allTopics = window._quizCachedTopics || [];
+            const chapterTopics = allTopics.filter(t => {
+                const cName = (typeof t.chapter === 'string') ? t.chapter : (t.chapter?.name || '');
+                return cName.trim().toLowerCase() === chapter.trim().toLowerCase();
+            });
+
+            if (chapterTopics.length > 0) {
+                renderQuizTopics(chapterTopics);
+            } else {
+                if (topicsList) { topicsList.classList.add('hidden'); topicsList.innerHTML = ''; }
+                if (emptyState) {
+                    emptyState.classList.remove('hidden');
+                    emptyState.innerHTML = '<div class="flex flex-col items-center gap-1.5 py-2 text-center">' +
+                        '<span class="material-symbols-rounded text-amber-500 text-xl">playlist_remove</span>' +
+                        '<span class="text-xs font-semibold text-slate-700 dark:text-slate-200">No approved topics found for this chapter</span>' +
+                        '<a href="/teacher/topics" target="_blank" class="inline-flex items-center gap-1 mt-1 px-2.5 py-1 rounded-lg bg-primary text-white text-[11px] font-bold hover:bg-primary/90 transition-all"><span class="material-symbols-rounded text-xs">add</span>Add Syllabus Topics</a>' +
+                        '</div>';
+                }
+                syncQuizTopicSelection();
+            }
+        };
+
+        function renderQuizTopics(topics) {
+            const topicsList = document.getElementById('quizTopicsList');
+            const emptyState = document.getElementById('quizTopicsEmptyState');
+            if (!topicsList) return;
+            topicsList.innerHTML = '';
+            const seen = new Set();
+            topics.forEach(t => {
+                const key = (t.name || '').trim().toLowerCase();
+                if (!key || seen.has(key)) return;
+                seen.add(key);
+                const tName = (t.name || '').trim();
+                const chip = document.createElement('label');
+                chip.className = 'topic-select-chip flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary/60 dark:hover:border-primary/60 bg-white dark:bg-slate-900 cursor-pointer text-xs select-none transition-all';
+                chip.innerHTML = '<input type="checkbox" name="topics[]" value="' + escapeHtml(tName) + '" class="quiz-topic-checkbox accent-primary rounded size-4 cursor-pointer" onchange="onQuizTopicChipChange(this)">' +
+                    '<span class="font-medium text-slate-700 dark:text-slate-200 text-xs leading-tight">' + escapeHtml(tName) + '</span>';
+                topicsList.appendChild(chip);
+            });
+            if (emptyState) emptyState.classList.add('hidden');
+            topicsList.classList.remove('hidden');
+            syncQuizTopicSelection();
+        }
+
+        window.onQuizTopicChipChange = function(cb) {
+            const chip = cb ? cb.closest('.topic-select-chip') : null;
+            if (chip && cb) {
+                if (cb.checked) chip.classList.add('bg-primary/5','dark:bg-primary/15','border-primary','dark:border-primary');
+                else chip.classList.remove('bg-primary/5','dark:bg-primary/15','border-primary','dark:border-primary');
+            }
+            syncQuizTopicSelection();
+        };
+
+        window.syncQuizTopicSelection = function() {
+            const badge = document.getElementById('quizTopicCountBadge');
+            const primaryInput = document.getElementById('quizPrimaryTopicInput');
+            const checked = Array.from(document.querySelectorAll('#quizTopicsList input[name="topics[]"]:checked'));
+            if (badge) {
+                if (checked.length > 0) { badge.textContent = checked.length + ' selected'; badge.classList.remove('hidden'); }
+                else badge.classList.add('hidden');
+            }
+            if (checked.length > 0) {
+                const names = checked.map(b => b.value.trim()).filter(Boolean);
+                if (primaryInput) primaryInput.value = names[0] || '';
+                // Cross-class check
+                const isModelTest = document.getElementById('isModelTest').value === 'true';
+                let subject = '';
+                if (isModelTest) {
+                    const qs = document.getElementById('quizSubject');
+                    subject = qs ? qs.value.trim() : '';
+                } else {
+                    const cs = document.getElementById('courseId');
+                    const so = cs.options[cs.selectedIndex];
+                    subject = so ? (so.getAttribute('data-subject') || '') : '';
+                }
+                const chapter = document.getElementById('quizChapter') ? document.getElementById('quizChapter').value.trim() : '';
+                const cls = document.getElementById('classLevel').value;
+                checkAndRenderCrossClassSync(subject, names, chapter, cls ? [cls] : []);
+            } else {
+                if (primaryInput) primaryInput.value = '';
+                const syncPortal = document.getElementById('crossClassSyncPortal');
+                if (syncPortal) syncPortal.classList.add('hidden');
+            }
+        };
+
+        // ─── Cross-class sync check ───────────────────────────────────────────────
+        async function checkAndRenderCrossClassSync(subject, topicNames, chapterName, checkedClasses) {
+            const portal    = document.getElementById('crossClassSyncPortal');
+            const container = document.getElementById('crossClassListContainer');
+            if (!portal || !container) return;
+            const topicsParam = Array.isArray(topicNames) ? topicNames.join(',') : String(topicNames || '');
+            if (!subject || !topicsParam) { portal.classList.add('hidden'); container.innerHTML = ''; return; }
+            try {
+                const q = new URLSearchParams({ subject, topic: topicsParam, chapter: chapterName || '', currentClasses: checkedClasses.join(',') }).toString();
+                let res = await fetch('/api/topics/cross-class-check?' + q, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+                if (!res || !res.ok) res = await fetch('/teacher/api/topics/cross-class-check?' + q, { headers: { 'Accept': 'application/json' } }).catch(() => null);
+                if (!res || !res.ok) { portal.classList.add('hidden'); return; }
+                const data = await res.json();
+                if (data && data.success && data.hasCrossClass && Array.isArray(data.details) && data.details.length > 0) {
+                    container.innerHTML = '';
+                    data.details.forEach(item => {
+                        const label = document.createElement('label');
+                        label.className = 'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 text-xs font-semibold text-slate-800 dark:text-slate-100 cursor-pointer shadow-xs hover:border-emerald-500 transition-colors select-none';
+                        label.innerHTML = '<input type="checkbox" name="syncClasses[]" value="' + escapeHtml(item.classLevel) + '" checked class="accent-emerald-600 rounded size-3.5 cursor-pointer">' +
+                            '<span class="font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1"><span class="material-symbols-rounded text-sm">school</span>' + escapeHtml(item.classLevel) + '</span>' +
+                            '<span class="text-[10px] text-slate-500 dark:text-slate-400 font-normal truncate max-w-[140px]">(' + escapeHtml(item.chapterName || '') + ')</span>';
+                        container.appendChild(label);
+                    });
+                    portal.classList.remove('hidden');
+                } else {
+                    portal.classList.add('hidden');
+                    container.innerHTML = '';
+                }
+            } catch (e) {
+                console.warn('Cross-class check failed:', e);
+                portal.classList.add('hidden');
+            }
+        }
+
+        // ─── Bank metadata ────────────────────────────────────────────────────────
         async function syncBankMetadata() {
             const classLevel = document.getElementById('classLevel').value;
             const isModelTest = document.getElementById('isModelTest').value === 'true';
             let subject = '';
-            
             if (isModelTest) {
-                subject = document.querySelector('select[name="subject"]').value;
+                const qs = document.getElementById('quizSubject');
+                subject = qs ? qs.value : '';
             } else {
-                const courseSelect = document.getElementById('courseId');
-                const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
-                subject = selectedOpt ? (selectedOpt.getAttribute('data-subject') || '') : '';
+                const cs = document.getElementById('courseId');
+                const so = cs.options[cs.selectedIndex];
+                subject = so ? (so.getAttribute('data-subject') || '') : '';
             }
-
-            const topic = document.getElementById('bankTopic').value;
-            const board = document.getElementById('bankBoard').value;
-            const year = document.getElementById('bankYear').value;
-
+            const topic = document.getElementById('bankTopic') ? document.getElementById('bankTopic').value : '';
+            const board = document.getElementById('bankBoard') ? document.getElementById('bankBoard').value : '';
+            const year  = document.getElementById('bankYear')  ? document.getElementById('bankYear').value  : '';
             if (!classLevel || !subject) {
                 updateDropdown('bankTopic', [], '', 'Any Topic');
                 updateDropdown('bankBoard', [], '', 'Any Board');
-                updateDropdown('bankYear', [], '', 'Any Year');
+                updateDropdown('bankYear',  [], '', 'Any Year');
                 return;
             }
-
             try {
                 const url = `/teacher/api/bank-metadata?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}&topic=${encodeURIComponent(topic)}&board=${encodeURIComponent(board)}&year=${encodeURIComponent(year)}`;
-                const response = await fetch(url);
-                const data = await response.json();
-
+                const data = await (await fetch(url)).json();
                 if (data.success) {
                     updateDropdown('bankTopic', data.topics, topic, 'Any Topic');
                     updateDropdown('bankBoard', data.boards, board, 'Any Board');
-                    updateDropdown('bankYear', data.years, year, 'Any Year');
+                    updateDropdown('bankYear',  data.years,  year,  'Any Year');
                 }
             } catch (err) { console.error('Failed to sync metadata', err); }
         }
@@ -362,23 +656,23 @@
             const select = document.getElementById(id);
             if (!select) return;
             let html = `<option value="">${placeholder}</option>`;
-            items.forEach(item => {
-                html += `<option value="${item}" ${item === currentVal ? 'selected' : ''}>${item}</option>`;
-            });
+            items.forEach(item => { html += `<option value="${item}" ${item === currentVal ? 'selected' : ''}>${item}</option>`; });
             select.innerHTML = html;
         }
 
+        // ─── Main view toggle ─────────────────────────────────────────────────────
         function updateView(preserveCourse = false) {
-            const isModelTest = document.getElementById('isModelTest').value === 'true';
+            const isModelTest  = document.getElementById('isModelTest').value === 'true';
             const selectedClass = document.getElementById('classLevel').value;
-            
-            const courseContainer = document.getElementById('courseContainer');
+            const courseContainer  = document.getElementById('courseContainer');
             const subjectContainer = document.getElementById('subjectContainer');
             const courseSelect = document.getElementById('courseId');
 
             if (isModelTest) {
                 courseContainer.classList.add('hidden');
                 subjectContainer.classList.remove('hidden');
+                // Filter subjects for selected class
+                if (selectedClass) filterSubjectsByClass(selectedClass);
             } else {
                 courseContainer.classList.remove('hidden');
                 subjectContainer.classList.add('hidden');
@@ -386,73 +680,35 @@
 
             const currentCourseId = preserveCourse ? preSelectedCourseId : courseSelect.value;
             courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
-            
             const filtered = selectedClass
-                ? allCourses.filter(opt => {
-                    const courseClass = opt.getAttribute('data-class') || '';
-                    return courseClass.includes(selectedClass) || courseClass.includes('Class ' + selectedClass);
-                })
+                ? allCourses.filter(opt => { const cc = opt.getAttribute('data-class') || ''; return cc.includes(selectedClass) || cc.includes('Class ' + selectedClass); })
                 : allCourses;
-            
             filtered.forEach(opt => courseSelect.appendChild(opt.cloneNode(true)));
-
             if (currentCourseId) {
                 const targetOpt = courseSelect.querySelector(`option[value="${currentCourseId}"]`);
                 if (targetOpt) targetOpt.selected = true;
             }
-            
-            syncAccessType();
-            syncBankMetadata();
-        }
 
-        function syncAccessType() {
-            const isModelTest = document.getElementById('isModelTest').value === 'true';
-            const accessTypeSelect = document.getElementById('accessType');
-            
-            if (isModelTest) {
-                accessTypeSelect.disabled = false;
-                accessTypeSelect.classList.remove('opacity-60', 'bg-slate-100', 'dark:bg-slate-800/50');
-            } else {
-                const courseSelect = document.getElementById('courseId');
-                const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
-                if (selectedOpt && selectedOpt.value) {
-                    const rawAccess = selectedOpt.getAttribute('data-access') || 'Free';
-                    const access = (rawAccess.toLowerCase() === 'paid') ? 'Paid' : 'Free';
-                    accessTypeSelect.value = access;
-                    accessTypeSelect.disabled = true;
-                    accessTypeSelect.classList.add('opacity-60', 'bg-slate-100', 'dark:bg-slate-800/50');
-                } else {
-                    accessTypeSelect.disabled = false;
-                    accessTypeSelect.classList.remove('opacity-60', 'bg-slate-100', 'dark:bg-slate-800/50');
-                }
-            }
+            syncBankMetadata();
+            onQuizSubjectOrClassChange();
         }
 
         function toggleStrategy(strategy) {
-            const bankFilters = document.getElementById('bankFilters');
+            const bankFilters  = document.getElementById('bankFilters');
             const strategyDesc = document.getElementById('strategyDesc');
-            const manualCard = document.getElementById('strategy-manual-label');
-            const autoCard = document.getElementById('strategy-automated-label');
-            
+            const manualCard   = document.getElementById('strategy-manual-label');
+            const autoCard     = document.getElementById('strategy-automated-label');
             if (strategy === 'automated') {
                 bankFilters.classList.remove('hidden');
                 strategyDesc.innerText = '* Questions will be pulled automatically from the Question Bank based on these counts.';
-                if (autoCard) {
-                    autoCard.className = "p-3.5 rounded-xl border border-blue-500/50 bg-blue-50/20 dark:bg-blue-500/10 flex items-start gap-3 cursor-pointer transition-all active:scale-95 group";
-                }
-                if (manualCard) {
-                    manualCard.className = "p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700 flex items-start gap-3 cursor-pointer transition-all active:scale-95 group";
-                }
+                if (autoCard)   autoCard.className   = "p-3.5 rounded-xl border border-blue-500/50 bg-blue-50/20 dark:bg-blue-500/10 flex items-start gap-3 cursor-pointer transition-all active:scale-95 group";
+                if (manualCard) manualCard.className = "p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700 flex items-start gap-3 cursor-pointer transition-all active:scale-95 group";
                 syncBankMetadata();
             } else {
                 bankFilters.classList.add('hidden');
                 strategyDesc.innerText = '* System will create empty slots for you to fill manually.';
-                if (manualCard) {
-                    manualCard.className = "p-3.5 rounded-xl border border-blue-500/50 bg-blue-50/20 dark:bg-blue-500/10 flex items-start gap-3 cursor-pointer transition-all active:scale-95 group";
-                }
-                if (autoCard) {
-                    autoCard.className = "p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700 flex items-start gap-3 cursor-pointer transition-all active:scale-95 group";
-                }
+                if (manualCard) manualCard.className = "p-3.5 rounded-xl border border-blue-500/50 bg-blue-50/20 dark:bg-blue-500/10 flex items-start gap-3 cursor-pointer transition-all active:scale-95 group";
+                if (autoCard)   autoCard.className   = "p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 hover:border-slate-300 dark:hover:border-slate-700 flex items-start gap-3 cursor-pointer transition-all active:scale-95 group";
             }
         }
 
@@ -461,24 +717,13 @@
             const hasAnyFilled = fields.some(f => f && parseInt(f.value) > 0);
             const badges = document.querySelectorAll('.q-config-badge');
             const alertBox = document.getElementById('qConfigAlert');
-
             if (hasAnyFilled) {
-                // If input in one field, others become optional
-                badges.forEach(b => {
-                    b.innerHTML = '<span class="text-slate-400 font-normal text-[10px]">(Optional)</span>';
-                });
-                fields.forEach(f => {
-                    if (f) f.removeAttribute('required');
-                });
+                badges.forEach(b => { b.innerHTML = '<span class="text-slate-400 font-normal text-[10px]">(Optional)</span>'; });
+                fields.forEach(f => { if (f) f.removeAttribute('required'); });
                 if (alertBox) alertBox.classList.add('hidden');
             } else {
-                // At first or if all empty/0, all show as required
-                badges.forEach(b => {
-                    b.innerHTML = '<span class="text-rose-500 font-bold text-xs">*</span>';
-                });
-                fields.forEach(f => {
-                    if (f) f.setAttribute('required', 'required');
-                });
+                badges.forEach(b => { b.innerHTML = '<span class="text-rose-500 font-bold text-xs">*</span>'; });
+                fields.forEach(f => { if (f) f.setAttribute('required', 'required'); });
             }
             return hasAnyFilled;
         }
@@ -494,14 +739,12 @@
                 firstField?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return false;
             }
-            const accessType = document.getElementById('accessType');
-            if (accessType) accessType.disabled = false;
             return true;
         }
 
         document.getElementById('courseId').addEventListener('change', () => {
-            syncAccessType();
             syncBankMetadata();
+            onQuizSubjectOrClassChange();
         });
 
         window.addEventListener('DOMContentLoaded', () => {
