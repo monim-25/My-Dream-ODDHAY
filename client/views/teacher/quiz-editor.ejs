@@ -174,12 +174,12 @@
                     </div>
                     <div class="stat-card">
                         <div class="stat-card-inner">
-                            <div class="size-8 sm:size-11 rounded-lg sm:rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 shrink-0">
-                                <span class="material-symbols-rounded text-lg sm:text-2xl">verified_user</span>
+                            <div id="autosave-icon-wrapper" class="size-8 sm:size-11 rounded-lg sm:rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0">
+                                <span id="autosave-icon" class="material-symbols-rounded text-lg sm:text-2xl">cloud_done</span>
                             </div>
                             <div class="min-w-0">
-                                <p class="text-[9px] sm:text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">Access</p>
-                                <h3 class="text-sm sm:text-xl font-bold leading-none text-slate-800 dark:text-white truncate"><%= quiz.accessType %></h3>
+                                <p class="text-[9px] sm:text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">Auto-Save</p>
+                                <h3 id="autosave-text" class="text-xs sm:text-sm font-bold leading-none text-emerald-600 dark:text-emerald-400 truncate">All Saved</h3>
                             </div>
                         </div>
                     </div>
@@ -330,10 +330,14 @@
                                 </div>
                             <% } %>
 
-                            <div class="mt-4 sm:mt-6 flex justify-end">
-                                <button onclick="saveCard('<%= q._id %>', '<%= q.questionType %>')" class="h-9 sm:h-10 px-5 sm:px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs hover:opacity-95 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95">
-                                    <span class="material-symbols-rounded text-base">save</span> 
-                                    <span>Save Changes</span>
+                            <div class="mt-4 sm:mt-6 flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                                <div id="card-status-<%= q._id %>" class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-sm text-emerald-500">cloud_done</span>
+                                    <span>Auto-saved</span>
+                                </div>
+                                <button type="button" onclick="saveCard('<%= q._id %>', '<%= q.questionType %>', true)" class="h-8 px-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer" title="Save instantly">
+                                    <span class="material-symbols-rounded text-sm">save</span> 
+                                    <span>Save Now</span>
                                 </button>
                             </div>
                         </div>
@@ -392,24 +396,6 @@
         const questionsData = <%- JSON.stringify(quiz.questions) %>;
         const quizId = '<%= quiz._id %>';
         const currentCourseId = '<%= typeof courseId !== "undefined" ? courseId : "" %>';
-
-        async function addSlot(type) {
-            try {
-                const response = await fetch(`/teacher/quiz/${quizId}/add-question`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        questionText: `New ${type} Question`,
-                        options: type === 'MCQ' ? ['Option A', 'Option B', 'Option C', 'Option D'] : [],
-                        correctAnswer: 0,
-                        explanation: '',
-                        questionType: type
-                    })
-                });
-                if((await response.json()).success) location.reload();
-                else Swal.fire('Error', 'Failed to add slot', 'error');
-            } catch (err) { Swal.fire('Error', 'Network error', 'error'); }
-        }
 
         function openAddModal() {
             Swal.fire({
@@ -597,91 +583,186 @@
             } catch (err) { Swal.fire('Error', 'Network error', 'error'); }
         }
 
-        async function saveCard(qid, type) {
-            const data = { questionType: type };
-            
-            // Marks Validation
-            const marksVal = document.getElementById(`marks-${qid}`).value;
-            if (!marksVal || marksVal.trim() === '') {
-                Swal.fire('Error', 'Marks cannot be blank!', 'error');
-                return;
+        // ─── Real-Time Auto-Save Engine ─────────────────────────────────────────
+        const debounceTimers = {};
+        const pendingSaves = new Set();
+
+        function setAutoSaveStatus(state) {
+            const iconWrapper = document.getElementById('autosave-icon-wrapper');
+            const icon = document.getElementById('autosave-icon');
+            const text = document.getElementById('autosave-text');
+            if (!iconWrapper || !icon || !text) return;
+
+            if (state === 'saving') {
+                iconWrapper.className = 'size-8 sm:size-11 rounded-lg sm:rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0';
+                icon.className = 'material-symbols-rounded text-lg sm:text-2xl animate-spin';
+                icon.textContent = 'sync';
+                text.className = 'text-xs sm:text-sm font-bold leading-none text-blue-600 dark:text-blue-400 truncate';
+                text.textContent = 'Saving...';
+            } else if (state === 'saved') {
+                iconWrapper.className = 'size-8 sm:size-11 rounded-lg sm:rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 shrink-0';
+                icon.className = 'material-symbols-rounded text-lg sm:text-2xl';
+                icon.textContent = 'cloud_done';
+                text.className = 'text-xs sm:text-sm font-bold leading-none text-emerald-600 dark:text-emerald-400 truncate';
+                text.textContent = 'All Saved';
+            } else if (state === 'error') {
+                iconWrapper.className = 'size-8 sm:size-11 rounded-lg sm:rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500 shrink-0';
+                icon.className = 'material-symbols-rounded text-lg sm:text-2xl';
+                icon.textContent = 'error';
+                text.className = 'text-xs sm:text-sm font-bold leading-none text-rose-600 dark:text-rose-400 truncate';
+                text.textContent = 'Retry Error';
             }
-            data.marks = parseInt(marksVal);
-            data.board = document.getElementById(`board-${qid}`).value;
-            data.year = document.getElementById(`year-${qid}`).value;
+        }
+
+        function setCardStatus(qid, state) {
+            const statusEl = document.getElementById(`card-status-${qid}`);
+            if (!statusEl) return;
+            if (state === 'saving') {
+                statusEl.innerHTML = '<span class="material-symbols-rounded text-sm animate-spin text-blue-500">sync</span><span class="text-blue-500 font-semibold">Saving...</span>';
+            } else if (state === 'saved') {
+                statusEl.innerHTML = '<span class="material-symbols-rounded text-sm text-emerald-500">cloud_done</span><span class="text-emerald-600 dark:text-emerald-400 font-semibold">Auto-saved</span>';
+            } else if (state === 'error') {
+                statusEl.innerHTML = '<span class="material-symbols-rounded text-sm text-rose-500">warning</span><span class="text-rose-500 font-semibold">Save failed</span>';
+            }
+        }
+
+        function extractCardData(qid, type) {
+            const marksEl = document.getElementById(`marks-${qid}`);
+            const boardEl = document.getElementById(`board-${qid}`);
+            const yearEl  = document.getElementById(`year-${qid}`);
+            const explainEl = document.getElementById(`explain-${qid}`);
+
+            const data = {
+                questionType: type,
+                marks: marksEl && marksEl.value.trim() !== '' ? (parseInt(marksEl.value) || 1) : 1,
+                board: boardEl ? boardEl.value.trim() : '',
+                year: yearEl ? yearEl.value.trim() : '',
+                explanation: explainEl ? explainEl.value.trim() : ''
+            };
 
             if (type === 'MCQ' || !type) {
-                data.questionText = document.getElementById(`qtext-${qid}`).value.trim();
+                const qtextEl = document.getElementById(`qtext-${qid}`);
+                const optAEl  = document.getElementById(`optA-${qid}`);
+                const optBEl  = document.getElementById(`optB-${qid}`);
+                const optCEl  = document.getElementById(`optC-${qid}`);
+                const optDEl  = document.getElementById(`optD-${qid}`);
+                const correctEl = document.getElementById(`correct-${qid}`);
+
+                data.questionText = qtextEl ? qtextEl.value.trim() : '';
                 data.options = [
-                    document.getElementById(`optA-${qid}`).value.trim(),
-                    document.getElementById(`optB-${qid}`).value.trim(),
-                    document.getElementById(`optC-${qid}`).value.trim(),
-                    document.getElementById(`optD-${qid}`).value.trim()
+                    optAEl ? optAEl.value.trim() : '',
+                    optBEl ? optBEl.value.trim() : '',
+                    optCEl ? optCEl.value.trim() : '',
+                    optDEl ? optDEl.value.trim() : ''
                 ];
-                data.correctAnswer = parseInt(document.getElementById(`correct-${qid}`).value);
-
-                if (!data.questionText) {
-                    Swal.fire('Error', 'Question text is mandatory!', 'error');
-                    return;
-                }
-                const filledOptions = data.options.filter(o => o !== '');
-                if (filledOptions.length < 3) {
-                    Swal.fire('Error', 'At least 3 options are mandatory for MCQ!', 'error');
-                    return;
-                }
-                if (data.options[data.correctAnswer] === '') {
-                    Swal.fire('Error', 'The correct answer must be one of the filled options!', 'error');
-                    return;
-                }
-            } else if (type === 'Short') {
-                data.questionText = document.getElementById(`qtext-${qid}`).value.trim();
-                data.answer = document.getElementById(`ans-${qid}`).value.trim();
-
-                if (!data.questionText || !data.answer) {
-                    Swal.fire('Error', 'Question and Answer are mandatory!', 'error');
-                    return;
-                }
-            } else if (type === 'Medium') {
-                data.questionText = document.getElementById(`qtext-${qid}`).value.trim();
-                data.answer = document.getElementById(`ans-${qid}`).value.trim();
-
-                if (!data.questionText || !data.answer) {
-                    Swal.fire('Error', 'Question and Answer are mandatory!', 'error');
-                    return;
-                }
+                data.correctAnswer = correctEl ? (parseInt(correctEl.value) || 0) : 0;
+            } else if (type === 'Short' || type === 'Medium') {
+                const qtextEl = document.getElementById(`qtext-${qid}`);
+                const ansEl   = document.getElementById(`ans-${qid}`);
+                data.questionText = qtextEl ? qtextEl.value.trim() : '';
+                data.answer = ansEl ? ansEl.value.trim() : '';
             } else if (type === 'Comprehension') {
-                data.context = document.getElementById(`context-${qid}`).value.trim();
-                data.q1 = document.getElementById(`q1-${qid}`).value.trim();
-                data.q2 = document.getElementById(`q2-${qid}`).value.trim();
-                data.a1 = document.getElementById(`a1-${qid}`).value.trim();
-                data.a2 = document.getElementById(`a2-${qid}`).value.trim();
+                const contextEl = document.getElementById(`context-${qid}`);
+                const q1El = document.getElementById(`q1-${qid}`);
+                const q2El = document.getElementById(`q2-${qid}`);
+                const a1El = document.getElementById(`a1-${qid}`);
+                const a2El = document.getElementById(`a2-${qid}`);
 
-                if (!data.context || !data.q1 || !data.q2 || !data.a1 || !data.a2) {
-                    Swal.fire('Error', 'Context, Questions, and Answers are mandatory!', 'error');
-                    return;
-                }
+                data.context = contextEl ? contextEl.value.trim() : '';
+                data.q1 = q1El ? q1El.value.trim() : '';
+                data.q2 = q2El ? q2El.value.trim() : '';
+                data.a1 = a1El ? a1El.value.trim() : '';
+                data.a2 = a2El ? a2El.value.trim() : '';
             }
+            return data;
+        }
 
-            // Extract explanation for all types (if element exists)
-            const explainEl = document.getElementById(`explain-${qid}`);
-            if (explainEl) {
-                data.explanation = explainEl.value.trim();
+        async function saveCard(qid, type, isManual = false) {
+            if (debounceTimers[qid]) {
+                clearTimeout(debounceTimers[qid]);
+                delete debounceTimers[qid];
             }
-            
+            pendingSaves.delete(qid);
+
+            const data = extractCardData(qid, type);
+            setCardStatus(qid, 'saving');
+            setAutoSaveStatus('saving');
+
             try {
                 const response = await fetch(`/teacher/quiz/${quizId}/question/${qid}/edit`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-                if((await response.json()).success) {
-                    const card = document.getElementById(`q-${qid}`);
-                    if (card) {
-                        card.classList.add('blink-effect');
-                        setTimeout(() => card.classList.remove('blink-effect'), 500);
+                const res = await response.json();
+                if (res && res.success) {
+                    setCardStatus(qid, 'saved');
+                    if (pendingSaves.size === 0) {
+                        setAutoSaveStatus('saved');
                     }
-                } else Swal.fire('Error', 'Update failed', 'error');
-            } catch (err) { Swal.fire('Error', 'Network error', 'error'); }
+                    if (isManual) {
+                        const card = document.getElementById(`q-${qid}`);
+                        if (card) {
+                            card.classList.add('blink-effect');
+                            setTimeout(() => card.classList.remove('blink-effect'), 500);
+                        }
+                    }
+                } else {
+                    setCardStatus(qid, 'error');
+                    setAutoSaveStatus('error');
+                    if (isManual) Swal.fire('Error', res.error || 'Update failed', 'error');
+                }
+            } catch (err) {
+                setCardStatus(qid, 'error');
+                setAutoSaveStatus('error');
+                if (isManual) Swal.fire('Error', 'Network error', 'error');
+            }
+        }
+
+        function queueAutoSave(qid, type) {
+            setCardStatus(qid, 'saving');
+            setAutoSaveStatus('saving');
+            pendingSaves.add(qid);
+
+            if (debounceTimers[qid]) {
+                clearTimeout(debounceTimers[qid]);
+            }
+            debounceTimers[qid] = setTimeout(() => {
+                saveCard(qid, type, false);
+            }, 600);
+        }
+
+        function initAutoSave() {
+            questionsData.forEach(q => {
+                const card = document.getElementById(`q-${q._id}`);
+                if (!card) return;
+                const type = q.questionType || 'MCQ';
+
+                // Listen to input and change events on all textareas, inputs, and selects
+                card.querySelectorAll('input, textarea, select').forEach(el => {
+                    el.addEventListener('input', () => queueAutoSave(q._id, type));
+                    el.addEventListener('change', () => queueAutoSave(q._id, type));
+                    el.addEventListener('blur', () => {
+                        if (debounceTimers[q._id]) {
+                            saveCard(q._id, type, false);
+                        }
+                    });
+                });
+            });
+
+            // Flush any pending save before leaving / reloading page
+            window.addEventListener('beforeunload', () => {
+                pendingSaves.forEach(qid => {
+                    const q = questionsData.find(x => x._id === qid);
+                    if (q) {
+                        const data = extractCardData(qid, q.questionType || 'MCQ');
+                        navigator.sendBeacon(
+                            `/teacher/quiz/${quizId}/question/${qid}/edit`,
+                            new Blob([JSON.stringify(data)], { type: 'application/json' })
+                        );
+                    }
+                });
+            });
         }
 
         async function launchQuiz() {
@@ -896,6 +977,8 @@
             }
             Swal.fire('Success', `${count} Vectors Deployed`, 'success').then(() => location.reload());
         }
+
+        window.addEventListener('DOMContentLoaded', initAutoSave);
     </script>
 </body>
 </html>

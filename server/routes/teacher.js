@@ -3407,37 +3407,19 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
             options = [optionA, optionB, optionC, optionD].filter(o => o !== undefined && o !== null);
         }
 
-        // Validation
-        if (!marks) {
-            return res.status(400).json({ success: false, error: 'Marks are mandatory!' });
-        }
-
-        if (questionType === 'MCQ' || !questionType) {
-            if (!questionText || questionText.trim() === '') {
-                return res.status(400).json({ success: false, error: 'Question text is mandatory!' });
-            }
-            const filledOptions = options.filter(o => o && o.trim() !== '');
-            if (filledOptions.length < 3) {
-                return res.status(400).json({ success: false, error: 'At least 3 options are mandatory for MCQ!' });
-            }
-        } else if (questionType === 'Short' || questionType === 'Medium') {
-            if (!questionText || questionText.trim() === '' || !answer || answer.trim() === '') {
-                return res.status(400).json({ success: false, error: 'Question and Answer are mandatory!' });
-            }
-        } else if (questionType === 'Comprehension') {
-            if (!context || context.trim() === '' || !q1 || !q2 || !a1 || !a2) {
-                return res.status(400).json({ success: false, error: 'Context, Questions, and Answers are mandatory!' });
-            }
-        }
+        // Draft update: save whatever the teacher has typed without throwing 400 validation errors,
+        // so real-time auto-save preserves all keystrokes even if fields are partially filled.
+        let parsedMarks = parseInt(marks);
+        if (isNaN(parsedMarks)) parsedMarks = 1;
         
         let updateData = {
-            'questions.$.questionText': questionText ? questionText.trim() : '',
-            'questions.$.options': options,
-            'questions.$.explanation': explanation ? explanation.trim() : '',
-            'questions.$.marks': parseInt(marks) || 1,
-            'questions.$.board': board || '',
-            'questions.$.year': year || '',
-            'questions.$.questionType': questionType
+            'questions.$.questionText': questionText !== undefined ? questionText.trim() : '',
+            'questions.$.options': Array.isArray(options) ? options : [],
+            'questions.$.explanation': explanation !== undefined ? explanation.trim() : '',
+            'questions.$.marks': parsedMarks,
+            'questions.$.board': board ? board.trim() : '',
+            'questions.$.year': year ? year.trim() : '',
+            'questions.$.questionType': questionType || 'MCQ'
         };
         
         if (questionType === 'MCQ' || !questionType) {
