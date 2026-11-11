@@ -3,6 +3,7 @@
 
 <head>
     <%- include('../partials/head') %>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <title>Notes | ODDHAY Command Center</title>
     <style>
                 :root { --admin-sidebar-width: 260px; }
@@ -446,19 +447,20 @@
     </div>
 
     <!-- PDF Viewer Modal -->
-    <div id="note-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-2 sm:p-4">
-        <div class="bg-white dark:bg-[#0f172a] rounded-xl w-full max-w-4xl h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800">
-            <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 shrink-0">
+    <div id="note-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-1 sm:p-4">
+        <div class="bg-white dark:bg-[#0f172a] rounded-xl w-full max-w-4xl h-[95vh] sm:h-[90vh] flex flex-col overflow-hidden shadow-2xl border border-slate-200 dark:border-slate-800">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 shrink-0">
                 <div class="flex items-center gap-2 min-w-0">
                     <span class="material-symbols-rounded text-primary text-xl flex items-center justify-center leading-none select-none">picture_as_pdf</span>
-                    <h3 id="note-modal-title" class="text-sm font-bold text-slate-800 dark:text-white truncate">Note Document</h3>
+                    <h3 id="note-modal-title" class="text-xs sm:text-sm font-bold text-slate-800 dark:text-white truncate max-w-[140px] sm:max-w-xs md:max-w-md">Note Document</h3>
                 </div>
-                <div class="flex items-center gap-2">
-                    <a id="note-modal-open-tab" href="#" target="_blank" class="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-xs font-bold transition-all flex items-center gap-1 shadow-xs" title="Open in new tab">
-                        <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none">open_in_new</span>
+                <div class="flex items-center gap-1.5 sm:gap-2">
+                    <a id="note-modal-open-tab" href="#" class="px-2 sm:px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-xs font-bold transition-all flex items-center gap-1 shadow-xs" title="Open in this tab">
+                        <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none">open_in_browser</span>
                         <span>Open</span>
                     </a>
-                    <a id="note-modal-download" href="#" download class="px-2.5 py-1 bg-primary hover:bg-primary/90 text-white rounded text-xs font-bold transition-all flex items-center gap-1 shadow-xs">
+                    <a id="note-modal-download" href="#" download class="px-2 sm:px-2.5 py-1 bg-primary hover:bg-primary/90 text-white rounded text-xs font-bold transition-all flex items-center gap-1 shadow-xs">
                         <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none">download</span>
                         <span>Download</span>
                     </a>
@@ -467,8 +469,22 @@
                     </button>
                 </div>
             </div>
-            <div class="flex-1 w-full bg-slate-100 dark:bg-slate-950 relative">
-                <iframe id="note-modal-frame" src="" class="w-full h-full border-none"></iframe>
+
+            <!-- Mobile Notice & Fast Open in Same Tab -->
+            <div id="note-modal-mobile-bar" class="sm:hidden px-3 py-1.5 bg-blue-50/90 dark:bg-blue-950/50 border-b border-blue-100 dark:border-blue-900/30 flex items-center justify-between text-xs shrink-0">
+                <span class="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate">স্ক্রোল করতে সমস্যা হলে:</span>
+                <a id="note-modal-mobile-open" href="#" class="px-2 py-0.5 bg-primary hover:bg-blue-600 text-white rounded text-[11px] font-bold flex items-center gap-1 shrink-0">
+                    <span class="material-symbols-rounded text-xs">open_in_browser</span>
+                    <span>একই ট্যাবে ওপেন</span>
+                </a>
+            </div>
+
+            <!-- Scrollable Viewport (Works on small touchscreens & desktops) -->
+            <div id="note-modal-scroll-area" class="flex-1 w-full bg-slate-100 dark:bg-slate-950 relative overflow-y-auto overflow-x-hidden p-2 sm:p-4 flex flex-col items-center gap-3" style="-webkit-overflow-scrolling: touch; touch-action: pan-y;">
+                <!-- PDF.js Canvas Rendering Container (Smooth multi-page scrolling on mobile / all screens) -->
+                <div id="note-modal-pages" class="w-full flex flex-col items-center gap-3"></div>
+                <!-- Iframe fallback for desktop / non-PDF -->
+                <iframe id="note-modal-frame" src="" class="hidden w-full h-full flex-1 border-none bg-white dark:bg-slate-950 min-h-[450px]"></iframe>
             </div>
         </div>
     </div>
@@ -1395,12 +1411,72 @@
             document.body.classList.remove('notes-list-mode');
         }
 
+                let _activePdfLoadingTask = null;
+
+        async function renderModalPdfPages(url) {
+            const pagesContainer = document.getElementById('note-modal-pages');
+            const frame = document.getElementById('note-modal-frame');
+            if (!pagesContainer) return;
+            
+            pagesContainer.innerHTML = '<div class="flex flex-col items-center justify-center p-8 text-center text-slate-400"><span class="material-symbols-rounded text-3xl animate-spin text-primary mb-2">progress_activity</span><span class="text-xs font-semibold">Loading document pages...</span></div>';
+            pagesContainer.classList.remove('hidden');
+            if (frame) frame.classList.add('hidden');
+
+            try {
+                if (_activePdfLoadingTask) {
+                    try { _activePdfLoadingTask.destroy(); } catch (e) {}
+                }
+                if (!window.pdfjsLib) {
+                    throw new Error('PDF.js not loaded');
+                }
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                _activePdfLoadingTask = window.pdfjsLib.getDocument(url);
+                const pdf = await _activePdfLoadingTask.promise;
+                pagesContainer.innerHTML = '';
+
+                const scrollArea = document.getElementById('note-modal-scroll-area');
+                const availableWidth = ((scrollArea ? scrollArea.clientWidth : window.innerWidth) || 360) - 24;
+                const targetWidth = Math.min(Math.max(availableWidth, 280), 800);
+
+                for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                    const page = await pdf.getPage(pageNum);
+                    const unscaled = page.getViewport({ scale: 1 });
+                    const scale = targetWidth / unscaled.width;
+                    const viewport = page.getViewport({ scale: Math.max(scale, 0.4) });
+
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'w-full flex flex-col items-center gap-1';
+                    wrapper.innerHTML = `<div class="w-full max-w-[${Math.round(viewport.width)}px] flex justify-between items-center text-[10px] font-semibold text-slate-400 px-1"><span>Page ${pageNum} of ${pdf.numPages}</span></div>`;
+
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    canvas.className = 'w-full max-w-full h-auto rounded-lg shadow-sm border border-slate-200 dark:border-slate-800 bg-white';
+                    
+                    wrapper.appendChild(canvas);
+                    pagesContainer.appendChild(wrapper);
+
+                    await page.render({ canvasContext: ctx, viewport }).promise;
+                }
+            } catch (err) {
+                console.warn('PDF.js canvas render fallback to iframe:', err);
+                if (frame) {
+                    pagesContainer.classList.add('hidden');
+                    frame.classList.remove('hidden');
+                    frame.src = url;
+                }
+            }
+        }
+
         function openNoteModal(url, title) {
             const modal = document.getElementById('note-modal');
             const frame = document.getElementById('note-modal-frame');
             const titleEl = document.getElementById('note-modal-title');
             const downloadBtn = document.getElementById('note-modal-download');
             const openTabBtn = document.getElementById('note-modal-open-tab');
+            const mobileOpenBtn = document.getElementById('note-modal-mobile-open');
+            const pagesContainer = document.getElementById('note-modal-pages');
             
             if (!url || url === '#' || url === 'undefined') {
                 if (typeof showCustomAlert === 'function') {
@@ -1416,22 +1492,50 @@
                 resolvedUrl = '/' + resolvedUrl.replace(/\\/g, '/');
             }
 
-            if (modal && frame) {
+            if (modal) {
                 titleEl.textContent = title || 'Note Document';
                 if (downloadBtn) downloadBtn.href = resolvedUrl;
-                if (openTabBtn) openTabBtn.href = resolvedUrl;
-                frame.src = resolvedUrl;
+                // Open in SAME TAB
+                if (openTabBtn) {
+                    openTabBtn.href = resolvedUrl;
+                    openTabBtn.removeAttribute('target');
+                }
+                if (mobileOpenBtn) {
+                    mobileOpenBtn.href = resolvedUrl;
+                    mobileOpenBtn.removeAttribute('target');
+                }
+
                 modal.classList.remove('hidden');
                 document.body.style.overflow = 'hidden';
+
+                const cleanUrl = resolvedUrl.split('?')[0].toLowerCase();
+                const isPdf = cleanUrl.endsWith('.pdf') || resolvedUrl.includes('.pdf');
+                
+                // Use PDF.js for 100% smooth touch scrolling on mobile and all screens
+                if (isPdf && window.pdfjsLib) {
+                    renderModalPdfPages(resolvedUrl);
+                } else {
+                    if (pagesContainer) pagesContainer.classList.add('hidden');
+                    if (frame) {
+                        frame.classList.remove('hidden');
+                        frame.src = resolvedUrl;
+                    }
+                }
             }
         }
 
         function closeNoteModal() {
             const modal = document.getElementById('note-modal');
             const frame = document.getElementById('note-modal-frame');
+            const pagesContainer = document.getElementById('note-modal-pages');
+            if (_activePdfLoadingTask) {
+                try { _activePdfLoadingTask.destroy(); } catch (e) {}
+                _activePdfLoadingTask = null;
+            }
             if (modal) {
                 modal.classList.add('hidden');
                 if (frame) frame.src = '';
+                if (pagesContainer) pagesContainer.innerHTML = '';
                 document.body.style.overflow = '';
             }
         }
