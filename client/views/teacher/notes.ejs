@@ -340,7 +340,8 @@
                                        const title = note.title || 'Untitled Note';
                                        const subject = note.subject || 'General Academic';
                                        const classLevelStr = Array.isArray(note.classLevel) ? note.classLevel.join(', ') : (note.classLevel || 'General');
-                                       const fileUrl = note.filePath || note.fileUrl || note.url || '#';
+                                       const rawFileUrl = note.filePath || note.fileUrl || note.url || '#';
+                                       const fileUrl = typeof getImg === 'function' ? getImg(rawFileUrl) : (rawFileUrl.startsWith('http') || rawFileUrl.startsWith('/') ? rawFileUrl : '/' + rawFileUrl.replace(/\\/g, '/'));
                                        const isPdf = fileUrl.toLowerCase().endsWith('.pdf');
                                        const isPaid = (note.accessType || '').toLowerCase() === 'paid';
                                        const authorName = note.addedBy ? note.addedBy.name : (note.author || 'Instructor');
@@ -453,6 +454,10 @@
                     <h3 id="note-modal-title" class="text-sm font-bold text-slate-800 dark:text-white truncate">Note Document</h3>
                 </div>
                 <div class="flex items-center gap-2">
+                    <a id="note-modal-open-tab" href="#" target="_blank" class="px-2.5 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded text-xs font-bold transition-all flex items-center gap-1 shadow-xs" title="Open in new tab">
+                        <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none">open_in_new</span>
+                        <span>Open</span>
+                    </a>
                     <a id="note-modal-download" href="#" download class="px-2.5 py-1 bg-primary hover:bg-primary/90 text-white rounded text-xs font-bold transition-all flex items-center gap-1 shadow-xs">
                         <span class="material-symbols-rounded text-sm flex items-center justify-center leading-none">download</span>
                         <span>Download</span>
@@ -1395,11 +1400,27 @@
             const frame = document.getElementById('note-modal-frame');
             const titleEl = document.getElementById('note-modal-title');
             const downloadBtn = document.getElementById('note-modal-download');
+            const openTabBtn = document.getElementById('note-modal-open-tab');
             
+            if (!url || url === '#' || url === 'undefined') {
+                if (typeof showCustomAlert === 'function') {
+                    showCustomAlert('No document attached to this note yet.', 'warning', 'Document Missing');
+                } else {
+                    alert('No document attached to this note yet.');
+                }
+                return;
+            }
+
+            let resolvedUrl = url;
+            if (!resolvedUrl.startsWith('http://') && !resolvedUrl.startsWith('https://') && !resolvedUrl.startsWith('/')) {
+                resolvedUrl = '/' + resolvedUrl.replace(/\\/g, '/');
+            }
+
             if (modal && frame) {
                 titleEl.textContent = title || 'Note Document';
-                downloadBtn.href = url;
-                frame.src = url;
+                if (downloadBtn) downloadBtn.href = resolvedUrl;
+                if (openTabBtn) openTabBtn.href = resolvedUrl;
+                frame.src = resolvedUrl;
                 modal.classList.remove('hidden');
                 document.body.style.overflow = 'hidden';
             }
@@ -2391,23 +2412,12 @@
                 return completeJson.fileUrl;
             }
 
-            // Universal smart uploader (handles up to 25MB seamlessly)
+            // Universal smart uploader (handles up to 25MB seamlessly via MongoDB GridFS)
             async function uploadNoteFile(file, onProgress) {
                 if (file.size > 25 * 1024 * 1024) {
                     throw new Error('File exceeds the 25MB maximum limit.');
                 }
-
-                // If file is <= 10MB, try direct Cloudinary upload first
-                if (file.size <= 10485760) {
-                    try {
-                        return await uploadFileDirectlyToCloudinary(file, onProgress);
-                    } catch (err) {
-                        console.warn('Direct Cloudinary upload failed, falling back to chunked storage:', err);
-                        return await uploadFileInChunks(file, onProgress);
-                    }
-                }
-
-                // If file is > 10MB (Cloudinary free tier limit is 10MB), use chunked storage directly
+                // Always upload via secure chunked storage to MongoDB GridFS (supports 25MB+, no Cloudinary 401 ACL issues)
                 return await uploadFileInChunks(file, onProgress);
             }
 
