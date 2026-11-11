@@ -1078,245 +1078,249 @@
         function openAddNoteModal(presetSubject = '', presetCourseId = '', presetChapter = '') {
             const modal = document.getElementById('addNoteModal');
             if (!modal) return;
-            
-            const subjInput = document.getElementById('noteSubject');
-            const parentFolderInput = document.getElementById('noteParentFolderId');
-            const courseInput = document.getElementById('noteCoursePicker');
-            const targetBadge = document.getElementById('noteFolderContextBadge');
-            const targetText = document.getElementById('noteTargetFolderText');
-
-            // Detect folder context from active folder navigation
-            let detectedSubject = '';
-            let detectedChapter = '';
-            let detectedClass = '';
-            let detectedFolderId = window.activeFolderIdFilter || '';
-
-            const knownSubjects = (Array.isArray(window.assignedSubjects) ? window.assignedSubjects : []).map(s => String(s || '').trim().toLowerCase());
-            const isSubjectName = (name) => {
-                if (!name) return false;
-                const n = String(name).trim().toLowerCase();
-                if (knownSubjects.includes(n)) return true;
-                const common = ['bangla', 'english', 'physics', 'mathematics', 'higher mathematics', 'math', 'chemistry', 'biology', 'ict', 'general academic', 'accounting', 'finance', 'economics', 'তথ্য ও যোগাযোগ প্রযুক্তি', 'পদার্থবিজ্ঞান', 'রসায়ন', 'গণিত', 'উচ্চতর গণিত', 'জীববিজ্ঞান', 'বাংলা'];
-                return common.includes(n);
-            };
-
-            if (detectedFolderId && window.customFolders) {
-                const curFolder = window.customFolders.find(f => String(f._id) === String(detectedFolderId));
-                if (curFolder) {
-                    if (curFolder.parentId) {
-                        detectedChapter = curFolder.name;
-                        const parentFolder = window.customFolders.find(f => String(f._id) === String(curFolder.parentId));
-                        detectedSubject = curFolder.subject || (parentFolder ? (parentFolder.subject || parentFolder.name) : '');
-                        detectedClass = curFolder.classLevel || (parentFolder ? parentFolder.classLevel : '') || window.activeClass || '';
-                    } else {
-                        // Top level folder: check if it represents a Subject or a Chapter
-                        if (isSubjectName(curFolder.name)) {
-                            detectedSubject = curFolder.name;
-                        } else if (curFolder.subject && curFolder.name.trim().toLowerCase() !== curFolder.subject.trim().toLowerCase()) {
-                            detectedChapter = curFolder.name;
-                            detectedSubject = curFolder.subject;
-                        } else {
-                            detectedChapter = curFolder.name;
-                            detectedSubject = curFolder.subject || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : '');
-                        }
-                        detectedClass = curFolder.classLevel || window.activeClass || '';
-                    }
-                }
-            }
-
-            if (window.folderNavStack && window.folderNavStack.length > 0) {
-                if (window.folderNavStack.length >= 2) {
-                    if (!detectedSubject) detectedSubject = window.folderNavStack[0].name;
-                    if (!detectedChapter) detectedChapter = window.folderNavStack[1].name;
-                } else if (window.folderNavStack.length === 1) {
-                    const topFolder = window.folderNavStack[0].name;
-                    if (isSubjectName(topFolder)) {
-                        if (!detectedSubject) detectedSubject = topFolder;
-                    } else {
-                        if (!detectedChapter) detectedChapter = topFolder;
-                        if (!detectedSubject && window.activeSubject && window.activeSubject !== 'all') {
-                            detectedSubject = window.activeSubject;
-                        }
-                    }
-                }
-                if (!detectedClass) detectedClass = window.activeClass || '';
-            }
-
-            // Fallback for activeChapterFilter: if window.activeChapterFilter is set, and it's not a subject name
-            if (!detectedChapter && window.activeChapterFilter && window.activeChapterFilter !== 'all') {
-                if (!isSubjectName(window.activeChapterFilter)) {
-                    detectedChapter = window.activeChapterFilter.trim();
-                } else if (!detectedSubject) {
-                    detectedSubject = window.activeChapterFilter.trim();
-                }
-            }
-
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlSubj = (urlParams.get('subject') && urlParams.get('subject') !== 'all') ? urlParams.get('subject') : '';
-            const isInsideSubjectFolder = Boolean(presetSubject || detectedSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all'));
-            const activeSubj = (presetSubject || detectedSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : (window.assignedSubjects && window.assignedSubjects[0] ? window.assignedSubjects[0] : 'General Academic'))).trim();
-            const activeChapterVal = (presetChapter || detectedChapter || '').trim();
-            const activeClass = (detectedClass || (window.activeClass && window.activeClass !== 'all' ? window.activeClass : '') || urlParams.get('class') || '').trim();
-            const activeParentId = detectedFolderId || '';
-            const activeCourse = presetCourseId || window.activeCourseId || '';
-
-            const isInsideChapterFolder = Boolean(activeChapterVal && activeChapterVal.toLowerCase() !== activeSubj.toLowerCase());
-
-            window._initialNoteChapter = isInsideChapterFolder ? activeChapterVal : '';
-
-            // Handle Subject UI & Context Locking
-            const lockedNotice = document.getElementById('noteSubjectLockedNotice');
-            const lockedText = document.getElementById('lockedSubjectText');
-            const subjectHidden = document.getElementById('noteSubjectHidden');
-
-            if (subjectHidden) subjectHidden.value = activeSubj;
-
-            if (subjInput) {
-                let match = Array.from(subjInput.options).find(o => o.value.trim().toLowerCase() === activeSubj.toLowerCase());
-                if (!match) {
-                    const aliases = (typeof getSubjectAliases === 'function') ? getSubjectAliases(activeSubj) : [activeSubj];
-                    match = Array.from(subjInput.options).find(o => aliases.some(a => a.toLowerCase() === o.value.trim().toLowerCase()));
-                }
-                if (match) {
-                    subjInput.value = match.value;
-                    if (subjectHidden) subjectHidden.value = match.value;
-                } else if (activeSubj) {
-                    const opt = document.createElement('option');
-                    opt.value = activeSubj;
-                    opt.textContent = activeSubj;
-                    subjInput.appendChild(opt);
-                    subjInput.value = activeSubj;
-                }
-
-                if (isInsideSubjectFolder && activeSubj) {
-                    // Lock subject: hide dropdown so no different subject can be chosen, show locked card!
-                    subjInput.classList.add('hidden');
-                    if (lockedNotice) {
-                        lockedNotice.classList.remove('hidden');
-                        if (lockedText) lockedText.textContent = activeSubj;
-                    }
-                } else {
-                    subjInput.classList.remove('hidden');
-                    if (lockedNotice) lockedNotice.classList.add('hidden');
-                }
-            }
-
-            // Handle Chapter UI & Context Locking
-            const chapterLockedNotice = document.getElementById('noteChapterLockedNotice');
-            const lockedChapterText = document.getElementById('lockedChapterText');
-            const chapterHidden = document.getElementById('noteChapterHidden');
-            const chapterSelect = document.getElementById('noteChapter');
-
-            if (chapterHidden) chapterHidden.value = isInsideChapterFolder ? activeChapterVal : '';
-
-            if (chapterSelect) {
-                if (isInsideChapterFolder && activeChapterVal) {
-                    chapterSelect.classList.add('hidden');
-                    if (chapterLockedNotice) {
-                        chapterLockedNotice.classList.remove('hidden');
-                        if (lockedChapterText) lockedChapterText.textContent = activeChapterVal;
-                    }
-                } else {
-                    chapterSelect.classList.remove('hidden');
-                    if (chapterLockedNotice) chapterLockedNotice.classList.add('hidden');
-                }
-            }
-
-            if (parentFolderInput) parentFolderInput.value = activeParentId;
-            if (courseInput) courseInput.value = activeCourse;
-
-            // Handle Class UI & Context Locking
-            const isInsideClassFolder = Boolean(activeClass && activeClass.toLowerCase() !== 'all');
-            const classLockedNotice = document.getElementById('noteClassLockedNotice');
-            const lockedClassText = document.getElementById('lockedClassText');
-            const classHidden = document.getElementById('noteClassHidden');
-            const classesContainer = document.getElementById('noteClassesContainer');
-
-            if (classHidden) {
-                if (isInsideClassFolder) {
-                    classHidden.disabled = false;
-                    classHidden.value = activeClass;
-                } else {
-                    classHidden.disabled = true;
-                    classHidden.value = '';
-                }
-            }
-
-            if (isInsideClassFolder) {
-                if (classesContainer) classesContainer.classList.add('hidden');
-                if (classLockedNotice) {
-                    classLockedNotice.classList.remove('hidden');
-                    if (lockedClassText) lockedClassText.textContent = activeClass;
-                }
-            } else {
-                if (classesContainer) classesContainer.classList.remove('hidden');
-                if (classLockedNotice) classLockedNotice.classList.add('hidden');
-            }
-
-            // Auto-check target class matching active folder / filter
-            const classCheckboxes = document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]');
-            let hasAnyChecked = false;
-            classCheckboxes.forEach(cb => {
-                const cbVal = cb.value.toLowerCase();
-                const actVal = activeClass.toLowerCase();
-                if (activeClass && activeClass !== 'all' && (cbVal === actVal || cbVal.includes(actVal) || actVal.includes(cbVal))) {
-                    cb.checked = true;
-                    hasAnyChecked = true;
-                } else {
-                    cb.checked = false;
-                }
-            });
-            if (!hasAnyChecked && classCheckboxes.length > 0 && !isInsideClassFolder) {
-                classCheckboxes[0].checked = true;
-            }
-
-            if (window.onNoteSubjectOrClassChange) window.onNoteSubjectOrClassChange();
-
-            if (targetBadge && targetText) {
-                const parts = [];
-                if (activeSubj) parts.push(activeSubj);
-                if (activeChapter) parts.push(activeChapter);
-                if (activeClass && activeClass !== 'all') parts.push(activeClass);
-                if (parts.length > 0) {
-                    targetText.textContent = parts.join(' • ');
-                    targetBadge.classList.remove('hidden');
-                } else {
-                    targetBadge.classList.add('hidden');
-                }
-            }
-
-            // Reset file preview
-            const fileInput = document.getElementById('noteFileInput');
-            if (fileInput) {
-                fileInput.value = '';
-                fileInput.disabled = false;
-            }
-            const existingUrlInput = document.getElementById('addNoteForm')?.querySelector('input[name="fileUrl"]');
-            if (existingUrlInput) existingUrlInput.remove();
-            const nameEl = document.getElementById('noteFileNamePreview');
-            const sizeEl = document.getElementById('noteFileSizePreview');
-            const iconBox = document.getElementById('noteFileIconBox');
-            const dropzone = document.getElementById('noteFileDropzone');
-            if (nameEl) nameEl.textContent = 'Select PDF file';
-            if (sizeEl) sizeEl.textContent = 'Max 25MB';
-            if (dropzone) {
-                dropzone.classList.remove('border-emerald-500', 'bg-emerald-50/10');
-                dropzone.classList.add('border-slate-200', 'dark:border-slate-700');
-            }
-            if (iconBox) {
-                iconBox.className = 'size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-2 border border-primary/20';
-                iconBox.innerHTML = '<span class="material-symbols-rounded text-2xl leading-none">picture_as_pdf</span>';
-            }
-
-            // Reset submit button state
-            const submitBtn = document.getElementById('addNoteSubmitBtn');
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<span class="material-symbols-rounded text-sm leading-none">cloud_upload</span><span>Upload Note</span>';
-            }
-
             modal.classList.remove('hidden');
+
+            try {
+                const subjInput = document.getElementById('noteSubject');
+                const parentFolderInput = document.getElementById('noteParentFolderId');
+                const courseInput = document.getElementById('noteCoursePicker');
+                const targetBadge = document.getElementById('noteFolderContextBadge');
+                const targetText = document.getElementById('noteTargetFolderText');
+
+                // Detect folder context from active folder navigation
+                let detectedSubject = '';
+                let detectedChapter = '';
+                let detectedClass = '';
+                let detectedFolderId = window.activeFolderIdFilter || '';
+
+                const knownSubjects = (Array.isArray(window.assignedSubjects) ? window.assignedSubjects : []).map(s => String(s || '').trim().toLowerCase());
+                const isSubjectName = (name) => {
+                    if (!name) return false;
+                    const n = String(name).trim().toLowerCase();
+                    if (knownSubjects.includes(n)) return true;
+                    const common = ['bangla', 'english', 'physics', 'mathematics', 'higher mathematics', 'math', 'chemistry', 'biology', 'ict', 'general academic', 'accounting', 'finance', 'economics', 'তথ্য ও যোগাযোগ প্রযুক্তি', 'পদার্থবিজ্ঞান', 'রসায়ন', 'গণিত', 'উচ্চতর গণিত', 'জীববিজ্ঞান', 'বাংলা'];
+                    return common.includes(n);
+                };
+
+                if (detectedFolderId && window.customFolders) {
+                    const curFolder = window.customFolders.find(f => String(f._id) === String(detectedFolderId));
+                    if (curFolder) {
+                        if (curFolder.parentId) {
+                            detectedChapter = curFolder.name;
+                            const parentFolder = window.customFolders.find(f => String(f._id) === String(curFolder.parentId));
+                            detectedSubject = curFolder.subject || (parentFolder ? (parentFolder.subject || parentFolder.name) : '');
+                            detectedClass = curFolder.classLevel || (parentFolder ? parentFolder.classLevel : '') || window.activeClass || '';
+                        } else {
+                            // Top level folder: check if it represents a Subject or a Chapter
+                            if (isSubjectName(curFolder.name)) {
+                                detectedSubject = curFolder.name;
+                            } else if (curFolder.subject && curFolder.name.trim().toLowerCase() !== curFolder.subject.trim().toLowerCase()) {
+                                detectedChapter = curFolder.name;
+                                detectedSubject = curFolder.subject;
+                            } else {
+                                detectedChapter = curFolder.name;
+                                detectedSubject = curFolder.subject || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : '');
+                            }
+                            detectedClass = curFolder.classLevel || window.activeClass || '';
+                        }
+                    }
+                }
+
+                if (window.folderNavStack && window.folderNavStack.length > 0) {
+                    if (window.folderNavStack.length >= 2) {
+                        if (!detectedSubject) detectedSubject = window.folderNavStack[0].name;
+                        if (!detectedChapter) detectedChapter = window.folderNavStack[1].name;
+                    } else if (window.folderNavStack.length === 1) {
+                        const topFolder = window.folderNavStack[0].name;
+                        if (isSubjectName(topFolder)) {
+                            if (!detectedSubject) detectedSubject = topFolder;
+                        } else {
+                            if (!detectedChapter) detectedChapter = topFolder;
+                            if (!detectedSubject && window.activeSubject && window.activeSubject !== 'all') {
+                                detectedSubject = window.activeSubject;
+                            }
+                        }
+                    }
+                    if (!detectedClass) detectedClass = window.activeClass || '';
+                }
+
+                // Fallback for activeChapterFilter: if window.activeChapterFilter is set, and it's not a subject name
+                if (!detectedChapter && window.activeChapterFilter && window.activeChapterFilter !== 'all') {
+                    if (!isSubjectName(window.activeChapterFilter)) {
+                        detectedChapter = window.activeChapterFilter.trim();
+                    } else if (!detectedSubject) {
+                        detectedSubject = window.activeChapterFilter.trim();
+                    }
+                }
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlSubj = (urlParams.get('subject') && urlParams.get('subject') !== 'all') ? urlParams.get('subject') : '';
+                const isInsideSubjectFolder = Boolean(presetSubject || detectedSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all'));
+                const activeSubj = (presetSubject || detectedSubject || urlSubj || (window.activeSubject && window.activeSubject !== 'all' ? window.activeSubject : (window.assignedSubjects && window.assignedSubjects[0] ? window.assignedSubjects[0] : 'General Academic'))).trim();
+                const activeChapterVal = (presetChapter || detectedChapter || '').trim();
+                const activeClass = (detectedClass || (window.activeClass && window.activeClass !== 'all' ? window.activeClass : '') || urlParams.get('class') || '').trim();
+                const activeParentId = detectedFolderId || '';
+                const activeCourse = presetCourseId || window.activeCourseId || '';
+
+                const isInsideChapterFolder = Boolean(activeChapterVal && activeChapterVal.toLowerCase() !== activeSubj.toLowerCase());
+
+                window._initialNoteChapter = isInsideChapterFolder ? activeChapterVal : '';
+
+                // Handle Subject UI & Context Locking
+                const lockedNotice = document.getElementById('noteSubjectLockedNotice');
+                const lockedText = document.getElementById('lockedSubjectText');
+                const subjectHidden = document.getElementById('noteSubjectHidden');
+
+                if (subjectHidden) subjectHidden.value = activeSubj;
+
+                if (subjInput) {
+                    let match = Array.from(subjInput.options).find(o => o.value.trim().toLowerCase() === activeSubj.toLowerCase());
+                    if (!match) {
+                        const aliases = (typeof getSubjectAliases === 'function') ? getSubjectAliases(activeSubj) : [activeSubj];
+                        match = Array.from(subjInput.options).find(o => aliases.some(a => a.toLowerCase() === o.value.trim().toLowerCase()));
+                    }
+                    if (match) {
+                        subjInput.value = match.value;
+                        if (subjectHidden) subjectHidden.value = match.value;
+                    } else if (activeSubj) {
+                        const opt = document.createElement('option');
+                        opt.value = activeSubj;
+                        opt.textContent = activeSubj;
+                        subjInput.appendChild(opt);
+                        subjInput.value = activeSubj;
+                    }
+
+                    if (isInsideSubjectFolder && activeSubj) {
+                        // Lock subject: hide dropdown so no different subject can be chosen, show locked card!
+                        subjInput.classList.add('hidden');
+                        if (lockedNotice) {
+                            lockedNotice.classList.remove('hidden');
+                            if (lockedText) lockedText.textContent = activeSubj;
+                        }
+                    } else {
+                        subjInput.classList.remove('hidden');
+                        if (lockedNotice) lockedNotice.classList.add('hidden');
+                    }
+                }
+
+                // Handle Chapter UI & Context Locking
+                const chapterLockedNotice = document.getElementById('noteChapterLockedNotice');
+                const lockedChapterText = document.getElementById('lockedChapterText');
+                const chapterHidden = document.getElementById('noteChapterHidden');
+                const chapterSelect = document.getElementById('noteChapter');
+
+                if (chapterHidden) chapterHidden.value = isInsideChapterFolder ? activeChapterVal : '';
+
+                if (chapterSelect) {
+                    if (isInsideChapterFolder && activeChapterVal) {
+                        chapterSelect.classList.add('hidden');
+                        if (chapterLockedNotice) {
+                            chapterLockedNotice.classList.remove('hidden');
+                            if (lockedChapterText) lockedChapterText.textContent = activeChapterVal;
+                        }
+                    } else {
+                        chapterSelect.classList.remove('hidden');
+                        if (chapterLockedNotice) chapterLockedNotice.classList.add('hidden');
+                    }
+                }
+
+                if (parentFolderInput) parentFolderInput.value = activeParentId;
+                if (courseInput) courseInput.value = activeCourse;
+
+                // Handle Class UI & Context Locking
+                const isInsideClassFolder = Boolean(activeClass && activeClass.toLowerCase() !== 'all');
+                const classLockedNotice = document.getElementById('noteClassLockedNotice');
+                const lockedClassText = document.getElementById('lockedClassText');
+                const classHidden = document.getElementById('noteClassHidden');
+                const classesContainer = document.getElementById('noteClassesContainer');
+
+                if (classHidden) {
+                    if (isInsideClassFolder) {
+                        classHidden.disabled = false;
+                        classHidden.value = activeClass;
+                    } else {
+                        classHidden.disabled = true;
+                        classHidden.value = '';
+                    }
+                }
+
+                if (isInsideClassFolder) {
+                    if (classesContainer) classesContainer.classList.add('hidden');
+                    if (classLockedNotice) {
+                        classLockedNotice.classList.remove('hidden');
+                        if (lockedClassText) lockedClassText.textContent = activeClass;
+                    }
+                } else {
+                    if (classesContainer) classesContainer.classList.remove('hidden');
+                    if (classLockedNotice) classLockedNotice.classList.add('hidden');
+                }
+
+                // Auto-check target class matching active folder / filter
+                const classCheckboxes = document.querySelectorAll('#noteClassesContainer input[name="classLevel[]"]');
+                let hasAnyChecked = false;
+                classCheckboxes.forEach(cb => {
+                    const cbVal = cb.value.toLowerCase();
+                    const actVal = activeClass.toLowerCase();
+                    if (activeClass && activeClass !== 'all' && (cbVal === actVal || cbVal.includes(actVal) || actVal.includes(cbVal))) {
+                        cb.checked = true;
+                        hasAnyChecked = true;
+                    } else {
+                        cb.checked = false;
+                    }
+                });
+                if (!hasAnyChecked && classCheckboxes.length > 0 && !isInsideClassFolder) {
+                    classCheckboxes[0].checked = true;
+                }
+
+                if (window.onNoteSubjectOrClassChange) window.onNoteSubjectOrClassChange();
+
+                if (targetBadge && targetText) {
+                    const parts = [];
+                    if (activeSubj) parts.push(activeSubj);
+                    if (activeChapterVal) parts.push(activeChapterVal);
+                    if (activeClass && activeClass !== 'all') parts.push(activeClass);
+                    if (parts.length > 0) {
+                        targetText.textContent = parts.join(' • ');
+                        targetBadge.classList.remove('hidden');
+                    } else {
+                        targetBadge.classList.add('hidden');
+                    }
+                }
+
+                // Reset file preview
+                const fileInput = document.getElementById('noteFileInput');
+                if (fileInput) {
+                    fileInput.value = '';
+                    fileInput.disabled = false;
+                }
+                const existingUrlInput = document.getElementById('addNoteForm')?.querySelector('input[name="fileUrl"]');
+                if (existingUrlInput) existingUrlInput.remove();
+                const nameEl = document.getElementById('noteFileNamePreview');
+                const sizeEl = document.getElementById('noteFileSizePreview');
+                const iconBox = document.getElementById('noteFileIconBox');
+                const dropzone = document.getElementById('noteFileDropzone');
+                if (nameEl) nameEl.textContent = 'Select PDF file';
+                if (sizeEl) sizeEl.textContent = 'Max 25MB';
+                if (dropzone) {
+                    dropzone.classList.remove('border-emerald-500', 'bg-emerald-50/10');
+                    dropzone.classList.add('border-slate-200', 'dark:border-slate-700');
+                }
+                if (iconBox) {
+                    iconBox.className = 'size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center mb-2 border border-primary/20';
+                    iconBox.innerHTML = '<span class="material-symbols-rounded text-2xl leading-none">picture_as_pdf</span>';
+                }
+
+                // Reset submit button state
+                const submitBtn = document.getElementById('addNoteSubmitBtn');
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<span class="material-symbols-rounded text-sm leading-none">cloud_upload</span><span>Upload Note</span>';
+                }
+            } catch (err) {
+                console.error('Error opening add note modal:', err);
+            }
         }
+        window.openAddNoteModal = openAddNoteModal;
 
         function openChapterFolder(chapterName, folderId) {
             window.activeChapterFilter = chapterName;
