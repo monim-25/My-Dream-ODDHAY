@@ -3413,7 +3413,7 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
             return res.status(403).json({ success: false, error: 'Access denied' });
         }
 
-        let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation, answer, context, q1, q2, a1, a2, marks, board, year, questionType } = req.body;
+        let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation, answer, context, q1, q2, a1, a2, marks, board, year, questionType, topic } = req.body;
         
         if (!options || !Array.isArray(options)) {
             options = [optionA, optionB, optionC, optionD].filter(o => o !== undefined && o !== null);
@@ -3433,6 +3433,10 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
             'questions.$.year': year ? year.trim() : '',
             'questions.$.questionType': questionType || 'MCQ'
         };
+
+        if (topic !== undefined) {
+            updateData['questions.$.topic'] = String(topic).trim();
+        }
         
         if (questionType === 'MCQ' || !questionType) {
             const finalCorrectIndex = (correctAnswer !== undefined) ? parseInt(correctAnswer) : (parseInt(correctAnswerIndex) || 0);
@@ -3965,6 +3969,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const qBoards    = [].concat(body['qBoard[]']    || body.qBoard    || []);
         const qYears     = [].concat(body['qYear[]']     || body.qYear     || []);
         const qMarks     = [].concat(body['qMarks[]']    || body.qMarks    || []);
+        const qTopics    = [].concat(body['qTopic[]']    || body.qTopic    || []);
 
         // Comprehension specific fields
         const qContexts  = [].concat(body['qContext[]']  || body.qContext  || []);
@@ -4066,6 +4071,10 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 ? ([a1Val && `1. ${a1Val}`, a2Val && `2. ${a2Val}`].filter(Boolean).join('\n') || '')
                 : (qAnswers[i] || '');
 
+            const assignedTopic = (qTopics[i] !== undefined && qTopics[i] !== null && String(qTopics[i]).trim() !== '')
+                ? String(qTopics[i]).trim()
+                : (globalTopic || '');
+
             return {
                 questionText: questionTextFinal,
                 questionType: type,
@@ -4083,6 +4092,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 s2: isComprehension ? s2Val : '',
                 solution2: isComprehension ? s2Val : '',
                 marks: parseInt(qMarks[i] || (isComprehension ? 10 : 1)) || (isComprehension ? 10 : 1),
+                topic: assignedTopic,
                 board:    mode === 'archive' ? globalBoard  : (qBoards[i] || globalBoard || 'General Board'),
                 year:     mode === 'archive' ? globalYear   : (qYears[i]  || globalYear  || ''),
                 subject:  mode === 'archive' ? globalSubject : (body.qSubject?.[i] || globalSubject || 'General'),

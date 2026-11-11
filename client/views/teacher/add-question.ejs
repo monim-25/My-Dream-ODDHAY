@@ -247,7 +247,6 @@
             
             <!-- Hidden Fields -->
             <input type="hidden" name="qType[]" value="MCQ">
-            <input type="hidden" name="qTopic[]" value="">
 
             <!-- Row Header -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 sm:pb-3 border-b border-slate-100 dark:border-slate-800/80">
@@ -275,6 +274,12 @@
                 </div>
 
                 <div class="flex flex-wrap items-center justify-between sm:justify-end gap-2 sm:gap-2.5">
+                    <div class="flex items-center gap-1.5 individual-topic">
+                        <span class="text-xs font-normal text-slate-500 dark:text-slate-400">Topic</span>
+                        <select name="qTopic[]" class="q-topic-select h-7 px-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-normal text-slate-700 dark:text-slate-200 outline-none focus:border-primary transition-all max-w-[130px] sm:max-w-[190px] cursor-pointer">
+                            <option value="">Topic (Optional)</option>
+                        </select>
+                    </div>
                     <div class="flex items-center gap-1.5">
                         <span class="text-xs font-normal text-slate-500 dark:text-slate-400">Marks</span>
                         <input type="number" name="qMarks[]" value="1" min="1" max="100" class="w-12 sm:w-14 h-7 px-1.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-normal text-slate-700 dark:text-slate-200 outline-none focus:border-primary transition-all text-center">
@@ -513,6 +518,12 @@
                     }
                 });
             }
+
+            if (fieldId === 'globalSubject' || fieldId === 'globalClass') {
+                if (typeof loadTopicsForQuestionStudio === 'function') {
+                    loadTopicsForQuestionStudio();
+                }
+            }
             closeAllSystemDropdowns();
             saveStudioDraft();
         }
@@ -563,6 +574,12 @@
                     }
                 });
             }
+
+            if (fieldId === 'globalSubject' || fieldId === 'globalClass') {
+                if (typeof loadTopicsForQuestionStudio === 'function') {
+                    loadTopicsForQuestionStudio();
+                }
+            }
             closeAllSystemDropdowns();
             saveStudioDraft();
         }
@@ -602,12 +619,14 @@
                     const typeInput = row.querySelector('input[name="qType[]"]');
                     const textInput = row.querySelector('textarea[name="qText[]"]');
                     const marksInput = row.querySelector('input[name="qMarks[]"]');
+                    const topicInput = row.querySelector('select[name="qTopic[]"], input[name="qTopic[]"]');
                     const type = typeInput ? typeInput.value : 'MCQ';
 
                     const qData = {
                         type,
                         text: textInput ? textInput.value : '',
                         marks: marksInput ? marksInput.value : getDefaultMarks(type),
+                        topic: topicInput ? topicInput.value : '',
                         options: [],
                         correctIndex: 0,
                         answer: '',
@@ -723,6 +742,16 @@
             const marksInput = row.querySelector('input[name="qMarks[]"]');
             if (marksInput) marksInput.value = qData.marks || getDefaultMarks(qData.type);
 
+            const topicSelect = row.querySelector('.q-topic-select');
+            if (topicSelect) {
+                const targetTopic = qData.topic || urlParams.get('topic') || '';
+                topicSelect.setAttribute('data-prefill', targetTopic);
+                if (typeof buildTopicOptionsHTML === 'function') {
+                    topicSelect.innerHTML = buildTopicOptionsHTML(targetTopic, urlParams.get('topic') || '');
+                }
+                if (targetTopic) topicSelect.value = targetTopic;
+            }
+
             if (qData.type === 'MCQ') {
                 const optInputs = row.querySelectorAll('.mcq-area input[name="qOptions[]"]');
                 (qData.options || []).forEach((optVal, idx) => {
@@ -834,6 +863,100 @@
                 span.className = `inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-normal border ${item.color}`;
                 span.innerHTML = `<span class="material-symbols-rounded text-[13px]">${item.icon}</span><span>${item.label}</span>`;
                 badgesContainer.appendChild(span);
+            });
+        }
+
+        let cachedStudioTopics = [];
+
+        async function fetchStudioTopicsSafely(subject, classLevel) {
+            const endpoints = ['/teacher/api/topics', '/api/topics'];
+            const query = new URLSearchParams({ subject, classLevel }).toString();
+            for (const ep of endpoints) {
+                try {
+                    const res = await fetch(ep + '?' + query, { headers: { 'Accept': 'application/json' } });
+                    if (!res.ok) continue;
+                    const ct = res.headers.get('content-type') || '';
+                    if (!ct.includes('application/json')) continue;
+                    const json = await res.json();
+                    if (json && (json.success || Array.isArray(json.topics))) return json;
+                } catch (e) { console.warn('Topic endpoint error:', ep, e); }
+            }
+            return { success: true, count: 0, topics: [], chapters: [] };
+        }
+
+        function escapeTopicHtml(str) {
+            return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function buildTopicOptionsHTML(selectedTopic = '', paperTopic = '') {
+            let html = '<option value="">Topic (Optional)</option>';
+            
+            const topicNames = new Set((cachedStudioTopics || []).map(t => t.name).filter(Boolean));
+            if (paperTopic && !topicNames.has(paperTopic)) {
+                const isSel = selectedTopic === paperTopic ? 'selected' : '';
+                html += `<option value="${escapeTopicHtml(paperTopic)}" ${isSel}>${escapeTopicHtml(paperTopic)} (Paper)</option>`;
+            }
+
+            const byChapter = {};
+            const ungrouped = [];
+            (cachedStudioTopics || []).forEach(t => {
+                const chapName = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '';
+                if (chapName) {
+                    if (!byChapter[chapName]) byChapter[chapName] = [];
+                    byChapter[chapName].push(t.name);
+                } else {
+                    ungrouped.push(t.name);
+                }
+            });
+
+            for (const [chap, tops] of Object.entries(byChapter)) {
+                html += `<optgroup label="${escapeTopicHtml(chap)}">`;
+                tops.forEach(topName => {
+                    const isSel = selectedTopic === topName ? 'selected' : '';
+                    html += `<option value="${escapeTopicHtml(topName)}" ${isSel}>${escapeTopicHtml(topName)}</option>`;
+                });
+                html += `</optgroup>`;
+            }
+
+            if (ungrouped.length > 0) {
+                if (Object.keys(byChapter).length > 0) html += `<optgroup label="Other Topics">`;
+                ungrouped.forEach(topName => {
+                    const isSel = selectedTopic === topName ? 'selected' : '';
+                    html += `<option value="${escapeTopicHtml(topName)}" ${isSel}>${escapeTopicHtml(topName)}</option>`;
+                });
+                if (Object.keys(byChapter).length > 0) html += `</optgroup>`;
+            }
+
+            if (selectedTopic && !topicNames.has(selectedTopic) && selectedTopic !== paperTopic) {
+                html += `<option value="${escapeTopicHtml(selectedTopic)}" selected>${escapeTopicHtml(selectedTopic)}</option>`;
+            }
+
+            return html;
+        }
+
+        async function loadTopicsForQuestionStudio() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const subject = urlParams.get('subject') || document.getElementById('globalSubject')?.value || document.getElementById('hiddenSubject')?.value || '';
+            const classLevel = urlParams.get('class') || document.getElementById('globalClass')?.value || document.getElementById('hiddenClass')?.value || '';
+            const paperTopic = urlParams.get('topic') || '';
+
+            if (subject || classLevel) {
+                try {
+                    const data = await fetchStudioTopicsSafely(subject, classLevel);
+                    if (data && Array.isArray(data.topics)) {
+                        cachedStudioTopics = data.topics;
+                    }
+                } catch (e) {
+                    console.warn('Failed to load syllabus topics:', e);
+                }
+            }
+
+            document.querySelectorAll('.question-row').forEach(row => {
+                const select = row.querySelector('.q-topic-select');
+                if (!select) return;
+                const currentVal = select.value || (select.getAttribute('data-prefill') || '');
+                select.innerHTML = buildTopicOptionsHTML(currentVal, paperTopic);
+                if (currentVal) select.value = currentVal;
             });
         }
 
@@ -961,6 +1084,8 @@
                     clearStudioDraft();
                 });
             }
+
+            loadTopicsForQuestionStudio();
         };
 
         function changeRowType(itemEl, type) {
@@ -1048,8 +1173,13 @@
                 
                 toggleTypeUI(row, qType);
                 
-                const topicInput = row.querySelector('input[name="qTopic[]"]');
-                if (topicInput && defaultTopic) topicInput.value = defaultTopic;
+                const topicInput = row.querySelector('.q-topic-select, input[name="qTopic[]"]');
+                if (topicInput) {
+                    if (typeof buildTopicOptionsHTML === 'function') {
+                        topicInput.innerHTML = buildTopicOptionsHTML(defaultTopic, defaultTopic);
+                    }
+                    if (defaultTopic) topicInput.value = defaultTopic;
+                }
 
                 if (mode !== 'archive') {
                     const boardInput = row.querySelector('input[name="qBoard[]"]');

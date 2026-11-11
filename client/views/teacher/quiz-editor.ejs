@@ -217,8 +217,8 @@
                                     </div>
                                 </div>
 
-                                <!-- Metadata: Mark, Board, Year inputs (3-col on mobile, flex on desktop) -->
-                                <div class="grid grid-cols-3 sm:flex sm:items-center gap-2 sm:gap-3 text-xs font-medium text-slate-600 dark:text-slate-300">
+                                <!-- Metadata: Mark, Topic, Board, Year inputs -->
+                                <div class="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3 text-xs font-medium text-slate-600 dark:text-slate-300">
                                     <div class="flex items-center gap-1">
                                         <span class="text-[11px] text-slate-400 shrink-0">Mark:</span>
                                         <% 
@@ -227,6 +227,15 @@
                                             if (q.questionType === 'Comprehension') defaultMarks = 7;
                                         %>
                                         <input type="number" id="marks-<%= q._id %>" value="<%= (q.marks !== undefined && q.marks !== null) ? q.marks : defaultMarks %>" class="form-input text-center w-full sm:w-14" style="height: 32px !important; padding: 0 4px;">
+                                    </div>
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-[11px] text-slate-400 shrink-0">Topic:</span>
+                                        <select id="topic-<%= q._id %>" class="form-input text-xs w-full sm:w-28 cursor-pointer q-editor-topic" style="height: 32px !important; padding: 0 4px;" data-prefill="<%= q.topic || '' %>">
+                                            <option value="">(Optional)</option>
+                                            <% if (q.topic) { %>
+                                                <option value="<%= q.topic %>" selected><%= q.topic %></option>
+                                            <% } %>
+                                        </select>
                                     </div>
                                     <div class="flex items-center gap-1">
                                         <span class="text-[11px] text-slate-400 shrink-0">Board:</span>
@@ -631,6 +640,7 @@
 
         function extractCardData(qid, type) {
             const marksEl = document.getElementById(`marks-${qid}`);
+            const topicEl = document.getElementById(`topic-${qid}`);
             const boardEl = document.getElementById(`board-${qid}`);
             const yearEl  = document.getElementById(`year-${qid}`);
             const explainEl = document.getElementById(`explain-${qid}`);
@@ -638,6 +648,7 @@
             const data = {
                 questionType: type,
                 marks: marksEl && marksEl.value.trim() !== '' ? (parseInt(marksEl.value) || 1) : 1,
+                topic: topicEl ? topicEl.value.trim() : '',
                 board: boardEl ? boardEl.value.trim() : '',
                 year: yearEl ? yearEl.value.trim() : '',
                 explanation: explainEl ? explainEl.value.trim() : ''
@@ -786,6 +797,7 @@
                 const data = { 
                     questionType: type,
                     marks: parseInt(marksVal),
+                    topic: document.getElementById(`topic-${qid}`) ? document.getElementById(`topic-${qid}`).value.trim() : '',
                     board: document.getElementById(`board-${qid}`).value.trim(),
                     year: document.getElementById(`year-${qid}`).value.trim()
                 };
@@ -984,7 +996,70 @@
             Swal.fire('Success', `${count} Vectors Deployed`, 'success').then(() => location.reload());
         }
 
-        window.addEventListener('DOMContentLoaded', initAutoSave);
+        window.addEventListener('DOMContentLoaded', () => {
+            initAutoSave();
+            loadQuizEditorTopics();
+        });
+
+        async function loadQuizEditorTopics() {
+            const subject = <%- JSON.stringify(quiz.subject || '') %>;
+            const classLevel = <%- JSON.stringify(quiz.classLevel || '') %>;
+            const quizTopic = <%- JSON.stringify(quiz.topic || '') %>;
+            if (!subject && !classLevel) return;
+
+            try {
+                const endpoints = ['/teacher/api/topics', '/api/topics'];
+                const query = new URLSearchParams({ subject, classLevel }).toString();
+                let topicList = [];
+                for (const ep of endpoints) {
+                    try {
+                        const res = await fetch(ep + '?' + query, { headers: { 'Accept': 'application/json' } });
+                        if (!res.ok) continue;
+                        const json = await res.json();
+                        if (json && Array.isArray(json.topics)) {
+                            topicList = json.topics;
+                            break;
+                        }
+                    } catch (e) {}
+                }
+
+                document.querySelectorAll('.q-editor-topic').forEach(select => {
+                    const currentVal = select.value || select.getAttribute('data-prefill') || '';
+                    let html = '<option value="">(Optional)</option>';
+                    if (quizTopic) {
+                        const isSel = currentVal === quizTopic ? 'selected' : '';
+                        html += `<option value="${escapeEditorHtml(quizTopic)}" ${isSel}>${escapeEditorHtml(quizTopic)} (Quiz Topic)</option>`;
+                    }
+                    const byChapter = {};
+                    topicList.forEach(t => {
+                        const ch = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '';
+                        if (ch) {
+                            if (!byChapter[ch]) byChapter[ch] = [];
+                            byChapter[ch].push(t.name);
+                        }
+                    });
+                    for (const [ch, names] of Object.entries(byChapter)) {
+                        html += `<optgroup label="${escapeEditorHtml(ch)}">`;
+                        names.forEach(n => {
+                            const isSel = currentVal === n ? 'selected' : '';
+                            html += `<option value="${escapeEditorHtml(n)}" ${isSel}>${escapeEditorHtml(n)}</option>`;
+                        });
+                        html += `</optgroup>`;
+                    }
+                    if (currentVal && !html.includes(`value="${escapeEditorHtml(currentVal)}"`)) {
+                        html += `<option value="${escapeEditorHtml(currentVal)}" selected>${escapeEditorHtml(currentVal)}</option>`;
+                    }
+                    select.innerHTML = html;
+                    if (currentVal) select.value = currentVal;
+                });
+            } catch (err) {
+                console.warn('Failed to load quiz editor topics:', err);
+            }
+        }
+
+        function escapeEditorHtml(str) {
+            return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
     </script>
 </body>
 </html>
