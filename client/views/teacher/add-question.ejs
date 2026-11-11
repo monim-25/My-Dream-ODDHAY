@@ -274,9 +274,15 @@
                 </div>
 
                 <div class="flex flex-wrap items-center justify-between sm:justify-end gap-2 sm:gap-2.5">
+                    <div class="flex items-center gap-1.5 individual-chapter">
+                        <span class="text-xs font-normal text-slate-500 dark:text-slate-400">Chapter</span>
+                        <select name="qChapter[]" class="q-chapter-select h-7 px-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-normal text-slate-700 dark:text-slate-200 outline-none focus:border-primary transition-all max-w-[125px] sm:max-w-[170px] cursor-pointer" onchange="onStudioChapterChange(this)">
+                            <option value="">Chapter (Optional)</option>
+                        </select>
+                    </div>
                     <div class="flex items-center gap-1.5 individual-topic">
                         <span class="text-xs font-normal text-slate-500 dark:text-slate-400">Topic</span>
-                        <select name="qTopic[]" class="q-topic-select h-7 px-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-normal text-slate-700 dark:text-slate-200 outline-none focus:border-primary transition-all max-w-[130px] sm:max-w-[190px] cursor-pointer">
+                        <select name="qTopic[]" class="q-topic-select h-7 px-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-normal text-slate-700 dark:text-slate-200 outline-none focus:border-primary transition-all max-w-[125px] sm:max-w-[170px] cursor-pointer">
                             <option value="">Topic (Optional)</option>
                         </select>
                     </div>
@@ -619,6 +625,7 @@
                     const typeInput = row.querySelector('input[name="qType[]"]');
                     const textInput = row.querySelector('textarea[name="qText[]"]');
                     const marksInput = row.querySelector('input[name="qMarks[]"]');
+                    const chapInput = row.querySelector('select[name="qChapter[]"], input[name="qChapter[]"]');
                     const topicInput = row.querySelector('select[name="qTopic[]"], input[name="qTopic[]"]');
                     const type = typeInput ? typeInput.value : 'MCQ';
 
@@ -626,6 +633,7 @@
                         type,
                         text: textInput ? textInput.value : '',
                         marks: marksInput ? marksInput.value : getDefaultMarks(type),
+                        chapter: chapInput ? chapInput.value : '',
                         topic: topicInput ? topicInput.value : '',
                         options: [],
                         correctIndex: 0,
@@ -742,12 +750,23 @@
             const marksInput = row.querySelector('input[name="qMarks[]"]');
             if (marksInput) marksInput.value = qData.marks || getDefaultMarks(qData.type);
 
+            const chapSelect = row.querySelector('.q-chapter-select');
+            if (chapSelect) {
+                const targetChap = qData.chapter || '';
+                chapSelect.setAttribute('data-prefill', targetChap);
+                if (typeof buildChapterOptionsHTML === 'function') {
+                    chapSelect.innerHTML = buildChapterOptionsHTML(targetChap);
+                }
+                if (targetChap) chapSelect.value = targetChap;
+            }
+
             const topicSelect = row.querySelector('.q-topic-select');
             if (topicSelect) {
                 const targetTopic = qData.topic || urlParams.get('topic') || '';
+                const targetChap = qData.chapter || '';
                 topicSelect.setAttribute('data-prefill', targetTopic);
                 if (typeof buildTopicOptionsHTML === 'function') {
-                    topicSelect.innerHTML = buildTopicOptionsHTML(targetTopic, urlParams.get('topic') || '');
+                    topicSelect.innerHTML = buildTopicOptionsHTML(targetTopic, targetChap, urlParams.get('topic') || '');
                 }
                 if (targetTopic) topicSelect.value = targetTopic;
             }
@@ -888,43 +907,68 @@
             return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
-        function buildTopicOptionsHTML(selectedTopic = '', paperTopic = '') {
+        function buildChapterOptionsHTML(selectedChapter = '') {
+            let html = '<option value="">Chapter (Optional)</option>';
+            const chapters = Array.from(new Set((cachedStudioTopics || []).map(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '').filter(Boolean))).sort();
+            chapters.forEach(chap => {
+                const isSel = selectedChapter && selectedChapter.trim().toLowerCase() === chap.toLowerCase() ? 'selected' : '';
+                html += `<option value="${escapeTopicHtml(chap)}" ${isSel}>${escapeTopicHtml(chap)}</option>`;
+            });
+            if (selectedChapter && !chapters.some(c => c.toLowerCase() === selectedChapter.trim().toLowerCase())) {
+                html += `<option value="${escapeTopicHtml(selectedChapter)}" selected>${escapeTopicHtml(selectedChapter)}</option>`;
+            }
+            return html;
+        }
+
+        function buildTopicOptionsHTML(selectedTopic = '', selectedChapter = '', paperTopic = '') {
             let html = '<option value="">Topic (Optional)</option>';
             
-            const topicNames = new Set((cachedStudioTopics || []).map(t => t.name).filter(Boolean));
-            if (paperTopic && !topicNames.has(paperTopic)) {
+            let filtered = cachedStudioTopics || [];
+            if (selectedChapter) {
+                filtered = filtered.filter(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim().toLowerCase() === selectedChapter.trim().toLowerCase() : false);
+            }
+
+            const topicNames = new Set(filtered.map(t => t.name).filter(Boolean));
+            if (paperTopic && !topicNames.has(paperTopic) && !selectedChapter) {
                 const isSel = selectedTopic === paperTopic ? 'selected' : '';
                 html += `<option value="${escapeTopicHtml(paperTopic)}" ${isSel}>${escapeTopicHtml(paperTopic)} (Paper)</option>`;
             }
 
-            const byChapter = {};
-            const ungrouped = [];
-            (cachedStudioTopics || []).forEach(t => {
-                const chapName = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '';
-                if (chapName) {
-                    if (!byChapter[chapName]) byChapter[chapName] = [];
-                    byChapter[chapName].push(t.name);
-                } else {
-                    ungrouped.push(t.name);
+            if (selectedChapter) {
+                filtered.forEach(t => {
+                    const isSel = selectedTopic === t.name ? 'selected' : '';
+                    html += `<option value="${escapeTopicHtml(t.name)}" ${isSel}>${escapeTopicHtml(t.name)}</option>`;
+                });
+            } else {
+                const byChapter = {};
+                const ungrouped = [];
+                filtered.forEach(t => {
+                    const chapName = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '';
+                    if (chapName) {
+                        if (!byChapter[chapName]) byChapter[chapName] = [];
+                        byChapter[chapName].push(t.name);
+                    } else {
+                        ungrouped.push(t.name);
+                    }
+                });
+
+                for (const [chap, tops] of Object.entries(byChapter)) {
+                    html += `<optgroup label="${escapeTopicHtml(chap)}">`;
+                    tops.forEach(topName => {
+                        const isSel = selectedTopic === topName ? 'selected' : '';
+                        html += `<option value="${escapeTopicHtml(topName)}" ${isSel}>${escapeTopicHtml(topName)}</option>`;
+                    });
+                    html += `</optgroup>`;
                 }
-            });
 
-            for (const [chap, tops] of Object.entries(byChapter)) {
-                html += `<optgroup label="${escapeTopicHtml(chap)}">`;
-                tops.forEach(topName => {
-                    const isSel = selectedTopic === topName ? 'selected' : '';
-                    html += `<option value="${escapeTopicHtml(topName)}" ${isSel}>${escapeTopicHtml(topName)}</option>`;
-                });
-                html += `</optgroup>`;
-            }
-
-            if (ungrouped.length > 0) {
-                if (Object.keys(byChapter).length > 0) html += `<optgroup label="Other Topics">`;
-                ungrouped.forEach(topName => {
-                    const isSel = selectedTopic === topName ? 'selected' : '';
-                    html += `<option value="${escapeTopicHtml(topName)}" ${isSel}>${escapeTopicHtml(topName)}</option>`;
-                });
-                if (Object.keys(byChapter).length > 0) html += `</optgroup>`;
+                if (ungrouped.length > 0) {
+                    if (Object.keys(byChapter).length > 0) html += `<optgroup label="Other Topics">`;
+                    ungrouped.forEach(topName => {
+                        const isSel = selectedTopic === topName ? 'selected' : '';
+                        html += `<option value="${escapeTopicHtml(topName)}" ${isSel}>${escapeTopicHtml(topName)}</option>`;
+                    });
+                    if (Object.keys(byChapter).length > 0) html += `</optgroup>`;
+                }
             }
 
             if (selectedTopic && !topicNames.has(selectedTopic) && selectedTopic !== paperTopic) {
@@ -933,6 +977,18 @@
 
             return html;
         }
+
+        function onStudioChapterChange(chapterSelect) {
+            const row = chapterSelect.closest('.question-row');
+            if (!row) return;
+            const topicSelect = row.querySelector('.q-topic-select');
+            if (!topicSelect) return;
+            const selectedChapter = chapterSelect.value;
+            const currentTopic = topicSelect.value;
+            topicSelect.innerHTML = buildTopicOptionsHTML(currentTopic, selectedChapter);
+            saveStudioDraft();
+        }
+        window.onStudioChapterChange = onStudioChapterChange;
 
         async function loadTopicsForQuestionStudio() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -952,11 +1008,19 @@
             }
 
             document.querySelectorAll('.question-row').forEach(row => {
-                const select = row.querySelector('.q-topic-select');
-                if (!select) return;
-                const currentVal = select.value || (select.getAttribute('data-prefill') || '');
-                select.innerHTML = buildTopicOptionsHTML(currentVal, paperTopic);
-                if (currentVal) select.value = currentVal;
+                const chapSelect = row.querySelector('.q-chapter-select');
+                const topSelect = row.querySelector('.q-topic-select');
+                const currentChap = chapSelect ? (chapSelect.value || chapSelect.getAttribute('data-prefill') || '') : '';
+                const currentTop = topSelect ? (topSelect.value || topSelect.getAttribute('data-prefill') || '') : '';
+
+                if (chapSelect) {
+                    chapSelect.innerHTML = buildChapterOptionsHTML(currentChap);
+                    if (currentChap) chapSelect.value = currentChap;
+                }
+                if (topSelect) {
+                    topSelect.innerHTML = buildTopicOptionsHTML(currentTop, currentChap, paperTopic);
+                    if (currentTop) topSelect.value = currentTop;
+                }
             });
         }
 
@@ -1173,10 +1237,15 @@
                 
                 toggleTypeUI(row, qType);
                 
+                const chapSelect = row.querySelector('.q-chapter-select');
+                if (chapSelect && typeof buildChapterOptionsHTML === 'function') {
+                    chapSelect.innerHTML = buildChapterOptionsHTML('');
+                }
+
                 const topicInput = row.querySelector('.q-topic-select, input[name="qTopic[]"]');
                 if (topicInput) {
                     if (typeof buildTopicOptionsHTML === 'function') {
-                        topicInput.innerHTML = buildTopicOptionsHTML(defaultTopic, defaultTopic);
+                        topicInput.innerHTML = buildTopicOptionsHTML(defaultTopic, '', defaultTopic);
                     }
                     if (defaultTopic) topicInput.value = defaultTopic;
                 }

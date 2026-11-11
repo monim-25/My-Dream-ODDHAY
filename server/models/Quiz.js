@@ -23,6 +23,7 @@ const quizSchema = new mongoose.Schema({
         a1: { type: String },
         a2: { type: String },
         marks: { type: Number },
+        chapter: { type: String, default: '' },
         topic: { type: String, default: '' },
         board: { type: String },
         year: { type: String }

@@ -229,6 +229,15 @@
                                         <input type="number" id="marks-<%= q._id %>" value="<%= (q.marks !== undefined && q.marks !== null) ? q.marks : defaultMarks %>" class="form-input text-center w-full sm:w-14" style="height: 32px !important; padding: 0 4px;">
                                     </div>
                                     <div class="flex items-center gap-1">
+                                        <span class="text-[11px] text-slate-400 shrink-0">Chapter:</span>
+                                        <select id="chapter-<%= q._id %>" class="form-input text-xs w-full sm:w-28 cursor-pointer q-editor-chapter" style="height: 32px !important; padding: 0 4px;" data-prefill="<%= q.chapter || '' %>" onchange="onQuizEditorChapterChange(this, '<%= q._id %>')">
+                                            <option value="">(Optional)</option>
+                                            <% if (q.chapter) { %>
+                                                <option value="<%= q.chapter %>" selected><%= q.chapter %></option>
+                                            <% } %>
+                                        </select>
+                                    </div>
+                                    <div class="flex items-center gap-1">
                                         <span class="text-[11px] text-slate-400 shrink-0">Topic:</span>
                                         <select id="topic-<%= q._id %>" class="form-input text-xs w-full sm:w-28 cursor-pointer q-editor-topic" style="height: 32px !important; padding: 0 4px;" data-prefill="<%= q.topic || '' %>">
                                             <option value="">(Optional)</option>
@@ -640,6 +649,7 @@
 
         function extractCardData(qid, type) {
             const marksEl = document.getElementById(`marks-${qid}`);
+            const chapterEl = document.getElementById(`chapter-${qid}`);
             const topicEl = document.getElementById(`topic-${qid}`);
             const boardEl = document.getElementById(`board-${qid}`);
             const yearEl  = document.getElementById(`year-${qid}`);
@@ -648,6 +658,7 @@
             const data = {
                 questionType: type,
                 marks: marksEl && marksEl.value.trim() !== '' ? (parseInt(marksEl.value) || 1) : 1,
+                chapter: chapterEl ? chapterEl.value.trim() : '',
                 topic: topicEl ? topicEl.value.trim() : '',
                 board: boardEl ? boardEl.value.trim() : '',
                 year: yearEl ? yearEl.value.trim() : '',
@@ -797,6 +808,7 @@
                 const data = { 
                     questionType: type,
                     marks: parseInt(marksVal),
+                    chapter: document.getElementById(`chapter-${qid}`) ? document.getElementById(`chapter-${qid}`).value.trim() : '',
                     topic: document.getElementById(`topic-${qid}`) ? document.getElementById(`topic-${qid}`).value.trim() : '',
                     board: document.getElementById(`board-${qid}`).value.trim(),
                     year: document.getElementById(`year-${qid}`).value.trim()
@@ -1001,6 +1013,8 @@
             loadQuizEditorTopics();
         });
 
+        let cachedQuizEditorTopics = [];
+
         async function loadQuizEditorTopics() {
             const subject = <%- JSON.stringify(quiz.subject || '') %>;
             const classLevel = <%- JSON.stringify(quiz.classLevel || '') %>;
@@ -1022,40 +1036,99 @@
                         }
                     } catch (e) {}
                 }
+                cachedQuizEditorTopics = topicList;
 
-                document.querySelectorAll('.q-editor-topic').forEach(select => {
+                const chapters = Array.from(new Set(topicList.map(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '').filter(Boolean))).sort();
+
+                document.querySelectorAll('.q-editor-chapter').forEach(select => {
                     const currentVal = select.value || select.getAttribute('data-prefill') || '';
                     let html = '<option value="">(Optional)</option>';
-                    if (quizTopic) {
-                        const isSel = currentVal === quizTopic ? 'selected' : '';
-                        html += `<option value="${escapeEditorHtml(quizTopic)}" ${isSel}>${escapeEditorHtml(quizTopic)} (Quiz Topic)</option>`;
-                    }
-                    const byChapter = {};
-                    topicList.forEach(t => {
-                        const ch = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '';
-                        if (ch) {
-                            if (!byChapter[ch]) byChapter[ch] = [];
-                            byChapter[ch].push(t.name);
-                        }
+                    chapters.forEach(ch => {
+                        const isSel = currentVal && currentVal.toLowerCase() === ch.toLowerCase() ? 'selected' : '';
+                        html += `<option value="${escapeEditorHtml(ch)}" ${isSel}>${escapeEditorHtml(ch)}</option>`;
                     });
-                    for (const [ch, names] of Object.entries(byChapter)) {
-                        html += `<optgroup label="${escapeEditorHtml(ch)}">`;
-                        names.forEach(n => {
-                            const isSel = currentVal === n ? 'selected' : '';
-                            html += `<option value="${escapeEditorHtml(n)}" ${isSel}>${escapeEditorHtml(n)}</option>`;
-                        });
-                        html += `</optgroup>`;
-                    }
-                    if (currentVal && !html.includes(`value="${escapeEditorHtml(currentVal)}"`)) {
+                    if (currentVal && !chapters.some(c => c.toLowerCase() === currentVal.toLowerCase())) {
                         html += `<option value="${escapeEditorHtml(currentVal)}" selected>${escapeEditorHtml(currentVal)}</option>`;
                     }
                     select.innerHTML = html;
+                    if (currentVal) select.value = currentVal;
+                });
+
+                document.querySelectorAll('.q-editor-topic').forEach(select => {
+                    const qid = select.id.replace('topic-', '');
+                    const chapSelect = document.getElementById(`chapter-${qid}`);
+                    const selectedChap = chapSelect ? chapSelect.value : '';
+                    const currentVal = select.value || select.getAttribute('data-prefill') || '';
+                    select.innerHTML = buildEditorTopicOptionsHTML(currentVal, selectedChap, quizTopic);
                     if (currentVal) select.value = currentVal;
                 });
             } catch (err) {
                 console.warn('Failed to load quiz editor topics:', err);
             }
         }
+
+        function buildEditorTopicOptionsHTML(selectedTopic = '', selectedChapter = '', quizTopic = '') {
+            let html = '<option value="">(Optional)</option>';
+            let filtered = cachedQuizEditorTopics || [];
+            if (selectedChapter) {
+                filtered = filtered.filter(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim().toLowerCase() === selectedChapter.trim().toLowerCase() : false);
+            }
+
+            const topicNames = new Set(filtered.map(t => t.name).filter(Boolean));
+            if (quizTopic && !topicNames.has(quizTopic) && !selectedChapter) {
+                const isSel = selectedTopic === quizTopic ? 'selected' : '';
+                html += `<option value="${escapeEditorHtml(quizTopic)}" ${isSel}>${escapeEditorHtml(quizTopic)} (Quiz Topic)</option>`;
+            }
+
+            if (selectedChapter) {
+                filtered.forEach(t => {
+                    const isSel = selectedTopic === t.name ? 'selected' : '';
+                    html += `<option value="${escapeEditorHtml(t.name)}" ${isSel}>${escapeEditorHtml(t.name)}</option>`;
+                });
+            } else {
+                const byChapter = {};
+                filtered.forEach(t => {
+                    const ch = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '';
+                    if (ch) {
+                        if (!byChapter[ch]) byChapter[ch] = [];
+                        byChapter[ch].push(t.name);
+                    }
+                });
+                for (const [ch, names] of Object.entries(byChapter)) {
+                    html += `<optgroup label="${escapeEditorHtml(ch)}">`;
+                    names.forEach(n => {
+                        const isSel = selectedTopic === n ? 'selected' : '';
+                        html += `<option value="${escapeEditorHtml(n)}" ${isSel}>${escapeEditorHtml(n)}</option>`;
+                    });
+                    html += `</optgroup>`;
+                }
+            }
+
+            if (selectedTopic && !topicNames.has(selectedTopic) && selectedTopic !== quizTopic) {
+                html += `<option value="${escapeEditorHtml(selectedTopic)}" selected>${escapeEditorHtml(selectedTopic)}</option>`;
+            }
+            return html;
+        }
+
+        function onQuizEditorChapterChange(select, qid) {
+            const topicSelect = document.getElementById(`topic-${qid}`);
+            if (!topicSelect) return;
+            const quizTopic = <%- JSON.stringify(quiz.topic || '') %>;
+            const selectedChap = select.value;
+            const currentTopic = topicSelect.value;
+            topicSelect.innerHTML = buildEditorTopicOptionsHTML(currentTopic, selectedChap, quizTopic);
+            if (currentTopic && topicSelect.querySelector(`option[value="${escapeEditorHtml(currentTopic)}"]`)) {
+                topicSelect.value = currentTopic;
+            } else {
+                topicSelect.value = '';
+            }
+            const card = select.closest('.question-card');
+            if (card) {
+                const type = card.getAttribute('data-type') || 'MCQ';
+                queueAutoSave(qid, type);
+            }
+        }
+        window.onQuizEditorChapterChange = onQuizEditorChapterChange;
 
         function escapeEditorHtml(str) {
             return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
