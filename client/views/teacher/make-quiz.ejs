@@ -160,23 +160,32 @@
                                     </div>
                                 </div>
                                 <!-- Course Link (Course-Linked mode) -->
-                                <div id="courseContainer" class="col-span-2">
+                                <div id="courseContainer" class="col-span-1">
                                     <label class="form-label">Link to Course</label>
                                     <div class="relative">
-                                        <select name="courseId" id="courseId" class="form-input cursor-pointer pr-8 appearance-none">
+                                        <select name="courseId" id="courseId" onchange="onCourseSelectChange()" class="form-input cursor-pointer pr-8 appearance-none">
                                             <option value="">-- Select Course --</option>
-                                            <% courses.forEach(course => { %>
-                                                <option value="<%= course._id %>" data-class="<%= course.classLevel %>" data-subject="<%= Array.isArray(course.subject) ? course.subject[0] : course.subject %>" data-access="<%= course.accessType || 'Free' %>" <%= course._id.toString() === selectedCourseId ? 'selected' : '' %>><%= course.title %></option>
+                                            <% courses.forEach(course => { 
+                                                const cSubjList = Array.isArray(course.subject) ? course.subject.filter(Boolean) : (course.subject ? [course.subject] : []);
+                                                const cClassList = Array.isArray(course.classLevel) ? course.classLevel.filter(Boolean) : (course.classLevel ? [course.classLevel] : []);
+                                            %>
+                                                <option value="<%= course._id %>" 
+                                                        data-class="<%= cClassList.join(',') %>" 
+                                                        data-subject="<%= cSubjList.join(',') %>" 
+                                                        data-access="<%= course.accessType || 'Free' %>" 
+                                                        <%= course._id.toString() === selectedCourseId ? 'selected' : '' %>>
+                                                    <%= course.title %>
+                                                </option>
                                             <% }); %>
                                         </select>
                                         <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
                                     </div>
                                 </div>
-                                <!-- Subject (Model Test mode — filtered by class) -->
-                                <div id="subjectContainer" class="col-span-2 md:col-span-1 hidden">
-                                    <label class="form-label">Subject</label>
+                                <!-- Subject (Both Model Test and Course-Linked) -->
+                                <div id="subjectContainer" class="col-span-1">
+                                    <label id="subjectLabel" class="form-label">Subject</label>
                                     <div class="relative">
-                                        <select name="subject" id="quizSubject" onchange="onQuizSubjectOrClassChange()" class="form-input cursor-pointer pr-8 appearance-none">
+                                        <select name="subject" id="quizSubject" onchange="onQuizSubjectOrClassChange()" class="form-input cursor-pointer pr-8 appearance-none" required>
                                             <option value="">-- Select Subject --</option>
                                             <% (subjects || []).forEach(sub => { %>
                                                 <option value="<%= sub %>" <%= sub === selectedSubject ? 'selected' : '' %>><%= sub %></option>
@@ -390,7 +399,7 @@
             return { success: true, count: 0, topics: [], chapters: [] };
         }
 
-        // ─── Filter subject dropdown by selected class ────────────────────────────
+        // ─── Filter subject dropdown by selected class (Model Test mode) ─────────
         function filterSubjectsByClass(cls) {
             const subjSelect = document.getElementById('quizSubject');
             if (!subjSelect) return;
@@ -406,23 +415,69 @@
                 if (sub === current) opt.selected = true;
                 subjSelect.appendChild(opt);
             });
-            // Always trigger chapter/topic reload after subject list updates
             onQuizSubjectOrClassChange();
         }
+
+        // ─── Course Select Change (Course-Linked mode) ───────────────────────────
+        window.onCourseSelectChange = function() {
+            const isModelTest  = document.getElementById('isModelTest').value === 'true';
+            if (isModelTest) return;
+
+            const courseSelect = document.getElementById('courseId');
+            const subjSelect   = document.getElementById('quizSubject');
+            const classLevelEl = document.getElementById('classLevel');
+            const syllabusWrapper = document.getElementById('quizSyllabusWrapper');
+            const selectedOpt  = courseSelect && courseSelect.selectedIndex >= 0 ? courseSelect.options[courseSelect.selectedIndex] : null;
+
+            if (!selectedOpt || !selectedOpt.value) {
+                // No course selected:
+                if (subjSelect) {
+                    subjSelect.innerHTML = '<option value="">-- Select Course First --</option>';
+                    subjSelect.value = '';
+                }
+                if (syllabusWrapper) syllabusWrapper.classList.add('hidden');
+                syncBankMetadata();
+                return;
+            }
+
+            // Extract course's assigned subject(s) & class from course attributes
+            const rawSubj = (selectedOpt.getAttribute('data-subject') || '').trim();
+            const courseSubjects = rawSubj.split(',').map(s => s.trim()).filter(Boolean);
+
+            const rawClass = (selectedOpt.getAttribute('data-class') || '').trim();
+            const courseClasses = rawClass.split(',').map(c => c.trim()).filter(Boolean);
+
+            // Auto-sync classLevel dropdown to course's class if not matching
+            if (courseClasses.length > 0 && (!classLevelEl.value || !courseClasses.includes(classLevelEl.value))) {
+                classLevelEl.value = courseClasses[0];
+            }
+
+            // Populate subject dropdown with ONLY the subject(s) assigned to this course
+            if (subjSelect) {
+                const prevSubj = subjSelect.value;
+                subjSelect.innerHTML = courseSubjects.length > 1 ? '<option value="">-- Select Course Subject --</option>' : '';
+                courseSubjects.forEach(sub => {
+                    const opt = document.createElement('option');
+                    opt.value = sub;
+                    opt.textContent = sub;
+                    if (sub === prevSubj) opt.selected = true;
+                    subjSelect.appendChild(opt);
+                });
+                if (courseSubjects.length === 1) {
+                    subjSelect.value = courseSubjects[0];
+                }
+            }
+
+            syncBankMetadata();
+            onQuizSubjectOrClassChange();
+        };
 
         // ─── Subject / Class change → load chapters ───────────────────────────────
         window.onQuizSubjectOrClassChange = async function() {
             const isModelTest = document.getElementById('isModelTest').value === 'true';
-            const classLevel = document.getElementById('classLevel').value;
-            let subject = '';
-            if (isModelTest) {
-                const qs = document.getElementById('quizSubject');
-                subject = qs ? qs.value.trim() : '';
-            } else {
-                const courseSelect = document.getElementById('courseId');
-                const selOpt = courseSelect.options[courseSelect.selectedIndex];
-                subject = selOpt ? (selOpt.getAttribute('data-subject') || '') : '';
-            }
+            const classLevelEl = document.getElementById('classLevel');
+            const courseSelect = document.getElementById('courseId');
+            const qs = document.getElementById('quizSubject');
 
             const syllabusWrapper = document.getElementById('quizSyllabusWrapper');
             const chapterSelect  = document.getElementById('quizChapter');
@@ -434,13 +489,38 @@
 
             if (syncPortal) syncPortal.classList.add('hidden');
 
+            // If Course-Linked mode and NO course is selected, DO NOT LOAD SYLLABUS
+            if (!isModelTest && (!courseSelect || !courseSelect.value)) {
+                if (syllabusWrapper) syllabusWrapper.classList.add('hidden');
+                return;
+            }
+
+            const subject = qs ? qs.value.trim() : '';
+            let classLevel = classLevelEl ? classLevelEl.value.trim() : '';
+
+            // If classLevel is empty in course-linked mode, try getting it from course
+            if (!isModelTest && !classLevel && courseSelect && courseSelect.selectedIndex >= 0) {
+                const selOpt = courseSelect.options[courseSelect.selectedIndex];
+                if (selOpt) {
+                    const cCls = (selOpt.getAttribute('data-class') || '').trim();
+                    if (cCls) {
+                        classLevel = cCls.split(',')[0].trim();
+                        if (classLevelEl) classLevelEl.value = classLevel;
+                    }
+                }
+            }
+
+            // If subject or classLevel is missing, DO NOT LOAD SYLLABUS
             if (!subject || !classLevel) {
                 if (syllabusWrapper) syllabusWrapper.classList.add('hidden');
                 return;
             }
 
             if (syllabusWrapper) syllabusWrapper.classList.remove('hidden');
-            if (emptyState) { emptyState.classList.remove('hidden'); emptyState.innerHTML = '<span class="material-symbols-rounded text-base text-slate-300">info</span><span>Select a Chapter to view topics</span>'; }
+            if (emptyState) { 
+                emptyState.classList.remove('hidden'); 
+                emptyState.innerHTML = '<span class="material-symbols-rounded text-base text-slate-300">info</span><span>Select a Chapter to view topics</span>'; 
+            }
             if (loadingState) loadingState.classList.remove('hidden');
             if (topicsList) { topicsList.classList.add('hidden'); topicsList.innerHTML = ''; }
             if (badge) { badge.textContent = ''; badge.classList.add('hidden'); }
@@ -666,36 +746,51 @@
             const selectedClass = document.getElementById('classLevel').value;
             const courseContainer  = document.getElementById('courseContainer');
             const subjectContainer = document.getElementById('subjectContainer');
-            const courseSelect = document.getElementById('courseId');
+            const subjectLabel     = document.getElementById('subjectLabel');
+            const courseSelect     = document.getElementById('courseId');
+            const subjSelect       = document.getElementById('quizSubject');
 
             if (isModelTest) {
+                // Model Test Mode:
                 courseContainer.classList.add('hidden');
                 subjectContainer.classList.remove('hidden');
-                // Filter subjects for selected class, then reload chapter/topics
+                subjectContainer.className = 'col-span-2 md:col-span-2';
+                if (subjectLabel) subjectLabel.textContent = 'Subject';
+                
+                // Filter subjects for selected class
                 if (selectedClass) {
                     filterSubjectsByClass(selectedClass);
                 } else {
+                    subjSelect.innerHTML = '<option value="">-- Select Class First --</option>';
                     onQuizSubjectOrClassChange();
                 }
             } else {
+                // Course-Linked Mode:
                 courseContainer.classList.remove('hidden');
-                subjectContainer.classList.add('hidden');
-            }
+                courseContainer.className = 'col-span-1';
+                subjectContainer.classList.remove('hidden');
+                subjectContainer.className = 'col-span-1';
+                if (subjectLabel) subjectLabel.textContent = 'Course Subject';
 
-            const currentCourseId = preserveCourse ? preSelectedCourseId : courseSelect.value;
-            courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
-            const filtered = selectedClass
-                ? allCourses.filter(opt => { const cc = opt.getAttribute('data-class') || ''; return cc.includes(selectedClass) || cc.includes('Class ' + selectedClass); })
-                : allCourses;
-            filtered.forEach(opt => courseSelect.appendChild(opt.cloneNode(true)));
-            if (currentCourseId) {
-                const targetOpt = courseSelect.querySelector(`option[value="${currentCourseId}"]`);
-                if (targetOpt) targetOpt.selected = true;
+                const currentCourseId = preserveCourse ? preSelectedCourseId : courseSelect.value;
+                courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+                const filtered = selectedClass
+                    ? allCourses.filter(opt => { 
+                        const cc = opt.getAttribute('data-class') || ''; 
+                        return cc.includes(selectedClass) || cc.includes('Class ' + selectedClass); 
+                    })
+                    : allCourses;
+                filtered.forEach(opt => courseSelect.appendChild(opt.cloneNode(true)));
+                if (currentCourseId) {
+                    const targetOpt = courseSelect.querySelector(`option[value="${currentCourseId}"]`);
+                    if (targetOpt) targetOpt.selected = true;
+                }
+
+                // Sync the course's subjects into the subject dropdown
+                onCourseSelectChange();
             }
 
             syncBankMetadata();
-            // For course-linked mode, trigger syllabus load based on selected course
-            if (!isModelTest) onQuizSubjectOrClassChange();
         }
 
         function toggleStrategy(strategy) {
@@ -747,10 +842,7 @@
             return true;
         }
 
-        document.getElementById('courseId').addEventListener('change', () => {
-            syncBankMetadata();
-            onQuizSubjectOrClassChange();
-        });
+        document.getElementById('courseId').addEventListener('change', onCourseSelectChange);
 
         window.addEventListener('DOMContentLoaded', () => {
             updateView(true);
