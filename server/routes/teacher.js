@@ -2811,6 +2811,11 @@ router.get('/quizzes', teacherProtect, async (req, res) => {
             query.course = null;
         } else if (type === 'course') {
             query.course = { $ne: null };
+        } else if (type === 'draft') {
+            query.$or = [{ status: 'draft' }, { isDraft: true }];
+        } else if (type === 'live') {
+            query.status = 'published';
+            query.isDraft = { $ne: true };
         }
         
         if (q) {
@@ -3213,14 +3218,20 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             }
         }
 
+        // Cross-class sync: generate a shared syncGroup ID if multiple classes
+        const primaryClass = quizData.classLevel || '';
+        const extraClasses = syncClasses.filter(sc => sc && sc !== primaryClass);
+        if (extraClasses.length > 0) {
+            quizData.syncGroup = new mongoose.Types.ObjectId().toString();
+        }
+
         const quiz = await new Quiz(quizData).save();
 
         // Cross-class sync: duplicate quiz for each synced class (excluding the primary class)
-        const primaryClass = quizData.classLevel || '';
-        const extraClasses = syncClasses.filter(sc => sc && sc !== primaryClass);
         for (const syncCls of extraClasses) {
             const syncQuizData = Object.assign({}, quizData, {
                 classLevel: syncCls,
+                syncGroup: quizData.syncGroup, // same sync group
                 // questions array reference is shared, create a new object
                 questions: quizData.questions.map(q => Object.assign({}, q))
             });
@@ -3445,6 +3456,33 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
             { _id: req.params.id, 'questions._id': req.params.qid },
             { $set: updateData }
         );
+
+        // Cross-class sync: propagate question edits to all synced copies
+        if (quiz.syncGroup) {
+            const questionIndex = quiz.questions.findIndex(q => q._id.toString() === req.params.qid);
+            if (questionIndex >= 0) {
+                const syncedQuizzes = await Quiz.find({ 
+                    syncGroup: quiz.syncGroup, 
+                    _id: { $ne: quiz._id },
+                    addedBy: req.session.user._id 
+                });
+                for (const syncQuiz of syncedQuizzes) {
+                    if (syncQuiz.questions[questionIndex]) {
+                        const syncUpdateData = {};
+                        for (const [key, val] of Object.entries(updateData)) {
+                            // Replace questions.$ with questions.<index>
+                            const syncKey = key.replace('questions.$', `questions.${questionIndex}`);
+                            syncUpdateData[syncKey] = val;
+                        }
+                        await Quiz.updateOne(
+                            { _id: syncQuiz._id },
+                            { $set: syncUpdateData }
+                        );
+                    }
+                }
+            }
+        }
+
         res.json({ success: true });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
@@ -3465,6 +3503,7 @@ router.post('/quiz/:id/question/:qid/delete', teacherProtect, async (req, res) =
 });
 
 // Publish a quiz (transitions draft exam to proper live exam)
+// Also publishes all cross-class synced quizzes in the same syncGroup
 router.post('/quiz/:id/publish', teacherProtect, async (req, res) => {
     try {
         await connectDB();
@@ -3474,9 +3513,19 @@ router.post('/quiz/:id/publish', teacherProtect, async (req, res) => {
             return res.status(403).json({ success: false, error: 'Access denied' });
         }
 
+        // Publish this quiz
         quiz.status = 'published';
         quiz.isDraft = false;
         await quiz.save();
+
+        // Also publish all synced quizzes in the same group
+        if (quiz.syncGroup) {
+            await Quiz.updateMany(
+                { syncGroup: quiz.syncGroup, addedBy: req.session.user._id },
+                { $set: { status: 'published', isDraft: false } }
+            );
+        }
+
         res.json({ success: true, message: 'Assessment launched successfully' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
