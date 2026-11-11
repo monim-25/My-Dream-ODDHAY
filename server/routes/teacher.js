@@ -3110,6 +3110,8 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             classLevel: resolvedClass,
             duration:   parseInt(req.body.duration) || 10,
             accessType: accessType,
+            status:     'draft',
+            isDraft:    true,
             questions:  [],
             addedBy:    req.session.user._id
         };
@@ -3460,6 +3462,25 @@ router.post('/quiz/:id/question/:qid/delete', teacherProtect, async (req, res) =
         await Quiz.findByIdAndUpdate(req.params.id, { $pull: { questions: { _id: req.params.qid } } });
         res.json({ success: true });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
+
+// Publish a quiz (transitions draft exam to proper live exam)
+router.post('/quiz/:id/publish', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const quiz = await Quiz.findById(req.params.id);
+        if (!quiz) return res.status(404).json({ success: false, error: 'Quiz not found' });
+        if (quiz.addedBy.toString() !== req.session.user._id.toString()) {
+            return res.status(403).json({ success: false, error: 'Access denied' });
+        }
+
+        quiz.status = 'published';
+        quiz.isDraft = false;
+        await quiz.save();
+        res.json({ success: true, message: 'Assessment launched successfully' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 router.get('/api/question-banks', teacherProtect, async (req, res) => {

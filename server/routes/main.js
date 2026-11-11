@@ -309,6 +309,7 @@ router.get('/dashboard', protect, async (req, res) => {
                 .map(r => r.quiz.toString());
 
             const activeQuiz = await Quiz.findOne({
+                status: { $ne: 'draft' },
                 $and: [
                     {
                         $or: [
@@ -1845,6 +1846,7 @@ router.get('/routine', protect, async (req, res) => {
         // Query Board Exams / Quizzes and Question Banks for student's class
         const boardQuizzes = await Quiz.find({
             classLevel: userClass,
+            status: { $ne: 'draft' },
             $or: [{ accessType: 'Free' }, { accessType: 'Paid' }]
         }).limit(6).lean();
 
@@ -4357,7 +4359,7 @@ router.get('/library', protect, async (req, res) => {
 router.get('/mock-tests', protect, async (req, res) => {
     try {
         await connectDB();
-        const quizzes = await Quiz.find().populate('course').lean();
+        const quizzes = await Quiz.find({ status: { $ne: 'draft' } }).populate('course').lean();
         res.render('mock-tests', { user: req.session.user, quizzes });
     } catch (err) { res.render('mock-tests', { user: req.session.user, quizzes: [] }); }
 });
@@ -5310,7 +5312,7 @@ router.get('/exams/mock-tests', protect, async (req, res) => {
         const assignedSubjects = (studentSubs && studentSubs.length > 0) ? studentSubs : await Question.distinct('subject');
 
         // 2. Fetch only proper Mock Tests (isMockTest: true)
-        const allMockTests = await Quiz.find({ isMockTest: true })
+        const allMockTests = await Quiz.find({ isMockTest: true, status: { $ne: 'draft' } })
             .populate('course')
             .sort({ createdAt: -1 })
             .lean();
@@ -5616,9 +5618,9 @@ router.get('/exams', protect, async (req, res) => {
 
         const [questionBanksList, mockTestsList, totalQuestionBanksCount, totalMockTestsCount, totalModelTestsCount] = await Promise.all([
             QuestionBank.find(baseQbQuery).sort({ views: -1, createdAt: -1 }).lean(),
-            Quiz.find({ isMockTest: true }).populate('course').sort({ createdAt: -1 }).lean(),
+            Quiz.find({ isMockTest: true, status: { $ne: 'draft' } }).populate('course').sort({ createdAt: -1 }).lean(),
             QuestionBank.countDocuments(baseQbQuery),
-            Quiz.countDocuments({ isMockTest: true }),
+            Quiz.countDocuments({ isMockTest: true, status: { $ne: 'draft' } }),
             QuestionBank.countDocuments({
                 ...baseQbQuery,
                 $or: [

@@ -27,6 +27,8 @@ const quizSchema = new mongoose.Schema({
         year: { type: String }
     }],
     accessType: { type: String, enum: ['Free', 'Paid'], default: 'Free' },
+    status: { type: String, enum: ['draft', 'published'], default: 'draft' },
+    isDraft: { type: Boolean, default: true },
     scheduledAt: { type: Date }, // Time when the exam becomes joinable
     expiresAt: { type: Date },   // Time when the exam disappears (12h window)
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -35,6 +37,7 @@ const quizSchema = new mongoose.Schema({
 
 // High-performance indexes for live model tests, student exams, and queries
 quizSchema.index({ course: 1 });
+quizSchema.index({ status: 1 });
 quizSchema.index({ classLevel: 1, subject: 1 });
 quizSchema.index({ classLevel: 1, subject: 1, chapter: 1, topic: 1 });
 quizSchema.index({ scheduledAt: 1, expiresAt: 1 });
