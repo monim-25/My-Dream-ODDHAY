@@ -217,20 +217,20 @@
                                     </div>
                                 </div>
 
-                                <!-- Metadata: Mark, Topic, Board, Year inputs -->
-                                <div class="grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-3 text-xs font-medium text-slate-600 dark:text-slate-300">
-                                    <div class="flex items-center gap-1">
+                                <!-- Metadata: Mark, Chapter, Topic, Board, Year inputs -->
+                                <div class="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+                                    <div class="flex items-center gap-1 shrink-0">
                                         <span class="text-[11px] text-slate-400 shrink-0">Mark:</span>
                                         <% 
                                             let defaultMarks = 1;
                                             if (q.questionType === 'Medium') defaultMarks = 2;
                                             if (q.questionType === 'Comprehension') defaultMarks = 7;
                                         %>
-                                        <input type="number" id="marks-<%= q._id %>" value="<%= (q.marks !== undefined && q.marks !== null) ? q.marks : defaultMarks %>" class="form-input text-center w-full sm:w-14" style="height: 32px !important; padding: 0 4px;">
+                                        <input type="number" id="marks-<%= q._id %>" value="<%= (q.marks !== undefined && q.marks !== null) ? q.marks : defaultMarks %>" class="form-input text-center w-12 sm:w-14" style="height: 32px !important; padding: 0 4px;">
                                     </div>
                                     <div class="flex items-center gap-1">
                                         <span class="text-[11px] text-slate-400 shrink-0">Chapter:</span>
-                                        <select id="chapter-<%= q._id %>" class="form-input text-xs w-full sm:w-28 cursor-pointer q-editor-chapter" style="height: 32px !important; padding: 0 4px;" data-prefill="<%= q.chapter || '' %>" onchange="onQuizEditorChapterChange(this, '<%= q._id %>')">
+                                        <select id="chapter-<%= q._id %>" class="form-input text-xs w-28 sm:w-36 truncate cursor-pointer q-editor-chapter" style="height: 32px !important; padding: 0 4px;" data-prefill="<%= q.chapter || '' %>" onchange="onQuizEditorChapterChange(this, '<%= q._id %>')">
                                             <option value="">(Optional)</option>
                                             <% if (q.chapter) { %>
                                                 <option value="<%= q.chapter %>" selected><%= q.chapter %></option>
@@ -239,20 +239,20 @@
                                     </div>
                                     <div class="flex items-center gap-1">
                                         <span class="text-[11px] text-slate-400 shrink-0">Topic:</span>
-                                        <select id="topic-<%= q._id %>" class="form-input text-xs w-full sm:w-28 cursor-pointer q-editor-topic" style="height: 32px !important; padding: 0 4px;" data-prefill="<%= q.topic || '' %>">
-                                            <option value="">(Optional)</option>
-                                            <% if (q.topic) { %>
+                                        <select id="topic-<%= q._id %>" <%= !q.chapter ? 'disabled' : '' %> class="form-input text-xs w-28 sm:w-36 truncate cursor-pointer q-editor-topic <%= !q.chapter ? 'opacity-50 cursor-not-allowed' : '' %>" style="height: 32px !important; padding: 0 4px;" data-prefill="<%= q.topic || '' %>">
+                                            <option value=""><%= q.chapter ? '(Optional)' : 'Select Chapter First' %></option>
+                                            <% if (q.chapter && q.topic) { %>
                                                 <option value="<%= q.topic %>" selected><%= q.topic %></option>
                                             <% } %>
                                         </select>
                                     </div>
-                                    <div class="flex items-center gap-1">
+                                    <div class="flex items-center gap-1 shrink-0">
                                         <span class="text-[11px] text-slate-400 shrink-0">Board:</span>
-                                        <input type="text" id="board-<%= q._id %>" value="<%= q.board || '' %>" class="form-input w-full sm:w-20" style="height: 32px !important; padding: 0 6px;" placeholder="Board">
+                                        <input type="text" id="board-<%= q._id %>" value="<%= q.board || '' %>" class="form-input w-16 sm:w-20" style="height: 32px !important; padding: 0 6px;" placeholder="Board">
                                     </div>
-                                    <div class="flex items-center gap-1">
+                                    <div class="flex items-center gap-1 shrink-0">
                                         <span class="text-[11px] text-slate-400 shrink-0">Year:</span>
-                                        <input type="text" id="year-<%= q._id %>" value="<%= q.year || '' %>" class="form-input w-full sm:w-16" style="height: 32px !important; padding: 0 6px;" placeholder="Year">
+                                        <input type="text" id="year-<%= q._id %>" value="<%= q.year || '' %>" class="form-input w-14 sm:w-16" style="height: 32px !important; padding: 0 6px;" placeholder="Year">
                                     </div>
                                 </div>
 
@@ -1057,54 +1057,48 @@
                 document.querySelectorAll('.q-editor-topic').forEach(select => {
                     const qid = select.id.replace('topic-', '');
                     const chapSelect = document.getElementById(`chapter-${qid}`);
-                    const selectedChap = chapSelect ? chapSelect.value : '';
+                    const selectedChap = chapSelect ? (chapSelect.value || chapSelect.getAttribute('data-prefill') || '') : '';
                     const currentVal = select.value || select.getAttribute('data-prefill') || '';
-                    select.innerHTML = buildEditorTopicOptionsHTML(currentVal, selectedChap, quizTopic);
-                    if (currentVal) select.value = currentVal;
+                    if (selectedChap) {
+                        select.disabled = false;
+                        select.classList.remove('opacity-50', 'cursor-not-allowed');
+                        select.innerHTML = buildEditorTopicOptionsHTML(currentVal, selectedChap);
+                        if (currentVal) select.value = currentVal;
+                    } else {
+                        select.disabled = true;
+                        select.classList.add('opacity-50', 'cursor-not-allowed');
+                        select.innerHTML = '<option value="">Select Chapter First</option>';
+                        select.value = '';
+                    }
                 });
             } catch (err) {
                 console.warn('Failed to load quiz editor topics:', err);
             }
         }
 
-        function buildEditorTopicOptionsHTML(selectedTopic = '', selectedChapter = '', quizTopic = '') {
+        function buildEditorTopicOptionsHTML(selectedTopic = '', selectedChapter = '') {
+            if (!selectedChapter || selectedChapter.trim() === '') {
+                return '<option value="">Select Chapter First</option>';
+            }
+
             let html = '<option value="">(Optional)</option>';
-            let filtered = cachedQuizEditorTopics || [];
-            if (selectedChapter) {
-                filtered = filtered.filter(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim().toLowerCase() === selectedChapter.trim().toLowerCase() : false);
+            let filtered = (cachedQuizEditorTopics || []).filter(t => 
+                (t.chapter && t.chapter.name) ? t.chapter.name.trim().toLowerCase() === selectedChapter.trim().toLowerCase() : false
+            );
+
+            if (filtered.length === 0) {
+                return '<option value="">No topics in this chapter</option>';
             }
 
-            const topicNames = new Set(filtered.map(t => t.name).filter(Boolean));
-            if (quizTopic && !topicNames.has(quizTopic) && !selectedChapter) {
-                const isSel = selectedTopic === quizTopic ? 'selected' : '';
-                html += `<option value="${escapeEditorHtml(quizTopic)}" ${isSel}>${escapeEditorHtml(quizTopic)} (Quiz Topic)</option>`;
-            }
+            const topicNames = new Set();
+            filtered.forEach(t => {
+                if (!t.name || topicNames.has(t.name)) return;
+                topicNames.add(t.name);
+                const isSel = selectedTopic && selectedTopic.trim().toLowerCase() === t.name.trim().toLowerCase() ? 'selected' : '';
+                html += `<option value="${escapeEditorHtml(t.name)}" ${isSel}>${escapeEditorHtml(t.name)}</option>`;
+            });
 
-            if (selectedChapter) {
-                filtered.forEach(t => {
-                    const isSel = selectedTopic === t.name ? 'selected' : '';
-                    html += `<option value="${escapeEditorHtml(t.name)}" ${isSel}>${escapeEditorHtml(t.name)}</option>`;
-                });
-            } else {
-                const byChapter = {};
-                filtered.forEach(t => {
-                    const ch = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '';
-                    if (ch) {
-                        if (!byChapter[ch]) byChapter[ch] = [];
-                        byChapter[ch].push(t.name);
-                    }
-                });
-                for (const [ch, names] of Object.entries(byChapter)) {
-                    html += `<optgroup label="${escapeEditorHtml(ch)}">`;
-                    names.forEach(n => {
-                        const isSel = selectedTopic === n ? 'selected' : '';
-                        html += `<option value="${escapeEditorHtml(n)}" ${isSel}>${escapeEditorHtml(n)}</option>`;
-                    });
-                    html += `</optgroup>`;
-                }
-            }
-
-            if (selectedTopic && !topicNames.has(selectedTopic) && selectedTopic !== quizTopic) {
+            if (selectedTopic && !topicNames.has(selectedTopic)) {
                 html += `<option value="${escapeEditorHtml(selectedTopic)}" selected>${escapeEditorHtml(selectedTopic)}</option>`;
             }
             return html;
@@ -1113,15 +1107,20 @@
         function onQuizEditorChapterChange(select, qid) {
             const topicSelect = document.getElementById(`topic-${qid}`);
             if (!topicSelect) return;
-            const quizTopic = <%- JSON.stringify(quiz.topic || '') %>;
-            const selectedChap = select.value;
-            const currentTopic = topicSelect.value;
-            topicSelect.innerHTML = buildEditorTopicOptionsHTML(currentTopic, selectedChap, quizTopic);
-            if (currentTopic && topicSelect.querySelector(`option[value="${escapeEditorHtml(currentTopic)}"]`)) {
-                topicSelect.value = currentTopic;
+            const selectedChap = select.value.trim();
+
+            if (selectedChap) {
+                topicSelect.disabled = false;
+                topicSelect.classList.remove('opacity-50', 'cursor-not-allowed');
+                topicSelect.innerHTML = buildEditorTopicOptionsHTML('', selectedChap);
+                topicSelect.value = '';
             } else {
+                topicSelect.disabled = true;
+                topicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                topicSelect.innerHTML = '<option value="">Select Chapter First</option>';
                 topicSelect.value = '';
             }
+
             const card = select.closest('.question-card');
             if (card) {
                 const type = card.getAttribute('data-type') || 'MCQ';
