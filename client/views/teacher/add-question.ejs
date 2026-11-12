@@ -951,6 +951,7 @@
         }
 
         let cachedStudioTopics = [];
+        let cachedStudioChapters = [];
 
         async function fetchStudioTopicsSafely(subject, classLevel) {
             const endpoints = ['/teacher/api/topics', '/api/topics'];
@@ -974,7 +975,15 @@
 
         function buildChapterOptionsHTML(selectedChapter = '') {
             let html = '<option value="">Chapter (Optional)</option>';
-            const chapters = Array.from(new Set((cachedStudioTopics || []).map(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '').filter(Boolean))).sort();
+            const chapterSet = new Set();
+            (cachedStudioChapters || []).forEach(ch => { if (ch && String(ch).trim()) chapterSet.add(String(ch).trim()); });
+            (cachedStudioTopics || []).forEach(t => {
+                if (!t) return;
+                if (typeof t.chapter === 'string' && t.chapter.trim()) chapterSet.add(t.chapter.trim());
+                else if (t.chapter && typeof t.chapter.name === 'string' && t.chapter.name.trim()) chapterSet.add(t.chapter.name.trim());
+            });
+
+            const chapters = Array.from(chapterSet).sort();
             chapters.forEach(chap => {
                 const isSel = selectedChapter && selectedChapter.trim().toLowerCase() === chap.toLowerCase() ? 'selected' : '';
                 html += `<option value="${escapeTopicHtml(chap)}" ${isSel}>${escapeTopicHtml(chap)}</option>`;
@@ -992,19 +1001,23 @@
             }
 
             let html = '<option value="">Topic (Optional)</option>';
-            const filtered = (cachedStudioTopics || []).filter(t => 
-                (t.chapter && t.chapter.name) ? t.chapter.name.trim().toLowerCase() === selectedChapter.trim().toLowerCase() : false
-            );
+            const targetChap = selectedChapter.trim().toLowerCase();
+            const filtered = (cachedStudioTopics || []).filter(t => {
+                if (!t) return false;
+                const chapName = typeof t.chapter === 'string' ? t.chapter.trim().toLowerCase() : (t.chapter && t.chapter.name ? t.chapter.name.trim().toLowerCase() : '');
+                return chapName === targetChap;
+            });
 
             const topicNames = new Set();
             filtered.forEach(t => {
-                if (!t.name || topicNames.has(t.name)) return;
-                topicNames.add(t.name);
-                const isSel = selectedTopic && selectedTopic.trim().toLowerCase() === t.name.trim().toLowerCase() ? 'selected' : '';
-                html += `<option value="${escapeTopicHtml(t.name)}" ${isSel}>${escapeTopicHtml(t.name)}</option>`;
+                const name = (t.name || (typeof t === 'string' ? t : '')).trim();
+                if (!name || topicNames.has(name.toLowerCase())) return;
+                topicNames.add(name.toLowerCase());
+                const isSel = selectedTopic && selectedTopic.trim().toLowerCase() === name.toLowerCase() ? 'selected' : '';
+                html += `<option value="${escapeTopicHtml(name)}" ${isSel}>${escapeTopicHtml(name)}</option>`;
             });
 
-            if (selectedTopic && !topicNames.has(selectedTopic)) {
+            if (selectedTopic && !Array.from(topicNames).includes(selectedTopic.trim().toLowerCase())) {
                 html += `<option value="${escapeTopicHtml(selectedTopic)}" selected>${escapeTopicHtml(selectedTopic)}</option>`;
             }
 
@@ -1082,8 +1095,9 @@
             if (subject || classLevel) {
                 try {
                     const data = await fetchStudioTopicsSafely(subject, classLevel);
-                    if (data && Array.isArray(data.topics)) {
-                        cachedStudioTopics = data.topics;
+                    if (data) {
+                        if (Array.isArray(data.topics)) cachedStudioTopics = data.topics;
+                        if (Array.isArray(data.chapters)) cachedStudioChapters = data.chapters;
                     }
                 } catch (e) {
                     console.warn('Failed to load syllabus topics:', e);
@@ -1101,20 +1115,6 @@
                     if (currentChap) chapSelect.value = currentChap;
                 }
                 if (topSelect) {
-                    if (currentChap) {
-                        topSelect.disabled = false;
-                        topSelect.classList.remove('opacity-50', 'cursor-not-allowed');
-                        topSelect.innerHTML = buildTopicOptionsHTML(currentTop, currentChap);
-                        if (currentTop) topSelect.value = currentTop;
-                    } else {
-                        topSelect.disabled = true;
-                        topSelect.classList.add('opacity-50', 'cursor-not-allowed');
-                        topSelect.innerHTML = '<option value="">Select Chapter First</option>';
-                        topSelect.value = '';
-                    }
-                }
-            });
-        }
                     if (currentChap) {
                         topSelect.disabled = false;
                         topSelect.classList.remove('opacity-50', 'cursor-not-allowed');
