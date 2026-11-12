@@ -37,8 +37,8 @@
     </style>
 </head>
 
-<body class="bg-[#FFFFFF] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans h-full h-[100dvh] overflow-hidden">
-    <div class="flex">
+<body class="bg-[#FFFFFF] dark:bg-[#020617] text-slate-800 dark:text-slate-200 font-sans antialiased overflow-hidden h-full h-[100dvh] flex flex-col">
+    <div class="flex h-full h-[100dvh] w-full min-h-0 overflow-hidden flex-1">
         <aside id="adminSidebar" class="admin-sidebar fixed left-0 top-0 h-full w-[260px] bg-white dark:bg-[#0f172a] transition-transform duration-300 z-[100] border-r border-slate-200 dark:border-slate-800 -translate-x-full lg:translate-x-0">
             <%- include('sidebar', { active: 'questions' }) %>
         </aside>
@@ -46,10 +46,10 @@
         <!-- Backdrop overlay for mobile drawer -->
         <div id="teacherSidebarBackdrop" onclick="toggleTeacherSidebar(false)" class="fixed inset-0 bg-slate-950/50 backdrop-blur-xs z-[90] lg:hidden opacity-0 pointer-events-none transition-opacity duration-300"></div>
 
-        <main class="admin-main flex-1">
+        <main class="admin-main flex-1 flex flex-col h-full h-[100dvh] min-h-0 overflow-hidden">
             <%- include('header', { pageTitle: 'Bank Intelligence' }) %>
 
-            <div class="content-scroll flex flex-col gap-0 border-l-0 lg:border-l border-slate-200 dark:border-white/5 pb-24 sm:pb-20 lg:pb-8">
+            <div class="content-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col gap-0 border-l-0 lg:border-l border-slate-200 dark:border-white/5 pb-28 sm:pb-24 lg:pb-12 custom-scrollbar">
                 <!-- Top Summary Container -->
                 <div class="bg-white dark:bg-[#0b1120] rounded-2xl p-3.5 sm:p-6 border border-slate-200 dark:border-slate-800 shadow-xs flex flex-col gap-4 sm:gap-5 m-2 sm:m-4">
                     <div class="flex items-start justify-between gap-3">
@@ -283,7 +283,7 @@
                                             <span class="text-[9px] sm:text-[10px] font-medium text-slate-400">ID: <%= q._id.toString().slice(-6).toUpperCase() %></span>
                                         </div>
                                     </div>
-                                    <button onclick="toggleAnswer('<%= i %>', this)" class="h-7.5 sm:h-8 px-2 sm:px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-black dark:hover:text-white transition-all shadow-xs flex items-center gap-1 shrink-0">
+                                    <button type="button" onclick="toggleAnswer('<%= i %>', this)" class="h-7.5 sm:h-8 px-2 sm:px-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-black dark:hover:text-white transition-all shadow-xs flex items-center gap-1 shrink-0 cursor-pointer select-none">
                                         <span class="material-symbols-rounded text-xs sm:text-sm">visibility</span>
                                         <span class="text-[9px] sm:text-[10px] font-semibold">Answer</span>
                                     </button>
@@ -324,7 +324,7 @@
                                         </div>
                                     <% } %>
 
-                                    <!-- Answer Section (Hidden by default) -->
+                                    <!-- Answer Section (Hidden by default, shown when toggled) -->
                                     <div id="ans-<%= i %>" class="hidden mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-slate-100 dark:border-slate-800 animate-slide-up">
                                         <% if (q.questionType === 'Comprehension') { %>
                                             <div class="space-y-2.5 sm:space-y-3">
@@ -372,6 +372,14 @@
                                                     </div>
                                                 <% } %>
 
+                                                <% if (!q.q1 && !q.q2 && (q.correctAnswer || q.answer)) { %>
+                                                    <div class="p-3 sm:p-4 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/40">
+                                                        <div class="text-xs sm:text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                                                            <span class="font-bold">উত্তর: </span><%= q.correctAnswer || q.answer %>
+                                                        </div>
+                                                    </div>
+                                                <% } %>
+
                                                 <% const expComp = String(q.explanation || q.explanationText || q.solution || '').trim(); %>
                                                 <% if (expComp !== '') { %>
                                                     <div class="mt-2.5 p-3 sm:p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex gap-2.5 sm:gap-3 items-start">
@@ -386,13 +394,40 @@
                                                 <% } %>
                                             </div>
                                         <% } else if (q.questionType === 'MCQ') { %>
+                                            <!-- Prominent Correct Answer Callout -->
+                                            <% 
+                                                const corrIdx = Number(q.correctAnswerIndex);
+                                                const hasCorrIdx = !isNaN(corrIdx) && corrIdx >= 0 && corrIdx < ((q.options && q.options.length) || 4);
+                                                const corrOptText = (hasCorrIdx && q.options && q.options[corrIdx]) ? q.options[corrIdx] : (q.correctAnswer || '');
+                                            %>
+                                            <% if (corrOptText || hasCorrIdx) { %>
+                                                <div class="p-2.5 sm:p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 text-xs sm:text-[13px] font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-2 mb-3">
+                                                    <span class="material-symbols-rounded text-base text-emerald-600 dark:text-emerald-400 shrink-0">check_circle</span>
+                                                    <span>সঠিক উত্তর: 
+                                                        <% if (hasCorrIdx) { %>
+                                                            <strong class="font-bold underline decoration-emerald-500 underline-offset-2"><%= String.fromCharCode(65 + corrIdx) %></strong> - <%= corrOptText %>
+                                                        <% } else { %>
+                                                            <%= corrOptText %>
+                                                        <% } %>
+                                                    </span>
+                                                </div>
+                                            <% } %>
+
                                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 mb-4 sm:mb-6">
                                                 <% (q.options || []).forEach((opt, idx) => { %>
-                                                    <div class="p-2.5 sm:p-3.5 rounded-xl border <%= q.correctAnswerIndex === idx ? 'bg-emerald-50/80 dark:bg-emerald-950/20 border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300' : 'bg-slate-50 dark:bg-slate-900/60 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400' %> text-xs sm:text-[13px] font-medium flex gap-2.5 items-center">
-                                                        <div class="size-5 sm:size-6 rounded-md <%= q.correctAnswerIndex === idx ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500' %> flex items-center justify-center text-[10px] sm:text-[11px] font-bold shrink-0">
+                                                    <% 
+                                                        const isSelected = (hasCorrIdx && corrIdx === idx) ||
+                                                                          (String(q.correctAnswerIndex) === String(idx)) ||
+                                                                          (q.correctAnswer && (String(q.correctAnswer).trim() === String(opt).trim() || String(q.correctAnswer).trim() === String.fromCharCode(65 + idx) || String(q.correctAnswer).trim() === String(idx)));
+                                                    %>
+                                                    <div class="p-2.5 sm:p-3.5 rounded-xl border <%= isSelected ? 'bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-400 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 font-semibold ring-1 ring-emerald-400/50' : 'bg-slate-50 dark:bg-slate-900/60 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400' %> text-xs sm:text-[13px] font-medium flex gap-2.5 items-center">
+                                                        <div class="size-5 sm:size-6 rounded-md <%= isSelected ? 'bg-emerald-500 text-white shadow-xs' : 'bg-slate-200 dark:bg-slate-700 text-slate-500' %> flex items-center justify-center text-[10px] sm:text-[11px] font-bold shrink-0">
                                                             <%= String.fromCharCode(65 + idx) %>
                                                         </div>
                                                         <span class="flex-1 leading-snug"><%= opt %></span>
+                                                        <% if (isSelected) { %>
+                                                            <span class="material-symbols-rounded text-emerald-600 dark:text-emerald-400 text-sm shrink-0">check</span>
+                                                        <% } %>
                                                     </div>
                                                 <% }) %>
                                             </div>
@@ -418,7 +453,7 @@
                                                     <p class="text-[9px] sm:text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Model solution</p>
                                                 </div>
                                                 <div class="text-xs sm:text-[15px] font-semibold text-slate-700 dark:text-slate-200 leading-relaxed">
-                                                    <%- q.correctAnswer || 'Answer not provided.' %>
+                                                    <%- q.correctAnswer || q.answer || q.modelAnswer || q.solution || 'Answer not provided.' %>
                                                 </div>
                                             </div>
                                             <% const expNonMCQ = String(q.explanation || q.explanationText || q.solution || '').trim(); %>
@@ -451,22 +486,24 @@
 
     <script>
         function toggleAnswer(id, btn) {
-            console.log('Toggling answer for:', id);
             const ans = document.getElementById(`ans-${id}`);
-            if (!ans) {
-                console.error('Answer element not found for ID:', id);
-                return;
-            }
-            if (ans.classList.contains('hidden')) {
+            if (!ans) return;
+            const isHidden = ans.classList.contains('hidden');
+            if (isHidden) {
                 ans.classList.remove('hidden');
-                btn.innerHTML = '<span class="material-symbols-rounded text-sm">visibility_off</span><span class="text-[10px] font-bold">Hide Answer</span>';
-                btn.classList.add('border-blue-500', 'text-blue-600');
+                if (btn) {
+                    btn.innerHTML = '<span class="material-symbols-rounded text-xs sm:text-sm">visibility_off</span><span class="text-[9px] sm:text-[10px] font-semibold">Hide</span>';
+                    btn.classList.add('border-primary', 'text-primary');
+                }
             } else {
                 ans.classList.add('hidden');
-                btn.innerHTML = '<span class="material-symbols-rounded text-sm">visibility</span><span class="text-[10px] font-bold">Show Answer</span>';
-                btn.classList.remove('border-blue-500', 'text-blue-600');
+                if (btn) {
+                    btn.innerHTML = '<span class="material-symbols-rounded text-xs sm:text-sm">visibility</span><span class="text-[9px] sm:text-[10px] font-semibold">Answer</span>';
+                    btn.classList.remove('border-primary', 'text-primary');
+                }
             }
         }
+        window.toggleAnswer = toggleAnswer;
 
         let allAnswersVisible = false;
         function toggleAllAnswers(btn) {
@@ -480,21 +517,22 @@
             });
             document.querySelectorAll('.q-item button[onclick^="toggleAnswer"]').forEach(b => {
                 b.innerHTML = allAnswersVisible
-                    ? '<span class="material-symbols-rounded text-sm">visibility_off</span><span class="text-[10px] font-bold">Hide Answer</span>'
-                    : '<span class="material-symbols-rounded text-sm">visibility</span><span class="text-[10px] font-bold">Show Answer</span>';
+                    ? '<span class="material-symbols-rounded text-xs sm:text-sm">visibility_off</span><span class="text-[9px] sm:text-[10px] font-semibold">Hide</span>'
+                    : '<span class="material-symbols-rounded text-xs sm:text-sm">visibility</span><span class="text-[9px] sm:text-[10px] font-semibold">Answer</span>';
                 if (allAnswersVisible) {
-                    b.classList.add('border-blue-500', 'text-blue-600');
+                    b.classList.add('border-primary', 'text-primary');
                 } else {
-                    b.classList.remove('border-blue-500', 'text-blue-600');
+                    b.classList.remove('border-primary', 'text-primary');
                 }
             });
             if (btn) {
                 const icon = btn.querySelector('.material-symbols-rounded');
                 const label = btn.querySelector('span:last-child');
                 if (icon) icon.textContent = allAnswersVisible ? 'visibility_off' : 'visibility';
-                if (label) label.textContent = allAnswersVisible ? 'Hide All Answers' : 'Show All Answers';
+                if (label) label.textContent = allAnswersVisible ? 'Hide Answers' : 'Answers';
             }
         }
+        window.toggleAllAnswers = toggleAllAnswers;
 
         function filterQuestions(type) {
             const items = document.querySelectorAll('.q-item');
