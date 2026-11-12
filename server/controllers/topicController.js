@@ -640,7 +640,69 @@ const getTopicsApi = async (req, res) => {
         }
 
         const topics = await Topic.find(filter).sort({ 'chapter.number': 1, order: 1, name: 1 }).lean();
-        const chapterList = Array.from(new Set(topics.map(t => (t.chapter && t.chapter.name) ? t.chapter.name : '').filter(Boolean)));
+        let chapterList = Array.from(new Set(topics.map(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '').filter(Boolean)));
+
+        // Fallback: If syllabus chapters are empty or few, augment with chapters from QuestionBank, Quiz, Question, Note
+        try {
+            const QuestionBank = require('../models/QuestionBank');
+            const Quiz = require('../models/Quiz');
+            const Question = require('../models/Question');
+            const Note = require('../models/Note');
+
+            const fallbackFilter = {};
+            if (subject && subject !== 'all') {
+                const aliases = getSubjectAliases(subject);
+                fallbackFilter.subject = new RegExp('^(?:' + aliases.map(escapeRegex).join('|') + ')$', 'i');
+            }
+
+            const [qbDocs, quizDocs, questionDocs, noteDocs] = await Promise.all([
+                QuestionBank.find(fallbackFilter).select('chapter topic').lean().catch(() => []),
+                Quiz.find(fallbackFilter).select('chapter topic topics questions.chapter questions.topic').lean().catch(() => []),
+                Question.find(fallbackFilter).select('chapter topic').limit(200).lean().catch(() => []),
+                Note.find(fallbackFilter).select('chapter topic').lean().catch(() => [])
+            ]);
+
+            const extraChapters = new Set();
+            qbDocs.forEach(d => {
+                if (d.chapter && d.chapter.trim()) extraChapters.add(d.chapter.trim());
+                if (d.topic && d.topic.trim()) extraChapters.add(d.topic.trim());
+            });
+            quizDocs.forEach(d => {
+                if (d.chapter && d.chapter.trim()) extraChapters.add(d.chapter.trim());
+                if (d.topic && d.topic.trim()) extraChapters.add(d.topic.trim());
+                if (Array.isArray(d.topics)) d.topics.forEach(tp => { if (tp && tp.trim()) extraChapters.add(tp.trim()); });
+                if (Array.isArray(d.questions)) {
+                    d.questions.forEach(q => {
+                        if (q.chapter && q.chapter.trim()) extraChapters.add(q.chapter.trim());
+                        if (q.topic && q.topic.trim()) extraChapters.add(q.topic.trim());
+                    });
+                }
+            });
+            questionDocs.forEach(d => {
+                if (d.chapter && d.chapter.trim()) extraChapters.add(d.chapter.trim());
+                if (d.topic && d.topic.trim()) extraChapters.add(d.topic.trim());
+            });
+            noteDocs.forEach(d => {
+                if (d.chapter && d.chapter.trim()) extraChapters.add(d.chapter.trim());
+                if (d.topic && d.topic.trim()) extraChapters.add(d.topic.trim());
+            });
+
+            extraChapters.forEach(ch => {
+                if (!ch) return;
+                const exists = chapterList.some(existing => existing.toLowerCase() === ch.toLowerCase());
+                if (!exists) {
+                    chapterList.push(ch);
+                    topics.push({
+                        name: ch,
+                        subject: subject || '',
+                        classLevel: classLevel || '',
+                        chapter: { name: ch }
+                    });
+                }
+            });
+        } catch (fbErr) {
+            console.warn('[getTopicsApi] Fallback chapters lookup error:', fbErr.message);
+        }
 
         res.json({
             success: true,
