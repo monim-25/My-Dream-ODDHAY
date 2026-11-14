@@ -7,6 +7,7 @@ const Question = require('../models/Question');
 const Topic = require('../models/Topic');
 const AcademicClass = require('../models/AcademicClass');
 const AIKnowledge = require('../models/AIKnowledge');
+const { detectSubjectRenames, cascadeSubjectRename } = require('../utils/academicHelper');
 const { sendPaymentApprovalEmail, sendStaffInviteEmail, sendPasswordResetNotificationEmail } = require('../services/emailService');
 
 // Helper to log system activity
@@ -5321,6 +5322,55 @@ router.post('/academic-setup', superAdminProtect, async (req, res) => {
                 isArchived: false,
                 order
             };
+
+            // Detect subject renames / spelling fixes and cascade to teachers & academic content
+            let existingClass = null;
+            if (cls._id && mongoose.Types.ObjectId.isValid(cls._id)) {
+                existingClass = await AcademicClass.findById(cls._id).lean();
+            } else {
+                existingClass = await AcademicClass.findOne({ name }).lean();
+            }
+
+            if (existingClass) {
+                const detectedRenames = [];
+
+                // 1. Check common subjects
+                const oldCommon = splitTokens(existingClass.commonSubjects);
+                detectedRenames.push(...detectSubjectRenames(oldCommon, commonSubjects));
+
+                // 2. Check group subjects
+                if (hasGroups && Array.isArray(groups)) {
+                    for (const g of groups) {
+                        const oldGroup = (existingClass.groups || []).find(og => (og.name || '').toLowerCase() === (g.name || '').toLowerCase());
+                        const oldGroupSubs = oldGroup ? splitTokens(oldGroup.subjects) : [];
+                        detectedRenames.push(...detectSubjectRenames(oldGroupSubs, g.subjects));
+                    }
+                }
+
+                // 3. Check flat subjects
+                const oldFlat = splitTokens(existingClass.subjects);
+                detectedRenames.push(...detectSubjectRenames(oldFlat, splitTokens(cls.subjects)));
+
+                // 4. Overall combined subjects check
+                const oldAll = Array.from(new Set([...oldCommon, ...(existingClass.groups || []).flatMap(g => splitTokens(g.subjects)), ...oldFlat]));
+                const newAll = Array.from(new Set([...commonSubjects, ...groups.flatMap(g => g.subjects), ...splitTokens(cls.subjects)]));
+                detectedRenames.push(...detectSubjectRenames(oldAll, newAll));
+
+                // Deduplicate renames
+                const uniqueRenames = [];
+                const seenPairs = new Set();
+                for (const r of detectedRenames) {
+                    const key = `${r.oldSubject}->${r.newSubject}`;
+                    if (!seenPairs.has(key) && r.oldSubject.trim().toLowerCase() !== r.newSubject.trim().toLowerCase()) {
+                        seenPairs.add(key);
+                        uniqueRenames.push(r);
+                    }
+                }
+
+                for (const r of uniqueRenames) {
+                    await cascadeSubjectRename(r.oldSubject, r.newSubject, name);
+                }
+            }
 
             if (cls._id && mongoose.Types.ObjectId.isValid(cls._id)) {
                 await AcademicClass.findByIdAndUpdate(cls._id, updatePayload);

@@ -213,6 +213,251 @@ async function getStudentSubjects(user) {
     return ['Bangla', 'English', 'Mathematics', 'ICT'];
 }
 
+/**
+ * String similarity using Levenshtein distance
+ */
+function stringSimilarity(s1, s2) {
+    if (s1 === s2) return 1.0;
+    if (!s1 || !s2) return 0;
+    
+    const longer = s1.length > s2.length ? s1 : s2;
+    const shorter = s1.length > s2.length ? s2 : s1;
+    if (longer.length === 0) return 1.0;
+    
+    const costs = [];
+    for (let i = 0; i <= longer.length; i++) {
+        let lastValue = i;
+        for (let j = 0; j <= shorter.length; j++) {
+            if (i === 0) {
+                costs[j] = j;
+            } else if (j > 0) {
+                let newValue = costs[j - 1];
+                if (longer.charAt(i - 1) !== shorter.charAt(j - 1)) {
+                    newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
+                }
+                costs[j - 1] = lastValue;
+                lastValue = newValue;
+            }
+        }
+        if (i > 0) costs[shorter.length] = lastValue;
+    }
+    const distance = costs[shorter.length];
+    return (longer.length - distance) / longer.length;
+}
+
+/**
+ * Detect subject renames or spelling fixes between old and new subject lists
+ */
+function detectSubjectRenames(oldList = [], newList = []) {
+    const renames = [];
+    const oldNorm = (oldList || []).map(s => String(s || '').trim()).filter(Boolean);
+    const newNorm = (newList || []).map(s => String(s || '').trim()).filter(Boolean);
+    
+    const newSet = new Set(newNorm);
+    const oldSet = new Set(oldNorm);
+    
+    const removed = oldNorm.filter(s => !newSet.has(s));
+    const added = newNorm.filter(s => !oldSet.has(s));
+    
+    if (removed.length === 0 || added.length === 0) {
+        return renames;
+    }
+    
+    // 1. Position-based check when lengths are identical
+    if (oldNorm.length === newNorm.length) {
+        for (let i = 0; i < oldNorm.length; i++) {
+            const oldItem = oldNorm[i];
+            const newItem = newNorm[i];
+            if (oldItem !== newItem && !newSet.has(oldItem) && !oldSet.has(newItem)) {
+                renames.push({ oldSubject: oldItem, newSubject: newItem });
+            }
+        }
+        if (renames.length > 0) {
+            return renames;
+        }
+    }
+    
+    // 2. Exact 1-to-1 change (1 removed, 1 added)
+    if (removed.length === 1 && added.length === 1) {
+        renames.push({ oldSubject: removed[0], newSubject: added[0] });
+        return renames;
+    }
+    
+    // 3. Similarity-based matching for remaining removed/added
+    const availableAdded = [...added];
+    for (const rem of removed) {
+        if (availableAdded.length === 0) break;
+        
+        let bestMatch = null;
+        let highestScore = 0;
+        
+        for (const add of availableAdded) {
+            const score = stringSimilarity(rem.toLowerCase(), add.toLowerCase());
+            if (score > highestScore) {
+                highestScore = score;
+                bestMatch = add;
+            }
+        }
+        
+        if (bestMatch && highestScore >= 0.4) {
+            renames.push({ oldSubject: rem, newSubject: bestMatch });
+            const idx = availableAdded.indexOf(bestMatch);
+            if (idx > -1) availableAdded.splice(idx, 1);
+        }
+    }
+    
+    return renames;
+}
+
+/**
+ * Cascade subject rename across Users (teachers, students) and academic collections
+ */
+async function cascadeSubjectRename(oldSubject, newSubject, className = null) {
+    if (!oldSubject || !newSubject || oldSubject.trim().toLowerCase() === newSubject.trim().toLowerCase()) return;
+    
+    const cleanOld = oldSubject.trim();
+    const cleanNew = newSubject.trim();
+    const User = require('../models/User');
+    const escapedOld = cleanOld.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const exactOldRegex = new RegExp(`^${escapedOld}$`, 'i');
+
+    try {
+        // 1. Update User records (Teachers and Students)
+        const users = await User.find({
+            $or: [
+                { teachingSubjects: { $in: [cleanOld, exactOldRegex] } },
+                { teachingSubject: { $regex: new RegExp(escapedOld, 'i') } },
+                { subject: { $regex: new RegExp(escapedOld, 'i') } },
+                { subjects: { $in: [cleanOld, exactOldRegex] } }
+            ]
+        });
+
+        for (const u of users) {
+            let modified = false;
+
+            // teachingSubjects array
+            if (Array.isArray(u.teachingSubjects) && u.teachingSubjects.length > 0) {
+                const updatedList = u.teachingSubjects.map(s => {
+                    if (String(s || '').trim().toLowerCase() === cleanOld.toLowerCase()) {
+                        modified = true;
+                        return cleanNew;
+                    }
+                    return s;
+                });
+                if (modified) {
+                    u.teachingSubjects = Array.from(new Set(updatedList));
+                    u.teachingSubject = u.teachingSubjects.join(', ');
+                }
+            } else if (u.teachingSubject) {
+                const parts = u.teachingSubject.split(/[,;/]+/).map(p => p.trim());
+                let strChanged = false;
+                const newParts = parts.map(p => {
+                    if (p.toLowerCase() === cleanOld.toLowerCase()) {
+                        strChanged = true;
+                        return cleanNew;
+                    }
+                    return p;
+                });
+                if (strChanged) {
+                    u.teachingSubject = Array.from(new Set(newParts)).join(', ');
+                    modified = true;
+                }
+            }
+
+            // Fallback subject string
+            if (u.subject) {
+                if (u.subject.trim().toLowerCase() === cleanOld.toLowerCase()) {
+                    u.subject = cleanNew;
+                    modified = true;
+                } else if (u.subject.toLowerCase().includes(cleanOld.toLowerCase())) {
+                    u.subject = u.subject.replace(new RegExp(escapedOld, 'gi'), cleanNew);
+                    modified = true;
+                }
+            }
+
+            // Student subjects array
+            if (Array.isArray(u.subjects) && u.subjects.length > 0) {
+                let subsChanged = false;
+                u.subjects = u.subjects.map(s => {
+                    if (String(s || '').trim().toLowerCase() === cleanOld.toLowerCase()) {
+                        subsChanged = true;
+                        return cleanNew;
+                    }
+                    return s;
+                });
+                if (subsChanged) {
+                    u.subjects = Array.from(new Set(u.subjects));
+                    modified = true;
+                }
+            }
+
+            if (modified) {
+                await u.save().catch(err => console.error(`Error updating teacher/user ${u._id} subject:`, err.message));
+            }
+        }
+
+        // 2. Cascade across other academic collections
+        const updateTasks = [];
+
+        try {
+            const Question = require('../models/Question');
+            updateTasks.push(Question.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+        } catch (_) {}
+
+        try {
+            const QuestionBank = require('../models/QuestionBank');
+            updateTasks.push(QuestionBank.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+        } catch (_) {}
+
+        try {
+            const Quiz = require('../models/Quiz');
+            updateTasks.push(Quiz.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+        } catch (_) {}
+
+        try {
+            const Topic = require('../models/Topic');
+            updateTasks.push(Topic.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+        } catch (_) {}
+
+        try {
+            const Note = require('../models/Note');
+            updateTasks.push(Note.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+        } catch (_) {}
+
+        try {
+            const Book = require('../models/Book');
+            updateTasks.push(Book.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+        } catch (_) {}
+
+        try {
+            const Folder = require('../models/Folder');
+            updateTasks.push(Folder.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+        } catch (_) {}
+
+        try {
+            const Course = require('../models/Course');
+            updateTasks.push(Course.updateMany(
+                { subject: exactOldRegex },
+                { $set: { 'subject.$[elem]': cleanNew } },
+                { arrayFilters: [{ 'elem': exactOldRegex }] }
+            ));
+        } catch (_) {}
+
+        try {
+            const AIKnowledge = require('../models/AIKnowledge');
+            updateTasks.push(AIKnowledge.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+        } catch (_) {}
+
+        if (updateTasks.length > 0) {
+            await Promise.allSettled(updateTasks);
+        }
+
+        console.log(`✅ Cascaded subject rename: "${cleanOld}" -> "${cleanNew}" across users and academic records.`);
+    } catch (err) {
+        console.error(`❌ Error cascading subject rename "${cleanOld}" -> "${cleanNew}":`, err);
+    }
+}
+
 module.exports = {
     CANONICAL_CLASSES,
     VALID_GROUPS,
@@ -222,6 +467,9 @@ module.exports = {
     getLinkedClasses,
     buildClassQuery,
     extractSubjectsForStudent,
-    getStudentSubjects
+    getStudentSubjects,
+    stringSimilarity,
+    detectSubjectRenames,
+    cascadeSubjectRename
 };
 
