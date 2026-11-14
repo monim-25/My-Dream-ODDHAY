@@ -1,6 +1,16 @@
 const nodemailer = require('nodemailer');
 
 
+// Helper to get Base URL for outgoing emails
+const getBaseUrl = () => {
+    let url = process.env.BASE_URL || 'https://oddhay.net';
+    url = url.trim().replace(/\/+$/, '');
+    if (url.includes('vercel.app')) {
+        url = 'https://oddhay.net';
+    }
+    return url;
+};
+
 // Helper to get formatted Sender & Reply-To
 const getFromAddress = (title = 'ODDHAY শিক্ষা প্ল্যাটফর্ম') => {
     return process.env.EMAIL_FROM || `"${title}" <${process.env.EMAIL_USER}>`;
@@ -117,7 +127,7 @@ const sendWelcomeEmail = async (toEmail, userName) => {
                     এখন আপনি কোর্স, কুইজ, নোটস এবং আরও অনেক কিছু অ্যাক্সেস করতে পারবেন।
                 </p>
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="${process.env.BASE_URL || 'http://localhost:3005'}/dashboard" 
+                    <a href="${getBaseUrl()}/dashboard" 
                        style="background: #1a73e8; color: white; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 15px;">
                         ড্যাশবোর্ডে যান →
                     </a>
@@ -155,7 +165,7 @@ const sendPaymentApprovalEmail = async (toEmail, userName, courseName, amount) =
                     <strong>${courseName}</strong> কোর্সে আপনার অ্যাক্সেস চালু করা হয়েছে।
                 </p>
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="${process.env.BASE_URL || 'http://localhost:3005'}/dashboard" 
+                    <a href="${getBaseUrl()}/dashboard" 
                        style="background: #1a73e8; color: white; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: bold; font-size: 15px;">
                         ক্লাস শুরু করুন →
                     </a>
@@ -192,6 +202,12 @@ const sendPasswordResetNotificationEmail = async (toEmail, userName, tempPasswor
                     <p>Your password has been reset. Please use the temporary password below to log in:</p>
                     <div style="background: #f1f5f9; padding: 20px; border-radius: 8px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 4px; color: #0f172a; margin: 20px 0;">
                         ${tempPassword}
+                    </div>
+                    <div style="text-align: center; margin: 24px 0;">
+                        <a href="${getBaseUrl()}/login" 
+                           style="background: #2563eb; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
+                            Log In to ODDHAY
+                        </a>
                     </div>
                     <div style="background: #fff7ed; border-left: 4px solid #f97316; padding: 16px; border-radius: 8px; margin-top: 20px;">
                         <strong>Important:</strong> For security reasons, you will be required to change this password immediately upon logging in.
@@ -243,7 +259,7 @@ const sendStaffInviteEmail = async (toEmail, userName, role, password) => {
                     </div>
 
                     <div style="text-align: center; margin: 32px 0;">
-                        <a href="${process.env.BASE_URL || 'http://localhost:3005'}/login" 
+                        <a href="${getBaseUrl()}/login" 
                            style="background: #2563eb; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
                             Log In to Dashboard
                         </a>
