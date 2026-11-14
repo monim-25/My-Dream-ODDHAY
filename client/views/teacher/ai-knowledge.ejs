@@ -264,18 +264,31 @@
                                         <div class="flex flex-wrap items-center gap-1.5 min-w-0">
                                             <!-- Subject Badge -->
                                             <span class="px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] sm:text-[10.5px] border border-indigo-200/60 dark:border-indigo-800/60 shrink-0">
-                                                <%= item.subject %>
+                                                <%= Array.isArray(item.subject) ? item.subject.join(', ') : item.subject %>
                                             </span>
 
                                             <!-- Class Badge -->
                                             <span class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold text-[10px] sm:text-[10.5px] shrink-0">
-                                                <%= item.classLevel %>
+                                                <%= Array.isArray(item.classLevel) ? item.classLevel.join(', ') : item.classLevel %>
                                             </span>
 
+                                            <!-- Chapter Badge (if exists) -->
+                                            <% 
+                                                const chaps = (item.chapters && item.chapters.length > 0) ? item.chapters : (item.chapter ? [item.chapter] : []);
+                                                if (chaps.length > 0) { 
+                                            %>
+                                                <span class="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] sm:text-[11px] font-medium border border-emerald-200/60 dark:border-emerald-800/60 truncate max-w-[160px]">
+                                                    Chap: <%= chaps.join(', ') %>
+                                                </span>
+                                            <% } %>
+
                                             <!-- Topic Badge (if exists) -->
-                                            <% if (item.topic) { %>
+                                            <% 
+                                                const tops = (item.topics && item.topics.length > 0) ? item.topics : (item.topic ? [item.topic] : []);
+                                                if (tops.length > 0) { 
+                                            %>
                                                 <span class="px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-500 dark:text-slate-400 text-[10px] sm:text-[11px] font-medium truncate max-w-[150px] sm:max-w-xs">
-                                                    <%= item.topic %>
+                                                    <%= tops.join(', ') %>
                                                 </span>
                                             <% } %>
 
@@ -323,6 +336,18 @@
                                     <div class="relative bg-slate-50/90 dark:bg-slate-900/70 border border-slate-200/80 dark:border-slate-800/80 rounded-xl p-3 sm:p-4 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed font-normal whitespace-pre-wrap math-renderable overflow-x-auto">
 <%= item.content %>
                                     </div>
+
+                                    <!-- Attached Reference Document/Image (if exists) -->
+                                    <% if (item.fileUrl) { %>
+                                        <div class="flex items-center gap-2 pt-0.5">
+                                            <a href="<%= item.fileUrl %>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-medium transition-colors shadow-2xs">
+                                                <span class="material-symbols-rounded text-sm"><%= (item.fileType && item.fileType.includes('pdf')) || (item.fileName && item.fileName.toLowerCase().endsWith('.pdf')) ? 'picture_as_pdf' : 'image' %></span>
+                                                <span class="truncate max-w-[220px] sm:max-w-xs"><%= item.fileName || 'Attached Reference' %></span>
+                                                <% if (item.fileSize) { %><span class="text-[10px] text-slate-400 font-normal">(<%= (item.fileSize / (1024*1024)).toFixed(1) %> MB)</span><% } %>
+                                                <span class="material-symbols-rounded text-xs opacity-70">open_in_new</span>
+                                            </a>
+                                        </div>
+                                    <% } %>
 
                                     <!-- Footer Info & Actions -->
                                     <div class="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800/60 text-[10.5px] text-slate-400">
@@ -432,59 +457,108 @@
             </div>
 
             <!-- Modal Form -->
-            <form id="modalForm" method="POST" action="/teacher/ai-knowledge/create" class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 custom-scroll">
+            <form id="modalForm" method="POST" action="/teacher/ai-knowledge/create" enctype="multipart/form-data" onsubmit="return validateKnowledgeForm(event)" class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 custom-scroll">
+                <input type="hidden" name="removeFile" id="formRemoveFile" value="false">
                 
                 <!-- Title -->
                 <div>
-                    <label class="form-label">Title</label>
-                    <input type="text" name="title" id="formTitle" required placeholder="Rule title or topic" class="form-input">
+                    <label class="form-label">Title <span class="text-rose-500">*</span></label>
+                    <input type="text" name="title" id="formTitle" required placeholder="Type title here..." class="form-input">
                 </div>
 
-                <!-- Subject & Class Grid -->
-                <div class="grid grid-cols-2 gap-2.5 sm:gap-3">
-                    <div>
-                        <label class="form-label">Subject</label>
-                        <select name="subject" id="formSubject" required class="form-input cursor-pointer">
-                            <% subjectList.forEach(sub => { %>
-                                <option value="<%= sub %>"><%= sub %></option>
-                            <% }) %>
-                        </select>
+                <!-- Subject Selection (Multiple checkboxes) -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="form-label !mb-0">Subject(s) <span class="text-rose-500">*</span></label>
+                        <button type="button" onclick="toggleAllSubjects()" class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
+                            Select All
+                        </button>
                     </div>
-
-                    <div>
-                        <label class="form-label">Class</label>
-                        <select name="classLevel" id="formClassLevel" required class="form-input cursor-pointer">
-                            <option value="All Classes">All Classes</option>
-                            <% classList.forEach(cls => { %>
-                                <option value="<%= cls %>"><%= cls %></option>
+                    <div class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 max-h-36 overflow-y-auto custom-scroll">
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            <% subjectList.forEach((sub) => { %>
+                                <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer text-xs transition-colors">
+                                    <input type="checkbox" name="subjects[]" value="<%= sub %>" class="knowledge-subject-cb size-4 text-indigo-600 rounded cursor-pointer" onchange="onKnowledgeSubjectOrClassChange()">
+                                    <span class="truncate text-slate-700 dark:text-slate-300 font-medium"><%= sub %></span>
+                                </label>
                             <% }) %>
-                        </select>
+                        </div>
+                    </div>
+                    <p id="subjectError" class="hidden text-[11px] text-rose-500 mt-1">Please select at least one subject.</p>
+                </div>
+
+                <!-- Class Selection (Multiple checkboxes) -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="form-label !mb-0">Class(es) <span class="text-rose-500">*</span></label>
+                        <label class="flex items-center gap-1.5 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 cursor-pointer">
+                            <input type="checkbox" id="cbAllClasses" value="All Classes" onchange="toggleAllClassesCheckbox(this)" class="size-3.5 rounded text-indigo-600 cursor-pointer">
+                            <span>All Classes</span>
+                        </label>
+                    </div>
+                    <div class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 max-h-36 overflow-y-auto custom-scroll">
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            <% classList.forEach((cls) => { %>
+                                <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer text-xs transition-colors">
+                                    <input type="checkbox" name="classLevels[]" value="<%= cls %>" class="knowledge-class-cb size-4 text-indigo-600 rounded cursor-pointer" onchange="onIndividualClassChange()">
+                                    <span class="truncate text-slate-700 dark:text-slate-300 font-medium"><%= cls %></span>
+                                </label>
+                            <% }) %>
+                        </div>
+                    </div>
+                    <p id="classError" class="hidden text-[11px] text-rose-500 mt-1">Please select at least one class.</p>
+                </div>
+
+                <!-- Chapter Selection (Multiple, Optional, Cascading according to Subject/Class) -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <label class="form-label !mb-0">Chapter(s) <span class="text-slate-400 font-normal text-[11px]">(Optional)</span></label>
+                            <span id="chaptersLoading" class="hidden text-[11px] text-indigo-500 font-medium animate-pulse">Loading chapters...</span>
+                        </div>
+                        <button type="button" id="toggleAllChaptersBtn" onclick="toggleAllChapters()" class="hidden text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
+                            Select All
+                        </button>
+                    </div>
+                    <div id="chaptersContainer" class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 max-h-36 overflow-y-auto custom-scroll text-xs">
+                        <span class="text-slate-400 text-xs italic">Select subject(s) and class(es) to load chapters.</span>
                     </div>
                 </div>
 
-                <!-- Topic & Priority Grid -->
-                <div class="grid grid-cols-2 gap-2.5 sm:gap-3">
-                    <div>
-                        <label class="form-label">Topic (Optional)</label>
-                        <input type="text" name="topic" id="formTopic" placeholder="e.g. Kinetic Energy" class="form-input">
+                <!-- Topic Selection (Multiple, Optional, Cascading according to Chapter) -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <div class="flex items-center gap-1.5">
+                            <label class="form-label !mb-0">Topic(s) <span class="text-slate-400 font-normal text-[11px]">(Optional)</span></label>
+                            <span id="topicsLoading" class="hidden text-[11px] text-indigo-500 font-medium animate-pulse">Loading topics...</span>
+                        </div>
+                        <button type="button" id="toggleAllTopicsBtn" onclick="toggleAllTopics()" class="hidden text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
+                            Select All
+                        </button>
+                    </div>
+                    <div id="topicsContainer" class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 max-h-36 overflow-y-auto custom-scroll text-xs">
+                        <span class="text-slate-400 text-xs italic">Select chapter(s) to load topics.</span>
+                    </div>
+                    <input type="text" name="topic" id="formTopic" placeholder="Type here..." class="form-input mt-2">
+                </div>
+
+                <!-- Keywords & Priority -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="sm:col-span-2">
+                        <label class="form-label">Keywords <span class="text-rose-500">*</span></label>
+                        <input type="text" name="keywords" id="formKeywords" required placeholder="Type here..." class="form-input">
                     </div>
 
                     <div>
                         <label class="form-label">Priority</label>
-                        <input type="number" name="priority" id="formPriority" value="100" min="1" max="1000" class="form-input">
+                        <input type="number" name="priority" id="formPriority" value="100" min="1" max="1000" placeholder="Type here..." class="form-input">
                     </div>
-                </div>
-
-                <!-- Keywords -->
-                <div>
-                    <label class="form-label">Keywords</label>
-                    <input type="text" name="keywords" id="formKeywords" required placeholder="e.g. গতিশক্তি, বিভবশক্তি, E_k, 1/2mv^2" class="form-input">
                 </div>
 
                 <!-- Content Area with Live Preview Tabs -->
                 <div>
                     <div class="flex items-center justify-between mb-1.5">
-                        <label class="form-label !mb-0">Content</label>
+                        <label class="form-label !mb-0">Content <span class="text-rose-500">*</span></label>
                         
                         <!-- Write / Live Preview Tab Switcher -->
                         <div class="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
@@ -497,19 +571,10 @@
                         </div>
                     </div>
 
-                    <!-- Quick Formula Insertion Toolbar -->
-                    <div id="quickMathToolbar" class="flex items-center gap-1.5 overflow-x-auto py-1 mb-1.5 no-scrollbar custom-scroll">
-                        <button type="button" onclick="insertSyntax('$...$')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[11px] shrink-0">$x$</button>
-                        <button type="button" onclick="insertSyntax('$$\\frac{a}{b}$$')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[11px] shrink-0">$$\frac{a}{b}$$</button>
-                        <button type="button" onclick="insertSyntax('x^2')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[11px] shrink-0">x²</button>
-                        <button type="button" onclick="insertSyntax('\\sqrt{x}')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[11px] shrink-0">√x</button>
-                        <button type="button" onclick="insertSyntax('**bold**')" class="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 font-mono text-[11px] shrink-0">B</button>
-                    </div>
-
                     <!-- Textarea Editor -->
                     <div id="editorWriteContainer">
                         <textarea name="content" id="formContent" rows="5" required 
-                            placeholder="Write rule, definitions, formulas ($...$), or notes..." 
+                            placeholder="Type here..." 
                             class="form-input !h-auto !py-2.5 font-normal leading-relaxed text-xs sm:text-sm"
                             oninput="updatePreviewIfActive()"></textarea>
                     </div>
@@ -517,6 +582,39 @@
                     <!-- Live Rendered Preview Container -->
                     <div id="editorPreviewContainer" class="hidden min-h-[120px] max-h-[200px] overflow-y-auto bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 text-xs sm:text-sm text-slate-700 dark:text-slate-300 math-renderable custom-scroll">
                         <div id="previewOutput" class="leading-relaxed"></div>
+                    </div>
+                </div>
+
+                <!-- Attachment: Image or PDF <= 10MB -->
+                <div>
+                    <label class="form-label flex items-center justify-between">
+                        <span>Attachment <span class="text-slate-400 font-normal text-[11px]">(Image or PDF, max 10MB)</span></span>
+                    </label>
+
+                    <input type="file" name="file" id="formFile" accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml,application/pdf" class="hidden" onchange="handleFileSelect(this)">
+
+                    <div id="fileUploadBox" onclick="document.getElementById('formFile').click()" class="border-2 border-dashed border-slate-200 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 rounded-xl p-3 text-center cursor-pointer transition-colors bg-slate-50/50 dark:bg-slate-900/30">
+                        <div class="flex items-center justify-center gap-2 text-slate-500 dark:text-slate-400 text-xs">
+                            <span class="material-symbols-rounded text-indigo-500 text-lg">upload_file</span>
+                            <span class="font-medium text-slate-700 dark:text-slate-300">Click to attach Image or PDF</span>
+                            <span class="text-slate-400 text-[11px]">(Max 10MB)</span>
+                        </div>
+                    </div>
+
+                    <div id="filePreviewCard" class="hidden mt-2 p-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30 flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <span id="filePreviewIcon" class="material-symbols-rounded text-indigo-600 dark:text-indigo-400 text-xl shrink-0">attach_file</span>
+                            <div class="min-w-0">
+                                <p id="filePreviewName" class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">filename.pdf</p>
+                                <p id="filePreviewSize" class="text-[10px] text-slate-500">2.4 MB</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <a id="filePreviewLink" href="#" target="_blank" class="hidden px-2 py-1 text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline">View</a>
+                            <button type="button" onclick="removeAttachedFile()" class="p-1 rounded-md text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 cursor-pointer transition-colors" title="Remove file">
+                                <span class="material-symbols-rounded text-base">delete</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -531,7 +629,7 @@
                     <button type="button" onclick="closeModal()" class="flex-1 sm:flex-none px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium transition-colors cursor-pointer">
                         Cancel
                     </button>
-                    <button type="submit" class="flex-1 sm:flex-none px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium shadow-sm transition-all active:scale-95 cursor-pointer">
+                    <button type="submit" id="saveRuleSubmitBtn" class="flex-1 sm:flex-none px-5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium shadow-sm transition-all active:scale-95 cursor-pointer">
                         Save Rule
                     </button>
                 </div>
@@ -582,6 +680,243 @@
             }
         }
 
+        // Cached topics from API for chapter cascading
+        let _cachedKnowledgeTopics = [];
+
+        function toggleAllSubjects() {
+            const cbs = document.querySelectorAll('.knowledge-subject-cb');
+            if (!cbs.length) return;
+            const anyUnchecked = Array.from(cbs).some(cb => !cb.checked);
+            cbs.forEach(cb => cb.checked = anyUnchecked);
+            onKnowledgeSubjectOrClassChange();
+        }
+
+        function toggleAllClassesCheckbox(cbAll) {
+            const cbs = document.querySelectorAll('.knowledge-class-cb');
+            cbs.forEach(cb => cb.checked = cbAll.checked);
+            onKnowledgeSubjectOrClassChange();
+        }
+
+        function onIndividualClassChange() {
+            const cbs = Array.from(document.querySelectorAll('.knowledge-class-cb'));
+            const cbAll = document.getElementById('cbAllClasses');
+            if (cbAll) {
+                cbAll.checked = cbs.length > 0 && cbs.every(cb => cb.checked);
+            }
+            onKnowledgeSubjectOrClassChange();
+        }
+
+        async function onKnowledgeSubjectOrClassChange(preselectedChapters = [], preselectedTopics = []) {
+            const selectedSubjects = Array.from(document.querySelectorAll('.knowledge-subject-cb:checked')).map(cb => cb.value);
+            const selectedClasses = Array.from(document.querySelectorAll('.knowledge-class-cb:checked')).map(cb => cb.value);
+            const cbAllClasses = document.getElementById('cbAllClasses');
+            const hasAllClasses = cbAllClasses && cbAllClasses.checked;
+
+            const chaptersContainer = document.getElementById('chaptersContainer');
+            const topicsContainer = document.getElementById('topicsContainer');
+            const toggleChapBtn = document.getElementById('toggleAllChaptersBtn');
+            const chaptersLoading = document.getElementById('chaptersLoading');
+
+            if (selectedSubjects.length === 0 || (selectedClasses.length === 0 && !hasAllClasses)) {
+                chaptersContainer.innerHTML = '<span class="text-slate-400 text-xs italic">Select subject(s) and class(es) to load chapters.</span>';
+                topicsContainer.innerHTML = '<span class="text-slate-400 text-xs italic">Select chapter(s) to load topics.</span>';
+                if (toggleChapBtn) toggleChapBtn.classList.add('hidden');
+                _cachedKnowledgeTopics = [];
+                return;
+            }
+
+            if (chaptersLoading) chaptersLoading.classList.remove('hidden');
+
+            try {
+                const params = new URLSearchParams();
+                selectedSubjects.forEach(s => params.append('subjects[]', s));
+                if (!hasAllClasses) {
+                    selectedClasses.forEach(c => params.append('classLevels[]', c));
+                }
+                
+                const res = await fetch(`/teacher/api/topics?${params.toString()}`);
+                const data = await res.json();
+                _cachedKnowledgeTopics = data.topics || [];
+                
+                // Get unique chapter list
+                let chapters = data.chapters || [];
+                if (!chapters.length && _cachedKnowledgeTopics.length) {
+                    chapters = Array.from(new Set(_cachedKnowledgeTopics.map(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim() : (t.chapter || '')).filter(Boolean)));
+                }
+
+                if (chapters.length === 0) {
+                    chaptersContainer.innerHTML = '<span class="text-slate-400 text-xs italic">No chapters found for selected subject/class.</span>';
+                    if (toggleChapBtn) toggleChapBtn.classList.add('hidden');
+                } else {
+                    if (toggleChapBtn) toggleChapBtn.classList.remove('hidden');
+                    chaptersContainer.innerHTML = `
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            ${chapters.map(ch => {
+                                const isChecked = preselectedChapters.includes(ch) ? 'checked' : '';
+                                return `
+                                    <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer text-xs transition-colors">
+                                        <input type="checkbox" name="chapters[]" value="${ch.replace(/"/g, '&quot;')}" ${isChecked} class="knowledge-chapter-cb size-4 text-indigo-600 rounded cursor-pointer" onchange="onKnowledgeChapterChange()">
+                                        <span class="truncate text-slate-700 dark:text-slate-300 font-medium">${ch}</span>
+                                    </label>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
+                }
+
+                // Populate topics based on current checked chapters
+                onKnowledgeChapterChange(preselectedTopics);
+            } catch (err) {
+                console.error('Error fetching chapters & topics:', err);
+                chaptersContainer.innerHTML = '<span class="text-rose-400 text-xs">Failed to load chapters.</span>';
+            } finally {
+                if (chaptersLoading) chaptersLoading.classList.add('hidden');
+            }
+        }
+
+        function onKnowledgeChapterChange(preselectedTopics = []) {
+            const checkedChapters = Array.from(document.querySelectorAll('.knowledge-chapter-cb:checked')).map(cb => cb.value);
+            const topicsContainer = document.getElementById('topicsContainer');
+            const toggleTopicsBtn = document.getElementById('toggleAllTopicsBtn');
+
+            if (!_cachedKnowledgeTopics.length) {
+                topicsContainer.innerHTML = '<span class="text-slate-400 text-xs italic">No topics available.</span>';
+                if (toggleTopicsBtn) toggleTopicsBtn.classList.add('hidden');
+                return;
+            }
+
+            let filteredTopics = _cachedKnowledgeTopics;
+            if (checkedChapters.length > 0) {
+                filteredTopics = _cachedKnowledgeTopics.filter(t => {
+                    const chName = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : (t.chapter || '');
+                    return chName && checkedChapters.includes(chName);
+                });
+            }
+
+            const uniqueTopicNames = Array.from(new Set(filteredTopics.map(t => t.name).filter(Boolean)));
+
+            if (uniqueTopicNames.length === 0) {
+                topicsContainer.innerHTML = '<span class="text-slate-400 text-xs italic">No topics found for selected chapter(s).</span>';
+                if (toggleTopicsBtn) toggleTopicsBtn.classList.add('hidden');
+            } else {
+                if (toggleTopicsBtn) toggleTopicsBtn.classList.remove('hidden');
+                topicsContainer.innerHTML = `
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        ${uniqueTopicNames.map(top => {
+                            const isChecked = preselectedTopics.includes(top) ? 'checked' : '';
+                            return `
+                                <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer text-xs transition-colors">
+                                    <input type="checkbox" name="topics[]" value="${top.replace(/"/g, '&quot;')}" ${isChecked} class="knowledge-topic-cb size-4 text-indigo-600 rounded cursor-pointer">
+                                    <span class="truncate text-slate-700 dark:text-slate-300 font-medium">${top}</span>
+                                </label>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
+        }
+
+        function toggleAllChapters() {
+            const cbs = document.querySelectorAll('.knowledge-chapter-cb');
+            if (!cbs.length) return;
+            const anyUnchecked = Array.from(cbs).some(cb => !cb.checked);
+            cbs.forEach(cb => cb.checked = anyUnchecked);
+            onKnowledgeChapterChange();
+        }
+
+        function toggleAllTopics() {
+            const cbs = document.querySelectorAll('.knowledge-topic-cb');
+            if (!cbs.length) return;
+            const anyUnchecked = Array.from(cbs).some(cb => !cb.checked);
+            cbs.forEach(cb => cb.checked = anyUnchecked);
+        }
+
+        function handleFileSelect(input) {
+            const file = input.files && input.files[0];
+            if (!file) return;
+
+            // 10MB limit
+            const maxSize = 10 * 1024 * 1024;
+            if (file.size > maxSize) {
+                showToast('File size must be 10MB or less.', 'error');
+                input.value = '';
+                return;
+            }
+
+            const allowedTypes = [
+                'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
+                'application/pdf'
+            ];
+            if (!allowedTypes.includes(file.type) && !file.name.match(/\.(jpe?g|png|webp|gif|svg|pdf)$/i)) {
+                showToast('Only Image or PDF files are allowed.', 'error');
+                input.value = '';
+                return;
+            }
+
+            document.getElementById('formRemoveFile').value = 'false';
+            document.getElementById('fileUploadBox').classList.add('hidden');
+            const previewCard = document.getElementById('filePreviewCard');
+            previewCard.classList.remove('hidden');
+
+            document.getElementById('filePreviewName').textContent = file.name;
+            const sizeInMb = (file.size / (1024 * 1024)).toFixed(2);
+            document.getElementById('filePreviewSize').textContent = `${sizeInMb} MB`;
+
+            const iconSpan = document.getElementById('filePreviewIcon');
+            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                iconSpan.textContent = 'picture_as_pdf';
+            } else {
+                iconSpan.textContent = 'image';
+            }
+
+            const viewLink = document.getElementById('filePreviewLink');
+            viewLink.classList.add('hidden');
+        }
+
+        function removeAttachedFile() {
+            const fileInput = document.getElementById('formFile');
+            if (fileInput) fileInput.value = '';
+            document.getElementById('formRemoveFile').value = 'true';
+            document.getElementById('filePreviewCard').classList.add('hidden');
+            document.getElementById('fileUploadBox').classList.remove('hidden');
+        }
+
+        function validateKnowledgeForm(event) {
+            const subjectCbs = document.querySelectorAll('.knowledge-subject-cb:checked');
+            const subjectError = document.getElementById('subjectError');
+            if (subjectCbs.length === 0) {
+                if (subjectError) subjectError.classList.remove('hidden');
+                showToast('Please select at least one subject.', 'error');
+                if (event) event.preventDefault();
+                return false;
+            } else if (subjectError) {
+                subjectError.classList.add('hidden');
+            }
+
+            const classCbs = document.querySelectorAll('.knowledge-class-cb:checked');
+            const cbAll = document.getElementById('cbAllClasses');
+            const classError = document.getElementById('classError');
+            if (classCbs.length === 0 && (!cbAll || !cbAll.checked)) {
+                if (classError) classError.classList.remove('hidden');
+                showToast('Please select at least one class.', 'error');
+                if (event) event.preventDefault();
+                return false;
+            } else if (classError) {
+                classError.classList.add('hidden');
+            }
+
+            const fileInput = document.getElementById('formFile');
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+                if (fileInput.files[0].size > 10 * 1024 * 1024) {
+                    showToast('Attachment exceeds 10MB limit.', 'error');
+                    if (event) event.preventDefault();
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         // Modal opening & editing handlers
         function openCreateModal() {
             document.getElementById('modalTitle').innerHTML = '<span class="material-symbols-rounded text-indigo-500 text-lg">add_circle</span><span>Add Rule</span>';
@@ -592,7 +927,27 @@
             document.getElementById('formContent').value = '';
             document.getElementById('formPriority').value = '100';
             document.getElementById('formIsActive').checked = true;
-            
+
+            // Reset File
+            document.getElementById('formRemoveFile').value = 'false';
+            const fileInput = document.getElementById('formFile');
+            if (fileInput) fileInput.value = '';
+            document.getElementById('filePreviewCard').classList.add('hidden');
+            document.getElementById('fileUploadBox').classList.remove('hidden');
+
+            // Select all subjects or first subject by default
+            const subCbs = document.querySelectorAll('.knowledge-subject-cb');
+            subCbs.forEach((cb, idx) => { cb.checked = (idx === 0); });
+
+            // Select All Classes by default
+            const cbAll = document.getElementById('cbAllClasses');
+            if (cbAll) cbAll.checked = true;
+            const clsCbs = document.querySelectorAll('.knowledge-class-cb');
+            clsCbs.forEach(cb => { cb.checked = true; });
+
+            // Trigger chapter/topic loading
+            onKnowledgeSubjectOrClassChange();
+
             // Default to Write tab
             switchContentTab('write');
 
@@ -606,14 +961,78 @@
             document.getElementById('modalTitle').innerHTML = '<span class="material-symbols-rounded text-indigo-500 text-lg">edit</span><span>Edit Rule</span>';
             document.getElementById('modalForm').action = '/teacher/ai-knowledge/' + item._id + '/edit';
             document.getElementById('formTitle').value = item.title || '';
-            document.getElementById('formSubject').value = item.subject || '';
-            document.getElementById('formClassLevel').value = item.classLevel || 'All Classes';
-            document.getElementById('formTopic').value = item.topic || '';
             document.getElementById('formKeywords').value = (item.keywords || []).join(', ');
             document.getElementById('formContent').value = item.content || '';
             document.getElementById('formPriority').value = item.priority || 100;
             document.getElementById('formIsActive').checked = item.isActive !== false;
+            document.getElementById('formTopic').value = item.topic || '';
+
+            // Handle subjects
+            const itemSubjects = Array.isArray(item.subject) 
+                ? item.subject 
+                : (item.subject ? [item.subject] : []);
+            const subCbs = document.querySelectorAll('.knowledge-subject-cb');
+            subCbs.forEach(cb => {
+                cb.checked = itemSubjects.some(s => s.toLowerCase() === cb.value.toLowerCase());
+            });
+
+            // Handle classes
+            const itemClasses = Array.isArray(item.classLevel) 
+                ? item.classLevel 
+                : (item.classLevel ? [item.classLevel] : []);
+            const cbAll = document.getElementById('cbAllClasses');
+            const clsCbs = document.querySelectorAll('.knowledge-class-cb');
+            const isAllClasses = itemClasses.some(c => c.toLowerCase() === 'all classes');
+
+            if (isAllClasses) {
+                if (cbAll) cbAll.checked = true;
+                clsCbs.forEach(cb => cb.checked = true);
+            } else {
+                if (cbAll) cbAll.checked = false;
+                clsCbs.forEach(cb => {
+                    cb.checked = itemClasses.some(c => c.toLowerCase() === cb.value.toLowerCase());
+                });
+            }
+
+            // Handle file
+            document.getElementById('formRemoveFile').value = 'false';
+            const fileInput = document.getElementById('formFile');
+            if (fileInput) fileInput.value = '';
+
+            if (item.fileUrl) {
+                document.getElementById('fileUploadBox').classList.add('hidden');
+                const previewCard = document.getElementById('filePreviewCard');
+                previewCard.classList.remove('hidden');
+                document.getElementById('filePreviewName').textContent = item.fileName || 'Attached file';
+                const sizeText = item.fileSize ? (item.fileSize / (1024 * 1024)).toFixed(2) + ' MB' : '';
+                document.getElementById('filePreviewSize').textContent = sizeText;
+                
+                const viewLink = document.getElementById('filePreviewLink');
+                viewLink.href = item.fileUrl;
+                viewLink.classList.remove('hidden');
+
+                const iconSpan = document.getElementById('filePreviewIcon');
+                if (item.fileType?.includes('pdf') || item.fileUrl?.toLowerCase().endsWith('.pdf')) {
+                    iconSpan.textContent = 'picture_as_pdf';
+                } else {
+                    iconSpan.textContent = 'image';
+                }
+            } else {
+                document.getElementById('filePreviewCard').classList.add('hidden');
+                document.getElementById('fileUploadBox').classList.remove('hidden');
+            }
+
+            // Handle Chapters & Topics preselection
+            const preselectedChapters = Array.isArray(item.chapters) && item.chapters.length > 0 
+                ? item.chapters 
+                : (item.chapter ? item.chapter.split(',').map(s => s.trim()).filter(Boolean) : []);
             
+            const preselectedTopics = Array.isArray(item.topics) && item.topics.length > 0 
+                ? item.topics 
+                : (item.topic ? item.topic.split(',').map(s => s.trim()).filter(Boolean) : []);
+
+            onKnowledgeSubjectOrClassChange(preselectedChapters, preselectedTopics);
+
             // Default to Write tab
             switchContentTab('write');
 
@@ -638,20 +1057,17 @@
             const previewBtn = document.getElementById('tabPreviewBtn');
             const writeContainer = document.getElementById('editorWriteContainer');
             const previewContainer = document.getElementById('editorPreviewContainer');
-            const quickToolbar = document.getElementById('quickMathToolbar');
 
             if (tab === 'write') {
                 writeBtn.className = 'px-2.5 py-0.5 text-xs font-medium rounded-md bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs transition-all';
                 previewBtn.className = 'px-2.5 py-0.5 text-xs font-medium rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-all';
                 writeContainer.classList.remove('hidden');
                 previewContainer.classList.add('hidden');
-                quickToolbar.classList.remove('hidden');
             } else {
                 previewBtn.className = 'px-2.5 py-0.5 text-xs font-medium rounded-md bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs transition-all';
                 writeBtn.className = 'px-2.5 py-0.5 text-xs font-medium rounded-md text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-all';
                 writeContainer.classList.add('hidden');
                 previewContainer.classList.remove('hidden');
-                quickToolbar.classList.add('hidden');
 
                 renderLivePreview();
             }

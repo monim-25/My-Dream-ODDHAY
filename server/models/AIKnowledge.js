@@ -12,14 +12,43 @@ const aiKnowledgeSchema = new mongoose.Schema({
         default: 'All Classes'
     },
     subject: {
-        type: String,
+        type: mongoose.Schema.Types.Mixed,
         required: [true, 'Subject is required'],
+        default: 'General'
+    },
+    chapters: [{
+        type: String,
+        trim: true
+    }],
+    chapter: {
+        type: String,
+        default: '',
         trim: true
     },
+    topics: [{
+        type: String,
+        trim: true
+    }],
     topic: {
         type: String,
         default: '',
         trim: true
+    },
+    fileUrl: {
+        type: String,
+        default: ''
+    },
+    fileName: {
+        type: String,
+        default: ''
+    },
+    fileType: {
+        type: String,
+        default: ''
+    },
+    fileSize: {
+        type: Number,
+        default: 0
     },
     keywords: [{
         type: String,

@@ -628,12 +628,39 @@ const getTopicsApi = async (req, res) => {
                 filter.classLevel = new RegExp('^(?:' + finalClassList.map(escapeRegex).join('|') + ')$', 'i');
             }
         }
-        if (subject && subject !== 'all') {
-            const aliases = getSubjectAliases(subject);
-            filter.subject = new RegExp('^(?:' + aliases.map(escapeRegex).join('|') + ')$', 'i');
+        const rawSubject = req.query.subjects || subject || req.query['subjects[]'] || req.query['subject[]'];
+        if (rawSubject && rawSubject !== 'all') {
+            let subList = [];
+            if (Array.isArray(rawSubject)) {
+                subList = rawSubject.flatMap(s => String(s).split(',')).map(s => s.trim()).filter(Boolean);
+            } else {
+                subList = String(rawSubject).split(',').map(s => s.trim()).filter(Boolean);
+            }
+            const allAliases = new Set();
+            subList.forEach(s => {
+                getSubjectAliases(s).forEach(a => allAliases.add(a));
+            });
+            const finalSubList = Array.from(allAliases).filter(Boolean);
+            if (finalSubList.length === 1) {
+                filter.subject = new RegExp('^' + escapeRegex(finalSubList[0]) + '$', 'i');
+            } else if (finalSubList.length > 1) {
+                filter.subject = new RegExp('^(?:' + finalSubList.map(escapeRegex).join('|') + ')$', 'i');
+            }
         }
-        if (chapter && chapter !== 'all') {
-            filter['chapter.name'] = new RegExp('^' + escapeRegex(chapter.trim()) + '$', 'i');
+
+        const rawChapter = req.query.chapters || chapter || req.query['chapters[]'] || req.query['chapter[]'];
+        if (rawChapter && rawChapter !== 'all') {
+            let chapList = [];
+            if (Array.isArray(rawChapter)) {
+                chapList = rawChapter.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+            } else {
+                chapList = String(rawChapter).split(',').map(c => c.trim()).filter(Boolean);
+            }
+            if (chapList.length === 1) {
+                filter['chapter.name'] = new RegExp('^' + escapeRegex(chapList[0]) + '$', 'i');
+            } else if (chapList.length > 1) {
+                filter['chapter.name'] = new RegExp('^(?:' + chapList.map(escapeRegex).join('|') + ')$', 'i');
+            }
         }
         if (group && group !== 'all') {
             filter.group = { $in: [group, 'all', 'None', null] };

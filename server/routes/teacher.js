@@ -4431,23 +4431,86 @@ router.get('/ai-knowledge', teacherProtect, async (req, res) => {
 });
 
 // POST /teacher/ai-knowledge/create - Teacher creates rule strictly for their assigned subjects
-router.post('/ai-knowledge/create', teacherProtect, async (req, res) => {
+router.post('/ai-knowledge/create', teacherProtect, (req, res, next) => {
+    const upload = router.upload;
+    if (upload) upload.single('file')(req, res, next);
+    else next();
+}, async (req, res) => {
     try {
         await connectDB();
         const AIKnowledge = require('../models/AIKnowledge');
         const user = req.session.user;
-        const { title, classLevel, subject, topic, keywords, content, priority, isActive } = req.body;
+        const { title, priority, isActive, keywords, content } = req.body;
 
-        if (!title || !subject || !content) {
-            return res.status(400).json({ success: false, error: 'Title, Subject and Content are required.' });
+        if (!title || !content) {
+            return res.status(400).json({ success: false, error: 'Title and Content are required.' });
+        }
+
+        // Parse subjects (can be array from checkboxes or string)
+        let subjectList = [];
+        const rawSubjects = req.body['subjects[]'] || req.body.subjects || req.body.subject || [];
+        if (Array.isArray(rawSubjects)) {
+            subjectList = rawSubjects.flatMap(s => String(s).split(',')).map(s => s.trim()).filter(Boolean);
+        } else if (typeof rawSubjects === 'string' && rawSubjects.trim()) {
+            subjectList = rawSubjects.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        if (subjectList.length === 0) {
+            subjectList = ['General'];
+        }
+
+        // Parse classes (can be array from checkboxes or string)
+        let classLevelsList = [];
+        const rawClasses = req.body['classLevels[]'] || req.body.classLevels || req.body.classLevel || [];
+        if (Array.isArray(rawClasses)) {
+            classLevelsList = rawClasses.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+        } else if (typeof rawClasses === 'string' && rawClasses.trim()) {
+            classLevelsList = rawClasses.split(',').map(c => c.trim()).filter(Boolean);
+        }
+        if (classLevelsList.length === 0) {
+            classLevelsList = ['All Classes'];
+        }
+
+        // Parse chapters (optional)
+        let chaptersList = [];
+        const rawChapters = req.body['chapters[]'] || req.body.chapters || req.body.chapter || [];
+        if (Array.isArray(rawChapters)) {
+            chaptersList = rawChapters.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+        } else if (typeof rawChapters === 'string' && rawChapters.trim()) {
+            chaptersList = rawChapters.split(',').map(c => c.trim()).filter(Boolean);
+        }
+
+        // Parse topics (optional)
+        let topicsList = [];
+        const rawTopics = req.body['topics[]'] || req.body.topics || req.body.topic || [];
+        if (Array.isArray(rawTopics)) {
+            topicsList = rawTopics.flatMap(t => String(t).split(',')).map(t => t.trim()).filter(Boolean);
+        } else if (typeof rawTopics === 'string' && rawTopics.trim()) {
+            topicsList = rawTopics.split(',').map(t => t.trim()).filter(Boolean);
         }
 
         const { assignedSubjects } = await getTeacherAssignedContext(user._id);
 
         // Security check: teacher can only add knowledge for assigned subjects
-        const isSubjectPermitted = assignedSubjects.some(s => s.toLowerCase() === subject.trim().toLowerCase());
-        if (!isSubjectPermitted) {
+        const isSubjectPermitted = subjectList.some(s => 
+            s.toLowerCase() === 'general' || assignedSubjects.some(as => as.toLowerCase() === s.toLowerCase())
+        );
+        if (!isSubjectPermitted && assignedSubjects.length > 0) {
             return res.status(403).send('Unauthorized: You are only allowed to manage AI knowledge for your assigned subjects: ' + assignedSubjects.join(', '));
+        }
+
+        // Handle File Upload (Image or PDF <= 10MB)
+        let fileUrl = '';
+        let fileName = '';
+        let fileType = '';
+        let fileSize = 0;
+        if (req.file) {
+            if (req.file.size > 10 * 1024 * 1024) {
+                return res.redirect('/teacher/ai-knowledge?error=file_too_large');
+            }
+            fileUrl = await processUploadedFile(req.file, 'knowledge');
+            fileName = req.file.originalname || 'attachment';
+            fileType = req.file.mimetype || '';
+            fileSize = req.file.size || 0;
         }
 
         const parsedKeywords = (keywords || '')
@@ -4457,18 +4520,25 @@ router.post('/ai-knowledge/create', teacherProtect, async (req, res) => {
 
         const newEntry = new AIKnowledge({
             title: title.trim(),
-            classLevel: (classLevel || 'All Classes').trim(),
-            subject: subject.trim(),
-            topic: (topic || '').trim(),
+            classLevel: classLevelsList.length === 1 ? classLevelsList[0] : classLevelsList,
+            subject: subjectList.length === 1 ? subjectList[0] : subjectList,
+            chapters: chaptersList,
+            chapter: chaptersList.join(', '),
+            topics: topicsList,
+            topic: topicsList.join(', '),
             keywords: parsedKeywords,
             content: content.trim(),
+            fileUrl,
+            fileName,
+            fileType,
+            fileSize,
             priority: parseInt(priority, 10) || 100,
             isActive: isActive === 'true' || isActive === true || isActive === 'on',
             createdBy: user._id
         });
 
         await newEntry.save();
-        await logActivity(req, 'TEACHER_CREATE_AI_KNOWLEDGE', `Teacher created AI Knowledge rule: ${newEntry.title} for ${newEntry.subject}`, 'AIKnowledge');
+        await logActivity(req, 'TEACHER_CREATE_AI_KNOWLEDGE', `Teacher created AI Knowledge rule: ${newEntry.title} for ${Array.isArray(newEntry.subject) ? newEntry.subject.join(', ') : newEntry.subject}`, 'AIKnowledge');
 
         res.redirect('/teacher/ai-knowledge?success=created');
     } catch (err) {
@@ -4478,24 +4548,71 @@ router.post('/ai-knowledge/create', teacherProtect, async (req, res) => {
 });
 
 // POST /teacher/ai-knowledge/:id/edit - Edit rule if within assigned subjects or created by teacher
-router.post('/ai-knowledge/:id/edit', teacherProtect, async (req, res) => {
+router.post('/ai-knowledge/:id/edit', teacherProtect, (req, res, next) => {
+    const upload = router.upload;
+    if (upload) upload.single('file')(req, res, next);
+    else next();
+}, async (req, res) => {
     try {
         await connectDB();
         const AIKnowledge = require('../models/AIKnowledge');
         const user = req.session.user;
-        const { title, classLevel, subject, topic, keywords, content, priority, isActive } = req.body;
+        const { title, priority, isActive, keywords, content, removeFile } = req.body;
 
         const entry = await AIKnowledge.findById(req.params.id);
         if (!entry) return res.redirect('/teacher/ai-knowledge?error=not_found');
 
+        // Parse subjects
+        let subjectList = [];
+        const rawSubjects = req.body['subjects[]'] || req.body.subjects || req.body.subject || [];
+        if (Array.isArray(rawSubjects)) {
+            subjectList = rawSubjects.flatMap(s => String(s).split(',')).map(s => s.trim()).filter(Boolean);
+        } else if (typeof rawSubjects === 'string' && rawSubjects.trim()) {
+            subjectList = rawSubjects.split(',').map(s => s.trim()).filter(Boolean);
+        }
+        if (subjectList.length === 0 && entry.subject) {
+            subjectList = Array.isArray(entry.subject) ? entry.subject : [entry.subject];
+        }
+
+        // Parse classes
+        let classLevelsList = [];
+        const rawClasses = req.body['classLevels[]'] || req.body.classLevels || req.body.classLevel || [];
+        if (Array.isArray(rawClasses)) {
+            classLevelsList = rawClasses.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+        } else if (typeof rawClasses === 'string' && rawClasses.trim()) {
+            classLevelsList = rawClasses.split(',').map(c => c.trim()).filter(Boolean);
+        }
+        if (classLevelsList.length === 0 && entry.classLevel) {
+            classLevelsList = Array.isArray(entry.classLevel) ? entry.classLevel : [entry.classLevel];
+        }
+
+        // Parse chapters (optional)
+        let chaptersList = [];
+        const rawChapters = req.body['chapters[]'] || req.body.chapters || req.body.chapter || [];
+        if (Array.isArray(rawChapters)) {
+            chaptersList = rawChapters.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+        } else if (typeof rawChapters === 'string' && rawChapters.trim()) {
+            chaptersList = rawChapters.split(',').map(c => c.trim()).filter(Boolean);
+        }
+
+        // Parse topics (optional)
+        let topicsList = [];
+        const rawTopics = req.body['topics[]'] || req.body.topics || req.body.topic || [];
+        if (Array.isArray(rawTopics)) {
+            topicsList = rawTopics.flatMap(t => String(t).split(',')).map(t => t.trim()).filter(Boolean);
+        } else if (typeof rawTopics === 'string' && rawTopics.trim()) {
+            topicsList = rawTopics.split(',').map(t => t.trim()).filter(Boolean);
+        }
+
         const { assignedSubjects } = await getTeacherAssignedContext(user._id);
 
         // Verify permission
-        const isOriginalSubjectPermitted = assignedSubjects.some(s => s.toLowerCase() === entry.subject.toLowerCase());
-        const isTargetSubjectPermitted = assignedSubjects.some(s => s.toLowerCase() === (subject || entry.subject).trim().toLowerCase());
         const isOwner = entry.createdBy && entry.createdBy.toString() === user._id.toString();
+        const isTargetSubjectPermitted = subjectList.some(s => 
+            s.toLowerCase() === 'general' || assignedSubjects.some(as => as.toLowerCase() === s.toLowerCase())
+        );
 
-        if (!isOwner && (!isOriginalSubjectPermitted || !isTargetSubjectPermitted)) {
+        if (!isOwner && !isTargetSubjectPermitted && assignedSubjects.length > 0) {
             return res.status(403).send('Unauthorized: You can only edit knowledge for your assigned subjects.');
         }
 
@@ -4505,13 +4622,34 @@ router.post('/ai-knowledge/:id/edit', teacherProtect, async (req, res) => {
             .filter(Boolean);
 
         entry.title = title ? title.trim() : entry.title;
-        entry.classLevel = classLevel ? classLevel.trim() : entry.classLevel;
-        entry.subject = subject ? subject.trim() : entry.subject;
-        entry.topic = topic !== undefined ? topic.trim() : entry.topic;
-        entry.keywords = parsedKeywords;
+        entry.classLevel = classLevelsList.length === 1 ? classLevelsList[0] : (classLevelsList.length > 1 ? classLevelsList : entry.classLevel);
+        entry.subject = subjectList.length === 1 ? subjectList[0] : (subjectList.length > 1 ? subjectList : entry.subject);
+        entry.chapters = chaptersList;
+        entry.chapter = chaptersList.join(', ');
+        entry.topics = topicsList;
+        entry.topic = topicsList.join(', ');
+        entry.keywords = parsedKeywords.length ? parsedKeywords : entry.keywords;
         entry.content = content ? content.trim() : entry.content;
         entry.priority = priority !== undefined ? parseInt(priority, 10) : entry.priority;
         entry.isActive = isActive === 'true' || isActive === true || isActive === 'on';
+
+        // Handle file removal or update
+        if (removeFile === 'true' || removeFile === true) {
+            entry.fileUrl = '';
+            entry.fileName = '';
+            entry.fileType = '';
+            entry.fileSize = 0;
+        }
+
+        if (req.file) {
+            if (req.file.size > 10 * 1024 * 1024) {
+                return res.redirect('/teacher/ai-knowledge?error=file_too_large');
+            }
+            entry.fileUrl = await processUploadedFile(req.file, 'knowledge');
+            entry.fileName = req.file.originalname || 'attachment';
+            entry.fileType = req.file.mimetype || '';
+            entry.fileSize = req.file.size || 0;
+        }
 
         await entry.save();
         await logActivity(req, 'TEACHER_UPDATE_AI_KNOWLEDGE', `Teacher updated AI Knowledge rule: ${entry.title}`, 'AIKnowledge');
@@ -4534,7 +4672,8 @@ router.post('/ai-knowledge/:id/delete', teacherProtect, async (req, res) => {
         if (!entry) return res.redirect('/teacher/ai-knowledge?error=not_found');
 
         const { assignedSubjects } = await getTeacherAssignedContext(user._id);
-        const isSubjectPermitted = assignedSubjects.some(s => s.toLowerCase() === entry.subject.toLowerCase());
+        const entrySubs = Array.isArray(entry.subject) ? entry.subject : [entry.subject].filter(Boolean);
+        const isSubjectPermitted = assignedSubjects.some(s => entrySubs.some(es => String(es).toLowerCase() === String(s).toLowerCase()));
         const isOwner = entry.createdBy && entry.createdBy.toString() === user._id.toString();
 
         if (!isOwner && !isSubjectPermitted) {
@@ -4562,7 +4701,8 @@ router.post('/ai-knowledge/:id/toggle', teacherProtect, async (req, res) => {
         if (!entry) return res.status(404).json({ success: false, error: 'Not found' });
 
         const { assignedSubjects } = await getTeacherAssignedContext(user._id);
-        const isSubjectPermitted = assignedSubjects.some(s => s.toLowerCase() === entry.subject.toLowerCase());
+        const entrySubs = Array.isArray(entry.subject) ? entry.subject : [entry.subject].filter(Boolean);
+        const isSubjectPermitted = assignedSubjects.some(s => entrySubs.some(es => String(es).toLowerCase() === String(s).toLowerCase()));
         const isOwner = entry.createdBy && entry.createdBy.toString() === user._id.toString();
 
         if (!isOwner && !isSubjectPermitted) {
