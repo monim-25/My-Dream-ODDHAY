@@ -209,14 +209,70 @@ app.use(async (req, res, next) => {
     }
     if (uid && mongoose.connection.readyState === 1) {
         try {
-            if (!res.locals.user || !res.locals.user.email) {
-                const User = require('./models/User');
-                const dbUser = await User.findById(uid).lean();
-                if (dbUser) {
-                    res.locals.user = dbUser;
-                    req.session.user = dbUser;
+            const User = require('./models/User');
+            const dbUser = await User.findById(uid).lean();
+
+            // 1. Account was permanently deleted from DB
+            if (!dbUser) {
+                console.warn(`[SECURITY] Active session for deleted user ID ${uid}. Destroying session.`);
+                req.session.destroy(() => {});
+                res.clearCookie('connect.sid');
+                res.locals.user = null;
+
+                if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+                    return res.status(401).json({ success: false, error: 'Account has been deleted', type: 'deleted' });
                 }
+
+                const publicPaths = ['/login', '/register', '/logout', '/account-status'];
+                const isPublic = publicPaths.some(p => req.path === p || req.path.startsWith(p + '/'));
+                if (!isPublic && req.path !== '/') {
+                    return res.render('account-status', {
+                        type: 'deleted',
+                        message: 'আপনার অ্যাকাউন্টটি এডমিন প্যানেল থেকে মুছে ফেলা হয়েছে।'
+                    });
+                }
+                return next();
             }
+
+            // 2. Account is suspended
+            if (dbUser.status === 'suspended' && dbUser.restrictionExpires && new Date() > new Date(dbUser.restrictionExpires)) {
+                // Auto-unsuspend if duration has elapsed
+                await User.updateOne({ _id: uid }, { $set: { status: 'active', restrictionExpires: null, restrictionReason: null } });
+                dbUser.status = 'active';
+                dbUser.restrictionExpires = null;
+                dbUser.restrictionReason = null;
+            }
+
+            if (dbUser.status === 'suspended' || dbUser.status === 'banned' || dbUser.isSuspended === true || dbUser.isBanned === true) {
+                res.locals.user = dbUser;
+                req.session.user = dbUser;
+
+                if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+                    return res.status(403).json({
+                        success: false,
+                        error: 'Account suspended',
+                        type: 'suspended',
+                        reason: dbUser.restrictionReason,
+                        expires: dbUser.restrictionExpires
+                    });
+                }
+
+                const allowedSuspendedPaths = ['/logout', '/login', '/account-status', '/contact', '/help'];
+                const isAllowed = allowedSuspendedPaths.some(p => req.path === p || req.path.startsWith(p + '/'));
+                if (!isAllowed) {
+                    return res.render('account-status', {
+                        type: 'suspended',
+                        user: dbUser,
+                        reason: dbUser.restrictionReason,
+                        expires: dbUser.restrictionExpires
+                    });
+                }
+            } else {
+                res.locals.user = dbUser;
+                req.session.user = dbUser;
+                req.session.userId = String(dbUser._id);
+            }
+
             const Notification = require('./models/Notification');
             const Message = require('./models/Message');
             const [notifCount, msgCount] = await Promise.all([
@@ -230,11 +286,12 @@ app.use(async (req, res, next) => {
             const nowMs = Date.now();
             if (!req.session.lastActiveLogged || (nowMs - req.session.lastActiveLogged > 60 * 1000)) {
                 req.session.lastActiveLogged = nowMs;
-                const User = require('./models/User');
                 User.updateOne({ _id: uid }, { $set: { lastActive: new Date() } }).catch(() => {});
                 if (req.session.user) req.session.user.lastActive = new Date();
             }
-        } catch (e) {}
+        } catch (e) {
+            console.error('Session user sync error:', e);
+        }
     }
 
     // Role Enforcement: ONLY monimmdmonim41@gmail.com can be superadmin

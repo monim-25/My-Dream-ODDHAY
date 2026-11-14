@@ -1285,7 +1285,8 @@ router.get('/dashboard', protect, async (req, res) => {
 // ---- Profile ----
 router.get('/profile', protect, async (req, res) => {
     try {
-        const user = await User.findById(req.session.userId).populate('quizResults.quiz');
+        const uid = req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null);
+        const user = await User.findById(uid).populate('quizResults.quiz');
         if (!user) {
             req.session.destroy(() => {});
             return res.render('account-status', {

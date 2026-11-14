@@ -27,7 +27,44 @@ const connectDB = async () => {
 };
 
 // ---- Auth Middlewares ----
+// Helper to verify user account status (suspended/deleted)
+const checkUserStatus = (req, res) => {
+    const user = req.session ? req.session.user : null;
+    if (!user) return { allowed: false, reason: 'unauthorized' };
+
+    if (user.status === 'suspended' || user.status === 'banned' || user.isSuspended === true || user.isBanned === true) {
+        if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+            res.status(403).json({ success: false, error: 'Account suspended', type: 'suspended' });
+        } else {
+            res.render('account-status', {
+                type: 'suspended',
+                user,
+                reason: user.restrictionReason,
+                expires: user.restrictionExpires
+            });
+        }
+        return { allowed: false, reason: 'suspended' };
+    }
+    return { allowed: true, user };
+};
+
 const protect = (req, res, next) => {
+    const statusCheck = checkUserStatus(req, res);
+    if (!statusCheck.allowed) {
+        if (statusCheck.reason === 'unauthorized') {
+            if (req.path.startsWith('/api') || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+                return res.status(401).json({ success: false, error: 'Unauthorized' });
+            }
+            return res.redirect('/login');
+        }
+        return;
+    }
+    const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
+    if (userId && !req.session.userId) req.session.userId = String(userId);
+    return next();
+};
+
+const dummyUnused = (req, res, next) => {
     const userId = req.session.userId || (req.session.user ? req.session.user._id : null);
     if (userId) { if (!req.session.userId) req.session.userId = userId; next(); }
     else {
@@ -56,6 +93,16 @@ const isSuperAdmin = (user) => {
 };
 
 const adminProtect = (req, res, next) => {
+    const statusCheck = checkUserStatus(req, res);
+    if (!statusCheck.allowed) {
+        if (statusCheck.reason === 'unauthorized') {
+            if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+                return res.status(401).json({ success: false, error: 'Unauthorized' });
+            }
+            return res.redirect('/login');
+        }
+        return;
+    }
     if (!req.session || !req.session.user) {
         if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
@@ -177,6 +224,16 @@ const superAdminProtect = (req, res, next) => {
 };
 
 const teacherProtect = (req, res, next) => {
+    const statusCheck = checkUserStatus(req, res);
+    if (!statusCheck.allowed) {
+        if (statusCheck.reason === 'unauthorized') {
+            if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
+                return res.status(401).json({ success: false, error: 'Unauthorized' });
+            }
+            return res.redirect('/login');
+        }
+        return;
+    }
     if (!req.session || !req.session.user) {
         if ((req.path && req.path.startsWith('/api')) || req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
@@ -213,6 +270,13 @@ const parentProtect = (req, res, next) => {
 };
 
 const studentProtect = (req, res, next) => {
+    const statusCheck = checkUserStatus(req, res);
+    if (!statusCheck.allowed) {
+        if (statusCheck.reason === 'unauthorized') {
+            return res.redirect('/login');
+        }
+        return;
+    }
     if (!req.session || !req.session.user) {
         return res.redirect('/login');
     }

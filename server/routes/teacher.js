@@ -1552,7 +1552,21 @@ router.get('/profile', teacherProtect, async (req, res) => {
     try {
         await connectDB();
         const user = await User.findById(req.session.user._id);
-        if (!user) return res.redirect('/login');
+        if (!user) {
+            req.session.destroy(() => {});
+            return res.render('account-status', {
+                type: 'deleted',
+                message: 'আপনার অ্যাকাউন্টটি এডমিন প্যানেল থেকে মুছে ফেলা হয়েছে।'
+            });
+        }
+        if (user.status === 'suspended') {
+            return res.render('account-status', {
+                type: 'suspended',
+                user,
+                reason: user.restrictionReason,
+                expires: user.restrictionExpires
+            });
+        }
         
         // Find assigned courses and group by class
         const assignedCourses = await Course.find({

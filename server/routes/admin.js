@@ -4512,6 +4512,12 @@ router.post('/users/:id/restrict', userManagementProtect, async (req, res) => {
             restrictionReason: reason
         });
 
+        try {
+            await mongoose.connection.collection('sessions').deleteMany({
+                session: { $regex: String(req.params.id) }
+            });
+        } catch (_) {}
+
         await logActivity(req, 'RESTRICT_USER', `Restricted user for ${duration} days. Reason: ${reason}`, 'User', req.params.id);
         res.json({ success: true });
     } catch (err) {
@@ -4524,6 +4530,13 @@ router.get('/users/:id/delete', userManagementProtect, async (req, res) => {
     try {
         await connectDB();
         await User.findByIdAndDelete(req.params.id);
+
+        try {
+            await mongoose.connection.collection('sessions').deleteMany({
+                session: { $regex: String(req.params.id) }
+            });
+        } catch (_) {}
+
         await logActivity(req, 'DELETE_USER', `Permanently deleted user ID: ${req.params.id}`, 'User', req.params.id);
         res.redirect('back');
     } catch (err) {
@@ -4652,8 +4665,18 @@ router.post('/users/bulk', userManagementProtect, async (req, res) => {
             await User.updateMany({ _id: { $in: userIds } }, { status: 'active' });
         } else if (action === 'suspend') {
             await User.updateMany({ _id: { $in: userIds } }, { status: 'suspended' });
+            try {
+                for (const uid of userIds) {
+                    await mongoose.connection.collection('sessions').deleteMany({ session: { $regex: String(uid) } });
+                }
+            } catch (_) {}
         } else if (action === 'delete') {
             await User.deleteMany({ _id: { $in: userIds } });
+            try {
+                for (const uid of userIds) {
+                    await mongoose.connection.collection('sessions').deleteMany({ session: { $regex: String(uid) } });
+                }
+            } catch (_) {}
         }
 
         await logActivity(req, 'BULK_ACTION', `Performed ${action} on ${userIds.length} users`, 'User');
@@ -4674,8 +4697,18 @@ router.post('/users/bulk-action', userManagementProtect, async (req, res) => {
             await User.updateMany({ _id: { $in: userIds } }, { status: 'active' });
         } else if (action === 'suspend') {
             await User.updateMany({ _id: { $in: userIds } }, { status: 'suspended' });
+            try {
+                for (const uid of userIds) {
+                    await mongoose.connection.collection('sessions').deleteMany({ session: { $regex: String(uid) } });
+                }
+            } catch (_) {}
         } else if (action === 'delete') {
             await User.deleteMany({ _id: { $in: userIds } });
+            try {
+                for (const uid of userIds) {
+                    await mongoose.connection.collection('sessions').deleteMany({ session: { $regex: String(uid) } });
+                }
+            } catch (_) {}
         }
 
         await logActivity(req, 'BULK_ACTION', `Performed ${action} on ${userIds.length} users`, 'User');
