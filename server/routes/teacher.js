@@ -4758,14 +4758,24 @@ router.get('/ai-knowledge/:id/view-file', teacherProtect, async (req, res) => {
         }
 
         const fileUrl = entry.fileUrl;
-        const fileName = entry.fileName || 'document.pdf';
+        const fileName = entry.fileName || 'attachment';
         const isPdf = Boolean(
             (entry.fileType && entry.fileType.includes('pdf')) || 
             fileName.toLowerCase().endsWith('.pdf') || 
             fileUrl.toLowerCase().endsWith('.pdf') ||
             fileUrl.toLowerCase().includes('.pdf')
         );
-        const contentType = isPdf ? 'application/pdf' : (entry.fileType || 'image/jpeg');
+
+        let contentType = entry.fileType;
+        if (!contentType) {
+            if (isPdf) contentType = 'application/pdf';
+            else if (fileName.match(/\.png$/i) || fileUrl.match(/\.png$/i)) contentType = 'image/png';
+            else if (fileName.match(/\.jpe?g$/i) || fileUrl.match(/\.jpe?g$/i)) contentType = 'image/jpeg';
+            else if (fileName.match(/\.webp$/i) || fileUrl.match(/\.webp$/i)) contentType = 'image/webp';
+            else if (fileName.match(/\.gif$/i) || fileUrl.match(/\.gif$/i)) contentType = 'image/gif';
+            else if (fileName.match(/\.svg$/i) || fileUrl.match(/\.svg$/i)) contentType = 'image/svg+xml';
+            else contentType = 'application/octet-stream';
+        }
 
         // Case 1: Local file on disk
         if (fileUrl.startsWith('/uploads/') || fileUrl.startsWith('uploads/')) {
@@ -4784,7 +4794,7 @@ router.get('/ai-knowledge/:id/view-file', teacherProtect, async (req, res) => {
             }
         }
 
-        // Case 2: Cloudinary file (specifically handles PDFs that have Cloudinary 401 ACL block)
+        // Case 2: Cloudinary file
         if (fileUrl.includes('cloudinary.com')) {
             if (isPdf) {
                 try {
@@ -4822,8 +4832,25 @@ router.get('/ai-knowledge/:id/view-file', teacherProtect, async (req, res) => {
                 } catch (cldErr) {
                     console.error('Cloudinary private download error:', cldErr);
                 }
+                return res.redirect(fileUrl);
             }
-            return res.redirect(fileUrl);
+
+            // Stream Cloudinary Image directly inline in tab
+            const https = require('https');
+            return https.get(fileUrl, (streamRes) => {
+                if (streamRes.statusCode === 200) {
+                    res.setHeader('Content-Type', streamRes.headers['content-type'] || contentType);
+                    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+                    if (streamRes.headers['content-length']) {
+                        res.setHeader('Content-Length', streamRes.headers['content-length']);
+                    }
+                    return streamRes.pipe(res);
+                }
+                return res.redirect(fileUrl);
+            }).on('error', (err) => {
+                console.error('Cloudinary image stream error:', err);
+                res.redirect(fileUrl);
+            });
         }
 
         return res.redirect(fileUrl);
