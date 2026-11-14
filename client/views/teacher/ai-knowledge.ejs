@@ -339,13 +339,25 @@
 
                                     <!-- Attached Reference Document/Image (if exists) -->
                                     <% if (item.fileUrl) { %>
+                                        <% 
+                                            const isPdf = Boolean((item.fileType && item.fileType.includes('pdf')) || (item.fileName && item.fileName.toLowerCase().endsWith('.pdf')) || (item.fileUrl && item.fileUrl.toLowerCase().includes('.pdf')));
+                                        %>
                                         <div class="flex items-center gap-2 pt-0.5">
-                                            <a href="<%= item.fileUrl %>" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-medium transition-colors shadow-2xs">
-                                                <span class="material-symbols-rounded text-sm"><%= (item.fileType && item.fileType.includes('pdf')) || (item.fileName && item.fileName.toLowerCase().endsWith('.pdf')) ? 'picture_as_pdf' : 'image' %></span>
-                                                <span class="truncate max-w-[220px] sm:max-w-xs"><%= item.fileName || 'Attached Reference' %></span>
-                                                <% if (item.fileSize) { %><span class="text-[10px] text-slate-400 font-normal">(<%= (item.fileSize / (1024*1024)).toFixed(1) %> MB)</span><% } %>
-                                                <span class="material-symbols-rounded text-xs opacity-70">open_in_new</span>
-                                            </a>
+                                            <% if (isPdf) { %>
+                                                <a href="/teacher/ai-knowledge/<%= item._id %>/view-file" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-medium transition-colors shadow-2xs">
+                                                    <span class="material-symbols-rounded text-sm">picture_as_pdf</span>
+                                                    <span class="truncate max-w-[220px] sm:max-w-xs"><%= item.fileName || 'Attached PDF' %></span>
+                                                    <% if (item.fileSize) { %><span class="text-[10px] text-slate-400 font-normal">(<%= (item.fileSize / (1024*1024)).toFixed(1) %> MB)</span><% } %>
+                                                    <span class="material-symbols-rounded text-xs opacity-70">open_in_new</span>
+                                                </a>
+                                            <% } else { %>
+                                                <button type="button" onclick="openImageViewer('<%= item.fileUrl %>', '<%= (item.fileName || item.title || "Image").replace(/'/g, "\\'") %>')" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-800/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-medium transition-colors shadow-2xs cursor-pointer">
+                                                    <span class="material-symbols-rounded text-sm">image</span>
+                                                    <span class="truncate max-w-[220px] sm:max-w-xs"><%= item.fileName || 'Attached Image' %></span>
+                                                    <% if (item.fileSize) { %><span class="text-[10px] text-slate-400 font-normal">(<%= (item.fileSize / (1024*1024)).toFixed(1) %> MB)</span><% } %>
+                                                    <span class="material-symbols-rounded text-xs opacity-70">visibility</span>
+                                                </button>
+                                            <% } %>
                                         </div>
                                     <% } %>
 
@@ -509,37 +521,62 @@
                     <p id="classError" class="hidden text-[11px] text-rose-500 mt-1">Please select at least one class.</p>
                 </div>
 
-                <!-- Chapter Selection (Multiple, Optional, Cascading according to Subject/Class) -->
-                <div>
-                    <div class="flex items-center justify-between mb-1.5">
-                        <div class="flex items-center gap-1.5">
-                            <label class="form-label !mb-0">Chapter(s) <span class="text-slate-400 font-normal text-[11px]">(Optional)</span></label>
-                            <span id="chaptersLoading" class="hidden text-[11px] text-indigo-500 font-medium animate-pulse">Loading chapters...</span>
+                <!-- Collapsible Chapter Selection (Normally Collapsed) -->
+                <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 overflow-hidden">
+                    <button type="button" onclick="toggleChapterSection()" class="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors cursor-pointer text-left">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="material-symbols-rounded text-indigo-500 text-base">menu_book</span>
+                            <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Chapter(s)</span>
+                            <span class="text-[11px] text-slate-400 font-normal">(Optional)</span>
+                            <span id="selectedChaptersCountBadge" class="hidden px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">0</span>
+                            <span id="chaptersLoading" class="hidden text-[11px] text-indigo-500 font-medium animate-pulse ml-1">Loading...</span>
                         </div>
-                        <button type="button" id="toggleAllChaptersBtn" onclick="toggleAllChapters()" class="hidden text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
-                            Select All
-                        </button>
-                    </div>
-                    <div id="chaptersContainer" class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 max-h-36 overflow-y-auto custom-scroll text-xs">
-                        <span class="text-slate-400 text-xs italic">Select subject(s) and class(es) to load chapters.</span>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <span id="chapterToggleText" class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400">Expand</span>
+                            <span id="chapterToggleIcon" class="material-symbols-rounded text-base text-slate-400 transition-transform duration-200">expand_more</span>
+                        </div>
+                    </button>
+                    <div id="chapterSectionBody" class="hidden p-3 border-t border-slate-200/80 dark:border-slate-800/80 space-y-2">
+                        <div class="flex items-center justify-end">
+                            <button type="button" id="toggleAllChaptersBtn" onclick="toggleAllChapters()" class="hidden text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
+                                Select All
+                            </button>
+                        </div>
+                        <div id="chaptersContainer" class="p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 max-h-36 overflow-y-auto custom-scroll text-xs">
+                            <span class="text-slate-400 text-xs italic">Select subject(s) and class(es) to load chapters.</span>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Topic Selection (Multiple, Optional, Cascading according to Chapter) -->
-                <div>
-                    <div class="flex items-center justify-between mb-1.5">
-                        <div class="flex items-center gap-1.5">
-                            <label class="form-label !mb-0">Topic(s) <span class="text-slate-400 font-normal text-[11px]">(Optional)</span></label>
-                            <span id="topicsLoading" class="hidden text-[11px] text-indigo-500 font-medium animate-pulse">Loading topics...</span>
+                <!-- Collapsible Topic Selection (Normally Collapsed) -->
+                <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 overflow-hidden">
+                    <button type="button" onclick="toggleTopicSection()" class="w-full px-3.5 py-2.5 flex items-center justify-between hover:bg-slate-100/60 dark:hover:bg-slate-800/40 transition-colors cursor-pointer text-left">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="material-symbols-rounded text-indigo-500 text-base">label</span>
+                            <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">Topic(s)</span>
+                            <span class="text-[11px] text-slate-400 font-normal">(Optional)</span>
+                            <span id="selectedTopicsCountBadge" class="hidden px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">0</span>
+                            <span id="topicsLoading" class="hidden text-[11px] text-indigo-500 font-medium animate-pulse ml-1">Loading...</span>
                         </div>
-                        <button type="button" id="toggleAllTopicsBtn" onclick="toggleAllTopics()" class="hidden text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
-                            Select All
-                        </button>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <span id="topicToggleText" class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400">Expand</span>
+                            <span id="topicToggleIcon" class="material-symbols-rounded text-base text-slate-400 transition-transform duration-200">expand_more</span>
+                        </div>
+                    </button>
+                    <div id="topicSectionBody" class="hidden p-3 border-t border-slate-200/80 dark:border-slate-800/80 space-y-2">
+                        <div class="flex items-center justify-end">
+                            <button type="button" id="toggleAllTopicsBtn" onclick="toggleAllTopics()" class="hidden text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
+                                Select All
+                            </button>
+                        </div>
+                        <div id="topicsContainer" class="p-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 max-h-36 overflow-y-auto custom-scroll text-xs">
+                            <span class="text-slate-400 text-xs italic">Select chapter(s) to load topics.</span>
+                        </div>
+                        <div>
+                            <label class="form-label !mb-1 text-[11px]">Custom Topic (Optional)</label>
+                            <input type="text" name="topic" id="formTopic" placeholder="Type here..." class="form-input">
+                        </div>
                     </div>
-                    <div id="topicsContainer" class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 max-h-36 overflow-y-auto custom-scroll text-xs">
-                        <span class="text-slate-400 text-xs italic">Select chapter(s) to load topics.</span>
-                    </div>
-                    <input type="text" name="topic" id="formTopic" placeholder="Type here..." class="form-input mt-2">
                 </div>
 
                 <!-- Keywords & Priority -->
@@ -636,6 +673,31 @@
 
             </form>
 
+        </div>
+    </div>
+
+    <!-- In-Page Lightbox Modal for Viewing Images in the Same Tab -->
+    <div id="imageViewerModal" class="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-6" onclick="closeImageViewer(event)">
+        <div class="relative max-w-4xl max-h-[90vh] bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-2xl flex flex-col border border-slate-200 dark:border-slate-800" onclick="event.stopPropagation()">
+            <!-- Header -->
+            <div class="px-4 py-3 bg-slate-50 dark:bg-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="material-symbols-rounded text-indigo-500 text-lg">image</span>
+                    <span id="imageViewerTitle" class="text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-200 truncate">Image Preview</span>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <a id="imageViewerDownloadBtn" href="#" download class="size-8 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer transition-colors" title="Download">
+                        <span class="material-symbols-rounded text-base">download</span>
+                    </a>
+                    <button type="button" onclick="closeImageViewer()" class="size-8 rounded-lg text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center cursor-pointer transition-colors" title="Close">
+                        <span class="material-symbols-rounded text-lg">close</span>
+                    </button>
+                </div>
+            </div>
+            <!-- Body -->
+            <div class="p-3 sm:p-4 overflow-auto flex items-center justify-center bg-slate-100/50 dark:bg-slate-950/50 min-h-[250px] max-h-[calc(90vh-100px)]">
+                <img id="imageViewerImg" src="" alt="Image Preview" class="max-w-full max-h-[calc(90vh-120px)] object-contain rounded-lg shadow-sm">
+            </div>
         </div>
     </div>
 
@@ -774,14 +836,78 @@
             }
         }
 
+        // Section collapsible toggles (normally collapsed)
+        let isChapterSectionExpanded = false;
+        function toggleChapterSection(forceState) {
+            isChapterSectionExpanded = typeof forceState === 'boolean' ? forceState : !isChapterSectionExpanded;
+            const body = document.getElementById('chapterSectionBody');
+            const text = document.getElementById('chapterToggleText');
+            const icon = document.getElementById('chapterToggleIcon');
+            if (isChapterSectionExpanded) {
+                body.classList.remove('hidden');
+                text.textContent = 'Collapse';
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                body.classList.add('hidden');
+                text.textContent = 'Expand';
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        let isTopicSectionExpanded = false;
+        function toggleTopicSection(forceState) {
+            isTopicSectionExpanded = typeof forceState === 'boolean' ? forceState : !isTopicSectionExpanded;
+            const body = document.getElementById('topicSectionBody');
+            const text = document.getElementById('topicToggleText');
+            const icon = document.getElementById('topicToggleIcon');
+            if (isTopicSectionExpanded) {
+                body.classList.remove('hidden');
+                text.textContent = 'Collapse';
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                body.classList.add('hidden');
+                text.textContent = 'Expand';
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function updateSelectedChaptersCount() {
+            const checkedCount = document.querySelectorAll('.knowledge-chapter-cb:checked').length;
+            const badge = document.getElementById('selectedChaptersCountBadge');
+            if (badge) {
+                if (checkedCount > 0) {
+                    badge.textContent = checkedCount;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+        }
+
+        function updateSelectedTopicsCount() {
+            const checkedCount = document.querySelectorAll('.knowledge-topic-cb:checked').length;
+            const badge = document.getElementById('selectedTopicsCountBadge');
+            if (badge) {
+                if (checkedCount > 0) {
+                    badge.textContent = checkedCount;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
+        }
+
         function onKnowledgeChapterChange(preselectedTopics = []) {
             const checkedChapters = Array.from(document.querySelectorAll('.knowledge-chapter-cb:checked')).map(cb => cb.value);
             const topicsContainer = document.getElementById('topicsContainer');
             const toggleTopicsBtn = document.getElementById('toggleAllTopicsBtn');
 
+            updateSelectedChaptersCount();
+
             if (!_cachedKnowledgeTopics.length) {
                 topicsContainer.innerHTML = '<span class="text-slate-400 text-xs italic">No topics available.</span>';
                 if (toggleTopicsBtn) toggleTopicsBtn.classList.add('hidden');
+                updateSelectedTopicsCount();
                 return;
             }
 
@@ -806,7 +932,7 @@
                             const isChecked = preselectedTopics.includes(top) ? 'checked' : '';
                             return `
                                 <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer text-xs transition-colors">
-                                    <input type="checkbox" name="topics[]" value="${top.replace(/"/g, '&quot;')}" ${isChecked} class="knowledge-topic-cb size-4 text-indigo-600 rounded cursor-pointer">
+                                    <input type="checkbox" name="topics[]" value="${top.replace(/"/g, '&quot;')}" ${isChecked} class="knowledge-topic-cb size-4 text-indigo-600 rounded cursor-pointer" onchange="updateSelectedTopicsCount()">
                                     <span class="truncate text-slate-700 dark:text-slate-300 font-medium">${top}</span>
                                 </label>
                             `;
@@ -814,6 +940,7 @@
                     </div>
                 `;
             }
+            updateSelectedTopicsCount();
         }
 
         function toggleAllChapters() {
@@ -829,7 +956,46 @@
             if (!cbs.length) return;
             const anyUnchecked = Array.from(cbs).some(cb => !cb.checked);
             cbs.forEach(cb => cb.checked = anyUnchecked);
+            updateSelectedTopicsCount();
         }
+
+        // Image Viewer Lightbox Modal in the same tab
+        function openImageViewer(url, title = 'Image Preview') {
+            const modal = document.getElementById('imageViewerModal');
+            const img = document.getElementById('imageViewerImg');
+            const titleEl = document.getElementById('imageViewerTitle');
+            const downloadBtn = document.getElementById('imageViewerDownloadBtn');
+
+            if (!modal || !img) return;
+
+            img.src = url;
+            titleEl.textContent = title || 'Image Preview';
+            downloadBtn.href = url;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeImageViewer(event) {
+            const modal = document.getElementById('imageViewerModal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            const img = document.getElementById('imageViewerImg');
+            if (img) img.src = '';
+            document.body.style.overflow = '';
+        }
+
+        // Close image viewer on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const imgModal = document.getElementById('imageViewerModal');
+                if (imgModal && !imgModal.classList.contains('hidden')) {
+                    closeImageViewer();
+                }
+            }
+        });
 
         function handleFileSelect(input) {
             const file = input.files && input.files[0];
@@ -862,15 +1028,21 @@
             const sizeInMb = (file.size / (1024 * 1024)).toFixed(2);
             document.getElementById('filePreviewSize').textContent = `${sizeInMb} MB`;
 
+            const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
             const iconSpan = document.getElementById('filePreviewIcon');
-            if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-                iconSpan.textContent = 'picture_as_pdf';
-            } else {
-                iconSpan.textContent = 'image';
-            }
+            iconSpan.textContent = isPdf ? 'picture_as_pdf' : 'image';
 
             const viewLink = document.getElementById('filePreviewLink');
-            viewLink.classList.add('hidden');
+            if (isPdf) {
+                const blobUrl = URL.createObjectURL(file);
+                viewLink.href = blobUrl;
+                viewLink.onclick = null;
+            } else {
+                const blobUrl = URL.createObjectURL(file);
+                viewLink.href = 'javascript:void(0)';
+                viewLink.onclick = () => openImageViewer(blobUrl, file.name);
+            }
+            viewLink.classList.remove('hidden');
         }
 
         function removeAttachedFile() {
@@ -948,6 +1120,12 @@
             // Trigger chapter/topic loading
             onKnowledgeSubjectOrClassChange();
 
+            // Sections collapsed normally by default
+            toggleChapterSection(false);
+            toggleTopicSection(false);
+            updateSelectedChaptersCount();
+            updateSelectedTopicsCount();
+
             // Default to Write tab
             switchContentTab('write');
 
@@ -1007,16 +1185,19 @@
                 const sizeText = item.fileSize ? (item.fileSize / (1024 * 1024)).toFixed(2) + ' MB' : '';
                 document.getElementById('filePreviewSize').textContent = sizeText;
                 
+                const isPdf = Boolean(item.fileType?.includes('pdf') || item.fileUrl?.toLowerCase().endsWith('.pdf') || item.fileUrl?.toLowerCase().includes('.pdf'));
                 const viewLink = document.getElementById('filePreviewLink');
-                viewLink.href = item.fileUrl;
+                if (isPdf) {
+                    viewLink.href = '/teacher/ai-knowledge/' + item._id + '/view-file';
+                    viewLink.onclick = null;
+                } else {
+                    viewLink.href = 'javascript:void(0)';
+                    viewLink.onclick = () => openImageViewer(item.fileUrl, item.fileName || item.title);
+                }
                 viewLink.classList.remove('hidden');
 
                 const iconSpan = document.getElementById('filePreviewIcon');
-                if (item.fileType?.includes('pdf') || item.fileUrl?.toLowerCase().endsWith('.pdf')) {
-                    iconSpan.textContent = 'picture_as_pdf';
-                } else {
-                    iconSpan.textContent = 'image';
-                }
+                iconSpan.textContent = isPdf ? 'picture_as_pdf' : 'image';
             } else {
                 document.getElementById('filePreviewCard').classList.add('hidden');
                 document.getElementById('fileUploadBox').classList.remove('hidden');
@@ -1032,6 +1213,10 @@
                 : (item.topic ? item.topic.split(',').map(s => s.trim()).filter(Boolean) : []);
 
             onKnowledgeSubjectOrClassChange(preselectedChapters, preselectedTopics);
+
+            // Collapsed normally unless already has preselected items
+            toggleChapterSection(preselectedChapters.length > 0);
+            toggleTopicSection(preselectedTopics.length > 0);
 
             // Default to Write tab
             switchContentTab('write');

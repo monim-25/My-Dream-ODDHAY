@@ -172,7 +172,7 @@ app.use('/uploads', (req, res, next) => {
     }
     
     // Check inside subfolders if not found directly
-    const subfolders = ['qa', 'thumbnails', 'avatars', 'videos', 'notes', 'routines', 'questions', 'messages', 'evaluations', 'user-notes'];
+    const subfolders = ['qa', 'thumbnails', 'avatars', 'videos', 'notes', 'routines', 'questions', 'messages', 'evaluations', 'user-notes', 'knowledge'];
     for (const base of baseDirs) {
         for (const sub of subfolders) {
             const candidate = path.join(base, sub, rawPath);

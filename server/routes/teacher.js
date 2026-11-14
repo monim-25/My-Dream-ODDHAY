@@ -4507,9 +4507,23 @@ router.post('/ai-knowledge/create', teacherProtect, (req, res, next) => {
             if (req.file.size > 10 * 1024 * 1024) {
                 return res.redirect('/teacher/ai-knowledge?error=file_too_large');
             }
-            fileUrl = await processUploadedFile(req.file, 'knowledge');
+            const isPdf = req.file.mimetype === 'application/pdf' || req.file.originalname.toLowerCase().endsWith('.pdf');
+            if (isPdf) {
+                const localDir = path.join(process.cwd(), 'client/public/uploads/knowledge');
+                fs.mkdirSync(localDir, { recursive: true });
+                const safeName = `pdf-${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+                const destPath = path.join(localDir, safeName);
+                if (req.file.path && fs.existsSync(req.file.path)) {
+                    fs.copyFileSync(req.file.path, destPath);
+                } else if (req.file.buffer) {
+                    fs.writeFileSync(destPath, req.file.buffer);
+                }
+                fileUrl = `/uploads/knowledge/${safeName}`;
+            } else {
+                fileUrl = await processUploadedFile(req.file, 'knowledge');
+            }
             fileName = req.file.originalname || 'attachment';
-            fileType = req.file.mimetype || '';
+            fileType = req.file.mimetype || (isPdf ? 'application/pdf' : 'image/jpeg');
             fileSize = req.file.size || 0;
         }
 
@@ -4645,9 +4659,23 @@ router.post('/ai-knowledge/:id/edit', teacherProtect, (req, res, next) => {
             if (req.file.size > 10 * 1024 * 1024) {
                 return res.redirect('/teacher/ai-knowledge?error=file_too_large');
             }
-            entry.fileUrl = await processUploadedFile(req.file, 'knowledge');
+            const isPdf = req.file.mimetype === 'application/pdf' || req.file.originalname.toLowerCase().endsWith('.pdf');
+            if (isPdf) {
+                const localDir = path.join(process.cwd(), 'client/public/uploads/knowledge');
+                fs.mkdirSync(localDir, { recursive: true });
+                const safeName = `pdf-${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+                const destPath = path.join(localDir, safeName);
+                if (req.file.path && fs.existsSync(req.file.path)) {
+                    fs.copyFileSync(req.file.path, destPath);
+                } else if (req.file.buffer) {
+                    fs.writeFileSync(destPath, req.file.buffer);
+                }
+                entry.fileUrl = `/uploads/knowledge/${safeName}`;
+            } else {
+                entry.fileUrl = await processUploadedFile(req.file, 'knowledge');
+            }
             entry.fileName = req.file.originalname || 'attachment';
-            entry.fileType = req.file.mimetype || '';
+            entry.fileType = req.file.mimetype || (isPdf ? 'application/pdf' : 'image/jpeg');
             entry.fileSize = req.file.size || 0;
         }
 
@@ -4716,6 +4744,92 @@ router.post('/ai-knowledge/:id/toggle', teacherProtect, async (req, res) => {
     } catch (err) {
         console.error('Error toggling Teacher AI Knowledge:', err);
         res.status(500).json({ success: false, error: 'Server Error' });
+    }
+});
+
+// GET /teacher/ai-knowledge/:id/view-file - Safely stream PDF or Image directly in the tab
+router.get('/ai-knowledge/:id/view-file', teacherProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const AIKnowledge = require('../models/AIKnowledge');
+        const entry = await AIKnowledge.findById(req.params.id);
+        if (!entry || !entry.fileUrl) {
+            return res.status(404).send('Attachment not found');
+        }
+
+        const fileUrl = entry.fileUrl;
+        const fileName = entry.fileName || 'document.pdf';
+        const isPdf = Boolean(
+            (entry.fileType && entry.fileType.includes('pdf')) || 
+            fileName.toLowerCase().endsWith('.pdf') || 
+            fileUrl.toLowerCase().endsWith('.pdf') ||
+            fileUrl.toLowerCase().includes('.pdf')
+        );
+        const contentType = isPdf ? 'application/pdf' : (entry.fileType || 'image/jpeg');
+
+        // Case 1: Local file on disk
+        if (fileUrl.startsWith('/uploads/') || fileUrl.startsWith('uploads/')) {
+            const relPath = fileUrl.replace(/^\//, '');
+            const candidates = [
+                path.join(process.cwd(), 'client/public', relPath),
+                path.join(process.cwd(), 'public', relPath),
+                path.join(process.cwd(), relPath)
+            ];
+            for (const cand of candidates) {
+                if (fs.existsSync(cand)) {
+                    res.setHeader('Content-Type', contentType);
+                    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+                    return res.sendFile(cand);
+                }
+            }
+        }
+
+        // Case 2: Cloudinary file (specifically handles PDFs that have Cloudinary 401 ACL block)
+        if (fileUrl.includes('cloudinary.com')) {
+            if (isPdf) {
+                try {
+                    const { isConfigured, cloudinary } = require('../services/cloudinaryService');
+                    if (isConfigured) {
+                        const isRaw = fileUrl.includes('/raw/upload/');
+                        const resourceType = isRaw ? 'raw' : 'image';
+                        const match = fileUrl.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.pdf)?$/i);
+                        const publicId = match ? match[1] : '';
+
+                        if (publicId) {
+                            const signedUrl = cloudinary.utils.private_download_url(publicId, 'pdf', {
+                                resource_type: resourceType,
+                                type: 'upload',
+                                attachment: false
+                            });
+
+                            const https = require('https');
+                            return https.get(signedUrl, (streamRes) => {
+                                if (streamRes.statusCode === 200) {
+                                    res.setHeader('Content-Type', 'application/pdf');
+                                    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(fileName)}"`);
+                                    if (streamRes.headers['content-length']) {
+                                        res.setHeader('Content-Length', streamRes.headers['content-length']);
+                                    }
+                                    return streamRes.pipe(res);
+                                }
+                                return res.redirect(fileUrl);
+                            }).on('error', (e) => {
+                                console.error('Cloudinary PDF stream error:', e);
+                                res.redirect(fileUrl);
+                            });
+                        }
+                    }
+                } catch (cldErr) {
+                    console.error('Cloudinary private download error:', cldErr);
+                }
+            }
+            return res.redirect(fileUrl);
+        }
+
+        return res.redirect(fileUrl);
+    } catch (err) {
+        console.error('Error in ai-knowledge view-file:', err);
+        res.status(500).send('Error viewing file');
     }
 });
 // ==========================================
