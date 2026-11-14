@@ -259,7 +259,7 @@ router.get('/compose-quiz', adminProtect, async (req, res) => {
 router.post('/add-quiz', contentAdminProtect, async (req, res) => {
     try {
         await connectDB();
-        
+
         const isModelTest = req.body.isModelTest === 'true';
         const courseId = isModelTest ? undefined : (req.body.courseId || undefined);
 
@@ -272,7 +272,7 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
         if (totalConfigured <= 0) {
             return res.redirect('/admin/compose-quiz?error=' + encodeURIComponent('Question Configuration required: Please specify at least one question count.'));
         }
-        
+
         const quizData = {
             title: req.body.title,
             course: courseId,
@@ -288,37 +288,37 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
         }
 
         for (let i = 0; i < mcqCount; i++) {
-            quizData.questions.push({ 
-                questionText: `New MCQ Question ${i+1}`, 
-                options: ['Option A', 'Option B', 'Option C', 'Option D'], 
-                correctAnswer: 0, 
+            quizData.questions.push({
+                questionText: `New MCQ Question ${i + 1}`,
+                options: ['Option A', 'Option B', 'Option C', 'Option D'],
+                correctAnswer: 0,
                 explanation: '',
                 questionType: 'MCQ'
             });
         }
         for (let i = 0; i < shortCount; i++) {
-            quizData.questions.push({ 
-                questionText: `New Short Question ${i+1}`, 
-                options: [], 
-                correctAnswer: 0, 
+            quizData.questions.push({
+                questionText: `New Short Question ${i + 1}`,
+                options: [],
+                correctAnswer: 0,
                 explanation: '',
                 questionType: 'Short'
             });
         }
         for (let i = 0; i < mediumCount; i++) {
-            quizData.questions.push({ 
-                questionText: `New Medium Question ${i+1}`, 
-                options: [], 
-                correctAnswer: 0, 
+            quizData.questions.push({
+                questionText: `New Medium Question ${i + 1}`,
+                options: [],
+                correctAnswer: 0,
                 explanation: '',
                 questionType: 'Medium'
             });
         }
         for (let i = 0; i < comprehensionCount; i++) {
-            quizData.questions.push({ 
-                questionText: `New Comprehension Question ${i+1}`, 
-                options: [], 
-                correctAnswer: 0, 
+            quizData.questions.push({
+                questionText: `New Comprehension Question ${i + 1}`,
+                options: [],
+                correctAnswer: 0,
                 explanation: '',
                 questionType: 'Comprehension'
             });
@@ -352,7 +352,7 @@ router.get('/quiz-details/:id', adminProtect, async (req, res) => {
 
         // Stats: Total Students Attended
         const attendeesCount = await User.countDocuments({ 'quizResults.quiz': quiz._id });
-        
+
         // Engagement: Total Marks, Avg Time, etc.
         const engagement = {
             attendees: attendeesCount,
@@ -371,11 +371,11 @@ router.post('/quiz/:id/add-question', contentAdminProtect, async (req, res) => {
     try {
         await connectDB();
         let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation } = req.body;
-        
+
         if (!options || !Array.isArray(options)) {
             options = [optionA, optionB, optionC, optionD].filter(o => o && o.trim());
         }
-        
+
         const finalCorrectIndex = (correctAnswer !== undefined) ? parseInt(correctAnswer) : (parseInt(correctAnswerIndex) || 0);
 
         if (!questionText || options.length < 2) {
@@ -384,19 +384,19 @@ router.post('/quiz/:id/add-question', contentAdminProtect, async (req, res) => {
 
         const quiz = await Quiz.findByIdAndUpdate(
             req.params.id,
-            { 
-                $push: { 
-                    questions: { 
-                        questionText: questionText.trim(), 
-                        options, 
-                        correctAnswerIndex: finalCorrectIndex, 
-                        explanation: explanation?.trim() || '' 
-                    } 
-                } 
+            {
+                $push: {
+                    questions: {
+                        questionText: questionText.trim(),
+                        options,
+                        correctAnswerIndex: finalCorrectIndex,
+                        explanation: explanation?.trim() || ''
+                    }
+                }
             },
             { new: true }
         );
-        
+
         const newQ = quiz.questions[quiz.questions.length - 1];
         res.json({ success: true, question: newQ, totalQuestions: quiz.questions.length });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
@@ -407,22 +407,22 @@ const editQuestionHandler = async (req, res) => {
     try {
         await connectDB();
         let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation } = req.body;
-        
+
         if (!options || !Array.isArray(options)) {
             options = [optionA, optionB, optionC, optionD].filter(o => o && o.trim());
         }
-        
+
         const finalCorrectIndex = (correctAnswer !== undefined) ? parseInt(correctAnswer) : (parseInt(correctAnswerIndex) || 0);
 
         await Quiz.updateOne(
             { _id: req.params.id, 'questions._id': req.params.qid },
-            { 
-                $set: { 
-                    'questions.$.questionText': questionText.trim(), 
-                    'questions.$.options': options, 
-                    'questions.$.correctAnswerIndex': finalCorrectIndex, 
-                    'questions.$.explanation': explanation?.trim() || '' 
-                } 
+            {
+                $set: {
+                    'questions.$.questionText': questionText.trim(),
+                    'questions.$.options': options,
+                    'questions.$.correctAnswerIndex': finalCorrectIndex,
+                    'questions.$.explanation': explanation?.trim() || ''
+                }
             }
         );
         res.json({ success: true });
@@ -626,13 +626,13 @@ router.get('/', adminProtect, async (req, res) => {
 router.get('/courses', adminProtect, async (req, res) => {
     try {
         await connectDB();
-        
+
         let { q, classLevel, subject, accessType, instructor, page = 1, limit = 20 } = req.query;
         page = parseInt(page);
         limit = parseInt(limit);
-        
+
         let query = {};
-        
+
         if (q) {
             query.$or = [
                 { title: { $regex: q, $options: 'i' } },
@@ -640,7 +640,7 @@ router.get('/courses', adminProtect, async (req, res) => {
                 { classLevel: { $regex: q, $options: 'i' } }
             ];
         }
-        
+
         if (classLevel && classLevel !== 'all') {
             const cleanClass = classLevel.replace(/^class\s*/i, '').trim();
             query.classLevel = { $in: [classLevel, `Class ${cleanClass}`, cleanClass] };
@@ -728,9 +728,9 @@ router.get('/my-courses', adminProtect, async (req, res) => {
         const skip = (page - 1) * limit;
 
         const { q, classLevel, subject, accessType } = req.query;
-        
+
         let query = { instructor: new mongoose.Types.ObjectId(user._id) };
-        
+
         if (q) {
             query.$or = [
                 { title: { $regex: q, $options: 'i' } },
@@ -738,7 +738,7 @@ router.get('/my-courses', adminProtect, async (req, res) => {
                 { classLevel: { $regex: q, $options: 'i' } }
             ];
         }
-        
+
         if (classLevel && classLevel !== 'all') query.classLevel = classLevel;
         if (subject && subject !== 'all') query.subject = subject;
         if (accessType && accessType !== 'all') query.accessType = accessType;
@@ -793,7 +793,7 @@ router.get('/my-courses', adminProtect, async (req, res) => {
 router.get('/api/search-teacher', adminProtect, async (req, res) => {
     const { query } = req.query;
     if (!query) return res.status(400).json({ error: 'Query required' });
-    
+
     try {
         await connectDB();
         const teacher = await User.findOne({
@@ -804,7 +804,7 @@ router.get('/api/search-teacher', adminProtect, async (req, res) => {
                 { _id: mongoose.Types.ObjectId.isValid(query) ? query : null }
             ]
         }).select('name email phone profileImage profilePicture').lean();
-        
+
         if (!teacher) return res.status(404).json({ error: 'Teacher not found' });
         res.json(teacher);
     } catch (err) {
@@ -818,12 +818,12 @@ router.get('/api/teachers-by-class', adminProtect, async (req, res) => {
         await connectDB();
         const classes = req.query.classes ? req.query.classes.split(',') : [];
         let query = { role: 'teacher' };
-        
+
         if (classes.length > 0) {
             const classRegexes = classes.map(c => new RegExp(c.trim(), 'i'));
             query.classLevel = { $in: classRegexes };
         }
-        
+
         const teachers = await User.find(query).select('name email phone profileImage profilePicture classLevel').lean();
         res.json(teachers);
     } catch (err) {
@@ -907,7 +907,7 @@ router.post('/add-course', adminProtect, (req, res, next) => {
         });
 
         await newCourse.save();
-        
+
         // Log Activity
         await logActivity(req, 'CREATE', `Created new course: ${title}`, 'course', newCourse._id);
 
@@ -923,9 +923,9 @@ router.get('/edit-course/:id', adminProtect, async (req, res) => {
     try {
         await connectDB();
         const course = await Course.findById(req.params.id).populate('permittedTeachers', 'name email profileImage profilePicture');
-        
+
         if (!course) return res.status(404).send('Course not found');
-        
+
         res.render('admin/edit-course', {
             user: req.session.user,
             active: 'courses',
@@ -946,7 +946,7 @@ router.post('/edit-course/:id', adminProtect, (req, res, next) => {
     try {
         await connectDB();
         const { title, accessType, price, discountPrice, difficulty, tags, trailerUrl, description, permittedTeachers, routine, chapters, totalRecordedClasses, totalLiveClasses, totalLectureNotes, totalQuizzes, isCompleted, learningHighlights, courseBenefits } = req.body;
-        
+
         const rawClassLevel = req.body.classLevel || req.body['classLevel[]'];
         const rawSubject = req.body.subject || req.body['subject[]'];
         const rawCategory = req.body.category || req.body['category[]'];
@@ -959,7 +959,7 @@ router.post('/edit-course/:id', adminProtect, (req, res, next) => {
             if (req.files.thumbnail) course.thumbnail = await processUploadedFile(req.files.thumbnail[0], 'thumbnails');
             if (req.files.routineImage) course.routineImage = await processUploadedFile(req.files.routineImage[0], 'routines');
         }
-        
+
         // Handle tags, highlights & benefits
         const tagsArray = tags ? tags.split(',').map(t => t.trim()).filter(Boolean) : [];
         if (learningHighlights !== undefined) {
@@ -994,7 +994,7 @@ router.post('/edit-course/:id', adminProtect, (req, res, next) => {
         course.description = description;
         course.permittedTeachers = Array.isArray(permittedTeachers) ? permittedTeachers : (permittedTeachers ? [permittedTeachers] : []);
         course.routine = Array.isArray(routine) ? routine.filter(r => r.day) : [];
-        
+
         // Update chapters (preserve existing sub-assets if title hasn't changed, or just update titles)
         if (chapters) {
             const chapterList = Array.isArray(chapters) ? chapters : Object.values(chapters);
@@ -1012,7 +1012,7 @@ router.post('/edit-course/:id', adminProtect, (req, res, next) => {
         }
 
         await course.save();
-        
+
         // Log Activity
         await logActivity(req, 'UPDATE', `Updated course: ${title}`, 'course', course._id);
 
@@ -1028,16 +1028,16 @@ router.get('/course/:id/delete', adminProtect, async (req, res) => {
     try {
         await connectDB();
         const course = await Course.findById(req.params.id);
-        
+
         if (!course) return res.status(404).send('Course not found');
-        
+
         // Check authorization (must be the instructor or a superadmin)
         if (course.instructor.toString() !== req.session.user._id.toString() && req.session.user.role !== 'superadmin') {
             return res.status(403).send('Not authorized to delete this course');
         }
 
         await Course.findByIdAndDelete(req.params.id);
-        
+
         // Log Activity
         await logActivity(req, 'DELETE', `Deleted course: ${course.title}`, 'course', req.params.id);
 
@@ -1075,15 +1075,15 @@ router.get('/course/:id', adminProtect, async (req, res) => {
                 accessType: "paid",
                 category: "Academic",
                 description: "This is a comprehensive demo course designed to showcase the Intelligence Hub features. It includes video lessons, notes, and interactive quizzes for HSC candidates.",
-                instructor: { 
-                    name: "Dr. Rakibul Islam", 
-                    profileImage: "/images/default-avatar.png", 
+                instructor: {
+                    name: "Dr. Rakibul Islam",
+                    profileImage: "/images/default-avatar.png",
                     email: "rakib.physics@oddhay.com",
-                    role: "teacher" 
+                    role: "teacher"
                 },
-                addedBy: { 
-                    _id: "69f340a7a82e71e65f9a80cf", 
-                    name: "Md. Al-Amin (Admin)", 
+                addedBy: {
+                    _id: "69f340a7a82e71e65f9a80cf",
+                    name: "Md. Al-Amin (Admin)",
                     email: "admin@oddhay.com",
                     role: "admin",
                     profileImage: "/images/default-avatar.png"
@@ -1093,21 +1093,21 @@ router.get('/course/:id', adminProtect, async (req, res) => {
                 ],
                 createdAt: new Date()
             };
-            
+
             stats = { studentCount: 124, examCount: 8 };
             students = [
                 { name: "Zayan Ahmed", email: "zayan@example.com", enrolledAt: new Date(), progress: 45 },
                 { name: "Samiul Islam", email: "samiul@example.com", enrolledAt: new Date(), progress: 12 }
             ];
-            
+
             console.log(`[Demo Mode] Injecting mock course for ID: ${req.params.id}`);
         } else {
             // Fetch enrolled students if real course exists
-            students = await User.find({ 
+            students = await User.find({
                 'enrolledCourses.course': course._id,
                 role: 'student'
             }).select('name email profileImage classLevel enrolledCourses createdAt').lean();
-            
+
             stats = {
                 studentCount: students.length,
                 examCount: course.chapters.reduce((acc, ch) => acc + (ch.quizzes?.length || 0), 0)
@@ -1351,42 +1351,50 @@ router.get('/academic', adminProtect, async (req, res) => {
             { $lookup: { from: 'users', localField: 'instructor', foreignField: '_id', as: 'instructorData' } },
             { $unwind: '$instructorData' },
             { $unwind: { path: '$chapters', preserveNullAndEmptyArrays: true } },
-            { $group: { 
-                _id: '$_id', 
-                instructor: { $first: '$instructor' },
-                name: { $first: '$instructorData.name' }, 
-                profilePicture: { $first: '$instructorData.profilePicture' }, 
-                subject: { $first: '$instructorData.classLevel' },
-                classesInCourse: { $sum: { $size: { $ifNull: ['$chapters.recordedClasses', []] } } }
-            }},
-            { $group: { 
-                _id: '$instructor', 
-                name: { $first: '$name' }, 
-                profilePicture: { $first: '$profilePicture' }, 
-                subject: { $first: '$subject' }, 
-                totalCourses: { $sum: 1 }, 
-                classesUploaded: { $sum: '$classesInCourse' }
-            }},
+            {
+                $group: {
+                    _id: '$_id',
+                    instructor: { $first: '$instructor' },
+                    name: { $first: '$instructorData.name' },
+                    profilePicture: { $first: '$instructorData.profilePicture' },
+                    subject: { $first: '$instructorData.classLevel' },
+                    classesInCourse: { $sum: { $size: { $ifNull: ['$chapters.recordedClasses', []] } } }
+                }
+            },
+            {
+                $group: {
+                    _id: '$instructor',
+                    name: { $first: '$name' },
+                    profilePicture: { $first: '$profilePicture' },
+                    subject: { $first: '$subject' },
+                    totalCourses: { $sum: 1 },
+                    classesUploaded: { $sum: '$classesInCourse' }
+                }
+            },
             { $lookup: { from: 'qas', localField: '_id', foreignField: 'answeredBy', as: 'resolvedQAs' } },
             { $lookup: { from: 'questionbanks', localField: '_id', foreignField: 'createdBy', as: 'qAdded' } },
             { $lookup: { from: 'notes', localField: '_id', foreignField: 'createdBy', as: 'nUploaded' } },
-            { $project: { 
-                _id: 1, name: 1, profilePicture: 1, subject: 1, totalCourses: 1, classesUploaded: 1,
-                qaResolved: { $size: { $filter: { input: '$resolvedQAs', as: 'qa', cond: { $eq: ['$$qa.status', 'resolved'] } } } },
-                questionsAdded: { $size: '$qAdded' },
-                notesUploaded: { $size: '$nUploaded' }
-            }},
-            { $addFields: {
-                performanceScore: {
-                    $add: [
-                        { $multiply: ['$qaResolved', 10] },
-                        { $multiply: ['$questionsAdded', 5] },
-                        { $multiply: ['$classesUploaded', 3] },
-                        { $multiply: ['$notesUploaded', 2] },
-                        { $multiply: ['$totalCourses', 1] }
-                    ]
+            {
+                $project: {
+                    _id: 1, name: 1, profilePicture: 1, subject: 1, totalCourses: 1, classesUploaded: 1,
+                    qaResolved: { $size: { $filter: { input: '$resolvedQAs', as: 'qa', cond: { $eq: ['$$qa.status', 'resolved'] } } } },
+                    questionsAdded: { $size: '$qAdded' },
+                    notesUploaded: { $size: '$nUploaded' }
                 }
-            }},
+            },
+            {
+                $addFields: {
+                    performanceScore: {
+                        $add: [
+                            { $multiply: ['$qaResolved', 10] },
+                            { $multiply: ['$questionsAdded', 5] },
+                            { $multiply: ['$classesUploaded', 3] },
+                            { $multiply: ['$notesUploaded', 2] },
+                            { $multiply: ['$totalCourses', 1] }
+                        ]
+                    }
+                }
+            },
             { $sort: { performanceScore: -1 } }
         ];
 
@@ -1622,53 +1630,61 @@ router.get('/academic', adminProtect, async (req, res) => {
 router.get('/instructors', adminProtect, async (req, res) => {
     try {
         await connectDB();
-        
+
         const teacherAggPipeline = [
             { $match: { instructor: { $exists: true, $ne: null } } },
             { $lookup: { from: 'users', localField: 'instructor', foreignField: '_id', as: 'instructorData' } },
             { $unwind: '$instructorData' },
             { $unwind: { path: '$chapters', preserveNullAndEmptyArrays: true } },
-            { $group: { 
-                _id: '$_id', 
-                instructor: { $first: '$instructor' },
-                name: { $first: '$instructorData.name' }, 
-                profilePicture: { $first: '$instructorData.profilePicture' }, 
-                subject: { $first: '$instructorData.classLevel' },
-                classesInCourse: { $sum: { $size: { $ifNull: ['$chapters.recordedClasses', []] } } }
-            }},
-            { $group: { 
-                _id: '$instructor', 
-                name: { $first: '$name' }, 
-                profilePicture: { $first: '$profilePicture' }, 
-                subject: { $first: '$subject' }, 
-                totalCourses: { $sum: 1 }, 
-                classesUploaded: { $sum: '$classesInCourse' }
-            }},
+            {
+                $group: {
+                    _id: '$_id',
+                    instructor: { $first: '$instructor' },
+                    name: { $first: '$instructorData.name' },
+                    profilePicture: { $first: '$instructorData.profilePicture' },
+                    subject: { $first: '$instructorData.classLevel' },
+                    classesInCourse: { $sum: { $size: { $ifNull: ['$chapters.recordedClasses', []] } } }
+                }
+            },
+            {
+                $group: {
+                    _id: '$instructor',
+                    name: { $first: '$name' },
+                    profilePicture: { $first: '$profilePicture' },
+                    subject: { $first: '$subject' },
+                    totalCourses: { $sum: 1 },
+                    classesUploaded: { $sum: '$classesInCourse' }
+                }
+            },
             { $lookup: { from: 'qas', localField: '_id', foreignField: 'answeredBy', as: 'resolvedQAs' } },
             { $lookup: { from: 'questionbanks', localField: '_id', foreignField: 'createdBy', as: 'qAdded' } },
             { $lookup: { from: 'notes', localField: '_id', foreignField: 'createdBy', as: 'nUploaded' } },
-            { $project: { 
-                _id: 1, instructor: '$_id', name: 1, email: 1, profilePicture: 1, subject: 1, totalCourses: 1, classesUploaded: 1,
-                qaResolved: { $size: { $filter: { input: '$resolvedQAs', as: 'qa', cond: { $eq: ['$$qa.status', 'resolved'] } } } },
-                questionsAdded: { $size: '$qAdded' },
-                notesUploaded: { $size: '$nUploaded' }
-            }},
-            { $addFields: {
-                performanceScore: {
-                    $add: [
-                        { $multiply: ['$qaResolved', 10] },
-                        { $multiply: ['$questionsAdded', 5] },
-                        { $multiply: ['$classesUploaded', 3] },
-                        { $multiply: ['$notesUploaded', 2] },
-                        { $multiply: ['$totalCourses', 1] }
-                    ]
+            {
+                $project: {
+                    _id: 1, instructor: '$_id', name: 1, email: 1, profilePicture: 1, subject: 1, totalCourses: 1, classesUploaded: 1,
+                    qaResolved: { $size: { $filter: { input: '$resolvedQAs', as: 'qa', cond: { $eq: ['$$qa.status', 'resolved'] } } } },
+                    questionsAdded: { $size: '$qAdded' },
+                    notesUploaded: { $size: '$nUploaded' }
                 }
-            }},
+            },
+            {
+                $addFields: {
+                    performanceScore: {
+                        $add: [
+                            { $multiply: ['$qaResolved', 10] },
+                            { $multiply: ['$questionsAdded', 5] },
+                            { $multiply: ['$classesUploaded', 3] },
+                            { $multiply: ['$notesUploaded', 2] },
+                            { $multiply: ['$totalCourses', 1] }
+                        ]
+                    }
+                }
+            },
             { $sort: { performanceScore: -1 } }
         ];
 
         let teacherPerformance = await Course.aggregate(teacherAggPipeline);
-        
+
         if (teacherPerformance.length === 0) {
             teacherPerformance = [
                 { _id: '507f1f77bcf86cd799439016', instructor: '507f1f77bcf86cd799439016', name: 'Dr. Hasan', email: 'hasan@oddhay.com', subject: 'HSC', totalCourses: 6, classesUploaded: 80, notesUploaded: 30, questionsAdded: 300, qaResolved: 85, rating: 4.7 },
@@ -2323,33 +2339,33 @@ router.post('/notifications/process-scheduled', adminProtect, async (req, res) =
 });
 
 router.get('/question-history', adminProtect, async (req, res) => {
-  try {
-    await connectDB();
-    const questions = await Question.find()
-      .sort({ createdAt: -1 })
-      .limit(20)
-      .populate('addedBy', 'name role');
-    
-    const stats = {
-      totalQuestions: questions.length,
-      recentActivity: questions.slice(0, 5).map(q => ({
-        text: `${q.questionText.substring(0, 50)}...`,
-        addedBy: q.addedBy?.name || 'System',
-        role: q.addedBy?.role || 'unknown',
-        createdAt: q.createdAt.toLocaleTimeString()
-      }))
-    };
+    try {
+        await connectDB();
+        const questions = await Question.find()
+            .sort({ createdAt: -1 })
+            .limit(20)
+            .populate('addedBy', 'name role');
 
-    res.render('admin/question-history', { 
-      questions, 
-      user: req.session.user, 
-      stats,
-      active: 'question-history' 
-    });
-  } catch (err) {
-    console.error('Question History Error:', err);
-    res.status(500).send('Error loading question history');
-  }
+        const stats = {
+            totalQuestions: questions.length,
+            recentActivity: questions.slice(0, 5).map(q => ({
+                text: `${q.questionText.substring(0, 50)}...`,
+                addedBy: q.addedBy?.name || 'System',
+                role: q.addedBy?.role || 'unknown',
+                createdAt: q.createdAt.toLocaleTimeString()
+            }))
+        };
+
+        res.render('admin/question-history', {
+            questions,
+            user: req.session.user,
+            stats,
+            active: 'question-history'
+        });
+    } catch (err) {
+        console.error('Question History Error:', err);
+        res.status(500).send('Error loading question history');
+    }
 });
 
 router.get('/question-details', adminProtect, async (req, res) => {
@@ -2397,9 +2413,9 @@ router.get('/question-details', adminProtect, async (req, res) => {
             Question.find(query).populate('addedBy', 'name profileImage').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
             Question.countDocuments(query)
         ]);
-        
+
         const totalQuestions = mCQCount + shortCount + mediumCount + compCount;
-        
+
         // If filtering by author, fetch their info for banner
         let filterTeacher = null;
         if (authorFilter) {
@@ -2454,7 +2470,7 @@ router.get('/edit-question/:id', adminProtect, async (req, res) => {
         await connectDB();
         const question = await Question.findById(req.params.id);
         if (!question) return res.status(404).send('Question not found');
-        
+
         const email = (req.session.user.email || '').toLowerCase().trim();
         const superEmail = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
         const isMaster = email && superEmail && email === superEmail;
@@ -2476,11 +2492,11 @@ router.get('/edit-question/:id', adminProtect, async (req, res) => {
 router.post('/edit-question/:id', adminProtect, async (req, res) => {
     try {
         await connectDB();
-        const { 
-            board, year, subject, classLevel, accessType, 
-            questionType, topic, questionText, 
-            options, optionA, optionB, optionC, optionD, 
-            correctAnswerIndex, correctAnswer, explanation 
+        const {
+            board, year, subject, classLevel, accessType,
+            questionType, topic, questionText,
+            options, optionA, optionB, optionC, optionD,
+            correctAnswerIndex, correctAnswer, explanation
         } = req.body;
 
         const updateData = {
@@ -2501,11 +2517,11 @@ router.post('/edit-question/:id', adminProtect, async (req, res) => {
 
         const updatedQuestion = await Question.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('addedBy', 'name profileImage');
         await logActivity(req, 'UPDATE', `Edited question: ${req.params.id}`, 'Question', req.params.id);
-        
+
         if (req.xhr || req.headers.accept.indexOf('json') > -1) {
             return res.json(updatedQuestion);
         }
-        
+
         res.redirect('/admin/question-details?success=Question updated');
     } catch (err) {
         console.error('Update Question Error:', err);
@@ -2613,9 +2629,9 @@ router.get('/exam-attempts', adminProtect, async (req, res) => {
                 totalQuizzesTaken: allAttempts.length
             },
             totalAttempts: allAttempts.length,
-            filters: { 
-                page: 1, 
-                totalPages: 1, 
+            filters: {
+                page: 1,
+                totalPages: 1,
                 totalAttempts: filteredAttempts.length,
                 type: typeFilter,
                 class: classFilter,
@@ -2770,11 +2786,11 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
     const mongoose = require('mongoose');
     if (chapter && subject && classLevelArray.length > 0) {
         const { ensureSyllabusFoldersForChapter } = require('../controllers/topicController');
-        await ensureSyllabusFoldersForChapter(classLevelArray, subject, chapter, req.session?.user?._id).catch(() => {});
+        await ensureSyllabusFoldersForChapter(classLevelArray, subject, chapter, req.session?.user?._id).catch(() => { });
     }
     await new Note({
-        title, subject, classLevel: classLevelArray.length > 0 ? classLevelArray : ['Class 10'], 
-        chapter: chapter || '', 
+        title, subject, classLevel: classLevelArray.length > 0 ? classLevelArray : ['Class 10'],
+        chapter: chapter || '',
         topic: primaryTopic,
         topics: parsedTopics.length > 0 ? parsedTopics : (primaryTopic ? [primaryTopic] : []),
         description: description || '',
@@ -2881,7 +2897,7 @@ router.get('/question-bank', adminProtect, async (req, res) => {
 
         let query = {};
         if (user.role === 'teacher') query.addedBy = user._id;
-        
+
         if (search) {
             query.$or = [
                 { subject: { $regex: search, $options: 'i' } },
@@ -3153,14 +3169,14 @@ router.post('/edit-question-bank/:id', adminProtect, (req, res, next) => {
         await connectDB();
         const { board, year, subject, classLevel, accessType } = req.body;
         const updateData = { board, year, subject, classLevel, accessType };
-        
+
         if (req.file) {
             updateData.fileUrl = await processUploadedFile(req.file, 'questions');
         }
 
         await QuestionBank.findByIdAndUpdate(req.params.id, updateData);
         await logActivity(req, 'UPDATE', `Updated Question Bank: ${board} ${year}`, 'QuestionBank', req.params.id);
-        
+
         res.redirect(`/admin/edit-question-bank/${req.params.id}?success=Metadata updated`);
     } catch (err) {
         console.error('Update Bank Error:', err);
@@ -3173,7 +3189,7 @@ router.post('/question-bank/:id/bulk-update-questions', adminProtect, async (req
     try {
         await connectDB();
         const { questionIds, texts, correctIndices, answers, explanations } = req.body;
-        
+
         if (!questionIds || !Array.isArray(questionIds)) {
             return res.redirect(`/admin/edit-question-bank/${req.params.id}?error=No questions to update`);
         }
@@ -3270,11 +3286,11 @@ router.post('/add-question-full', contentAdminProtect, (req, res, next) => {
     try {
         await connectDB();
         // The form sends parallel arrays: qText[], qType[], qOptions[], qCorrectIndex[], qExplanation[], qAnswer[]
-        const { 
-            bankId, 
-            board: rawBoard, 
-            year: rawYear, 
-            subject: rawSubject, 
+        const {
+            bankId,
+            board: rawBoard,
+            year: rawYear,
+            subject: rawSubject,
             classLevel: rawClass,
             mode: rawMode,
             qText, qType, qOptions, qCorrectIndex, qExplanation, qAnswer, qMarks
@@ -3284,7 +3300,7 @@ router.post('/add-question-full', contentAdminProtect, (req, res, next) => {
 
         // Fix: If board/year/subject/class arrive as arrays (due to duplicate form fields), pick the first one
         const getVal = (val) => Array.isArray(val) ? val.filter(v => v !== '').shift() || '' : (val || '');
-        
+
         const finalBoard = getVal(rawBoard);
         const finalYear = getVal(rawYear);
         const finalSubject = getVal(rawSubject);
@@ -3396,7 +3412,7 @@ router.get('/video-classes', adminProtect, async (req, res) => {
             const mongoose = require('mongoose');
             if (mongoose.Types.ObjectId.isValid(instructorFilter)) coursesQuery.instructor = instructorFilter;
         }
-        
+
         const allCourses = await Course.find(coursesQuery).populate('instructor', 'name').lean();
 
         // Fetch instructor info if filtering
@@ -3417,14 +3433,14 @@ router.get('/video-classes', adminProtect, async (req, res) => {
         allCourses.forEach(course => {
             (course.chapters || []).forEach(chapter => {
                 (chapter.recordedClasses || []).forEach(video => {
-                    const matchesSearch = !search || 
-                        video.title.toLowerCase().includes(search.toLowerCase()) || 
+                    const matchesSearch = !search ||
+                        video.title.toLowerCase().includes(search.toLowerCase()) ||
                         (course.instructor?.name || '').toLowerCase().includes(search.toLowerCase());
                     const courseSubjects = Array.isArray(course.subject) ? course.subject : (course.subject ? [course.subject] : []);
                     const matchesSubject = subjectFilter === 'all' || courseSubjects.includes(subjectFilter);
                     const courseClasses = Array.isArray(course.classLevel) ? course.classLevel : (course.classLevel ? [course.classLevel] : []);
                     const cleanClass = classFilter.replace(/^class\s*/i, '').trim();
-                    const matchesClass = classFilter === 'all' || 
+                    const matchesClass = classFilter === 'all' ||
                         courseClasses.some(cl => cl === classFilter || cl === `Class ${cleanClass}` || cl === cleanClass || (typeof cl === 'string' && cl.toLowerCase().includes(classFilter.toLowerCase())));
                     const matchesAccess = accessFilter === 'all' || course.accessType === accessFilter.toLowerCase();
                     const matchesCourse = courseFilter === 'all' || course._id.toString() === courseFilter;
@@ -3469,7 +3485,7 @@ router.get('/video-classes', adminProtect, async (req, res) => {
         if (subjectFilter !== 'all') assetsQuery.targetSubject = subjectFilter;
         if (classFilter !== 'all') assetsQuery.targetClass = classFilter;
         if (accessFilter !== 'all') assetsQuery.accessType = accessFilter.toLowerCase();
-        
+
         const standaloneAssets = await VideoAsset.find(assetsQuery).populate('addedBy', 'name').lean();
         standaloneAssets.forEach(asset => {
             const matchesSearch = !search || asset.title.toLowerCase().includes(search.toLowerCase());
@@ -3512,7 +3528,7 @@ router.get('/video-classes', adminProtect, async (req, res) => {
         const paginatedVideos = allVideos.slice(skip, skip + limit);
 
         let freeCount = 0;
-        allVideos.forEach(v => { if(v.accessType === 'free') freeCount++; });
+        allVideos.forEach(v => { if (v.accessType === 'free') freeCount++; });
 
         // Stats for the hub
         const hubStats = {
@@ -3598,7 +3614,7 @@ router.get('/qas', adminProtect, async (req, res) => {
                 const fStatus = i % 3 === 0 ? 'open' : 'resolved';
                 const fName = fakeNames[i % fakeNames.length];
                 const fQuestion = fakeQuestions[i % fakeQuestions.length];
-                
+
                 // Apply filters to fake data
                 const matchesStatus = status === 'all' || fStatus === status;
                 const matchesSearch = !q || fName.toLowerCase().includes(q.toLowerCase()) || fQuestion.toLowerCase().includes(q.toLowerCase());
@@ -3836,21 +3852,21 @@ router.get('/payments', financeProtect, async (req, res) => {
         const skip = (parseInt(page) - 1) * limit;
 
         let query = {};
-        
+
         // Search
         if (q) {
             const escapedQ = q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const searchRegex = new RegExp(escapedQ, 'i');
             // Find users matching search
-            const users = await User.find({ 
+            const users = await User.find({
                 $or: [
-                    { name: searchRegex }, 
-                    { email: searchRegex }, 
+                    { name: searchRegex },
+                    { email: searchRegex },
                     { phone: searchRegex }
-                ] 
+                ]
             }).select('_id');
             const userIds = users.map(u => u._id);
-            
+
             query.$or = [
                 { transactionId: searchRegex },
                 { phoneNumber: searchRegex },
@@ -3872,7 +3888,7 @@ router.get('/payments', financeProtect, async (req, res) => {
         if (dateFilter && dateFilter !== 'all') {
             const now = new Date();
             let startDate = new Date();
-            if (dateFilter === 'today') startDate.setHours(0,0,0,0);
+            if (dateFilter === 'today') startDate.setHours(0, 0, 0, 0);
             else if (dateFilter === 'week') startDate.setDate(now.getDate() - 7);
             else if (dateFilter === 'month') startDate.setMonth(now.getMonth() - 1);
             else if (dateFilter === '30days') startDate.setDate(now.getDate() - 30);
@@ -3918,7 +3934,7 @@ router.get('/payments', financeProtect, async (req, res) => {
                 { $sort: { "_id": 1 } }
             ])
         ]);
-        
+
         // Add fake data for preview if empty (Trend Chart)
         if (!revenueChart || revenueChart.length === 0) {
             const mockChart = [];
@@ -3940,7 +3956,7 @@ router.get('/payments', financeProtect, async (req, res) => {
             const methods = ['bkash', 'nagad', 'rocket'];
             const statuses = ['success', 'success', 'success', 'failed', 'refunded', 'pending'];
             const courses = ['Web Development Boot Camp', 'Graphics Design Mastery', 'Digital Marketing 101', 'UI/UX Advanced'];
-            
+
             const startIdx = payments.length;
             for (let i = startIdx; i < 20; i++) {
                 const fakeId = `fa1e${i.toString(16).padStart(4, '0')}${Math.random().toString(16).substring(2, 18)}`;
@@ -3959,7 +3975,7 @@ router.get('/payments', financeProtect, async (req, res) => {
             // Re-sort by date
             payments.sort((a, b) => b.createdAt - a.createdAt);
         }
-        
+
         const statsResult = statsAgg[0] || { total: 0, success: 0, totalRevenue: 0, totalRefunds: 0, bkash: 0, nagad: 0, rocket: 0 };
         const refundRate = statsResult.totalRevenue > 0 ? ((statsResult.totalRefunds / statsResult.totalRevenue) * 100).toFixed(1) : 0;
         const avgAmount = statsResult.success > 0 ? statsResult.totalRevenue / statsResult.success : 0;
@@ -4059,10 +4075,10 @@ router.post('/payments/:id/refund', financeProtect, async (req, res) => {
         payment.refundDate = new Date();
         payment.refundBy = req.session.userId;
         payment.status = type === 'full' ? 'refunded' : 'partial_refund';
-        
+
         await payment.save();
         await logActivity(req, 'REFUND', `Processed ${type} refund for TrxID: ${payment.transactionId}`, 'Payment', payment._id);
-        
+
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -4102,9 +4118,9 @@ router.post('/payments/bulk-action', financeProtect, async (req, res) => {
 
 // GET /create-role
 router.get('/create-role', adminOnlyProtect, async (req, res) => {
-    res.render('admin/create-role', { 
-        user: req.session.user, 
-        error: req.query.error || null, 
+    res.render('admin/create-role', {
+        user: req.session.user,
+        error: req.query.error || null,
         success: req.query.success || null,
         active: 'create-role'
     });
@@ -4115,14 +4131,14 @@ router.post('/create-role', adminOnlyProtect, async (req, res) => {
     try {
         await connectDB();
         const { name, email, phone, role, password, status, forcePasswordChange, sendInviteEmail, classes, subjects } = req.body;
-        
+
         // Authorization Check
         const isSuperAdmin = req.session.user.role === 'superadmin' || req.session.user.email === process.env.SUPER_ADMIN_EMAIL;
         if (!isSuperAdmin && ['admin', 'superadmin'].includes(role)) {
-            return res.render('admin/create-role', { 
-                user: req.session.user, 
-                error: 'Authorization Failed: You are only allowed to create Teacher, Support, or standard user roles.', 
-                success: null, 
+            return res.render('admin/create-role', {
+                user: req.session.user,
+                error: 'Authorization Failed: You are only allowed to create Teacher, Support, or standard user roles.',
+                success: null,
                 active: 'create-role',
                 name, email, phone, role: 'teacher', status, subjects
             });
@@ -4131,14 +4147,14 @@ router.post('/create-role', adminOnlyProtect, async (req, res) => {
         // Validation
         if (!name || !email || !password || !role) {
             console.warn('Create Role Validation Failed:', { name: !!name, email: !!email, password: !!password, role: !!role });
-            const errMsg = 'Please fill all required fields. (Missing: ' + [!name?'Name':'', !email?'Email':'', !password?'Password':'', !role?'Role':''].filter(Boolean).join(', ') + ')';
+            const errMsg = 'Please fill all required fields. (Missing: ' + [!name ? 'Name' : '', !email ? 'Email' : '', !password ? 'Password' : '', !role ? 'Role' : ''].filter(Boolean).join(', ') + ')';
             if (req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
                 return res.status(400).json({ success: false, error: errMsg });
             }
-            return res.render('admin/create-role', { 
-                user: req.session.user, 
-                error: errMsg, 
-                success: null, 
+            return res.render('admin/create-role', {
+                user: req.session.user,
+                error: errMsg,
+                success: null,
                 active: 'create-role',
                 name, email, phone, role, status, subjects
             });
@@ -4150,10 +4166,10 @@ router.post('/create-role', adminOnlyProtect, async (req, res) => {
             if (req.xhr || (req.headers && req.headers.accept && req.headers.accept.includes('application/json'))) {
                 return res.status(400).json({ success: false, error: errMsg });
             }
-            return res.render('admin/create-role', { 
-                user: req.session.user, 
-                error: errMsg, 
-                success: null, 
+            return res.render('admin/create-role', {
+                user: req.session.user,
+                error: errMsg,
+                success: null,
                 active: 'create-role',
                 name, email, phone, role, status, subjects
             });
@@ -4215,10 +4231,10 @@ router.post('/create-role', adminOnlyProtect, async (req, res) => {
         if (req.xhr || req.headers.accept.indexOf('json') > -1) {
             return res.status(500).json({ success: false, error: err.message });
         }
-        res.render('admin/create-role', { 
-            user: req.session.user, 
-            error: 'Failed to create account: ' + err.message, 
-            success: null, 
+        res.render('admin/create-role', {
+            user: req.session.user,
+            error: 'Failed to create account: ' + err.message,
+            success: null,
             active: 'create-role',
             name: req.body.name, email: req.body.email, role: req.body.role
         });
@@ -4236,7 +4252,7 @@ router.get('/users', userManagementProtect, async (req, res) => {
         const skip = (parseInt(page) - 1) * limit;
 
         let query = {};
-        
+
         // Search
         if (q) {
             const searchRegex = new RegExp(q.trim(), 'i');
@@ -4316,8 +4332,8 @@ router.get('/users', userManagementProtect, async (req, res) => {
                     }
                 }
             ]),
-            SystemLog.find({ 
-                entityType: 'User', 
+            SystemLog.find({
+                entityType: 'User',
                 $or: [
                     { action: 'DELETE_USER' },
                     { action: 'BULK_ACTION', actionDetails: /Performed delete on/ }
@@ -4408,18 +4424,18 @@ router.post('/users/:id/role', userManagementProtect, async (req, res) => {
     try {
         await connectDB();
         const { role } = req.body;
-        
+
         const currentUser = req.session.user;
         const isMaster = currentUser.email && currentUser.email === process.env.SUPER_ADMIN_EMAIL;
         const isSuperAdmin = currentUser.role === 'superadmin' || isMaster;
-        
+
         if (!isSuperAdmin && (role === 'admin' || role === 'superadmin')) {
             return res.status(403).json({ success: false, error: 'Only Superadmins can assign Admin or Superadmin roles.' });
         }
-        
+
         const targetUser = await User.findById(req.params.id);
         if (!targetUser) return res.status(404).json({ success: false, error: 'User not found' });
-        
+
         // Prevent regular admins from demoting existing admins/superadmins
         if (!isSuperAdmin && (targetUser.role === 'admin' || targetUser.role === 'superadmin')) {
             return res.status(403).json({ success: false, error: 'You do not have permission to modify this user.' });
@@ -4427,7 +4443,7 @@ router.post('/users/:id/role', userManagementProtect, async (req, res) => {
 
         targetUser.role = role;
         await targetUser.save();
-        
+
         await logActivity(req, 'CHANGE_ROLE', `Updated role to ${role} for user ID: ${req.params.id}`, 'User', req.params.id);
         res.json({ success: true });
     } catch (err) {
@@ -4455,13 +4471,13 @@ router.post('/users/:id/restrict', userManagementProtect, async (req, res) => {
         const { duration, reason } = req.body; // duration in days
         const restrictionExpires = new Date();
         restrictionExpires.setDate(restrictionExpires.getDate() + parseInt(duration));
-        
-        await User.findByIdAndUpdate(req.params.id, { 
+
+        await User.findByIdAndUpdate(req.params.id, {
             status: 'suspended',
             restrictionExpires,
             restrictionReason: reason
         });
-        
+
         await logActivity(req, 'RESTRICT_USER', `Restricted user for ${duration} days. Reason: ${reason}`, 'User', req.params.id);
         res.json({ success: true });
     } catch (err) {
@@ -4488,11 +4504,11 @@ router.post('/users/:id/password', userManagementProtect, async (req, res) => {
         const newPassword = Math.random().toString(36).slice(-8);
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ error: 'User not found' });
-        
+
         user.password = newPassword;
         user.passwordResetRequired = true;
         await user.save();
-        
+
         await logActivity(req, 'RESET_PASSWORD', `Reset password for user ID: ${req.params.id}`, 'User', req.params.id);
         res.json({ success: true, newPassword });
     } catch (err) {
@@ -4509,8 +4525,8 @@ const handleAdminUserUpdate = async (req, res) => {
         if (designation !== undefined) updates.designation = String(designation).trim();
 
         if (req.body.assignedClasses !== undefined) {
-            let clsList = Array.isArray(req.body.assignedClasses) 
-                ? req.body.assignedClasses 
+            let clsList = Array.isArray(req.body.assignedClasses)
+                ? req.body.assignedClasses
                 : String(req.body.assignedClasses).split(/[,;/]+/).map(s => s.trim()).filter(Boolean);
             clsList = clsList.map(s => s.replace(/\bclass\s+class\b/gi, 'Class').trim()).filter(Boolean);
             updates.assignedClasses = clsList;
@@ -4538,14 +4554,14 @@ const handleAdminUserUpdate = async (req, res) => {
             updates.teachingSubjects = subArray;
             updates.subject = cleanSub;
         }
-        
+
         const currentUser = req.session.user;
         const isMaster = currentUser.email && currentUser.email === process.env.SUPER_ADMIN_EMAIL;
         const isSuperAdmin = currentUser.role === 'superadmin' || isMaster;
 
         const targetUser = await User.findById(req.params.id);
         if (!targetUser) return res.status(404).json({ success: false, error: 'User not found' });
-        
+
         if (!isSuperAdmin && (targetUser.role === 'admin' || targetUser.role === 'superadmin')) {
             return res.status(403).json({ success: false, error: 'You do not have permission to modify this user.' });
         }
@@ -4557,7 +4573,7 @@ const handleAdminUserUpdate = async (req, res) => {
             updates.role = role;
         }
         if (status) updates.status = status;
-        
+
         if (action === 'reset_password') {
             const newPassword = Math.random().toString(36).slice(-8);
             const user = await User.findById(req.params.id);
@@ -4566,7 +4582,7 @@ const handleAdminUserUpdate = async (req, res) => {
             user.passwordResetRequired = true;
             await user.save();
             await logActivity(req, 'UPDATE', `Reset password for user ID: ${req.params.id}`, 'User', req.params.id);
-            
+
             // Send Automated Email Notification (Non-blocking)
             sendPasswordResetNotificationEmail(user.email, user.name, newPassword)
                 .catch(err => console.error('Background Email Error (Password Reset):', err));
@@ -4595,7 +4611,7 @@ router.post('/users/bulk', userManagementProtect, async (req, res) => {
         await connectDB();
         const { action, ids } = req.body; // Frontend sends 'ids' and 'action'
         const userIds = ids;
-        
+
         if (!userIds || !userIds.length) return res.status(400).json({ success: false, error: 'No users selected' });
 
         if (action === 'activate') {
@@ -4654,7 +4670,7 @@ router.post('/add-class', adminProtect, (req, res, next) => {
 }, async (req, res) => {
     try {
         await connectDB();
-        let { 
+        let {
             deploymentType, // 'curriculum' or 'asset'
             title, videoPath, chapterId, duration, instructor, accessType,
             assetType, displayContext, targetSubject, targetClass
@@ -4667,7 +4683,7 @@ router.post('/add-class', adminProtect, (req, res, next) => {
 
         // Auto-fill instructor if missing from UI
         if (!instructor && req.session.user) instructor = req.session.user.name;
-        
+
         if (deploymentType === 'curriculum') {
             const course = await Course.findOne({ "chapters._id": chapterId });
             if (!course) return res.status(404).send('Chapter not found');
@@ -4676,29 +4692,29 @@ router.post('/add-class', adminProtect, (req, res, next) => {
             // Inherit access type from course if possible, else default to 'paid'
             const videoAccess = course.accessType === 'free' ? 'free' : 'paid';
 
-            chapter.recordedClasses.push({ 
-                title, 
-                videoPath, 
+            chapter.recordedClasses.push({
+                title,
+                videoPath,
                 description: req.body.description,
                 instructor,
-                duration, 
-                accessType: videoAccess, 
-                views: 0 
+                duration,
+                accessType: videoAccess,
+                views: 0
             });
             await course.save();
             await logActivity(req, 'ADD_VIDEO', `Added curriculum video "${title}" to chapter ${chapter.title}`, 'Course', course._id);
         } else {
             // Deploy as Standalone Asset
             const newAsset = new VideoAsset({
-                title, 
-                videoPath, 
+                title,
+                videoPath,
                 description: req.body.description,
-                duration, 
-                instructor, 
+                duration,
+                instructor,
                 accessType: 'free', // Assets usually public unless specific logic
-                assetType, 
-                displayContext, 
-                targetSubject, 
+                assetType,
+                displayContext,
+                targetSubject,
                 targetClass,
                 addedBy: req.session.user._id
             });
@@ -4717,7 +4733,7 @@ router.get('/class/:id/delete', adminProtect, async (req, res) => {
     try {
         await connectDB();
         const videoId = req.params.id;
-        
+
         // 1. Try deleting from Courses (Curriculum)
         const course = await Course.findOne({ "chapters.recordedClasses._id": videoId });
         if (course) {
@@ -4837,13 +4853,13 @@ router.post('/system-reset', superAdminProtect, async (req, res) => {
 router.get('/user/:id', adminProtect, async (req, res) => {
     try {
         await connectDB();
-        
+
         // 1. Fetch User with populated enrollments and quiz results
         let targetUser = await User.findById(req.params.id)
             .populate('enrolledCourses.course', 'title subject classLevel accessType category thumbnail')
             .populate('quizResults.quiz', 'title course')
             .lean();
-            
+
         if (!targetUser) {
             return res.status(404).send('User not found');
         }
@@ -4864,7 +4880,7 @@ router.get('/user/:id', adminProtect, async (req, res) => {
         const totalSpend = payments
             .filter(p => p.status === 'success' || p.status === 'approved')
             .reduce((sum, p) => sum + (p.amount || 0), 0);
-            
+
         let avgExamScore = 0;
         if (targetUser.quizResults && targetUser.quizResults.length > 0) {
             const totalPercentage = targetUser.quizResults.reduce((acc, q) => {
@@ -4961,7 +4977,7 @@ router.get('/user/:id', adminProtect, async (req, res) => {
         if (targetUser.role === 'guardian' || targetUser.role === 'parent') {
             const connectedStudents = await User.find({ _id: { $in: targetUser.students || [] } }).select('name email role classLevel profilePicture').lean();
             const complains = await SystemLog.find({ performedBy: targetUser._id, action: 'COMPLAIN' }).sort({ createdAt: -1 }).lean();
-            
+
             guardianStats = {
                 connectedStudents,
                 complains,
@@ -5195,10 +5211,10 @@ router.post('/user/:id/complain/acknowledge', adminProtect, async (req, res) => 
         await connectDB();
         const user = await User.findById(req.params.id);
         if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-        
+
         // In a real app, we would send an email here using emailService
         await logActivity(req, 'EMAIL_SENT', `Complaint acknowledgement sent to guardian: ${user.email}`, 'User', user._id);
-        
+
         res.json({ success: true, message: 'Confirmation sent to guardian email.' });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -5210,7 +5226,7 @@ router.post('/user/:id/teacher-info', adminProtect, async (req, res) => {
     try {
         await connectDB();
         const { designation, experience, education, bio, achievements } = req.body;
-        
+
         await User.findByIdAndUpdate(req.params.id, {
             designation,
             experience,
@@ -5241,12 +5257,12 @@ router.post('/user/:id/status', adminProtect, async (req, res) => {
     try {
         await connectDB();
         const { status, days } = req.body;
-        
+
         const targetUser = await User.findById(req.params.id);
         if (!targetUser) return res.status(404).json({ success: false, error: 'User not found' });
-        
+
         targetUser.status = status;
-        
+
         if (status === 'suspended') {
             if (days) {
                 const expires = new Date();
@@ -5261,10 +5277,10 @@ router.post('/user/:id/status', adminProtect, async (req, res) => {
             targetUser.restrictionExpires = null;
             targetUser.restrictionReason = '';
         }
-        
+
         await targetUser.save();
         await logActivity(req, 'UPDATE_USER_STATUS', `User ${targetUser.email || targetUser.name} status changed to ${status}`, 'User');
-        
+
         res.json({ success: true });
     } catch (err) {
         console.error('Update Status Error:', err);
@@ -5426,7 +5442,7 @@ router.post('/ai-knowledge/:id/delete', adminProtect, async (req, res) => {
         await connectDB();
         const AIKnowledge = require('../models/AIKnowledge');
         const entry = await AIKnowledge.findByIdAndDelete(req.params.id);
-        
+
         if (entry) {
             await logActivity(req, 'DELETE_AI_KNOWLEDGE', `Deleted AI Knowledge rule: ${entry.title}`, 'AIKnowledge');
         }
@@ -5444,9 +5460,9 @@ router.post('/ai-knowledge/:id/toggle', adminProtect, async (req, res) => {
         await connectDB();
         const AIKnowledge = require('../models/AIKnowledge');
         const entry = await AIKnowledge.findById(req.params.id);
-        
+
         if (!entry) return res.status(404).json({ success: false, error: 'Not found' });
-        
+
         entry.isActive = !entry.isActive;
         await entry.save();
 
@@ -5575,7 +5591,7 @@ router.get('/academic-setup', adminProtect, async (req, res) => {
         const AcademicClass = require('../models/AcademicClass');
         const activeClasses = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
         const archivedClasses = await AcademicClass.find({ isArchived: { $in: [true, 'true', 1] } }).sort({ updatedAt: -1, order: 1 }).lean();
-        res.render('superadmin/academic-setup', { 
+        res.render('superadmin/academic-setup', {
             active: 'academic-setup',
             classes: activeClasses || [],
             archivedClasses: archivedClasses || [],
@@ -5604,7 +5620,7 @@ router.post('/academic-setup', adminProtect, async (req, res) => {
 
         const { classData } = req.body;
         if (!classData || !Array.isArray(classData)) return res.status(400).json({ error: 'Invalid data' });
-        
+
         const splitTokens = (val) => {
             if (!val) return [];
             if (Array.isArray(val)) return val.map(s => String(s || '').trim()).filter(Boolean);
