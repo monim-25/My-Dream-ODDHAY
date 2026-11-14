@@ -4030,6 +4030,20 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             return res.status(400).send('No questions provided in matrix');
         }
 
+        const optionsPerQ = 4; // MCQ always has 4 option slots
+
+        // Enforce that every MCQ has at least 3 non-empty options
+        for (let i = 0; i < qTexts.length; i++) {
+            const type = qTypes[i] || 'MCQ';
+            if (type === 'MCQ') {
+                const opts = allOptions.slice(i * optionsPerQ, i * optionsPerQ + optionsPerQ);
+                const filledOpts = opts.filter(o => o && String(o).trim().length > 0);
+                if (filledOpts.length < 3) {
+                    return res.status(400).send(`Question #${i + 1} must have at least 3 options filled in.`);
+                }
+            }
+        }
+
         let targetBankId = (bankId && bankId.trim() !== '' && bankId !== 'null') ? bankId.trim() : null;
 
         // --- AUTOMATED BANK CREATION (ARCHIVE MODE) ---
@@ -4062,7 +4076,6 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             targetBankId = newBank._id;
         }
 
-        const optionsPerQ = 4; // MCQ always has 4 options
         const questions = qTexts.map((text, i) => {
             const type = qTypes[i] || 'MCQ';
             const isMCQ = type === 'MCQ';
@@ -4158,6 +4171,10 @@ router.post('/edit-question/:id', teacherProtect, async (req, res) => {
         };
 
         if (questionType === 'MCQ') {
+            const filledOpts = (options || []).filter(o => o && String(o).trim().length > 0);
+            if (filledOpts.length < 3) {
+                return res.status(400).json({ error: 'At least 3 options are required for an MCQ.' });
+            }
             updateData.options = options;
             updateData.correctAnswerIndex = parseInt(correctAnswerIndex) || 0;
         } else if (questionType === 'Comprehension') {
