@@ -875,20 +875,35 @@
 
             <!-- Form Content -->
             <div class="p-3.5 sm:p-4 overflow-y-auto space-y-3 custom-scrollbar">
-                <!-- Class & Subject -->
+                <!-- Class & Subject (Strictly assigned & mandatory) -->
                 <div class="grid grid-cols-2 gap-2.5">
                     <!-- Class -->
                     <div class="space-y-1">
                         <% 
-                            const wizClassList = (assignedClasses && assignedClasses.length > 0) ? assignedClasses : [6,7,8,9,10,11,12];
+                            const uniqueClassSet = new Set();
+                            const formattedClasses = [];
+                            (assignedClasses || []).forEach(c => {
+                                const cStr = String(c).trim();
+                                if (!cStr) return;
+                                const normalized = cStr.startsWith('Class') ? cStr : 'Class ' + cStr;
+                                if (!uniqueClassSet.has(normalized.toLowerCase())) {
+                                    uniqueClassSet.add(normalized.toLowerCase());
+                                    formattedClasses.push(normalized);
+                                }
+                            });
                         %>
-                        <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Class</label>
+                        <label class="text-[11px] font-medium text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                            <span>Class <span class="text-rose-500 font-bold">*</span></span>
+                            <% if (formattedClasses.length === 0) { %>
+                                <span class="text-[10px] text-amber-500 font-normal">None assigned</span>
+                            <% } %>
+                        </label>
                         <select id="wizClass" onchange="onWizClassChange()" class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-medium text-slate-800 dark:text-slate-100 outline-none focus:border-primary transition-all cursor-pointer">
-                            <% wizClassList.forEach(c => { 
-                                const cStr = String(c);
-                                const cLabel = cStr.startsWith('Class') ? cStr : 'Class ' + cStr;
-                            %>
-                                <option value="<%= cLabel %>"><%= cLabel %></option>
+                            <% if (formattedClasses.length !== 1) { %>
+                                <option value="">Select Class *</option>
+                            <% } %>
+                            <% formattedClasses.forEach(cLabel => { %>
+                                <option value="<%= cLabel %>" <%= formattedClasses.length === 1 ? 'selected' : '' %>><%= cLabel %></option>
                             <% }) %>
                         </select>
                     </div>
@@ -896,12 +911,29 @@
                     <!-- Subject -->
                     <div class="space-y-1">
                         <% 
-                            const wizSubjectList = (assignedSubjects && assignedSubjects.length > 0) ? assignedSubjects : ['Physics','Chemistry','Biology','Higher Mathematics','General Mathematics','Bangla','English','ICT'];
+                            const uniqueSubjectSet = new Set();
+                            const formattedSubjects = [];
+                            (assignedSubjects || []).forEach(s => {
+                                const sStr = String(s).trim();
+                                if (!sStr) return;
+                                if (!uniqueSubjectSet.has(sStr.toLowerCase())) {
+                                    uniqueSubjectSet.add(sStr.toLowerCase());
+                                    formattedSubjects.push(sStr);
+                                }
+                            });
                         %>
-                        <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Subject</label>
+                        <label class="text-[11px] font-medium text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                            <span>Subject <span class="text-rose-500 font-bold">*</span></span>
+                            <% if (formattedSubjects.length === 0) { %>
+                                <span class="text-[10px] text-amber-500 font-normal">None assigned</span>
+                            <% } %>
+                        </label>
                         <select id="wizSubject" onchange="onWizSubjectChange()" class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-medium text-slate-800 dark:text-slate-100 outline-none focus:border-primary transition-all cursor-pointer">
-                            <% wizSubjectList.forEach(s => { %>
-                                <option value="<%= s %>"><%= s %></option>
+                            <% if (formattedSubjects.length !== 1) { %>
+                                <option value="">Select Subject *</option>
+                            <% } %>
+                            <% formattedSubjects.forEach(sName => { %>
+                                <option value="<%= sName %>" <%= formattedSubjects.length === 1 ? 'selected' : '' %>><%= sName %></option>
                             <% }) %>
                         </select>
                     </div>
@@ -912,7 +944,7 @@
                     <div class="space-y-1">
                         <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Chapter</label>
                         <select id="wizChapter" onchange="onWizChapterChange(this)" class="w-full h-9 px-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-medium text-slate-800 dark:text-slate-100 outline-none focus:border-primary transition-all cursor-pointer">
-                            <option value="">Select Chapter (Optional)</option>
+                            <option value="">Select Class &amp; Subject First</option>
                         </select>
                     </div>
 
@@ -1251,16 +1283,29 @@
         }
 
         async function loadWizardChaptersAndTopics() {
-            const classLevel = document.getElementById('wizClass')?.value || '';
-            const subject = document.getElementById('wizSubject')?.value || '';
+            const classLevel = (document.getElementById('wizClass')?.value || '').trim();
+            const subject = (document.getElementById('wizSubject')?.value || '').trim();
             const chapSelect = document.getElementById('wizChapter');
             const topicSelect = document.getElementById('wizTopic');
             if (!chapSelect || !topicSelect) return;
 
-            chapSelect.innerHTML = '<option value="">Loading chapters...</option>';
+            // Reset topic selection whenever Class or Subject changes
             topicSelect.innerHTML = '<option value="">Select Chapter First</option>';
             topicSelect.disabled = true;
             topicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+
+            if (!classLevel || !subject) {
+                if (!classLevel && !subject) {
+                    chapSelect.innerHTML = '<option value="">Select Class &amp; Subject First</option>';
+                } else if (!classLevel) {
+                    chapSelect.innerHTML = '<option value="">Select Class First</option>';
+                } else {
+                    chapSelect.innerHTML = '<option value="">Select Subject First</option>';
+                }
+                return;
+            }
+
+            chapSelect.innerHTML = '<option value="">Loading chapters...</option>';
 
             const data = await fetchWizTopics(subject, classLevel);
             cachedWizTopics = data.topics || [];
@@ -1276,9 +1321,13 @@
 
             const chapters = Array.from(chapterSet).sort();
             let html = '<option value="">Select Chapter (Optional)</option>';
-            chapters.forEach(c => {
-                html += `<option value="${escapeWizHtml(c)}">${escapeWizHtml(c)}</option>`;
-            });
+            if (chapters.length === 0) {
+                html = '<option value="">No chapters found for this subject &amp; class</option>';
+            } else {
+                chapters.forEach(c => {
+                    html += `<option value="${escapeWizHtml(c)}">${escapeWizHtml(c)}</option>`;
+                });
+            }
             chapSelect.innerHTML = html;
         }
 
@@ -1313,12 +1362,18 @@
 
             const topicNames = new Set();
             let html = '<option value="">Select Topic (Optional)</option>';
+            let topicCount = 0;
             filtered.forEach(t => {
                 const name = (t.name || (typeof t === 'string' ? t : '')).trim();
                 if (!name || topicNames.has(name.toLowerCase())) return;
                 topicNames.add(name.toLowerCase());
+                topicCount++;
                 html += `<option value="${escapeWizHtml(name)}">${escapeWizHtml(name)}</option>`;
             });
+
+            if (topicCount === 0) {
+                html = '<option value="">No topics found for this chapter</option>';
+            }
 
             topicSelect.innerHTML = html;
             topicSelect.disabled = false;
@@ -1334,14 +1389,48 @@
         window.openCompositionWizard = openCompositionWizard;
 
         async function startComposition() {
+            const classVal = (document.getElementById('wizClass')?.value || '').trim();
+            const subjectVal = (document.getElementById('wizSubject')?.value || '').trim();
+
+            if (!classVal) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Class Required',
+                        text: 'Please select a Class before continuing.',
+                        confirmButtonColor: '#4f46e5'
+                    });
+                } else {
+                    alert('Please select a Class before continuing.');
+                }
+                document.getElementById('wizClass')?.focus();
+                return;
+            }
+
+            if (!subjectVal) {
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Subject Required',
+                        text: 'Please select a Subject before continuing.',
+                        confirmButtonColor: '#4f46e5'
+                    });
+                } else {
+                    alert('Please select a Subject before continuing.');
+                }
+                document.getElementById('wizSubject')?.focus();
+                return;
+            }
+
             const params = new URLSearchParams({
-                class: document.getElementById('wizClass').value,
-                subject: document.getElementById('wizSubject').value,
-                chapter: document.getElementById('wizChapter')?.value || '',
-                topic: document.getElementById('wizTopic')?.value || '',
+                class: classVal,
+                subject: subjectVal,
+                chapter: (document.getElementById('wizChapter')?.value || '').trim(),
+                topic: (document.getElementById('wizTopic')?.value || '').trim(),
                 type: document.getElementById('wizType').value,
                 count: document.getElementById('wizCount').value,
                 access: document.getElementById('wizAccessType').value || 'Free',
+                fresh: 'true',
                 bankId: '<%= typeof bank !== "undefined" ? bank._id : "" %>'
             });
             window.location.href = `/teacher/add-question?${params.toString()}`;

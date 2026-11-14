@@ -3847,12 +3847,21 @@ router.get('/question-details', teacherProtect, async (req, res) => {
         const boardFilter = req.query.board || 'all';
         const search = req.query.q || '';
 
-        // Query assigned courses to populate dropdowns
+        // Query assigned courses and profile to strictly populate dropdowns
         const userCourses = await Course.find({
             $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
         });
-        const assignedSubjects = [...new Set(userCourses.flatMap(c => c.subject || []))].filter(Boolean).sort();
-        const assignedClasses = [...new Set(userCourses.flatMap(c => c.classLevel || []))].filter(Boolean).sort();
+        const teacherContext = await getTeacherAssignedContext(user._id);
+        const subjectSet = new Set(teacherContext.rawAssignedSubjects || []);
+        const classSet = new Set(teacherContext.rawAssignedClasses || []);
+        userCourses.forEach(c => {
+            if (Array.isArray(c.subject)) c.subject.forEach(s => subjectSet.add(s));
+            else if (c.subject) subjectSet.add(c.subject);
+            if (Array.isArray(c.classLevel)) c.classLevel.forEach(cl => classSet.add(cl));
+            else if (c.classLevel) classSet.add(c.classLevel);
+        });
+        const assignedSubjects = Array.from(subjectSet).filter(Boolean).sort();
+        const assignedClasses = Array.from(classSet).filter(Boolean).sort();
 
         let query = { addedBy: user._id };
         if (typeFilter !== 'all') query.questionType = typeFilter;
