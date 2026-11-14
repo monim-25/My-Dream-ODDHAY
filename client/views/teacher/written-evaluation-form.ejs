@@ -59,7 +59,17 @@
             <div class="content-scroll flex flex-col gap-0 p-0 border-l-0 lg:border-l border-slate-200 dark:border-white/5 pb-20 sm:pb-24 lg:pb-0">
                 
                 <%
-                   const subDate = attempt.submittedAt ? new Date(attempt.submittedAt) : new Date();
+                   function resolveImg(url) {
+                       if (!url) return '';
+                       let s = String(url).trim();
+                       if (!s || s === '#' || s === 'about:blank') return '';
+                       if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:') || s.startsWith('/')) {
+                           return s;
+                       }
+                       return '/' + s;
+                   }
+
+   const subDate = attempt.submittedAt ? new Date(attempt.submittedAt) : new Date();
                    const formattedSubDate = subDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) + ', ' + subDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
 
                    const isReviewed = attempt.writtenStatus === 'reviewed';
@@ -204,7 +214,7 @@
                                     } else {
                                         commValQ1 = existingComment;
                                     }
-                                    let imgValQ1 = existingImage;
+                                    let imgValQ1 = ua.q1TeacherImage || existingImage || '';
 
                                     const mAns1 = (q.a1 || '').trim();
                                     const hasMAns1 = mAns1 && mAns1 !== '0' && mAns1 !== 'undefined' && mAns1 !== 'null';
@@ -267,20 +277,32 @@
                                                 <%= ans1 %>
                                             </div>
                                         <% } %>
-                                        <% if (img1) { %>
+                                        <% if (img1) { 
+                                            const cleanImg1 = resolveImg(img1);
+                                        %>
                                             <div class="pt-2 space-y-1.5">
                                                 <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
                                                     <span class="material-symbols-rounded text-sm">photo_library</span>
                                                     <span>Student's Submitted Picture:</span>
                                                 </span>
-                                                <div>
-                                                    <div class="inline-block relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openFullscreenEvaluationImage('<%= img1 %>')">
-                                                        <img src="<%= img1 %>" alt="Student Submission" class="max-h-56 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
+                                                <div class="inline-flex flex-col gap-1.5 p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs">
+                                                    <div class="relative group rounded-lg overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shadow-2xs cursor-pointer select-none" onclick="openFullscreenEvaluationImage('<%= cleanImg1 %>')">
+                                                        <img src="<%= cleanImg1 %>" alt="Student Submission" class="max-h-56 sm:max-h-72 w-auto rounded-lg object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
                                                         <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
                                                             <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
                                                                 <span class="material-symbols-rounded text-xl">fullscreen</span>
                                                             </div>
                                                         </div>
+                                                    </div>
+                                                    <div class="flex items-center justify-between gap-2 px-1 pt-0.5">
+                                                        <button type="button" onclick="openFullscreenEvaluationImage('<%= cleanImg1 %>')" class="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                                                            <span class="material-symbols-rounded text-sm">zoom_in</span>
+                                                            <span>Zoom</span>
+                                                        </button>
+                                                        <a href="<%= cleanImg1 %>" target="_blank" rel="noopener noreferrer" class="text-[11px] font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:underline inline-flex items-center gap-0.5">
+                                                            <span class="material-symbols-rounded text-xs">open_in_new</span>
+                                                            <span>New Tab</span>
+                                                        </a>
                                                     </div>
                                                 </div>
                                             </div>
@@ -350,17 +372,24 @@
                                                 </div>
                                             </div>
 
-                                            <div id="image_preview_wrap_<%= qIdKey %>_q1" class="<%= imgValQ1 ? '' : 'hidden' %>">
+                                            <% const cleanImgValQ1 = resolveImg(imgValQ1); %>
+                                            <div id="image_preview_wrap_<%= qIdKey %>_q1" class="<%= cleanImgValQ1 ? '' : 'hidden' %>">
                                                 <div class="relative inline-flex items-center gap-2.5 p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs">
-                                                    <a id="image_link_<%= qIdKey %>_q1" href="<%= imgValQ1 || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
-                                                        <img id="image_preview_<%= qIdKey %>_q1" src="<%= imgValQ1 || '' %>" alt="Attached preview" class="size-full object-cover">
+                                                    <a id="image_link_<%= qIdKey %>_q1" href="<%= cleanImgValQ1 || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
+                                                        <img id="image_preview_<%= qIdKey %>_q1" src="<%= cleanImgValQ1 || '' %>" alt="Attached preview" class="size-full object-cover">
                                                     </a>
                                                     <div class="space-y-0.5 pr-2">
                                                         <p class="text-[11px] font-medium text-slate-700 dark:text-slate-300">Attached Picture</p>
-                                                        <button type="button" onclick="removeTeacherImage('<%= qIdKey %>_q1')" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
-                                                            <span class="material-symbols-rounded text-xs">delete</span>
-                                                            <span>Remove</span>
-                                                        </button>
+                                                        <div class="flex items-center gap-2">
+                                                            <button type="button" onclick="openFullscreenEvaluationImage(document.getElementById('image_preview_<%= qIdKey %>_q1').src)" class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 cursor-pointer">
+                                                                <span class="material-symbols-rounded text-xs">zoom_in</span>
+                                                                <span>View</span>
+                                                            </button>
+                                                            <button type="button" onclick="removeTeacherImage('<%= qIdKey %>_q1')" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
+                                                                <span class="material-symbols-rounded text-xs">delete</span>
+                                                                <span>Remove</span>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -387,7 +416,7 @@
                                         const cParts = existingComment.split('[Question 2]:');
                                         commValQ2 = (cParts[1] || '').trim();
                                     }
-                                    let imgValQ2 = '';
+                                    let imgValQ2 = ua.q2TeacherImage || '';
 
                                     const mAns2 = (q.a2 || '').trim();
                                     const hasMAns2 = mAns2 && mAns2 !== '0' && mAns2 !== 'undefined' && mAns2 !== 'null';
@@ -444,20 +473,32 @@
                                                 <%= ans2 %>
                                             </div>
                                         <% } %>
-                                        <% if (img2) { %>
+                                        <% if (img2) { 
+                                            const cleanImg2 = resolveImg(img2);
+                                        %>
                                             <div class="pt-2 space-y-1.5">
                                                 <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
                                                     <span class="material-symbols-rounded text-sm">photo_library</span>
                                                     <span>Student's Submitted Picture:</span>
                                                 </span>
-                                                <div>
-                                                    <div class="inline-block relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openFullscreenEvaluationImage('<%= img2 %>')">
-                                                        <img src="<%= img2 %>" alt="Student Submission" class="max-h-56 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
+                                                <div class="inline-flex flex-col gap-1.5 p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs">
+                                                    <div class="relative group rounded-lg overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shadow-2xs cursor-pointer select-none" onclick="openFullscreenEvaluationImage('<%= cleanImg2 %>')">
+                                                        <img src="<%= cleanImg2 %>" alt="Student Submission" class="max-h-56 sm:max-h-72 w-auto rounded-lg object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
                                                         <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
                                                             <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
                                                                 <span class="material-symbols-rounded text-xl">fullscreen</span>
                                                             </div>
                                                         </div>
+                                                    </div>
+                                                    <div class="flex items-center justify-between gap-2 px-1 pt-0.5">
+                                                        <button type="button" onclick="openFullscreenEvaluationImage('<%= cleanImg2 %>')" class="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                                                            <span class="material-symbols-rounded text-sm">zoom_in</span>
+                                                            <span>Zoom</span>
+                                                        </button>
+                                                        <a href="<%= cleanImg2 %>" target="_blank" rel="noopener noreferrer" class="text-[11px] font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:underline inline-flex items-center gap-0.5">
+                                                            <span class="material-symbols-rounded text-xs">open_in_new</span>
+                                                            <span>New Tab</span>
+                                                        </a>
                                                     </div>
                                                 </div>
                                             </div>
@@ -527,17 +568,24 @@
                                                 </div>
                                             </div>
 
-                                            <div id="image_preview_wrap_<%= qIdKey %>_q2" class="<%= imgValQ2 ? '' : 'hidden' %>">
+                                            <% const cleanImgValQ2 = resolveImg(imgValQ2); %>
+                                            <div id="image_preview_wrap_<%= qIdKey %>_q2" class="<%= cleanImgValQ2 ? '' : 'hidden' %>">
                                                 <div class="relative inline-flex items-center gap-2.5 p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs">
-                                                    <a id="image_link_<%= qIdKey %>_q2" href="<%= imgValQ2 || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
-                                                        <img id="image_preview_<%= qIdKey %>_q2" src="<%= imgValQ2 || '' %>" alt="Attached preview" class="size-full object-cover">
+                                                    <a id="image_link_<%= qIdKey %>_q2" href="<%= cleanImgValQ2 || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
+                                                        <img id="image_preview_<%= qIdKey %>_q2" src="<%= cleanImgValQ2 || '' %>" alt="Attached preview" class="size-full object-cover">
                                                     </a>
                                                     <div class="space-y-0.5 pr-2">
                                                         <p class="text-[11px] font-medium text-slate-700 dark:text-slate-300">Attached Picture</p>
-                                                        <button type="button" onclick="removeTeacherImage('<%= qIdKey %>_q2')" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
-                                                            <span class="material-symbols-rounded text-xs">delete</span>
-                                                            <span>Remove</span>
-                                                        </button>
+                                                        <div class="flex items-center gap-2">
+                                                            <button type="button" onclick="openFullscreenEvaluationImage(document.getElementById('image_preview_<%= qIdKey %>_q2').src)" class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 cursor-pointer">
+                                                                <span class="material-symbols-rounded text-xs">zoom_in</span>
+                                                                <span>View</span>
+                                                            </button>
+                                                            <button type="button" onclick="removeTeacherImage('<%= qIdKey %>_q2')" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
+                                                                <span class="material-symbols-rounded text-xs">delete</span>
+                                                                <span>Remove</span>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -595,6 +643,8 @@
                                                 if (Array.isArray(ua.writtenImages)) {
                                                     ua.writtenImages.forEach(img => { if (img && !studentImgs.includes(img)) studentImgs.push(img); });
                                                 }
+                                                if (ua.q1Image && !studentImgs.includes(ua.q1Image)) studentImgs.push(ua.q1Image);
+                                                if (ua.q2Image && !studentImgs.includes(ua.q2Image)) studentImgs.push(ua.q2Image);
                                             %>
                                             <% if ((!ua.writtenAnswer || ua.writtenAnswer.trim() === '') && studentImgs.length === 0) { %>
                                                 <span class="text-[10px] font-medium px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
@@ -616,13 +666,27 @@
                                                     <span>Student's Submitted Picture(s):</span>
                                                 </span>
                                                 <div class="flex flex-wrap gap-3">
-                                                    <% studentImgs.forEach(function(sImg) { %>
-                                                        <div class="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openFullscreenEvaluationImage('<%= sImg %>')">
-                                                            <img src="<%= sImg %>" alt="Student Submission" class="max-h-56 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
-                                                            <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
-                                                                <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
-                                                                    <span class="material-symbols-rounded text-xl">fullscreen</span>
+                                                    <% studentImgs.forEach(function(sImg) { 
+                                                        const cleanImg = resolveImg(sImg);
+                                                    %>
+                                                        <div class="inline-flex flex-col gap-1.5 p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs">
+                                                            <div class="relative group rounded-lg overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shadow-2xs cursor-pointer select-none" onclick="openFullscreenEvaluationImage('<%= cleanImg %>')">
+                                                                <img src="<%= cleanImg %>" alt="Student Submission" class="max-h-56 sm:max-h-72 w-auto rounded-lg object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
+                                                                <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                                                    <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
+                                                                        <span class="material-symbols-rounded text-xl">fullscreen</span>
+                                                                    </div>
                                                                 </div>
+                                                            </div>
+                                                            <div class="flex items-center justify-between gap-2 px-1 pt-0.5">
+                                                                <button type="button" onclick="openFullscreenEvaluationImage('<%= cleanImg %>')" class="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                                                                    <span class="material-symbols-rounded text-sm">zoom_in</span>
+                                                                    <span>Zoom</span>
+                                                                </button>
+                                                                <a href="<%= cleanImg %>" target="_blank" rel="noopener noreferrer" class="text-[11px] font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:underline inline-flex items-center gap-0.5">
+                                                                    <span class="material-symbols-rounded text-xs">open_in_new</span>
+                                                                    <span>New Tab</span>
+                                                                </a>
                                                             </div>
                                                         </div>
                                                     <% }); %>
@@ -702,17 +766,24 @@
                                             </div>
 
                                             <!-- Attachment Preview Area -->
-                                            <div id="image_preview_wrap_<%= qIdKey %>" class="<%= existingImage ? '' : 'hidden' %>">
+                                            <% const cleanExistingImage = resolveImg(existingImage); %>
+                                            <div id="image_preview_wrap_<%= qIdKey %>" class="<%= cleanExistingImage ? '' : 'hidden' %>">
                                                 <div class="relative inline-flex items-center gap-2.5 p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs">
-                                                    <a id="image_link_<%= qIdKey %>" href="<%= existingImage || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
-                                                        <img id="image_preview_<%= qIdKey %>" src="<%= existingImage || '' %>" alt="Attached preview" class="size-full object-cover">
+                                                    <a id="image_link_<%= qIdKey %>" href="<%= cleanExistingImage || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
+                                                        <img id="image_preview_<%= qIdKey %>" src="<%= cleanExistingImage || '' %>" alt="Attached preview" class="size-full object-cover">
                                                     </a>
                                                     <div class="space-y-0.5 pr-2">
                                                         <p class="text-[11px] font-medium text-slate-700 dark:text-slate-300">Attached Picture</p>
-                                                        <button type="button" onclick="removeTeacherImage('<%= qIdKey %>')" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
-                                                            <span class="material-symbols-rounded text-xs">delete</span>
-                                                            <span>Remove</span>
-                                                        </button>
+                                                        <div class="flex items-center gap-2">
+                                                            <button type="button" onclick="openFullscreenEvaluationImage(document.getElementById('image_preview_<%= qIdKey %>').src)" class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 cursor-pointer">
+                                                                <span class="material-symbols-rounded text-xs">zoom_in</span>
+                                                                <span>View</span>
+                                                            </button>
+                                                            <button type="button" onclick="removeTeacherImage('<%= qIdKey %>')" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
+                                                                <span class="material-symbols-rounded text-xs">delete</span>
+                                                                <span>Remove</span>
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -747,17 +818,24 @@
                                       class="w-full p-3.5 rounded-xl text-xs sm:text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-cyan-500 placeholder:text-slate-400"><%= teacherNote %></textarea>
                             
                             <!-- Overall Attachment Preview Area -->
-                            <div id="overall_image_preview_wrap" class="<%= teacherOverallImage ? '' : 'hidden' %>">
+                            <% const cleanOverallImage = resolveImg(teacherOverallImage); %>
+                            <div id="overall_image_preview_wrap" class="<%= cleanOverallImage ? '' : 'hidden' %>">
                                 <div class="relative inline-flex items-center gap-2.5 p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-cyan-200/80 dark:border-cyan-800/60 shadow-2xs">
-                                    <a id="overall_image_link" href="<%= teacherOverallImage || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
-                                        <img id="overall_image_preview" src="<%= teacherOverallImage || '' %>" alt="Attached preview" class="size-full object-cover">
+                                    <a id="overall_image_link" href="<%= cleanOverallImage || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
+                                        <img id="overall_image_preview" src="<%= cleanOverallImage || '' %>" alt="Attached preview" class="size-full object-cover">
                                     </a>
                                     <div class="space-y-0.5 pr-2">
                                         <p class="text-[11px] font-medium text-slate-700 dark:text-slate-300">Overall Attached Picture</p>
-                                        <button type="button" onclick="removeOverallTeacherImage()" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
-                                            <span class="material-symbols-rounded text-xs">delete</span>
-                                            <span>Remove</span>
-                                        </button>
+                                        <div class="flex items-center gap-2">
+                                            <button type="button" onclick="openFullscreenEvaluationImage(document.getElementById('overall_image_preview').src)" class="text-[11px] font-medium text-cyan-600 dark:text-cyan-400 hover:underline inline-flex items-center gap-0.5 cursor-pointer">
+                                                <span class="material-symbols-rounded text-xs">zoom_in</span>
+                                                <span>View</span>
+                                            </button>
+                                            <button type="button" onclick="removeOverallTeacherImage()" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
+                                                <span class="material-symbols-rounded text-xs">delete</span>
+                                                <span>Remove</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -995,8 +1073,10 @@
         function openFullscreenEvaluationImage(src) {
             const modal = document.getElementById('evalImgModal');
             const img = document.getElementById('evalModalImg');
+            const link = document.getElementById('evalModalNewTabLink');
             if (!modal || !img) return;
             img.src = src;
+            if (link) link.href = src;
             modal.classList.remove('hidden');
             requestAnimationFrame(() => {
                 modal.classList.remove('opacity-0');
@@ -1020,15 +1100,21 @@
     </script>
 
     <!-- FULLSCREEN EVALUATION IMAGE MODAL -->
-    <div id="evalImgModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden opacity-0 transition-opacity duration-200 flex flex-col items-center justify-center p-2 sm:p-4 select-none" onclick="closeFullscreenEvaluationImage()">
+    <div id="evalImgModal" class="fixed inset-0 z-[200] bg-black/90 backdrop-blur-md hidden opacity-0 transition-opacity duration-200 flex flex-col items-center justify-center p-2 sm:p-4 select-none" onclick="closeFullscreenEvaluationImage()">
         <div class="w-full flex items-center justify-between px-3 py-2 text-white max-w-4xl" onclick="event.stopPropagation()">
             <span class="text-xs font-semibold text-white/80 flex items-center gap-1.5">
                 <span class="material-symbols-rounded text-base text-cyan-400">photo_library</span>
                 <span>Student Written Answer Sheet</span>
             </span>
-            <button type="button" onclick="closeFullscreenEvaluationImage()" class="size-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors cursor-pointer active:scale-95">
+            <div class="flex items-center gap-2">
+                <a id="evalModalNewTabLink" href="#" target="_blank" rel="noopener noreferrer" class="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-xs text-white inline-flex items-center gap-1 transition-colors">
+                    <span class="material-symbols-rounded text-sm">open_in_new</span>
+                    <span>Open in New Tab</span>
+                </a>
+                <button type="button" onclick="closeFullscreenEvaluationImage()" class="size-9 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors cursor-pointer active:scale-95">
                 <span class="material-symbols-rounded text-xl">close</span>
             </button>
+            </div>
         </div>
         <div class="flex-1 flex items-center justify-center overflow-auto max-w-full max-h-[85vh] p-1" onclick="event.stopPropagation()">
             <img id="evalModalImg" src="" class="max-h-[82vh] max-w-[96vw] rounded-xl object-contain shadow-2xl transition-transform cursor-zoom-in" onclick="toggleModalZoom(this)">

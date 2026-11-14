@@ -22,6 +22,8 @@ const questionBankAttemptSchema = new mongoose.Schema({
         maxMarks: { type: Number, default: 1 },
         teacherComment: { type: String, default: '' },
         teacherImage: { type: String, default: '' },
+        q1TeacherImage: { type: String, default: '' },
+        q2TeacherImage: { type: String, default: '' },
         isReviewed: { type: Boolean, default: false }
     }],
     mcqScore: { type: Number, default: 0 },

@@ -5089,12 +5089,19 @@ router.get('/written-evaluations/:attemptId', teacherProtect, async (req, res) =
 
         // Map attempt userAnswers
         const uaMap = {};
+        const nonMcqUserAnswers = (attempt.userAnswers || []).filter(ua => ua.questionType !== 'MCQ');
         (attempt.userAnswers || []).forEach(ua => {
             if (ua.questionId) uaMap[ua.questionId.toString()] = ua;
         });
 
-        const questionsWithAnswers = writtenQuestions.map(q => {
-            const ua = uaMap[q._id.toString()] || {};
+        const questionsWithAnswers = writtenQuestions.map((q, qIdx) => {
+            let ua = uaMap[q._id.toString()];
+            if (!ua) {
+                // Robust fallbacks: try matching questionId or index among non-MCQ answers
+                ua = (attempt.userAnswers || []).find(u => u.questionId && u.questionId.toString() === q._id.toString()) ||
+                     nonMcqUserAnswers[qIdx] ||
+                     (attempt.userAnswers || [])[qIdx] || {};
+            }
             const defaultMark = (q.questionType === 'Medium') ? 2 : ((q.questionType === 'Comprehension') ? 7 : 1);
             const qMaxMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : (ua.maxMarks || defaultMark);
             return {
@@ -5156,8 +5163,56 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
         let totalWrittenEarned = 0;
         let totalWrittenMax = 0;
 
+        const saveBase64EvaluationImage = async (dataUri, prefix = 'eval') => {
+            if (!dataUri || typeof dataUri !== 'string') return '';
+            const trimmed = dataUri.trim();
+            if (!trimmed || trimmed === '#' || trimmed === 'about:blank') return '';
+            if (!trimmed.startsWith('data:image/')) return trimmed;
+            try {
+                const fs = require('fs');
+                const path = require('path');
+                const os = require('os');
+                const parts = trimmed.split(';base64,');
+                if (parts.length < 2) return '';
+                const mimeMatch = parts[0].match(/data:([a-zA-Z0-9\/\+.-]+)/);
+                const mimeType = mimeMatch ? mimeMatch[1].toLowerCase() : 'image/png';
+                let ext = 'png';
+                if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
+                else if (mimeType.includes('webp')) ext = 'webp';
+                else if (mimeType.includes('gif')) ext = 'gif';
+
+                const base64Data = parts.slice(1).join(';base64,').replace(/\s/g, '');
+                const buffer = Buffer.from(base64Data, 'base64');
+                const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e4)}.${ext}`;
+                const tmpFile = path.join(os.tmpdir(), filename);
+                fs.writeFileSync(tmpFile, buffer);
+
+                try {
+                    const { uploadToCloudinary } = require('../services/cloudinaryService');
+                    const cldRes = await uploadToCloudinary(tmpFile, 'evaluations');
+                    if (cldRes && cldRes.url) {
+                        try { fs.unlinkSync(tmpFile); } catch (e) {}
+                        return cldRes.url;
+                    }
+                } catch (cldErr) {
+                    console.warn('Evaluation image Cloudinary upload fallback:', cldErr.message);
+                }
+
+                const localDir = path.join(process.cwd(), 'client/public/uploads/evaluations');
+                fs.mkdirSync(localDir, { recursive: true });
+                const localFile = path.join(localDir, filename);
+                fs.copyFileSync(tmpFile, localFile);
+                try { fs.unlinkSync(tmpFile); } catch (e) {}
+                return `/uploads/evaluations/${filename}`;
+            } catch (err) {
+                console.warn('saveBase64EvaluationImage error:', err.message);
+                return '';
+            }
+        };
+
         // Update each answer in attempt.userAnswers
-        attempt.userAnswers.forEach((ua, idx) => {
+        for (let idx = 0; idx < attempt.userAnswers.length; idx++) {
+            const ua = attempt.userAnswers[idx];
             if (ua.questionType !== 'MCQ') {
                 const qIdStr = ua.questionId ? ua.questionId.toString() : String(idx);
                 const qObj = qMap.get(qIdStr);
@@ -5171,8 +5226,11 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
                 if (isComprehension) {
                     // Check for individual sub-question marks (Question 1 out of 3, Question 2 out of 4)
                     let q1Input = req.body[`marks_${qIdStr}_q1`];
+                    if (q1Input === undefined && qObj) q1Input = req.body[`marks_${qObj._id.toString()}_q1`];
                     if (q1Input === undefined) q1Input = req.body[`marks_${idx}_q1`];
+
                     let q2Input = req.body[`marks_${qIdStr}_q2`];
+                    if (q2Input === undefined && qObj) q2Input = req.body[`marks_${qObj._id.toString()}_q2`];
                     if (q2Input === undefined) q2Input = req.body[`marks_${idx}_q2`];
 
                     if (q1Input !== undefined || q2Input !== undefined) {
@@ -5185,6 +5243,7 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
                         markObtained = q1Mark + q2Mark;
                     } else {
                         let inputMark = req.body[`marks_${qIdStr}`];
+                        if (inputMark === undefined && qObj) inputMark = req.body[`marks_${qObj._id.toString()}`];
                         if (inputMark === undefined) inputMark = req.body[`marks_${idx}`];
                         const numMark = parseFloat(inputMark);
                         markObtained = isNaN(numMark) ? 0 : Math.max(0, Math.min(maxM, numMark));
@@ -5192,20 +5251,19 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
                 } else {
                     // Read mark from form
                     let inputMark = req.body[`marks_${qIdStr}`];
-                    if (inputMark === undefined) {
-                        inputMark = req.body[`marks_${idx}`];
-                    }
+                    if (inputMark === undefined && qObj) inputMark = req.body[`marks_${qObj._id.toString()}`];
+                    if (inputMark === undefined) inputMark = req.body[`marks_${idx}`];
                     const numMark = parseFloat(inputMark);
                     markObtained = isNaN(numMark) ? 0 : Math.max(0, Math.min(maxM, numMark));
                 }
 
                 // Read comment from form
                 let inputComment = req.body[`comment_${qIdStr}`];
-                if (inputComment === undefined) {
-                    inputComment = req.body[`comment_${idx}`];
-                }
-                const commQ1 = req.body[`comment_${qIdStr}_q1`] !== undefined ? req.body[`comment_${qIdStr}_q1`] : req.body[`comment_${idx}_q1`];
-                const commQ2 = req.body[`comment_${qIdStr}_q2`] !== undefined ? req.body[`comment_${qIdStr}_q2`] : req.body[`comment_${idx}_q2`];
+                if (inputComment === undefined && qObj) inputComment = req.body[`comment_${qObj._id.toString()}`];
+                if (inputComment === undefined) inputComment = req.body[`comment_${idx}`];
+
+                const commQ1 = req.body[`comment_${qIdStr}_q1`] !== undefined ? req.body[`comment_${qIdStr}_q1`] : (qObj && req.body[`comment_${qObj._id.toString()}_q1`] !== undefined ? req.body[`comment_${qObj._id.toString()}_q1`] : req.body[`comment_${idx}_q1`]);
+                const commQ2 = req.body[`comment_${qIdStr}_q2`] !== undefined ? req.body[`comment_${qIdStr}_q2`] : (qObj && req.body[`comment_${qObj._id.toString()}_q2`] !== undefined ? req.body[`comment_${qObj._id.toString()}_q2`] : req.body[`comment_${idx}_q2`]);
                 if (commQ1 || commQ2) {
                     const cParts = [];
                     if (commQ1 && commQ1.trim()) cParts.push(`[Question 1]: ${commQ1.trim()}`);
@@ -5214,35 +5272,28 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
                 }
 
                 // Read image attachment from form (base64 DataURL or existing image path)
-                let inputImage = req.body[`image_${qIdStr}`];
-                if (!inputImage) inputImage = req.body[`image_${idx}`];
-                if (!inputImage) inputImage = req.body[`image_${qIdStr}_q1`] || req.body[`image_${idx}_q1`];
-                if (!inputImage) inputImage = req.body[`image_${qIdStr}_q2`] || req.body[`image_${idx}_q2`];
+                if (isComprehension) {
+                    let imgQ1 = req.body[`image_${qIdStr}_q1`];
+                    if (imgQ1 === undefined && qObj) imgQ1 = req.body[`image_${qObj._id.toString()}_q1`];
+                    if (imgQ1 === undefined) imgQ1 = req.body[`image_${idx}_q1`];
 
-                if (typeof inputImage === 'string' && inputImage.startsWith('data:image/')) {
-                    try {
-                        const fs = require('fs');
-                        const path = require('path');
-                        const matches = inputImage.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-                        if (matches && matches.length === 3) {
-                            const mimeType = matches[1].toLowerCase();
-                            let ext = 'png';
-                            if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
-                            else if (mimeType.includes('webp')) ext = 'webp';
-                            else if (mimeType.includes('gif')) ext = 'gif';
-                            
-                            const buffer = Buffer.from(matches[2], 'base64');
-                            const uploadDir = path.join(__dirname, '../../client/public/uploads/evaluations');
-                            fs.mkdirSync(uploadDir, { recursive: true });
-                            const filename = `eval-${Date.now()}-${idx}.${ext}`;
-                            fs.writeFileSync(path.join(uploadDir, filename), buffer);
-                            ua.teacherImage = `/uploads/evaluations/${filename}`;
-                        }
-                    } catch (imgErr) {
-                        console.warn('Failed to save teacher image file:', imgErr);
-                    }
-                } else if (typeof inputImage === 'string') {
-                    ua.teacherImage = inputImage.trim();
+                    let imgQ2 = req.body[`image_${qIdStr}_q2`];
+                    if (imgQ2 === undefined && qObj) imgQ2 = req.body[`image_${qObj._id.toString()}_q2`];
+                    if (imgQ2 === undefined) imgQ2 = req.body[`image_${idx}_q2`];
+
+                    const savedQ1 = await saveBase64EvaluationImage(imgQ1, `eval-${idx}-q1`);
+                    const savedQ2 = await saveBase64EvaluationImage(imgQ2, `eval-${idx}-q2`);
+                    ua.q1TeacherImage = savedQ1 || '';
+                    ua.q2TeacherImage = savedQ2 || '';
+                    ua.teacherImage = savedQ1 || savedQ2 || '';
+                } else {
+                    let inputImage = req.body[`image_${qIdStr}`];
+                    if (inputImage === undefined && qObj) inputImage = req.body[`image_${qObj._id.toString()}`];
+                    if (inputImage === undefined) inputImage = req.body[`image_${idx}`];
+                    if (inputImage === undefined) inputImage = req.body[`image_${qIdStr}_q1`] || req.body[`image_${idx}_q1`];
+                    if (inputImage === undefined) inputImage = req.body[`image_${qIdStr}_q2`] || req.body[`image_${idx}_q2`];
+
+                    ua.teacherImage = await saveBase64EvaluationImage(inputImage, `eval-${idx}`);
                 }
 
                 ua.marksObtained = markObtained;
@@ -5252,34 +5303,12 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
                 totalWrittenEarned += markObtained;
                 totalWrittenMax += maxM;
             }
-        });
+        }
 
         // Set overall teacher review
         const overallFeedback = (req.body.overallFeedback || '').trim();
-        let overallImage = (req.body.overallImage || '').trim();
-        if (typeof overallImage === 'string' && overallImage.startsWith('data:image/')) {
-            try {
-                const fs = require('fs');
-                const path = require('path');
-                const matches = overallImage.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-                if (matches && matches.length === 3) {
-                    const mimeType = matches[1].toLowerCase();
-                    let ext = 'png';
-                    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
-                    else if (mimeType.includes('webp')) ext = 'webp';
-                    else if (mimeType.includes('gif')) ext = 'gif';
-                    
-                    const buffer = Buffer.from(matches[2], 'base64');
-                    const uploadDir = path.join(__dirname, '../../client/public/uploads/evaluations');
-                    fs.mkdirSync(uploadDir, { recursive: true });
-                    const filename = `overall-${Date.now()}.${ext}`;
-                    fs.writeFileSync(path.join(uploadDir, filename), buffer);
-                    overallImage = `/uploads/evaluations/${filename}`;
-                }
-            } catch (overallImgErr) {
-                console.warn('Failed to save overall teacher image file:', overallImgErr);
-            }
-        }
+        let overallImage = req.body.overallImage;
+        overallImage = await saveBase64EvaluationImage(overallImage, 'overall');
 
         attempt.teacherReview = {
             reviewedBy: user._id,

@@ -31,6 +31,16 @@
         <main class="flex-1 w-full overflow-y-auto p-0 flex flex-col no-scrollbar bg-white dark:bg-[#0b1120] relative">
             
             <% 
+               function resolveImg(url) {
+                   if (!url) return '';
+                   let s = String(url).trim();
+                   if (!s || s === '#' || s === 'about:blank') return '';
+                   if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:') || s.startsWith('/')) {
+                       return s;
+                   }
+                   return '/' + s;
+               }
+
                const isReviewed = attempt.writtenStatus === 'reviewed';
                const userAnswers = attempt.userAnswers || [];
                const writtenAnswers = userAnswers.filter(u => u.questionType !== 'MCQ');
@@ -104,8 +114,9 @@
                     <!-- TEACHER FEEDBACK QUOTE BOX -->
                     <% 
                        const overallImg = (attempt.teacherReview && attempt.teacherReview.overallImage) ? attempt.teacherReview.overallImage.trim() : '';
+                       const cleanOverallImg = resolveImg(overallImg);
                     %>
-                    <% if (isReviewed && (teacherFeedback || overallImg)) { %>
+                    <% if (isReviewed && (teacherFeedback || cleanOverallImg)) { %>
                         <div class="p-4 rounded-xl bg-white dark:bg-slate-800 border border-emerald-500/20 space-y-3 shadow-xs">
                             <div class="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                                 <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0">rate_review</span>
@@ -116,10 +127,10 @@
                                     "<%= teacherFeedback %>"
                                 </p>
                             <% } %>
-                            <% if (overallImg) { %>
+                            <% if (cleanOverallImg) { %>
                                 <div class="pt-1.5">
-                                    <div class="relative inline-block group rounded-xl overflow-hidden border border-emerald-500/30 bg-slate-900/5 shadow-xs cursor-pointer select-none" onclick="openEvaluationImageFullscreen('<%= overallImg %>')">
-                                        <img src="<%= overallImg %>" alt="Teacher Overall Feedback" class="max-h-60 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.01]">
+                                    <div class="relative inline-block group rounded-xl overflow-hidden border border-emerald-500/30 bg-slate-900/5 shadow-xs cursor-pointer select-none" onclick="openEvaluationImageFullscreen('<%= cleanOverallImg %>')">
+                                        <img src="<%= cleanOverallImg %>" alt="Teacher Overall Feedback" class="max-h-60 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.01]">
                                         <!-- FULLSCREEN ICON ON HOVER -->
                                         <div class="absolute inset-0 bg-slate-950/25 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
                                             <div class="size-10 rounded-xl bg-black/65 backdrop-blur-md text-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition-all duration-200 border border-white/20">
@@ -227,8 +238,8 @@
                                     <div class="space-y-4 pt-1">
                                         <% 
                                             const subQuestions = [
-                                                { num: 1, title: q.q1, modelSol: q.a1, studentAns: ans1, studentImg: img1, maxMark: 3, awardedMark: (ua.q1Marks !== undefined && ua.q1Marks !== null ? ua.q1Marks : null) },
-                                                { num: 2, title: q.q2, modelSol: q.a2, studentAns: ans2, studentImg: img2, maxMark: 4, awardedMark: (ua.q2Marks !== undefined && ua.q2Marks !== null ? ua.q2Marks : null) }
+                                                { num: 1, title: q.q1, modelSol: q.a1, studentAns: ans1, studentImg: resolveImg(img1), maxMark: 3, awardedMark: (ua.q1Marks !== undefined && ua.q1Marks !== null ? ua.q1Marks : null), teacherImg: resolveImg(ua.q1TeacherImage || '') },
+                                                { num: 2, title: q.q2, modelSol: q.a2, studentAns: ans2, studentImg: resolveImg(img2), maxMark: 4, awardedMark: (ua.q2Marks !== undefined && ua.q2Marks !== null ? ua.q2Marks : null), teacherImg: resolveImg(ua.q2TeacherImage || '') }
                                             ].filter(sq => sq.title && sq.title.trim() !== '');
                                         %>
                                         <% subQuestions.forEach(function(sq) { %>
@@ -301,6 +312,26 @@
                                                         <p class="text-xs sm:text-sm font-normal text-slate-400 italic">No answer submitted for this question.</p>
                                                     <% } %>
                                                 </div>
+
+                                                <!-- Teacher Attachment for this sub-question if available -->
+                                                <% if (sq.teacherImg) { %>
+                                                    <div class="p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/60 space-y-1.5 text-xs">
+                                                        <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                                                            <span class="material-symbols-rounded text-sm">rate_review</span>
+                                                            <span>Teacher's Reference Solution Photo (Part <%= sq.num %>):</span>
+                                                        </span>
+                                                        <div>
+                                                            <div class="inline-block relative group rounded-xl overflow-hidden border border-indigo-200 dark:border-indigo-800/80 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openEvaluationImageFullscreen('<%= sq.teacherImg %>')">
+                                                                <img src="<%= sq.teacherImg %>" alt="Teacher Reference" class="max-h-56 sm:max-h-72 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
+                                                                <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                                                    <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
+                                                                        <span class="material-symbols-rounded text-xl">fullscreen</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                <% } %>
                                             </div>
                                         <% }); %>
                                     </div>
@@ -369,8 +400,15 @@
                                     </div>
                                 <% } %>
 
-                                <!-- TEACHER COMMENT & PICTURE ON THIS QUESTION (IF AVAILABLE) -->
-                                <% if (isQuestionEvaluated && (teacherQuestionComment || ua.teacherImage)) { %>
+                                 <!-- TEACHER COMMENT & PICTURE ON THIS QUESTION (IF AVAILABLE) -->
+                                <% 
+                                   const teacherAttachedImgs = [];
+                                   if (ua.teacherImage) teacherAttachedImgs.push(resolveImg(ua.teacherImage));
+                                   if (ua.q1TeacherImage && !teacherAttachedImgs.includes(resolveImg(ua.q1TeacherImage))) teacherAttachedImgs.push(resolveImg(ua.q1TeacherImage));
+                                   if (ua.q2TeacherImage && !teacherAttachedImgs.includes(resolveImg(ua.q2TeacherImage))) teacherAttachedImgs.push(resolveImg(ua.q2TeacherImage));
+                                   const cleanTeacherAttachedImgs = teacherAttachedImgs.filter(Boolean);
+                                %>
+                                <% if (isQuestionEvaluated && (teacherQuestionComment || cleanTeacherAttachedImgs.length > 0)) { %>
                                     <div class="p-3.5 sm:p-4 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/60 text-xs space-y-2">
                                         <div class="flex items-center gap-1.5 text-[11px] font-medium text-indigo-700 dark:text-indigo-400 pb-1.5 border-b border-indigo-200/50 dark:border-indigo-800/40">
                                             <span class="material-symbols-rounded text-sm leading-none flex items-center justify-center shrink-0">rate_review</span>
@@ -381,16 +419,24 @@
                                             <p class="text-slate-700 dark:text-slate-300 font-normal leading-relaxed whitespace-pre-wrap"><%= teacherQuestionComment %></p>
                                         <% } %>
 
-                                        <% if (ua.teacherImage) { %>
-                                            <div class="pt-1.5">
-                                                <div class="relative inline-block group rounded-xl overflow-hidden border border-indigo-200 dark:border-indigo-800/80 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openEvaluationImageFullscreen('<%= ua.teacherImage %>')">
-                                                    <img src="<%= ua.teacherImage %>" alt="Teacher Attachment" class="max-h-64 sm:max-h-80 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.01]">
-                                                    <!-- FULLSCREEN ICON ON HOVER -->
-                                                    <div class="absolute inset-0 bg-slate-950/25 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
-                                                        <div class="size-10 rounded-xl bg-black/65 backdrop-blur-md text-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition-all duration-200 border border-white/20">
-                                                            <span class="material-symbols-rounded text-2xl leading-none">fullscreen</span>
+                                        <% if (cleanTeacherAttachedImgs.length > 0) { %>
+                                            <div class="pt-1.5 space-y-2">
+                                                <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                                                    <span class="material-symbols-rounded text-sm">photo_library</span>
+                                                    <span>Teacher's Attached Solution / Notes:</span>
+                                                </span>
+                                                <div class="flex flex-wrap gap-3">
+                                                    <% cleanTeacherAttachedImgs.forEach(function(tImg) { %>
+                                                        <div class="relative group rounded-xl overflow-hidden border border-indigo-200 dark:border-indigo-800/80 bg-white dark:bg-slate-900 shadow-xs cursor-pointer select-none" onclick="openEvaluationImageFullscreen('<%= tImg %>')">
+                                                            <img src="<%= tImg %>" alt="Teacher Attachment" class="max-h-64 sm:max-h-80 w-auto rounded-xl object-contain block transition-transform duration-200 group-hover:scale-[1.01]">
+                                                            <!-- FULLSCREEN ICON ON HOVER -->
+                                                            <div class="absolute inset-0 bg-slate-950/25 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                                                <div class="size-10 rounded-xl bg-black/65 backdrop-blur-md text-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition-all duration-200 border border-white/20">
+                                                                    <span class="material-symbols-rounded text-2xl leading-none">fullscreen</span>
+                                                                </div>
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    <% }); %>
                                                 </div>
                                             </div>
                                         <% } %>
