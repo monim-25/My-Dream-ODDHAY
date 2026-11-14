@@ -187,6 +187,11 @@ app.use('/uploads', (req, res, next) => {
 let cachedAcademicClasses = null;
 let lastAcademicCacheTime = 0;
 const ACADEMIC_CACHE_TTL = 10 * 60 * 1000;
+const clearAcademicCache = () => {
+    cachedAcademicClasses = null;
+    lastAcademicCacheTime = 0;
+};
+app.set('clearAcademicCache', clearAcademicCache);
 
 // In-memory active user activity tracking (instant zero-latency access across routes)
 const userLastSeen = new Map();
@@ -349,7 +354,26 @@ app.use(async (req, res, next) => {
                         }
                     ];
                     await AcademicClass.insertMany(defaultClasses);
-                    cachedAcademicClasses = await AcademicClass.find({ isArchived: { $ne: true } }).sort({ order: 1 }).lean();
+                    cachedAcademicClasses = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
+                }
+
+                // Ensure subjects array includes flat subjects, commonSubjects, and all group subjects
+                if (Array.isArray(cachedAcademicClasses)) {
+                    cachedAcademicClasses = cachedAcademicClasses.map(cls => {
+                        const allSubs = [];
+                        if (Array.isArray(cls.commonSubjects)) allSubs.push(...cls.commonSubjects);
+                        if (Array.isArray(cls.groups)) {
+                            cls.groups.forEach(g => {
+                                if (Array.isArray(g.subjects)) allSubs.push(...g.subjects);
+                            });
+                        }
+                        if (Array.isArray(cls.subjects)) allSubs.push(...cls.subjects);
+                        const merged = Array.from(new Set(allSubs.map(s => String(s || '').trim()).filter(Boolean)));
+                        return {
+                            ...cls,
+                            subjects: merged.length > 0 ? merged : (cls.subjects || [])
+                        };
+                    });
                 }
                 lastAcademicCacheTime = Date.now();
             }

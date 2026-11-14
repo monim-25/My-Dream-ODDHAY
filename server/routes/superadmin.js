@@ -4047,12 +4047,42 @@ router.post('/payments/bulk-action', superAdminProtect, async (req, res) => {
 
 // GET /create-role
 router.get('/create-role', superAdminProtect, async (req, res) => {
-    res.render('superadmin/create-role', { 
-        user: req.session.user, 
-        error: req.query.error || null, 
-        success: req.query.success || null,
-        active: 'create-role'
-    });
+    try {
+        await connectDB();
+        const AcademicClass = require('../models/AcademicClass');
+        const rawClasses = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
+        const academicClasses = (rawClasses || []).map(cls => {
+            const allSubs = [];
+            if (Array.isArray(cls.commonSubjects)) allSubs.push(...cls.commonSubjects);
+            if (Array.isArray(cls.groups)) {
+                cls.groups.forEach(g => {
+                    if (Array.isArray(g.subjects)) allSubs.push(...g.subjects);
+                });
+            }
+            if (Array.isArray(cls.subjects)) allSubs.push(...cls.subjects);
+            const merged = Array.from(new Set(allSubs.map(s => String(s || '').trim()).filter(Boolean)));
+            return {
+                ...cls,
+                subjects: merged.length > 0 ? merged : (cls.subjects || [])
+            };
+        });
+        res.render('superadmin/create-role', { 
+            user: req.session.user, 
+            error: req.query.error || null, 
+            success: req.query.success || null,
+            active: 'create-role',
+            globalAcademicClasses: academicClasses
+        });
+    } catch (err) {
+        console.error('Error in superadmin GET /create-role:', err);
+        res.render('superadmin/create-role', { 
+            user: req.session.user, 
+            error: req.query.error || null, 
+            success: req.query.success || null,
+            active: 'create-role',
+            globalAcademicClasses: res.locals.globalAcademicClasses || []
+        });
+    }
 });
 
 // POST /create-role
@@ -4073,7 +4103,8 @@ router.post('/create-role', superAdminProtect, async (req, res) => {
                 error: errMsg, 
                 success: null, 
                 active: 'create-role',
-                name, email, phone, role, status, subjects
+                name, email, phone, role, status, subjects,
+                globalAcademicClasses: res.locals.globalAcademicClasses || []
             });
         }
 
@@ -4088,7 +4119,8 @@ router.post('/create-role', superAdminProtect, async (req, res) => {
                 error: errMsg, 
                 success: null, 
                 active: 'create-role',
-                name, email, phone, role, status, subjects
+                name, email, phone, role, status, subjects,
+                globalAcademicClasses: res.locals.globalAcademicClasses || []
             });
         }
 
@@ -4097,7 +4129,7 @@ router.post('/create-role', superAdminProtect, async (req, res) => {
         let assignedClassesArray = [];
         if (role === 'teacher' && classes) {
             const rawClasses = Array.isArray(classes) ? classes : [classes];
-            assignedClassesArray = rawClasses.map(c => String(c).startsWith('Class') ? c : 'Class ' + c).filter(Boolean);
+            assignedClassesArray = rawClasses.map(c => String(c || '').trim()).filter(Boolean);
             classLevelString = assignedClassesArray.join(', ');
         }
         let subjectsArray = [];

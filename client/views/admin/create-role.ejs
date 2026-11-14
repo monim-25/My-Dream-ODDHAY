@@ -535,39 +535,65 @@
             }
         }
 
-        // Subject data by class dynamically from globalAcademicClasses
+        // Subject data by class dynamically from globalAcademicClasses (merges commonSubjects, group subjects, flat subjects)
         const subjectsByClass = {};
-        <% (globalAcademicClasses || []).forEach(cls => { %>
-            subjectsByClass['<%= cls.name %>'] = <%- JSON.stringify(cls.subjects || []) %>;
+        <% (globalAcademicClasses || []).forEach(cls => { 
+            const allSubs = [];
+            if (Array.isArray(cls.commonSubjects)) allSubs.push(...cls.commonSubjects);
+            if (Array.isArray(cls.groups)) {
+                cls.groups.forEach(g => {
+                    if (Array.isArray(g.subjects)) allSubs.push(...g.subjects);
+                });
+            }
+            if (Array.isArray(cls.subjects)) allSubs.push(...cls.subjects);
+            const cleanSubs = Array.from(new Set(allSubs.map(s => String(s || '').trim()).filter(Boolean)));
+        %>
+            subjectsByClass['<%= String(cls.name || "").trim() %>'] = <%- JSON.stringify(cleanSubs) %>;
         <% }); %>
+
+        function getSubjectsForClass(lvl) {
+            if (!lvl) return [];
+            const key = String(lvl).trim();
+            if (subjectsByClass[key]) return subjectsByClass[key];
+            const lowerKey = key.toLowerCase();
+            const matchedKey = Object.keys(subjectsByClass).find(k => k.trim().toLowerCase() === lowerKey);
+            return matchedKey ? subjectsByClass[matchedKey] : [];
+        }
 
         let selectedSubjects = [];
 
         function handleClassChange() {
-            const selectedClasses = Array.from(document.querySelectorAll('input[name="classes"]:checked')).map(cb => cb.value);
+            const selectedClasses = Array.from(document.querySelectorAll('input[name="classes"]:checked')).map(cb => cb.value.trim());
             const subjectField = document.getElementById('subjectField');
             const subjectPills = document.getElementById('subjectPills');
 
             if (selectedClasses.length > 0) {
-                const allSubjects = new Set();
+                const allAvailableSubjects = new Set();
                 selectedClasses.forEach(lvl => {
-                    if (subjectsByClass[lvl]) {
-                        subjectsByClass[lvl].forEach(s => allSubjects.add(s));
-                    }
+                    const subs = getSubjectsForClass(lvl);
+                    subs.forEach(s => allAvailableSubjects.add(s));
                 });
 
-                const sortedSubjects = Array.from(allSubjects).sort();
+                // Retain only subjects that belong to currently selected classes
+                selectedSubjects = selectedSubjects.filter(s => allAvailableSubjects.has(s));
+                updateSubjectsInput();
+
+                const sortedSubjects = Array.from(allAvailableSubjects).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
                 
                 // Clear and rebuild pills
                 subjectPills.innerHTML = '';
-                sortedSubjects.forEach(subject => {
-                    const isSelected = selectedSubjects.includes(subject);
-                    const pill = document.createElement('div');
-                    pill.className = `px-3 py-1.5 rounded-full border text-[10px] font-bold cursor-pointer transition-all ${isSelected ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400'}`;
-                    pill.textContent = subject;
-                    pill.onclick = () => toggleSubject(subject, pill);
-                    subjectPills.appendChild(pill);
-                });
+                if (sortedSubjects.length === 0) {
+                    subjectPills.innerHTML = '<div class="text-[11px] text-amber-600 dark:text-amber-400 font-semibold p-2 bg-amber-50 dark:bg-amber-950/30 rounded border border-amber-200 dark:border-amber-800/50">নির্বাচিত ক্লাসের জন্য কোনো বিষয় পাওয়া যায়নি (No subjects assigned in Academic Setup).</div>';
+                } else {
+                    sortedSubjects.forEach(subject => {
+                        const isSelected = selectedSubjects.includes(subject);
+                        const pill = document.createElement('div');
+                        pill.className = `px-3 py-1.5 rounded-full border text-[10px] font-bold cursor-pointer transition-all ${isSelected ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-500/20' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-400'}`;
+                        pill.textContent = subject;
+                        pill.onclick = () => toggleSubject(subject, pill);
+                        subjectPills.appendChild(pill);
+                    });
+                }
 
                 subjectField.classList.remove('hidden');
             } else {
@@ -592,14 +618,13 @@
         }
 
         function selectAllClassSubjects() {
-            const selectedClasses = Array.from(document.querySelectorAll('input[name="classes"]:checked')).map(cb => cb.value);
-            const allSubjects = new Set();
+            const selectedClasses = Array.from(document.querySelectorAll('input[name="classes"]:checked')).map(cb => cb.value.trim());
+            const allAvailableSubjects = new Set();
             selectedClasses.forEach(lvl => {
-                if (subjectsByClass[lvl]) {
-                    subjectsByClass[lvl].forEach(s => allSubjects.add(s));
-                }
+                const subs = getSubjectsForClass(lvl);
+                subs.forEach(s => allAvailableSubjects.add(s));
             });
-            selectedSubjects = Array.from(allSubjects);
+            selectedSubjects = Array.from(allAvailableSubjects);
             updateSubjectsInput();
             handleClassChange();
         }
@@ -709,7 +734,7 @@
                 const data = Object.fromEntries(formData.entries());
                 
                 // Add multi-select classes manually if they exist
-                const classes = Array.from(document.querySelectorAll('input[name="classes"]:checked')).map(cb => cb.value);
+                const classes = Array.from(document.querySelectorAll('input[name="classes"]:checked')).map(cb => cb.value.trim());
                 if (classes.length > 0) data.classes = classes;
 
                 // Ensure subjects are synchronized
