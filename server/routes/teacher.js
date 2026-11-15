@@ -5433,6 +5433,7 @@ router.post('/topics/copy-to-classes', teacherProtect, topicController.copyTopic
 router.post('/topics/bulk', teacherProtect, topicController.bulkCreateTopics);
 router.delete('/topics/:id/pending', teacherProtect, topicController.deletePendingTeacherTopic);
 router.post('/topics/:id/delete-pending', teacherProtect, topicController.deletePendingTeacherTopic);
+router.post('/topics/submissions/bulk-action', teacherProtect, topicController.bulkActionTeacherSubmissions);
 
 module.exports = router;
 

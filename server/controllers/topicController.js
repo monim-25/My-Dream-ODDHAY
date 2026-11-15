@@ -1769,6 +1769,66 @@ const deletePendingTeacherTopic = async (req, res) => {
     }
 };
 
+// Bulk Action for Teacher Submissions (Delete or Resubmit)
+const bulkActionTeacherSubmissions = async (req, res) => {
+    try {
+        await connectDB();
+        const { topicIds, action } = req.body;
+
+        if (!topicIds || !Array.isArray(topicIds) || topicIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'Please select at least one topic' });
+        }
+
+        const validIds = topicIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+        if (validIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'No valid topic IDs provided' });
+        }
+
+        const userId = req.session.user && req.session.user._id;
+        if (!userId) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
+
+        const baseQuery = {
+            _id: { $in: validIds },
+            $or: [{ submittedBy: userId }, { createdBy: userId }],
+            status: { $in: ['pending', 'rejected'] }
+        };
+
+        if (action === 'delete') {
+            const result = await Topic.deleteMany(baseQuery);
+            return res.json({
+                success: true,
+                message: `${result.deletedCount} topic submission(s) removed successfully`,
+                count: result.deletedCount
+            });
+        } else if (action === 'resubmit') {
+            const resubmitQuery = {
+                _id: { $in: validIds },
+                $or: [{ submittedBy: userId }, { createdBy: userId }],
+                status: 'rejected'
+            };
+            const result = await Topic.updateMany(resubmitQuery, {
+                $set: {
+                    status: 'pending',
+                    rejectionReason: '',
+                    updatedAt: new Date()
+                }
+            });
+            return res.json({
+                success: true,
+                message: `${result.modifiedCount} rejected topic(s) resubmitted for review`,
+                count: result.modifiedCount
+            });
+        } else {
+            return res.status(400).json({ success: false, error: 'Invalid bulk action specified' });
+        }
+    } catch (error) {
+        console.error('bulkActionTeacherSubmissions Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
 // API: Check if a topic (with same subject & chapter) exists in other classes syllabus
 const checkCrossClassTopic = async (req, res) => {
     try {
@@ -1912,6 +1972,7 @@ module.exports = {
     bulkRejectTopics,
     getTeacherTopicsPage,
     deletePendingTeacherTopic,
+    bulkActionTeacherSubmissions,
     addSubjectToClasses,
     copyTopicsToClasses,
     checkCrossClassTopic
