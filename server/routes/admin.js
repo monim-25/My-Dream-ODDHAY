@@ -3024,7 +3024,18 @@ router.get('/question-bank-approvals', contentAdminProtect, async (req, res) => 
 router.post('/question-bank/:id/approve', contentAdminProtect, async (req, res) => {
     try {
         await connectDB();
-        await QuestionBank.findByIdAndUpdate(req.params.id, { status: 'approved' });
+        const bank = await QuestionBank.findByIdAndUpdate(req.params.id, { status: 'approved' }, { new: true });
+        if (bank && bank.addedBy) {
+            try {
+                const pushNotificationService = require('../services/pushNotificationService');
+                pushNotificationService.sendToUser(bank.addedBy, {
+                    title: 'Question Bank Approved! 🎉',
+                    body: `Your question "${bank.title || bank.topic}" has been approved.`,
+                    url: '/teacher/questions',
+                    type: 'system'
+                }).catch(() => {});
+            } catch(e) {}
+        }
         if (req.xhr || (req.headers.accept && req.headers.accept.includes('json'))) {
             return res.json({ success: true });
         }
@@ -3042,7 +3053,18 @@ router.post('/question-bank/:id/approve', contentAdminProtect, async (req, res) 
 router.post('/question-bank/:id/reject', contentAdminProtect, async (req, res) => {
     try {
         await connectDB();
-        await QuestionBank.findByIdAndUpdate(req.params.id, { status: 'rejected' });
+        const bank = await QuestionBank.findByIdAndUpdate(req.params.id, { status: 'rejected' }, { new: true });
+        if (bank && bank.addedBy) {
+            try {
+                const pushNotificationService = require('../services/pushNotificationService');
+                pushNotificationService.sendToUser(bank.addedBy, {
+                    title: 'Question Bank Requires Revision ⚠️',
+                    body: `Your question "${bank.title || bank.topic}" requires revision or was rejected.`,
+                    url: '/teacher/questions',
+                    type: 'system'
+                }).catch(() => {});
+            } catch(e) {}
+        }
         if (req.xhr || (req.headers.accept && req.headers.accept.includes('json'))) {
             return res.json({ success: true });
         }

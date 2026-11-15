@@ -931,12 +931,15 @@ const createTopic = async (req, res) => {
         if (isTeacher && createdTopics.length > 0) {
             try {
                 const pushNotificationService = require('../services/pushNotificationService');
-                pushNotificationService.sendToRole('superadmin', {
-                    title: 'New AI Topic Awaiting Approval',
-                    body: `Teacher ${req.session.user ? req.session.user.name : 'Teacher'} submitted "${name.trim()}" (${targetClasses.join(', ')} - ${subject}).`,
+                const teacherName = req.session.user ? req.session.user.name : 'Teacher';
+                const notifPayload = {
+                    title: 'New Topic Awaiting Approval',
+                    body: `Teacher ${teacherName} submitted "${name.trim()}" (${targetClasses.join(', ')} - ${subject}).`,
                     url: '/superadmin/topics',
-                    type: 'topic_review'
-                }).catch(() => {});
+                    type: 'system'
+                };
+                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
+                pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
             } catch(e) {}
         }
 
@@ -1095,6 +1098,21 @@ const bulkCreateTopics = async (req, res) => {
         const successMsg = isTeacher 
             ? `${createdTopics.length} topics submitted for Admin review across ${targetClasses.length} class(es): ${targetClasses.join(', ')}`
             : `${createdTopics.length} topics added to "${chapterName}" across ${targetClasses.length} class(es): ${targetClasses.join(', ')}`;
+
+        if (isTeacher && createdTopics.length > 0) {
+            try {
+                const pushNotificationService = require('../services/pushNotificationService');
+                const teacherName = req.session.user ? req.session.user.name : 'Teacher';
+                const notifPayload = {
+                    title: 'New Topics Submitted for Review',
+                    body: `Teacher ${teacherName} submitted ${createdTopics.length} topic(s) under "${chapterName}" (${targetClasses.join(', ')} - ${subject}).`,
+                    url: '/superadmin/topics',
+                    type: 'system'
+                };
+                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
+                pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
+            } catch(e) {}
+        }
 
         res.json({
             success: true,
@@ -1334,6 +1352,19 @@ const approveTopic = async (req, res) => {
         if (!topic) return res.status(404).json({ success: false, error: 'Topic not found' });
         await ensureSyllabusFoldersForChapter([topic.classLevel], topic.subject, topic.chapter?.name, topic.createdBy || topic.submittedBy);
 
+        if (topic.submittedBy || topic.createdBy) {
+            try {
+                const teacherId = topic.submittedBy || topic.createdBy;
+                const pushNotificationService = require('../services/pushNotificationService');
+                pushNotificationService.sendToUser(teacherId, {
+                    title: 'Topic Approved! 🎉',
+                    body: `Your topic "${topic.name}" has been approved and published to the live syllabus.`,
+                    url: '/teacher/topics?tab=submissions&subStatus=approved',
+                    type: 'system'
+                }).catch(() => {});
+            } catch(e) {}
+        }
+
         res.json({
             success: true,
             message: `Topic "${topic.name}" approved and published live`,
@@ -1372,6 +1403,27 @@ const bulkApproveTopics = async (req, res) => {
             await ensureSyllabusFoldersForChapter([t.classLevel], t.subject, t.chapter?.name, t.createdBy || t.submittedBy);
         }
 
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            const teacherMap = new Map();
+            topicsToApprove.forEach(t => {
+                const uid = t.submittedBy || t.createdBy;
+                if (uid) {
+                    const strId = String(uid);
+                    if (!teacherMap.has(strId)) teacherMap.set(strId, []);
+                    teacherMap.get(strId).push(t);
+                }
+            });
+            teacherMap.forEach((tList, uid) => {
+                pushNotificationService.sendToUser(uid, {
+                    title: 'Topics Approved! 🎉',
+                    body: `${tList.length} of your submitted topic(s) have been approved and published to the live syllabus.`,
+                    url: '/teacher/topics?tab=submissions&subStatus=approved',
+                    type: 'system'
+                }).catch(() => {});
+            });
+        } catch(e) {}
+
         res.json({
             success: true,
             message: `${result.modifiedCount} topic(s) approved and published live`,
@@ -1400,6 +1452,19 @@ const rejectTopic = async (req, res) => {
 
         if (!topic) return res.status(404).json({ success: false, error: 'Topic not found' });
 
+        if (topic.submittedBy || topic.createdBy) {
+            try {
+                const teacherId = topic.submittedBy || topic.createdBy;
+                const pushNotificationService = require('../services/pushNotificationService');
+                pushNotificationService.sendToUser(teacherId, {
+                    title: 'Topic Revision Required ⚠️',
+                    body: `Topic "${topic.name}" requires revision: ${reason || 'Please review syllabus alignment.'}`,
+                    url: '/teacher/topics?tab=submissions&subStatus=rejected',
+                    type: 'system'
+                }).catch(() => {});
+            } catch(e) {}
+        }
+
         res.json({
             success: true,
             message: 'Topic returned to teacher with feedback',
@@ -1422,6 +1487,7 @@ const bulkRejectTopics = async (req, res) => {
         }
 
         const validIds = topicIds.filter(id => mongoose.Types.ObjectId.isValid(id));
+        const topicsToReject = await Topic.find({ _id: { $in: validIds } }).select('name submittedBy createdBy').lean();
         const result = await Topic.updateMany(
             { _id: { $in: validIds } },
             { 
@@ -1433,6 +1499,27 @@ const bulkRejectTopics = async (req, res) => {
                 } 
             }
         );
+
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            const teacherMap = new Map();
+            topicsToReject.forEach(t => {
+                const uid = t.submittedBy || t.createdBy;
+                if (uid) {
+                    const strId = String(uid);
+                    if (!teacherMap.has(strId)) teacherMap.set(strId, []);
+                    teacherMap.get(strId).push(t);
+                }
+            });
+            teacherMap.forEach((tList, uid) => {
+                pushNotificationService.sendToUser(uid, {
+                    title: 'Topics Revision Required ⚠️',
+                    body: `${tList.length} of your submitted topic(s) require revision: ${reason || 'Please review and resubmit.'}`,
+                    url: '/teacher/topics?tab=submissions&subStatus=rejected',
+                    type: 'system'
+                }).catch(() => {});
+            });
+        } catch(e) {}
 
         res.json({
             success: true,
@@ -1815,6 +1902,22 @@ const bulkActionTeacherSubmissions = async (req, res) => {
                     updatedAt: new Date()
                 }
             });
+
+            if (result.modifiedCount > 0) {
+                try {
+                    const pushNotificationService = require('../services/pushNotificationService');
+                    const teacherName = req.session.user ? req.session.user.name : 'Teacher';
+                    const notifPayload = {
+                        title: 'Topics Resubmitted for Review',
+                        body: `Teacher ${teacherName} resubmitted ${result.modifiedCount} topic(s) for review.`,
+                        url: '/superadmin/topics',
+                        type: 'system'
+                    };
+                    pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
+                    pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
+                } catch(e) {}
+            }
+
             return res.json({
                 success: true,
                 message: `${result.modifiedCount} rejected topic(s) resubmitted for review`,
