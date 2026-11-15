@@ -127,7 +127,10 @@
                                         <span>Select Chapters</span>
                                         <span class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">(Optional)</span>
                                     </label>
-                                    <span id="chapterCountBadge" class="text-[11px] font-medium text-slate-400">0 selected</span>
+                                    <div class="flex items-center gap-2.5">
+                                        <button type="button" id="selectAllChaptersBtn" onclick="toggleSelectAllChapters()" class="hidden text-[11px] font-bold text-primary hover:underline cursor-pointer transition-all active:scale-95">Select All</button>
+                                        <span id="chapterCountBadge" class="text-[11px] font-medium text-slate-400">0 selected</span>
+                                    </div>
                                 </div>
                                 <p class="text-[11px] text-slate-400 dark:text-slate-500 mb-3">You can select one or more chapters to scope this assessment, or leave unselected for full syllabus coverage.</p>
 
@@ -180,13 +183,7 @@
                             </h3>
                             
                             <!-- Bank Filters (Shown for Smart Generation) -->
-                            <div id="bankFilters" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 hidden">
-                                <div>
-                                    <label class="form-label">Filter by Topic</label>
-                                    <select name="bankTopic" id="bankTopic" onchange="syncBankMetadata()" class="form-input cursor-pointer">
-                                        <option value="">Any Topic</option>
-                                    </select>
-                                </div>
+                            <div id="bankFilters" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 hidden">
                                 <div>
                                     <label class="form-label">Filter by Board</label>
                                     <select name="bankBoard" id="bankBoard" onchange="syncBankMetadata()" class="form-input cursor-pointer">
@@ -278,21 +275,19 @@
             const classLevel = document.getElementById('classLevel').value;
             const subject = getActiveSubject();
 
-            const topic = document.getElementById('bankTopic').value;
-            const board = document.getElementById('bankBoard').value;
-            const year = document.getElementById('bankYear').value;
+            const board = document.getElementById('bankBoard') ? document.getElementById('bankBoard').value : '';
+            const year = document.getElementById('bankYear') ? document.getElementById('bankYear').value : '';
 
             if (!classLevel || !subject) return;
 
             const chaps = Array.from(selectedChapters).join(',');
 
             try {
-                const url = `/admin/api/bank-metadata?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}&chapters=${encodeURIComponent(chaps)}&topic=${encodeURIComponent(topic)}&board=${encodeURIComponent(board)}&year=${encodeURIComponent(year)}`;
+                const url = `/admin/api/bank-metadata?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}&chapters=${encodeURIComponent(chaps)}&board=${encodeURIComponent(board)}&year=${encodeURIComponent(year)}`;
                 const response = await fetch(url);
                 const data = await response.json();
 
                 if (data.success) {
-                    updateDropdown('bankTopic', data.topics, topic, 'Any Topic');
                     updateDropdown('bankBoard', data.boards, board, 'Any Board');
                     updateDropdown('bankYear', data.years, year, 'Any Year');
                 }
@@ -304,11 +299,13 @@
             const subject = getActiveSubject();
             const container = document.getElementById('chaptersContainer');
             const topicsSection = document.getElementById('topicsSection');
+            const selectAllBtn = document.getElementById('selectAllChaptersBtn');
 
             if (!classLevel || !subject) {
                 container.innerHTML = '<span id="chapterPlaceholder" class="text-[11px] text-slate-400 italic">Select Class Level and Subject to load syllabus chapters...</span>';
                 selectedChapters.clear();
                 updateChapterSummary();
+                if (selectAllBtn) selectAllBtn.classList.add('hidden');
                 if (topicsSection) topicsSection.classList.add('hidden');
                 return;
             }
@@ -334,23 +331,19 @@
                         const pill = createChapterPill(chapterName);
                         container.appendChild(pill);
                     });
+                    if (selectAllBtn) selectAllBtn.classList.remove('hidden');
                 } else {
-                    container.innerHTML = '<span class="text-[11px] text-slate-400 italic">No predefined chapters found for this subject. You can add custom chapter tags below.</span>';
+                    container.innerHTML = '<span class="text-[11px] text-slate-400 italic">No predefined chapters found for this subject.</span>';
+                    if (selectAllBtn) selectAllBtn.classList.add('hidden');
                 }
 
-                // Add Custom Chapter Button
-                const addCustomBtn = document.createElement('button');
-                addCustomBtn.type = 'button';
-                addCustomBtn.className = 'inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 text-primary border border-primary/30 hover:bg-primary/5 transition-all cursor-pointer active:scale-95';
-                addCustomBtn.innerHTML = '<span class="material-symbols-rounded text-sm">add</span> Add Chapter';
-                addCustomBtn.onclick = promptAddCustomChapter;
-                container.appendChild(addCustomBtn);
-
+                updateChapterSummary();
                 renderAdminTopicsForSelectedChapters();
 
             } catch (err) {
                 console.error('Failed to fetch chapters:', err);
-                container.innerHTML = '<span class="text-[11px] text-rose-500 italic">Failed to load chapters. You can still add manually or proceed.</span>';
+                container.innerHTML = '<span class="text-[11px] text-rose-500 italic">Failed to load chapters. You can proceed with full syllabus coverage.</span>';
+                if (selectAllBtn) selectAllBtn.classList.add('hidden');
             }
         }
 
@@ -383,6 +376,33 @@
             };
 
             return label;
+        }
+
+        function toggleSelectAllChapters() {
+            const container = document.getElementById('chaptersContainer');
+            const checkboxes = container.querySelectorAll('input[type="checkbox"][name="chapters[]"]');
+            if (checkboxes.length === 0) return;
+
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            const btn = document.getElementById('selectAllChaptersBtn');
+
+            checkboxes.forEach(cb => {
+                cb.checked = !allChecked;
+                const pill = cb.closest('.chapter-pill');
+                const chapterVal = cb.value;
+                if (!allChecked) {
+                    selectedChapters.add(chapterVal);
+                    if (pill) pill.classList.add('bg-primary/10', 'border-primary', 'text-primary', 'dark:text-primary');
+                } else {
+                    selectedChapters.delete(chapterVal);
+                    if (pill) pill.classList.remove('bg-primary/10', 'border-primary', 'text-primary', 'dark:text-primary');
+                }
+            });
+
+            if (btn) btn.innerText = allChecked ? 'Select All' : 'Deselect All';
+            updateChapterSummary();
+            renderAdminTopicsForSelectedChapters();
+            syncBankMetadata();
         }
 
         function renderAdminTopicsForSelectedChapters() {
@@ -429,28 +449,20 @@
                 }
             }
         }
-        }
-
-        function promptAddCustomChapter() {
-            const customName = prompt('Enter custom chapter name:');
-            if (customName && customName.trim()) {
-                const trimmed = customName.trim();
-                selectedChapters.add(trimmed);
-                const container = document.getElementById('chaptersContainer');
-                const pill = createChapterPill(trimmed);
-                const addBtn = container.querySelector('button');
-                if (addBtn) container.insertBefore(pill, addBtn);
-                else container.appendChild(pill);
-                updateChapterSummary();
-            }
-        }
 
         function updateChapterSummary() {
             const count = selectedChapters.size;
             const badge = document.getElementById('chapterCountBadge');
             const summaryInput = document.getElementById('chapterSummaryInput');
+            const btn = document.getElementById('selectAllChaptersBtn');
+            const checkboxes = document.querySelectorAll('#chaptersContainer input[type="checkbox"][name="chapters[]"]');
+
             if (badge) badge.innerText = `${count} selected`;
             if (summaryInput) summaryInput.value = Array.from(selectedChapters).join(', ');
+            if (btn && checkboxes.length > 0) {
+                const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+                btn.innerText = allChecked ? 'Deselect All' : 'Select All';
+            }
         }
 
         function onCourseSelected() {
