@@ -431,6 +431,17 @@
                                                 <% } %>
                                             </div>
 
+                                            <% const chSelectable = ch.topics.filter(t => t.status === 'pending' || t.status === 'rejected'); %>
+                                            <% if (chSelectable.length > 0) { %>
+                                                <!-- Delete Chapter Submissions Button -->
+                                                <button type="button" 
+                                                        onclick="deleteChapterSubmissions(<%= JSON.stringify(ch.name) %>, <%= chSelectable.length %>, <%= JSON.stringify(chSelectable.map(t => t._id)) %>)" 
+                                                        class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors shrink-0" 
+                                                        title="Delete all <%= chSelectable.length %> submission(s) in chapter <%= ch.name %>">
+                                                    <span class="material-symbols-rounded text-base">delete</span>
+                                                </button>
+                                            <% } %>
+
                                             <!-- Expand / Collapse Chevron Button -->
                                             <button type="button" onclick="toggleChapterAccordion('sub_ch_<%= sIdx %>')" class="size-7 rounded hover:bg-slate-200/50 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400 shrink-0" title="Expand / Collapse Chapter">
                                                 <span id="icon_sub_ch_<%= sIdx %>" class="material-symbols-rounded text-base transition-transform duration-200">expand_more</span>
@@ -1788,6 +1799,63 @@
                         window.location.href = u.toString();
                     } else {
                         Swal.fire('Error', data.error || 'Failed to remove', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error', err.message || 'Connection error', 'error');
+                }
+            }
+        }
+
+        async function deleteChapterSubmissions(chapterName, count, topicIds) {
+            if (!topicIds || topicIds.length === 0) return;
+
+            const confirm = await Swal.fire({
+                title: 'Delete Chapter Submissions?',
+                html: `Remove all <strong>${count}</strong> topic submission(s) in chapter <strong>"${chapterName}"</strong>? This action cannot be undone.`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Yes, Delete Chapter Submissions'
+            });
+
+            if (confirm.isConfirmed) {
+                try {
+                    Swal.fire({
+                        title: 'Removing...',
+                        allowOutsideClick: false,
+                        didOpen: () => Swal.showLoading()
+                    });
+
+                    const res = await fetch(`${apiBase}/topics/submissions/bulk-action`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            topicIds: topicIds,
+                            action: 'delete'
+                        })
+                    });
+
+                    const text = await res.text();
+                    let data = {};
+                    try { data = JSON.parse(text); } catch (e) { data = { error: text }; }
+
+                    if (res.ok && data.success !== false) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'Removed!',
+                            text: data.message || `${count} submission(s) removed successfully`,
+                            timer: 1500,
+                            showConfirmButton: false
+                        });
+                        const u = new URL(window.location.href);
+                        u.searchParams.set('tab', 'submissions');
+                        window.location.href = u.toString();
+                    } else {
+                        Swal.fire('Error', data.error || 'Failed to remove chapter submissions', 'error');
                     }
                 } catch (err) {
                     Swal.fire('Error', err.message || 'Connection error', 'error');
