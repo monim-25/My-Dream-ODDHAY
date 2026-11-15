@@ -30,7 +30,7 @@
             <%- include('header_v2', { pageTitle: 'Compose Assessment' }) %>
 
             <section class="flex-1 flex flex-col bg-[#FFFFFF] dark:bg-[#0b1120] border-l border-slate-900/10 dark:border-white/5">
-                <form action="/superadmin/add-quiz" method="POST" class="w-full">
+                <form action="/superadmin/add-quiz" method="POST" class="w-full" onsubmit="return handleQuizFormSubmit(event);">
                     <div class="divide-y divide-slate-100 dark:divide-white/5 bg-white dark:bg-[#0f172a]">
                         <!-- Messages -->
                         <% if (locals.success || locals.error) { %>
@@ -80,41 +80,153 @@
                                 <span class="material-symbols-rounded text-[20px] text-emerald-500">account_tree</span> Logic & Routing
                             </h3>
                             <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                <div class="md:col-span-2">
+                                <div class="md:col-span-1">
                                     <label class="form-label">Exam Type</label>
-                                    <select name="isModelTest" onchange="toggleType(this.value)" class="form-input cursor-pointer">
-                                        <option value="false">Course-Linked Exam</option>
-                                        <option value="true">Standalone Model Test</option>
+                                    <select name="examCategory" id="examCategory" onchange="updateView()" class="form-input cursor-pointer font-bold">
+                                        <option value="course">Course-Linked Exam</option>
+                                        <option value="model">Standalone Model Test</option>
+                                        <option value="mock">Mock Test</option>
+                                    </select>
+                                    <!-- Compatibility flags for backend -->
+                                    <input type="hidden" name="isModelTest" id="isModelTest" value="false">
+                                    <input type="hidden" name="isMockTest" id="isMockTest" value="false">
+                                </div>
+                                <div class="md:col-span-1">
+                                    <label class="form-label">Class Level</label>
+                                    <select name="classLevel" id="classLevel" onchange="updateView()" class="form-input cursor-pointer" required>
+                                        <option value="">-- Select Class --</option>
+                                        <% ['6', '7', '8', '9', '10', '11', '12', 'HSC', 'Admission'].forEach(lvl => { %>
+                                            <option value="<%= lvl %>"><%= lvl.includes('Class') || ['HSC', 'Admission'].includes(lvl) ? lvl : 'Class ' + lvl %></option>
+                                        <% }) %>
                                     </select>
                                 </div>
                                 <div id="courseContainer" class="md:col-span-2">
                                     <label class="form-label">Link to Course</label>
-                                    <select name="courseId" class="form-input cursor-pointer">
+                                    <select name="courseId" id="courseId" onchange="onCourseSelected()" class="form-input cursor-pointer">
                                         <option value="">-- Select Course --</option>
                                         <% courses.forEach(course => { %>
-                                            <option value="<%= course._id %>"><%= course.title %> (<%= course.classLevel %>)</option>
+                                            <option value="<%= course._id %>" data-class="<%= course.classLevel %>" data-subject="<%= course.subject %>"><%= course.title %></option>
                                         <% }); %>
                                     </select>
                                 </div>
-                                <div id="subjectContainer" class="md:col-span-1 hidden">
+                                <div id="subjectContainer" class="md:col-span-2 hidden">
                                     <label class="form-label">Subject</label>
-                                    <select name="subject" class="form-input cursor-pointer">
+                                    <select name="subject" id="subjectSelect" onchange="onSubjectOrClassChanged()" class="form-input cursor-pointer">
                                         <option value="">-- Select Subject --</option>
                                         <% (subjects || []).forEach(sub => { %>
                                             <option value="<%= sub %>"><%= sub %></option>
                                         <% }) %>
                                     </select>
                                 </div>
-                                <div id="classContainer" class="md:col-span-1 hidden">
-                                    <label class="form-label">Class Level</label>
-                                    <select name="classLevel" class="form-input cursor-pointer">
-                                        <option value="">-- Select Class --</option>
-                                        <% ['6', '7', '8', '9', '10', '11', '12'].forEach(lvl => { %>
-                                            <option value="<%= lvl %>">Class <%= lvl %></option>
-                                        <% }) %>
+                            </div>
+
+                            <!-- Chapter Selection (Optional - Multi Select) -->
+                            <div id="chapterSection" class="mt-6 pt-6 border-t border-slate-100 dark:border-white/5">
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="form-label mb-0 flex items-center gap-2">
+                                        <span>Select Chapters</span>
+                                        <span class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">(Optional)</span>
+                                    </label>
+                                    <span id="chapterCountBadge" class="text-[11px] font-medium text-slate-400">0 selected</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 mb-3">You can select one or more chapters to scope this assessment, or leave unselected for full syllabus coverage.</p>
+
+                                <!-- Chapter Pills Container -->
+                                <div id="chaptersContainer" class="min-h-[44px] p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex flex-wrap gap-2 items-center">
+                                    <span id="chapterPlaceholder" class="text-[11px] text-slate-400 italic">Select Class Level and Subject to load syllabus chapters...</span>
+                                </div>
+                                <input type="hidden" name="chapter" id="chapterSummaryInput" value="">
+                            </div>
+                        </div>
+
+                        <!-- Creation Strategy -->
+                        <div class="p-8">
+                            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-6 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[20px] text-violet-500">design_services</span> Composition Strategy
+                            </h3>
+                            <div class="flex flex-col md:flex-row items-start md:items-center gap-8">
+                                <label class="flex items-center gap-3 cursor-pointer group">
+                                    <input type="radio" name="strategy" value="manual" onchange="toggleStrategy('manual')" checked class="w-4 h-4 text-violet-600 border-slate-300 focus:ring-violet-500">
+                                    <div class="flex flex-col">
+                                        <span class="text-[12px] font-bold text-slate-700 dark:text-slate-200">Manual Studio</span>
+                                        <span class="text-[10px] text-slate-400 font-medium italic">Create an empty exam and add questions manually.</span>
+                                    </div>
+                                </label>
+                                <label class="flex items-center gap-3 cursor-pointer group">
+                                    <input type="radio" name="strategy" value="automated" onchange="toggleStrategy('automated')" class="w-4 h-4 text-violet-600 border-slate-300 focus:ring-violet-500">
+                                    <div class="flex flex-col">
+                                        <span class="text-[12px] font-bold text-slate-700 dark:text-slate-200">Smart Generation</span>
+                                        <span class="text-[10px] text-slate-400 font-medium italic">Auto-populate using Question Bank data.</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Question Distribution -->
+                        <div id="distributionSection" class="p-8">
+                            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white tracking-tight mb-6 flex items-center gap-2">
+                                <span class="material-symbols-rounded text-[20px] text-amber-500">format_list_numbered</span> Question Configuration
+                            </h3>
+                            
+                            <!-- Bank Filters (Shown for Smart Generation) -->
+                            <div id="bankFilters" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 hidden">
+                                <div>
+                                    <label class="form-label">Filter by Topic</label>
+                                    <select name="bankTopic" id="bankTopic" onchange="syncBankMetadata()" class="form-input cursor-pointer">
+                                        <option value="">Any Topic</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label">Filter by Board</label>
+                                    <select name="bankBoard" id="bankBoard" onchange="syncBankMetadata()" class="form-input cursor-pointer">
+                                        <option value="">Any Board</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label">Filter by Year</label>
+                                    <select name="bankYear" id="bankYear" onchange="syncBankMetadata()" class="form-input cursor-pointer">
+                                        <option value="">Any Year</option>
                                     </select>
                                 </div>
                             </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                <div>
+                                    <label class="form-label flex items-center justify-between">
+                                        <span>MCQ Count</span>
+                                        <span class="q-config-badge text-rose-500 font-bold text-xs">*</span>
+                                    </label>
+                                    <input type="number" name="mcqCount" id="mcqCount" min="0" class="form-input q-config-field" placeholder="0" oninput="validateQuestionConfig()">
+                                </div>
+                                <div>
+                                    <label class="form-label flex items-center justify-between">
+                                        <span>Short Question Count</span>
+                                        <span class="q-config-badge text-rose-500 font-bold text-xs">*</span>
+                                    </label>
+                                    <input type="number" name="shortCount" id="shortCount" min="0" class="form-input q-config-field" placeholder="0" oninput="validateQuestionConfig()">
+                                </div>
+                                <div>
+                                    <label class="form-label flex items-center justify-between">
+                                        <span>Medium Question Count</span>
+                                        <span class="q-config-badge text-rose-500 font-bold text-xs">*</span>
+                                    </label>
+                                    <input type="number" name="mediumCount" id="mediumCount" min="0" class="form-input q-config-field" placeholder="0" oninput="validateQuestionConfig()">
+                                </div>
+                                <div>
+                                    <label class="form-label flex items-center justify-between">
+                                        <span>Comprehension Count</span>
+                                        <span class="q-config-badge text-rose-500 font-bold text-xs">*</span>
+                                    </label>
+                                    <input type="number" name="comprehensionCount" id="comprehensionCount" min="0" class="form-input q-config-field" placeholder="0" oninput="validateQuestionConfig()">
+                                </div>
+                            </div>
+                            <div id="qConfigAlert" class="hidden mt-3 p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-1.5">
+                                <span class="material-symbols-rounded text-base">error</span>
+                                <span>Please configure at least one question count (MCQ, Short, Medium, or Comprehension) to compose this assessment.</span>
+                            </div>
+                            <p id="strategyDesc" class="mt-4 text-[11px] text-slate-400 font-medium italic">
+                                * System will create empty slots for you to fill manually.
+                            </p>
                         </div>
                     </div>
 
@@ -133,21 +245,272 @@
     </div>
 
     <script>
-        function toggleType(isModelTest) {
+        const allCourses = Array.from(document.querySelectorAll('#courseId option')).slice(1);
+        let selectedChapters = new Set();
+
+        function getActiveSubject() {
+            const category = document.getElementById('examCategory').value;
+            if (category === 'course') {
+                const courseSelect = document.getElementById('courseId');
+                const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
+                if (selectedOpt && selectedOpt.value) {
+                    return selectedOpt.getAttribute('data-subject') || selectedOpt.text.split('-')[0].trim();
+                }
+                return '';
+            } else {
+                const subSelect = document.getElementById('subjectSelect');
+                return subSelect ? subSelect.value : '';
+            }
+        }
+
+        async function syncBankMetadata() {
+            const classLevel = document.getElementById('classLevel').value;
+            const subject = getActiveSubject();
+
+            const topic = document.getElementById('bankTopic').value;
+            const board = document.getElementById('bankBoard').value;
+            const year = document.getElementById('bankYear').value;
+
+            if (!classLevel || !subject) return;
+
+            try {
+                const url = `/superadmin/api/bank-metadata?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}&topic=${encodeURIComponent(topic)}&board=${encodeURIComponent(board)}&year=${encodeURIComponent(year)}`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success) {
+                    updateDropdown('bankTopic', data.topics, topic, 'Any Topic');
+                    updateDropdown('bankBoard', data.boards, board, 'Any Board');
+                    updateDropdown('bankYear', data.years, year, 'Any Year');
+                }
+            } catch (err) { console.error('Failed to sync metadata'); }
+        }
+
+        async function fetchChapters() {
+            const classLevel = document.getElementById('classLevel').value;
+            const subject = getActiveSubject();
+            const container = document.getElementById('chaptersContainer');
+
+            if (!classLevel || !subject) {
+                container.innerHTML = '<span id="chapterPlaceholder" class="text-[11px] text-slate-400 italic">Select Class Level and Subject to load syllabus chapters...</span>';
+                selectedChapters.clear();
+                updateChapterSummary();
+                return;
+            }
+
+            container.innerHTML = '<span class="text-[11px] text-slate-400 italic flex items-center gap-1.5"><span class="material-symbols-rounded animate-spin text-sm">sync</span> Loading chapters...</span>';
+
+            try {
+                const response = await fetch(`/superadmin/api/chapters?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}`);
+                const data = await response.json();
+
+                container.innerHTML = '';
+
+                if (data.success && Array.isArray(data.chapters) && data.chapters.length > 0) {
+                    data.chapters.forEach((ch, idx) => {
+                        const chapterName = (typeof ch === 'string') ? ch : (ch.name || `Chapter ${ch.number || (idx + 1)}`);
+                        const pill = createChapterPill(chapterName);
+                        container.appendChild(pill);
+                    });
+                } else {
+                    container.innerHTML = '<span class="text-[11px] text-slate-400 italic">No predefined chapters found for this subject. You can add custom chapter tags below.</span>';
+                }
+
+                // Add Custom Chapter Button
+                const addCustomBtn = document.createElement('button');
+                addCustomBtn.type = 'button';
+                addCustomBtn.className = 'inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 text-primary border border-primary/30 hover:bg-primary/5 transition-all cursor-pointer active:scale-95';
+                addCustomBtn.innerHTML = '<span class="material-symbols-rounded text-sm">add</span> Add Chapter';
+                addCustomBtn.onclick = promptAddCustomChapter;
+                container.appendChild(addCustomBtn);
+
+            } catch (err) {
+                console.error('Failed to fetch chapters:', err);
+                container.innerHTML = '<span class="text-[11px] text-rose-500 italic">Failed to load chapters. You can still add manually or proceed.</span>';
+            }
+        }
+
+        function createChapterPill(chapterName) {
+            const label = document.createElement('label');
+            label.className = 'chapter-pill cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all select-none bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-primary/50';
+            
+            const isChecked = selectedChapters.has(chapterName);
+            if (isChecked) {
+                label.classList.add('bg-primary/10', 'border-primary', 'text-primary', 'dark:text-primary');
+            }
+
+            label.innerHTML = `
+                <input type="checkbox" name="chapters[]" value="${chapterName}" ${isChecked ? 'checked' : ''} class="w-3.5 h-3.5 rounded text-primary border-slate-300 focus:ring-primary accent-primary">
+                <span>${chapterName}</span>
+            `;
+
+            const input = label.querySelector('input');
+            input.onchange = function() {
+                if (this.checked) {
+                    selectedChapters.add(chapterName);
+                    label.classList.add('bg-primary/10', 'border-primary', 'text-primary', 'dark:text-primary');
+                } else {
+                    selectedChapters.delete(chapterName);
+                    label.classList.remove('bg-primary/10', 'border-primary', 'text-primary', 'dark:text-primary');
+                }
+                updateChapterSummary();
+            };
+
+            return label;
+        }
+
+        function promptAddCustomChapter() {
+            const customName = prompt('Enter custom chapter name:');
+            if (customName && customName.trim()) {
+                const trimmed = customName.trim();
+                selectedChapters.add(trimmed);
+                const container = document.getElementById('chaptersContainer');
+                const pill = createChapterPill(trimmed);
+                const addBtn = container.querySelector('button');
+                if (addBtn) container.insertBefore(pill, addBtn);
+                else container.appendChild(pill);
+                updateChapterSummary();
+            }
+        }
+
+        function updateChapterSummary() {
+            const count = selectedChapters.size;
+            const badge = document.getElementById('chapterCountBadge');
+            const summaryInput = document.getElementById('chapterSummaryInput');
+            if (badge) badge.innerText = `${count} selected`;
+            if (summaryInput) summaryInput.value = Array.from(selectedChapters).join(', ');
+        }
+
+        function onCourseSelected() {
+            const courseSelect = document.getElementById('courseId');
+            const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
+            if (selectedOpt && selectedOpt.value) {
+                const courseClass = selectedOpt.getAttribute('data-class');
+                if (courseClass) {
+                    const classSelect = document.getElementById('classLevel');
+                    for (let opt of classSelect.options) {
+                        if (opt.value && courseClass.includes(opt.value)) {
+                            classSelect.value = opt.value;
+                            break;
+                        }
+                    }
+                }
+            }
+            syncBankMetadata();
+            fetchChapters();
+        }
+
+        function onSubjectOrClassChanged() {
+            syncBankMetadata();
+            fetchChapters();
+        }
+
+        function updateDropdown(id, items, currentVal, placeholder) {
+            const select = document.getElementById(id);
+            let html = `<option value="">${placeholder}</option>`;
+            items.forEach(item => {
+                html += `<option value="${item}" ${item === currentVal ? 'selected' : ''}>${item}</option>`;
+            });
+            select.innerHTML = html;
+        }
+
+        function updateView() {
+            const category = document.getElementById('examCategory').value;
+            const isModelTestInput = document.getElementById('isModelTest');
+            const isMockTestInput = document.getElementById('isMockTest');
+
+            const isModelOrMock = (category === 'model' || category === 'mock');
+            isModelTestInput.value = isModelOrMock ? 'true' : 'false';
+            isMockTestInput.value = (category === 'mock') ? 'true' : 'false';
+
+            const selectedClass = document.getElementById('classLevel').value;
             const courseContainer = document.getElementById('courseContainer');
             const subjectContainer = document.getElementById('subjectContainer');
-            const classContainer = document.getElementById('classContainer');
+            const courseSelect = document.getElementById('courseId');
+            const subjectSelect = document.getElementById('subjectSelect');
 
-            if (isModelTest === 'true') {
+            if (isModelOrMock) {
                 courseContainer.classList.add('hidden');
                 subjectContainer.classList.remove('hidden');
-                classContainer.classList.remove('hidden');
+                if (subjectSelect) subjectSelect.setAttribute('required', 'required');
+                if (courseSelect) courseSelect.removeAttribute('required');
             } else {
                 courseContainer.classList.remove('hidden');
                 subjectContainer.classList.add('hidden');
-                classContainer.classList.add('hidden');
+                if (subjectSelect) subjectSelect.removeAttribute('required');
+            }
+
+            courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
+            if (selectedClass) {
+                const filtered = allCourses.filter(opt => {
+                    const courseClass = opt.getAttribute('data-class') || '';
+                    return courseClass.includes(selectedClass) || courseClass.includes('Class ' + selectedClass);
+                });
+                filtered.forEach(opt => courseSelect.appendChild(opt.cloneNode(true)));
+            }
+
+            syncBankMetadata();
+            fetchChapters();
+        }
+
+        function toggleStrategy(strategy) {
+            const bankFilters = document.getElementById('bankFilters');
+            const strategyDesc = document.getElementById('strategyDesc');
+            
+            if (strategy === 'automated') {
+                bankFilters.classList.remove('hidden');
+                strategyDesc.innerText = '* Questions will be pulled automatically from the Question Bank based on these counts.';
+                syncBankMetadata();
+            } else {
+                bankFilters.classList.add('hidden');
+                strategyDesc.innerText = '* System will create empty slots for you to fill manually.';
             }
         }
+
+        function validateQuestionConfig() {
+            const fields = ['mcqCount', 'shortCount', 'mediumCount', 'comprehensionCount'].map(id => document.getElementById(id));
+            const hasAnyFilled = fields.some(f => f && parseInt(f.value) > 0);
+            const badges = document.querySelectorAll('.q-config-badge');
+            const alertBox = document.getElementById('qConfigAlert');
+
+            if (hasAnyFilled) {
+                badges.forEach(b => {
+                    b.innerHTML = '<span class="text-slate-400 font-normal text-[10px]">(Optional)</span>';
+                });
+                fields.forEach(f => {
+                    if (f) f.removeAttribute('required');
+                });
+                if (alertBox) alertBox.classList.add('hidden');
+            } else {
+                badges.forEach(b => {
+                    b.innerHTML = '<span class="text-rose-500 font-bold text-xs">*</span>';
+                });
+                fields.forEach(f => {
+                    if (f) f.setAttribute('required', 'required');
+                });
+            }
+            return hasAnyFilled;
+        }
+
+        function handleQuizFormSubmit(event) {
+            const hasAnyFilled = validateQuestionConfig();
+            if (!hasAnyFilled) {
+                if (event) event.preventDefault();
+                const alertBox = document.getElementById('qConfigAlert');
+                if (alertBox) alertBox.classList.remove('hidden');
+                const firstField = document.getElementById('mcqCount');
+                firstField?.focus();
+                firstField?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return false;
+            }
+            return true;
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            updateView();
+            toggleStrategy('manual');
+            validateQuestionConfig();
+        });
     </script>
 </body>
 

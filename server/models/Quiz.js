@@ -6,10 +6,13 @@ const quizSchema = new mongoose.Schema({
     subject: { type: String },    // Subject the exam covers (all exam types)
     classLevel: { type: String }, // Class level (all exam types)
     chapter: { type: String },    // Syllabus chapter
+    chapters: [{ type: String }], // Multiple syllabus chapters (Optional)
     topic: { type: String },      // Primary topic
     topics: [{ type: String }],   // All selected topics
     subTopic: { type: String, default: '' },
     subTopics: [{ type: String }],
+    isModelTest: { type: Boolean, default: false },
+    isMockTest: { type: Boolean, default: false },
     duration: { type: Number, default: 10 }, // Duration in minutes
     questions: [{
         questionType: { type: String, enum: ['MCQ', 'Short', 'Medium', 'Comprehension'], default: 'MCQ' },
@@ -45,6 +48,8 @@ const quizSchema = new mongoose.Schema({
 quizSchema.index({ course: 1 });
 quizSchema.index({ status: 1 });
 quizSchema.index({ classLevel: 1, subject: 1 });
+quizSchema.index({ isMockTest: 1, status: 1 });
+quizSchema.index({ isModelTest: 1, status: 1 });
 quizSchema.index({ classLevel: 1, subject: 1, chapter: 1, topic: 1 });
 quizSchema.index({ scheduledAt: 1, expiresAt: 1 });
 quizSchema.index({ createdAt: -1 });

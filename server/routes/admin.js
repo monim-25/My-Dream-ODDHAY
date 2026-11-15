@@ -260,8 +260,12 @@ router.get('/compose-quiz', adminProtect, async (req, res) => {
 router.post('/add-quiz', contentAdminProtect, async (req, res) => {
     try {
         await connectDB();
+        const QuestionBank = require('../models/QuestionBank');
+        const Question = require('../models/Question');
 
-        const isModelTest = req.body.isModelTest === 'true';
+        const examCategory = req.body.examCategory || (req.body.isMockTest === 'true' ? 'mock' : (req.body.isModelTest === 'true' ? 'model' : 'course'));
+        const isModelTest = examCategory === 'model' || examCategory === 'mock' || req.body.isModelTest === 'true';
+        const isMockTest = examCategory === 'mock' || req.body.isMockTest === 'true';
         const courseId = isModelTest ? undefined : (req.body.courseId || undefined);
 
         const mcqCount = parseInt(req.body.mcqCount) || 0;
@@ -274,55 +278,175 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
             return res.redirect('/admin/compose-quiz?error=' + encodeURIComponent('Question Configuration required: Please specify at least one question count.'));
         }
 
+        // Parse chapters (Optional, supports multiple)
+        const rawChapters = req.body['chapters[]'] || req.body.chapters || req.body.chapter || [];
+        let chaptersList = [];
+        if (Array.isArray(rawChapters)) {
+            chaptersList = rawChapters.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+        } else if (typeof rawChapters === 'string' && rawChapters.trim()) {
+            chaptersList = rawChapters.split(',').map(c => c.trim()).filter(Boolean);
+        }
+
+        let resolvedSubject = req.body.subject || '';
+        let resolvedClass = req.body.classLevel || '';
+        if (!isModelTest && courseId) {
+            const linkedCourse = await Course.findById(courseId).select('subject classLevel accessType');
+            if (linkedCourse) {
+                resolvedSubject = resolvedSubject || (Array.isArray(linkedCourse.subject) ? linkedCourse.subject[0] : linkedCourse.subject) || '';
+                resolvedClass = resolvedClass || (Array.isArray(linkedCourse.classLevel) ? linkedCourse.classLevel[0] : linkedCourse.classLevel) || '';
+            }
+        }
+
         const quizData = {
             title: req.body.title,
             course: courseId,
+            subject: resolvedSubject,
+            classLevel: resolvedClass,
+            chapter: chaptersList.join(', '),
+            chapters: chaptersList,
             duration: parseInt(req.body.duration) || 10,
             accessType: req.body.accessType || 'Free',
+            isModelTest: isModelTest,
+            isMockTest: isMockTest,
             questions: [],
             addedBy: req.session.user._id
         };
 
-        if (isModelTest) {
-            quizData.subject = req.body.subject;
-            quizData.classLevel = req.body.classLevel;
-        }
+        const strategy = req.body.strategy || 'manual';
 
-        for (let i = 0; i < mcqCount; i++) {
-            quizData.questions.push({
-                questionText: `New MCQ Question ${i + 1}`,
-                options: ['Option A', 'Option B', 'Option C', 'Option D'],
-                correctAnswer: 0,
-                explanation: '',
-                questionType: 'MCQ'
-            });
-        }
-        for (let i = 0; i < shortCount; i++) {
-            quizData.questions.push({
-                questionText: `New Short Question ${i + 1}`,
-                options: [],
-                correctAnswer: 0,
-                explanation: '',
-                questionType: 'Short'
-            });
-        }
-        for (let i = 0; i < mediumCount; i++) {
-            quizData.questions.push({
-                questionText: `New Medium Question ${i + 1}`,
-                options: [],
-                correctAnswer: 0,
-                explanation: '',
-                questionType: 'Medium'
-            });
-        }
-        for (let i = 0; i < comprehensionCount; i++) {
-            quizData.questions.push({
-                questionText: `New Comprehension Question ${i + 1}`,
-                options: [],
-                correctAnswer: 0,
-                explanation: '',
-                questionType: 'Comprehension'
-            });
+        if (strategy === 'automated') {
+            const { bankTopic, bankBoard, bankYear } = req.body;
+            let bankQuery = {};
+            if (resolvedClass) bankQuery.classLevel = resolvedClass;
+            if (resolvedSubject) {
+                bankQuery.$or = [
+                    { subject: resolvedSubject },
+                    { subjects: resolvedSubject }
+                ];
+            }
+            if (bankTopic) bankQuery.topic = bankTopic;
+            if (bankBoard) bankQuery.board = bankBoard;
+            if (bankYear) bankQuery.year = bankYear;
+
+            const matchingBanks = await QuestionBank.find(bankQuery).select('_id').lean();
+            const bankIds = matchingBanks.map(b => b._id);
+
+            const pullQuestions = async (type, count) => {
+                if (!count || count <= 0) return [];
+                let qQuery = { questionType: type };
+                const orClauses = [];
+                if (bankIds.length > 0) orClauses.push({ bankId: { $in: bankIds } });
+                if (resolvedSubject && resolvedClass) {
+                    orClauses.push({
+                        classLevel: resolvedClass,
+                        $or: [{ subject: resolvedSubject }, { subjects: resolvedSubject }],
+                        ...(bankTopic ? { topic: bankTopic } : {})
+                    });
+                }
+                if (orClauses.length > 0) qQuery.$or = orClauses;
+                if (bankBoard) qQuery.board = bankBoard;
+                if (bankYear) qQuery.year = bankYear;
+
+                return await Question.find(qQuery).limit(count).lean();
+            };
+
+            const mcqs = await pullQuestions('MCQ', mcqCount);
+            const shorts = await pullQuestions('Short', shortCount);
+            const mediums = await pullQuestions('Medium', mediumCount);
+            const comps = await pullQuestions('Comprehension', comprehensionCount);
+
+            const allPulled = [...mcqs, ...shorts, ...mediums, ...comps];
+            if (allPulled.length > 0) {
+                quizData.questions = allPulled.map(bq => ({
+                    questionText: bq.questionText || '',
+                    options: bq.options || [],
+                    correctAnswerIndex: (typeof bq.correctAnswer === 'number') ? bq.correctAnswer : (parseInt(bq.correctAnswer) || 0),
+                    correctAnswer: String(bq.correctAnswer || ''),
+                    explanation: bq.explanation || '',
+                    questionType: bq.questionType || 'MCQ',
+                    chapter: bq.chapter || '',
+                    topic: bq.topic || '',
+                    subTopic: bq.subTopic || '',
+                    board: bq.board || '',
+                    year: bq.year || ''
+                }));
+            }
+
+            // Fill remaining if fewer questions were found
+            for (let i = mcqs.length; i < mcqCount; i++) {
+                quizData.questions.push({
+                    questionText: `New MCQ Question ${i + 1}`,
+                    options: ['Option A', 'Option B', 'Option C', 'Option D'],
+                    correctAnswer: 0,
+                    explanation: '',
+                    questionType: 'MCQ'
+                });
+            }
+            for (let i = shorts.length; i < shortCount; i++) {
+                quizData.questions.push({
+                    questionText: `New Short Question ${i + 1}`,
+                    options: [],
+                    correctAnswer: 0,
+                    explanation: '',
+                    questionType: 'Short'
+                });
+            }
+            for (let i = mediums.length; i < mediumCount; i++) {
+                quizData.questions.push({
+                    questionText: `New Medium Question ${i + 1}`,
+                    options: [],
+                    correctAnswer: 0,
+                    explanation: '',
+                    questionType: 'Medium'
+                });
+            }
+            for (let i = comps.length; i < comprehensionCount; i++) {
+                quizData.questions.push({
+                    questionText: `New Comprehension Question ${i + 1}`,
+                    options: [],
+                    correctAnswer: 0,
+                    explanation: '',
+                    questionType: 'Comprehension'
+                });
+            }
+        } else {
+            // Manual Strategy
+            for (let i = 0; i < mcqCount; i++) {
+                quizData.questions.push({
+                    questionText: `New MCQ Question ${i + 1}`,
+                    options: ['Option A', 'Option B', 'Option C', 'Option D'],
+                    correctAnswer: 0,
+                    explanation: '',
+                    questionType: 'MCQ'
+                });
+            }
+            for (let i = 0; i < shortCount; i++) {
+                quizData.questions.push({
+                    questionText: `New Short Question ${i + 1}`,
+                    options: [],
+                    correctAnswer: 0,
+                    explanation: '',
+                    questionType: 'Short'
+                });
+            }
+            for (let i = 0; i < mediumCount; i++) {
+                quizData.questions.push({
+                    questionText: `New Medium Question ${i + 1}`,
+                    options: [],
+                    correctAnswer: 0,
+                    explanation: '',
+                    questionType: 'Medium'
+                });
+            }
+            for (let i = 0; i < comprehensionCount; i++) {
+                quizData.questions.push({
+                    questionText: `New Comprehension Question ${i + 1}`,
+                    options: [],
+                    correctAnswer: 0,
+                    explanation: '',
+                    questionType: 'Comprehension'
+                });
+            }
         }
 
         const quiz = await new Quiz(quizData).save();
@@ -339,7 +463,7 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
             } catch (notifErr) {}
         }
 
-        res.redirect(`/superadmin/quiz/${quiz._id}`);
+        res.redirect(`/admin/quiz/${quiz._id}`);
     } catch (err) {
         console.error(err);
         res.redirect('/admin/quizzes');
@@ -5932,6 +6056,38 @@ router.post('/topics/:id/restore', adminProtect, topicController.restoreTopic);
 router.post('/topics/:id/permanent', adminProtect, topicController.permanentDeleteTopic);
 router.delete('/topics/:id', adminProtect, topicController.permanentDeleteTopic);
 
+
+router.get('/api/bank-metadata', adminProtect, async (req, res) => {
+    try {
+        await connectDB();
+        const QuestionBank = require('../models/QuestionBank');
+        const { classLevel, subject, topic, board, year } = req.query;
+        
+        let baseQuery = {};
+        if (classLevel) baseQuery.classLevel = classLevel;
+        if (subject) {
+            baseQuery.$or = [
+                { subject: subject },
+                { subjects: subject }
+            ];
+        }
+        
+        const allBanks = await QuestionBank.find(baseQuery).lean();
+        const topics = [...new Set(allBanks.map(b => b.topic).filter(Boolean))].sort();
+        
+        let filteredQuery = { ...baseQuery };
+        if (topic) filteredQuery.topic = topic;
+        const topicBanks = await QuestionBank.find(filteredQuery).lean();
+        const boards = [...new Set(topicBanks.map(b => b.board).filter(Boolean))].sort();
+        
+        let boardQuery = { ...filteredQuery };
+        if (board) boardQuery.board = board;
+        const boardBanks = await QuestionBank.find(boardQuery).lean();
+        const years = [...new Set(boardBanks.map(b => b.year).filter(Boolean))].sort((a, b) => b - a);
+        
+        res.json({ success: true, topics, boards, years });
+    } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+});
 
 module.exports = router;
 

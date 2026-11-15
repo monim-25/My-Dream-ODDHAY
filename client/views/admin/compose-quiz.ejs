@@ -82,10 +82,14 @@
                             <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
                                 <div class="md:col-span-1">
                                     <label class="form-label">Exam Type</label>
-                                    <select name="isModelTest" id="isModelTest" onchange="updateView()" class="form-input cursor-pointer">
-                                        <option value="false">Course-Linked Exam</option>
-                                        <option value="true">Standalone Model Test</option>
+                                    <select name="examCategory" id="examCategory" onchange="updateView()" class="form-input cursor-pointer font-bold">
+                                        <option value="course">Course-Linked Exam</option>
+                                        <option value="model">Standalone Model Test</option>
+                                        <option value="mock">Mock Test</option>
                                     </select>
+                                    <!-- Compatibility flags for backend -->
+                                    <input type="hidden" name="isModelTest" id="isModelTest" value="false">
+                                    <input type="hidden" name="isMockTest" id="isMockTest" value="false">
                                 </div>
                                 <div class="md:col-span-1">
                                     <label class="form-label">Class Level</label>
@@ -98,22 +102,40 @@
                                 </div>
                                 <div id="courseContainer" class="md:col-span-2">
                                     <label class="form-label">Link to Course</label>
-                                    <select name="courseId" id="courseId" class="form-input cursor-pointer">
+                                    <select name="courseId" id="courseId" onchange="onCourseSelected()" class="form-input cursor-pointer">
                                         <option value="">-- Select Course --</option>
                                         <% courses.forEach(course => { %>
-                                            <option value="<%= course._id %>" data-class="<%= course.classLevel %>"><%= course.title %></option>
+                                            <option value="<%= course._id %>" data-class="<%= course.classLevel %>" data-subject="<%= course.subject %>"><%= course.title %></option>
                                         <% }); %>
                                     </select>
                                 </div>
-                                <div id="subjectContainer" class="md:col-span-1 hidden">
+                                <div id="subjectContainer" class="md:col-span-2 hidden">
                                     <label class="form-label">Subject</label>
-                                    <select name="subject" class="form-input cursor-pointer">
+                                    <select name="subject" id="subjectSelect" onchange="onSubjectOrClassChanged()" class="form-input cursor-pointer">
                                         <option value="">-- Select Subject --</option>
                                         <% (subjects || []).forEach(sub => { %>
                                             <option value="<%= sub %>"><%= sub %></option>
                                         <% }) %>
                                     </select>
                                 </div>
+                            </div>
+
+                            <!-- Chapter Selection (Optional - Multi Select) -->
+                            <div id="chapterSection" class="mt-6 pt-6 border-t border-slate-100 dark:border-white/5">
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="form-label mb-0 flex items-center gap-2">
+                                        <span>Select Chapters</span>
+                                        <span class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">(Optional)</span>
+                                    </label>
+                                    <span id="chapterCountBadge" class="text-[11px] font-medium text-slate-400">0 selected</span>
+                                </div>
+                                <p class="text-[11px] text-slate-400 dark:text-slate-500 mb-3">You can select one or more chapters to scope this assessment, or leave unselected for full syllabus coverage.</p>
+
+                                <!-- Chapter Pills Container -->
+                                <div id="chaptersContainer" class="min-h-[44px] p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex flex-wrap gap-2 items-center">
+                                    <span id="chapterPlaceholder" class="text-[11px] text-slate-400 italic">Select Class Level and Subject to load syllabus chapters...</span>
+                                </div>
+                                <input type="hidden" name="chapter" id="chapterSummaryInput" value="">
                             </div>
                         </div>
 
@@ -224,19 +246,26 @@
 
     <script>
         const allCourses = Array.from(document.querySelectorAll('#courseId option')).slice(1);
+        let selectedChapters = new Set();
+
+        function getActiveSubject() {
+            const category = document.getElementById('examCategory').value;
+            if (category === 'course') {
+                const courseSelect = document.getElementById('courseId');
+                const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
+                if (selectedOpt && selectedOpt.value) {
+                    return selectedOpt.getAttribute('data-subject') || selectedOpt.text.split('-')[0].trim();
+                }
+                return '';
+            } else {
+                const subSelect = document.getElementById('subjectSelect');
+                return subSelect ? subSelect.value : '';
+            }
+        }
 
         async function syncBankMetadata() {
             const classLevel = document.getElementById('classLevel').value;
-            const isModelTest = document.getElementById('isModelTest').value === 'true';
-            let subject = '';
-            
-            if (isModelTest) {
-                subject = document.querySelector('select[name="subject"]').value;
-            } else {
-                const courseSelect = document.getElementById('courseId');
-                const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
-                subject = selectedOpt ? selectedOpt.text.split('-')[0].trim() : '';
-            }
+            const subject = getActiveSubject();
 
             const topic = document.getElementById('bankTopic').value;
             const board = document.getElementById('bankBoard').value;
@@ -245,7 +274,7 @@
             if (!classLevel || !subject) return;
 
             try {
-                const url = `/admin/api/bank-metadata?classLevel=${classLevel}&subject=${subject}&topic=${topic}&board=${board}&year=${year}`;
+                const url = `/admin/api/bank-metadata?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}&topic=${encodeURIComponent(topic)}&board=${encodeURIComponent(board)}&year=${encodeURIComponent(year)}`;
                 const response = await fetch(url);
                 const data = await response.json();
 
@@ -255,6 +284,125 @@
                     updateDropdown('bankYear', data.years, year, 'Any Year');
                 }
             } catch (err) { console.error('Failed to sync metadata'); }
+        }
+
+        async function fetchChapters() {
+            const classLevel = document.getElementById('classLevel').value;
+            const subject = getActiveSubject();
+            const container = document.getElementById('chaptersContainer');
+
+            if (!classLevel || !subject) {
+                container.innerHTML = '<span id="chapterPlaceholder" class="text-[11px] text-slate-400 italic">Select Class Level and Subject to load syllabus chapters...</span>';
+                selectedChapters.clear();
+                updateChapterSummary();
+                return;
+            }
+
+            container.innerHTML = '<span class="text-[11px] text-slate-400 italic flex items-center gap-1.5"><span class="material-symbols-rounded animate-spin text-sm">sync</span> Loading chapters...</span>';
+
+            try {
+                const response = await fetch(`/admin/api/chapters?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}`);
+                const data = await response.json();
+
+                container.innerHTML = '';
+
+                if (data.success && Array.isArray(data.chapters) && data.chapters.length > 0) {
+                    data.chapters.forEach((ch, idx) => {
+                        const chapterName = (typeof ch === 'string') ? ch : (ch.name || `Chapter ${ch.number || (idx + 1)}`);
+                        const pill = createChapterPill(chapterName);
+                        container.appendChild(pill);
+                    });
+                } else {
+                    container.innerHTML = '<span class="text-[11px] text-slate-400 italic">No predefined chapters found for this subject. You can add custom chapter tags below.</span>';
+                }
+
+                // Add Custom Chapter Button
+                const addCustomBtn = document.createElement('button');
+                addCustomBtn.type = 'button';
+                addCustomBtn.className = 'inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-800 text-primary border border-primary/30 hover:bg-primary/5 transition-all cursor-pointer active:scale-95';
+                addCustomBtn.innerHTML = '<span class="material-symbols-rounded text-sm">add</span> Add Chapter';
+                addCustomBtn.onclick = promptAddCustomChapter;
+                container.appendChild(addCustomBtn);
+
+            } catch (err) {
+                console.error('Failed to fetch chapters:', err);
+                container.innerHTML = '<span class="text-[11px] text-rose-500 italic">Failed to load chapters. You can still add manually or proceed.</span>';
+            }
+        }
+
+        function createChapterPill(chapterName) {
+            const label = document.createElement('label');
+            label.className = 'chapter-pill cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all select-none bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-primary/50';
+            
+            const isChecked = selectedChapters.has(chapterName);
+            if (isChecked) {
+                label.classList.add('bg-primary/10', 'border-primary', 'text-primary', 'dark:text-primary');
+            }
+
+            label.innerHTML = `
+                <input type="checkbox" name="chapters[]" value="${chapterName}" ${isChecked ? 'checked' : ''} class="w-3.5 h-3.5 rounded text-primary border-slate-300 focus:ring-primary accent-primary">
+                <span>${chapterName}</span>
+            `;
+
+            const input = label.querySelector('input');
+            input.onchange = function() {
+                if (this.checked) {
+                    selectedChapters.add(chapterName);
+                    label.classList.add('bg-primary/10', 'border-primary', 'text-primary', 'dark:text-primary');
+                } else {
+                    selectedChapters.delete(chapterName);
+                    label.classList.remove('bg-primary/10', 'border-primary', 'text-primary', 'dark:text-primary');
+                }
+                updateChapterSummary();
+            };
+
+            return label;
+        }
+
+        function promptAddCustomChapter() {
+            const customName = prompt('Enter custom chapter name:');
+            if (customName && customName.trim()) {
+                const trimmed = customName.trim();
+                selectedChapters.add(trimmed);
+                const container = document.getElementById('chaptersContainer');
+                const pill = createChapterPill(trimmed);
+                const addBtn = container.querySelector('button');
+                if (addBtn) container.insertBefore(pill, addBtn);
+                else container.appendChild(pill);
+                updateChapterSummary();
+            }
+        }
+
+        function updateChapterSummary() {
+            const count = selectedChapters.size;
+            const badge = document.getElementById('chapterCountBadge');
+            const summaryInput = document.getElementById('chapterSummaryInput');
+            if (badge) badge.innerText = `${count} selected`;
+            if (summaryInput) summaryInput.value = Array.from(selectedChapters).join(', ');
+        }
+
+        function onCourseSelected() {
+            const courseSelect = document.getElementById('courseId');
+            const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
+            if (selectedOpt && selectedOpt.value) {
+                const courseClass = selectedOpt.getAttribute('data-class');
+                if (courseClass) {
+                    const classSelect = document.getElementById('classLevel');
+                    for (let opt of classSelect.options) {
+                        if (opt.value && courseClass.includes(opt.value)) {
+                            classSelect.value = opt.value;
+                            break;
+                        }
+                    }
+                }
+            }
+            syncBankMetadata();
+            fetchChapters();
+        }
+
+        function onSubjectOrClassChanged() {
+            syncBankMetadata();
+            fetchChapters();
         }
 
         function updateDropdown(id, items, currentVal, placeholder) {
@@ -267,31 +415,42 @@
         }
 
         function updateView() {
-            const isModelTest = document.getElementById('isModelTest').value === 'true';
+            const category = document.getElementById('examCategory').value;
+            const isModelTestInput = document.getElementById('isModelTest');
+            const isMockTestInput = document.getElementById('isMockTest');
+
+            const isModelOrMock = (category === 'model' || category === 'mock');
+            isModelTestInput.value = isModelOrMock ? 'true' : 'false';
+            isMockTestInput.value = (category === 'mock') ? 'true' : 'false';
+
             const selectedClass = document.getElementById('classLevel').value;
-            
             const courseContainer = document.getElementById('courseContainer');
             const subjectContainer = document.getElementById('subjectContainer');
             const courseSelect = document.getElementById('courseId');
+            const subjectSelect = document.getElementById('subjectSelect');
 
-            if (isModelTest) {
+            if (isModelOrMock) {
                 courseContainer.classList.add('hidden');
                 subjectContainer.classList.remove('hidden');
+                if (subjectSelect) subjectSelect.setAttribute('required', 'required');
+                if (courseSelect) courseSelect.removeAttribute('required');
             } else {
                 courseContainer.classList.remove('hidden');
                 subjectContainer.classList.add('hidden');
+                if (subjectSelect) subjectSelect.removeAttribute('required');
             }
 
             courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
             if (selectedClass) {
                 const filtered = allCourses.filter(opt => {
-                    const courseClass = opt.getAttribute('data-class');
+                    const courseClass = opt.getAttribute('data-class') || '';
                     return courseClass.includes(selectedClass) || courseClass.includes('Class ' + selectedClass);
                 });
                 filtered.forEach(opt => courseSelect.appendChild(opt.cloneNode(true)));
             }
-            
+
             syncBankMetadata();
+            fetchChapters();
         }
 
         function toggleStrategy(strategy) {
