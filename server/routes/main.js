@@ -4810,16 +4810,43 @@ router.post('/submit-quiz/:id', protect, async (req, res) => {
         student.markModified('dailyGoals');
         await student.save();
 
-        // Behavioral Trigger: Low Score Warning
-        const percentage = (score / quiz.questions.length) * 100;
-        if (percentage < 50) {
-            await new Notification({
-                user: student._id,
-                title: 'পড়ালেখায় মনোযোগ দিন!',
-                message: `আপনি "${quiz.title}" কুইজে মাত্র ${percentage.toFixed(0)}% নাম্বার পেয়েছেন। বিষয়গুলো আরও ভালো করে পড়া প্রয়োজন।`,
-                type: 'exam',
-                link: `/quiz/${quiz._id}`
-            }).save();
+        // Real-time Notification for Student & Linked Guardians
+        const percentage = Math.round((score / quiz.questions.length) * 100);
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            
+            // 1. Notify Student
+            const studentNotif = {
+                title: percentage >= 50 ? 'কুইজের ফলাফল প্রকাশ 🎯' : 'পড়ালেখায় মনোযোগ দিন ⚠️',
+                body: percentage >= 50 
+                    ? `অভিনন্দন! আপনি "${quiz.title}" কুইজে ${score}/${quiz.questions.length} (${percentage}%) স্কোর পেয়েছেন।`
+                    : `আপনি "${quiz.title}" কুইজে ${score}/${quiz.questions.length} (${percentage}%) নাম্বার পেয়েছেন। বিষয়গুলো আরও ভালো করে পড়া প্রয়োজন।`,
+                url: `/quiz/${quiz._id}`,
+                type: 'exam'
+            };
+            pushNotificationService.sendToUser(student._id, studentNotif).catch(() => {});
+
+            // 2. Notify Linked Parent(s) / Guardian(s)
+            const parents = await User.find({
+                $or: [
+                    { children: student._id },
+                    { _id: { $in: (student.parentRequests || []).filter(pr => pr.status === 'accepted').map(pr => pr.parent) } }
+                ]
+            }).select('_id').lean();
+
+            if (parents && parents.length > 0) {
+                const parentNotif = {
+                    title: 'সন্তানের পরীক্ষার ফলাফল 📊',
+                    body: `আপনার সন্তান ${student.name} "${quiz.title}" কুইজে অংশগ্রহণ করেছে (স্কোর: ${score}/${quiz.questions.length}, ${percentage}%)।`,
+                    url: '/parent/dashboard',
+                    type: 'exam'
+                };
+                for (const p of parents) {
+                    pushNotificationService.sendToUser(p._id, parentNotif).catch(() => {});
+                }
+            }
+        } catch (notifErr) {
+            console.error('Quiz notification error:', notifErr);
         }
 
         res.render('quiz-result', { score, total: quiz.questions.length });

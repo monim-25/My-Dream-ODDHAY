@@ -1526,6 +1526,22 @@ router.post('/qa/:id/answer', teacherProtect, (req, res, next) => {
             }
             return res.status(404).send('Question not found');
         }
+
+        // Notify Student who asked the question
+        if (qa.askedBy) {
+            try {
+                const pushNotificationService = require('../services/pushNotificationService');
+                const teacherName = (qa.answeredBy && qa.answeredBy.name) || req.session.user?.name || 'শিক্ষক';
+                pushNotificationService.sendToUser(qa.askedBy, {
+                    title: 'আপনার প্রশ্নের উত্তর দেওয়া হয়েছে 💡',
+                    body: `${teacherName} আপনার প্রশ্নের উত্তর দিয়েছেন: "${(qa.question || '').substring(0, 60)}..."`,
+                    url: `/qa#qa-${qa._id}`,
+                    type: 'message'
+                }).catch(() => {});
+            } catch (notifErr) {
+                console.error('QA answer notification error:', notifErr);
+            }
+        }
         
         if (req.xhr || req.headers.accept?.includes('application/json')) {
             return res.json({ 
@@ -2488,6 +2504,23 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
             }
         }
 
+        // Notify students in target classes about the new note
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            const targetClasses = (parsedClasses.length > 0 ? parsedClasses : ['Class 10']);
+            const noteNotif = {
+                title: 'নতুন স্টাডি নোট যুক্ত হয়েছে 📚',
+                body: `${subject || 'Academic'}: "${title}" স্টাডি মেটেরিয়ালে যুক্ত হয়েছে।`,
+                url: '/notes',
+                type: 'course'
+            };
+            for (const cls of targetClasses) {
+                pushNotificationService.sendToClassLevel(cls, noteNotif).catch(() => {});
+            }
+        } catch (notifErr) {
+            console.error('Note upload notification error:', notifErr);
+        }
+
         let redirectUrl = '/teacher/notes';
         if (subject && subject !== 'all') {
             redirectUrl += '?subject=' + encodeURIComponent(subject);
@@ -3271,6 +3304,23 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             delete syncQuizData._id;
             await new Quiz(syncQuizData).save();
         }
+
+        // Notify Students in target classes about the new quiz
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            const targetClasses = [...new Set([primaryClass, ...extraClasses].filter(Boolean))];
+            const quizNotif = {
+                title: 'নতুন পরীক্ষা লাইভ হয়েছে! 📝',
+                body: `"${quiz.title}" পরীক্ষাটি এখন উপলব্ধ (${targetClasses.join(', ')} - ${quiz.subject || ''})। দ্রুত অংশগ্রহণ করুন!`,
+                url: `/quiz/${quiz._id}`,
+                type: 'exam'
+            };
+            for (const cls of targetClasses) {
+                pushNotificationService.sendToClassLevel(cls, quizNotif).catch(() => {});
+            }
+        } catch (notifErr) {
+            console.error('Quiz publish notification error:', notifErr);
+        }
         
         if (req.body.activeFlow === 'courses' && courseId) {
             res.redirect(`/teacher/course/${courseId}/quiz/${quiz._id}`);
@@ -3624,6 +3674,23 @@ router.post('/add-question-bank', teacherProtect, (req, res, next) => {
             status: 'pending'
         });
         await newBank.save();
+
+        // Notify Admin & Superadmin about new QuestionBank submission
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            const teacherName = req.session.user ? req.session.user.name : 'Teacher';
+            const bankNotif = {
+                title: 'নতুন প্রশ্নব্যাংক পর্যালোচনার জন্য জমা 📋',
+                body: `শিক্ষক ${teacherName} "${newBank.title || newBank.topic}" (${subject} - ${(classLevelArray || []).join(', ')}) পর্যালোচনার জন্য জমা দিয়েছেন।`,
+                url: '/admin/question-bank-approvals',
+                type: 'system'
+            };
+            pushNotificationService.sendToRole('superadmin', bankNotif).catch(() => {});
+            pushNotificationService.sendToRole('admin', bankNotif).catch(() => {});
+        } catch(notifErr) {
+            console.error('Question bank submit notification error:', notifErr);
+        }
+
         res.redirect('/teacher/question-bank?success=Question Bank submitted for admin approval');
     } catch (err) {
         console.error('Add Question Bank Error:', err);

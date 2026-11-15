@@ -218,12 +218,34 @@ router.post('/submit', protect, async (req, res) => {
 
                 try {
                     const pushNotificationService = require('../services/pushNotificationService');
-                    pushNotificationService.sendToRole('superadmin', {
+                    const adminPayNotif = {
                         title: `Payment Received: ৳${finalAmount}`,
                         body: `${user.name} enrolled in "${course.title}" via ${(paymentMethod || 'Manual').toUpperCase()}.`,
-                        url: '/superadmin/payments',
-                        type: 'payment_received'
-                    }).catch(() => {});
+                        url: '/admin/payments',
+                        type: 'payment'
+                    };
+                    pushNotificationService.sendToRole('superadmin', adminPayNotif).catch(() => {});
+                    pushNotificationService.sendToRole('admin', adminPayNotif).catch(() => {});
+
+                    // Notify Linked Parent(s)
+                    const parents = await User.find({
+                        $or: [
+                            { children: user._id },
+                            { _id: { $in: (user.parentRequests || []).filter(pr => pr.status === 'accepted').map(pr => pr.parent) } }
+                        ]
+                    }).select('_id').lean();
+
+                    if (parents && parents.length > 0) {
+                        const parentPayNotif = {
+                            title: 'কোর্স পেমেন্ট নিশ্চিতকরণ 🧾',
+                            body: `আপনার সন্তান ${user.name} এর "${course.title}" ফি ৳${finalAmount} সফলভাবে পরিশোধিত হয়েছে।`,
+                            url: '/parent/dashboard',
+                            type: 'payment'
+                        };
+                        for (const p of parents) {
+                            pushNotificationService.sendToUser(p._id, parentPayNotif).catch(() => {});
+                        }
+                    }
                 } catch(e) {}
             }
             if (course) {
@@ -702,6 +724,37 @@ router.post('/gateway/execute', protect, async (req, res) => {
                 type: 'payment',
                 link: redirectUrl
             });
+
+            const pushNotificationService = require('../services/pushNotificationService');
+            const adminPayNotif = {
+                title: `Payment Received: ৳${session.finalAmount}`,
+                body: `${user ? user.name : 'Student'} completed payment via ${session.paymentMethod.toUpperCase()} (TrxID: ${transactionId}).`,
+                url: '/admin/payments',
+                type: 'payment'
+            };
+            pushNotificationService.sendToRole('superadmin', adminPayNotif).catch(() => {});
+            pushNotificationService.sendToRole('admin', adminPayNotif).catch(() => {});
+
+            if (user) {
+                const parents = await User.find({
+                    $or: [
+                        { children: user._id },
+                        { _id: { $in: (user.parentRequests || []).filter(pr => pr.status === 'accepted').map(pr => pr.parent) } }
+                    ]
+                }).select('_id').lean();
+
+                if (parents && parents.length > 0) {
+                    const parentPayNotif = {
+                        title: 'কোর্স পেমেন্ট নিশ্চিতকরণ 🧾',
+                        body: `আপনার সন্তান ${user.name} এর পেমেন্ট ৳${session.finalAmount} (${session.paymentMethod.toUpperCase()}) সফলভাবে সম্পন্ন হয়েছে।`,
+                        url: '/parent/dashboard',
+                        type: 'payment'
+                    };
+                    for (const p of parents) {
+                        pushNotificationService.sendToUser(p._id, parentPayNotif).catch(() => {});
+                    }
+                }
+            }
         } catch (e) { /* ignore notification errors */ }
 
         // Clear active gateway session

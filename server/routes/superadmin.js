@@ -188,6 +188,19 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
         }
 
         const quiz = await new Quiz(quizData).save();
+
+        if (quiz.classLevel) {
+            try {
+                const pushNotificationService = require('../services/pushNotificationService');
+                pushNotificationService.sendToClassLevel(quiz.classLevel, {
+                    title: 'নতুন পরীক্ষা লাইভ হয়েছে! 📝',
+                    body: `"${quiz.title}" পরীক্ষাটি শুরু হয়েছে। দ্রুত অংশগ্রহণ করুন!`,
+                    url: `/quiz/${quiz._id}`,
+                    type: 'exam'
+                }).catch(() => {});
+            } catch (notifErr) {}
+        }
+
         res.redirect(`/superadmin/quiz/${quiz._id}`);
     } catch (err) {
         console.error(err);
@@ -2573,6 +2586,24 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
         parentFolderId: resolvedParentFolderId,
         addedBy: req.session.user._id
     }).save();
+
+    // Notify students in target classes about the new note
+    try {
+        const pushNotificationService = require('../services/pushNotificationService');
+        const targetClasses = (classLevelArray.length > 0 ? classLevelArray : ['Class 10']);
+        const noteNotif = {
+            title: 'নতুন স্টাডি নোট যুক্ত হয়েছে 📚',
+            body: `${subject || 'Academic'}: "${title}" স্টাডি মেটেরিয়ালে যুক্ত হয়েছে।`,
+            url: '/notes',
+            type: 'course'
+        };
+        for (const cls of targetClasses) {
+            pushNotificationService.sendToClassLevel(cls, noteNotif).catch(() => {});
+        }
+    } catch (notifErr) {
+        console.error('Note upload notification error:', notifErr);
+    }
+
     res.redirect('/superadmin/notes?success=Note uploaded successfully');
 });
 
@@ -3402,7 +3433,21 @@ router.get('/qas', adminProtect, async (req, res) => {
 router.post('/qa-answer/:id', contentAdminProtect, async (req, res) => {
     await connectDB();
     if (req.session.user.role === 'superadmin') return res.status(403).send('সুপার অ্যাডমিন উত্তর দিতে পারবেন না।');
-    await QA.findByIdAndUpdate(req.params.id, { answer: req.body.answer, status: 'resolved', answeredBy: req.session.userId });
+    const qa = await QA.findByIdAndUpdate(req.params.id, { answer: req.body.answer, status: 'resolved', answeredBy: req.session.userId }, { new: true });
+    
+    // Notify Student who asked the question
+    if (qa && qa.askedBy) {
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            pushNotificationService.sendToUser(qa.askedBy, {
+                title: 'আপনার প্রশ্নের উত্তর দেওয়া হয়েছে 💡',
+                body: `অ্যাকাডেমিক টিম আপনার প্রশ্নের উত্তর দিয়েছেন: "${(qa.question || '').substring(0, 60)}..."`,
+                url: `/qa#qa-${qa._id}`,
+                type: 'message'
+            }).catch(() => {});
+        } catch (notifErr) {}
+    }
+
     res.redirect('/superadmin/qas');
 });
 
@@ -4175,6 +4220,17 @@ router.post('/create-role', superAdminProtect, async (req, res) => {
 
         await newUser.save();
         await logActivity(req, 'CREATE', `Created staff account: ${name} (${role}) with classes: ${classLevelString || 'N/A'} and subjects: ${teachingSubjectStr || 'N/A'}`, 'User', newUser._id);
+
+        // Welcome Notification to the newly created staff member
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            pushNotificationService.sendToUser(newUser._id, {
+                title: 'স্বাগতম অধ্যয়ন প্যানেলে! 🎓',
+                body: `আপনার ${role === 'teacher' ? 'শিক্ষক' : role} অ্যাকাউন্ট প্রস্তুত হয়েছে। আপনার দায়িত্বপ্রাপ্ত বিষয়: ${teachingSubjectStr || 'General'}।`,
+                url: role === 'teacher' ? '/teacher/dashboard' : '/dashboard',
+                type: 'system'
+            }).catch(() => {});
+        } catch(e) {}
 
         // Send invite email if requested (Non-blocking)
         if (sendInviteEmail === 'on') {
