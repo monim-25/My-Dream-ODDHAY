@@ -889,13 +889,19 @@
                         </div>
                     </div>
 
-                    <!-- Step 1 Footer Buttons: Cancel and Next -->
+                    <!-- Step 1 Footer Buttons: Cancel, Save Directly, and Next -->
                     <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                         <button type="button" onclick="closeModal('unifiedTopicModal')" class="h-9 px-3 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
-                        <button type="button" id="superTopicNextBtn" onclick="goToSuperadminTopicStep(2)" class="h-9 px-4 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-semibold transition-all flex items-center gap-1.5 shadow-xs">
-                            <span>Next</span>
-                            <span class="material-symbols-rounded text-sm">arrow_forward</span>
-                        </button>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="submitSuperadminDirectlyFromStep1()" class="h-9 px-3.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-all flex items-center gap-1.5 shadow-xs" title="Save topics directly without adding sub-topics">
+                                <span class="material-symbols-rounded text-sm">save</span>
+                                <span>Save Topics</span>
+                            </button>
+                            <button type="button" id="superTopicNextBtn" onclick="goToSuperadminTopicStep(2)" class="h-9 px-3.5 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-semibold transition-all flex items-center gap-1.5 shadow-xs" title="Review topics and add sub-topics">
+                                <span>Next (Add Sub-topics)</span>
+                                <span class="material-symbols-rounded text-sm">arrow_forward</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1663,67 +1669,86 @@
             document.getElementById('unifiedTopicModal').classList.remove('hidden');
         }
 
+        function collectSuperadminStep1Topics() {
+            const checkedClasses = Array.from(document.querySelectorAll('#unifiedModalClassGrid input[name="targetClass"]:checked')).map(cb => cb.value);
+            if (checkedClasses.length === 0) {
+                Swal.fire('Select Class', 'Please select at least one class for these topics.', 'warning');
+                return false;
+            }
+            const subject = document.getElementById('unifiedSubject')?.value.trim();
+            if (!subject) {
+                Swal.fire('Select Subject', 'Please enter or select a subject.', 'warning');
+                return false;
+            }
+            const chapterName = document.getElementById('unifiedChapterName')?.value.trim();
+            if (!chapterName) {
+                Swal.fire('Chapter Required', 'Please enter a Chapter Name.', 'warning');
+                return false;
+            }
+            const chapterNumber = parseInt(document.getElementById('unifiedChapterNumber')?.value, 10);
+            if (isNaN(chapterNumber) || chapterNumber < 1) {
+                Swal.fire('Invalid Chapter #', 'Please enter a valid Chapter Number (1 or greater).', 'warning');
+                return false;
+            }
+
+            if (currentModalMode === 'single') {
+                const singleName = document.getElementById('singleTopicName')?.value.trim();
+                if (!singleName && superStagedTopics.length === 0) {
+                    Swal.fire('Topic Name Required', 'Please enter a Topic Name.', 'warning');
+                    return false;
+                }
+                if (singleName) {
+                    const existingSubs = (superStagedTopics[0] && superStagedTopics[0].subTopics) ? superStagedTopics[0].subTopics : [];
+                    superStagedTopics = [{
+                        name: singleName,
+                        code: document.getElementById('singleTopicCode')?.value.trim() || '',
+                        difficulty: document.getElementById('singleTopicDifficulty')?.value || 'Medium',
+                        description: document.getElementById('singleTopicDesc')?.value.trim() || '',
+                        subTopics: existingSubs
+                    }];
+                }
+            } else {
+                const bulkText = document.getElementById('bulkTopicList')?.value.trim();
+                if (!bulkText && superStagedTopics.length === 0) {
+                    Swal.fire('Topics Required', 'Please enter topic names (one per line).', 'warning');
+                    return false;
+                }
+                if (bulkText) {
+                    const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean);
+                    const subTopicsMap = new Map();
+                    superStagedTopics.forEach(t => {
+                        if (t && t.name) subTopicsMap.set(t.name.toLowerCase(), t.subTopics || []);
+                    });
+                    const bulkDiff = document.getElementById('bulkTopicDifficulty')?.value || 'Medium';
+                    superStagedTopics = lines.map(lineName => ({
+                        name: lineName,
+                        code: '',
+                        difficulty: bulkDiff,
+                        description: '',
+                        subTopics: subTopicsMap.get(lineName.toLowerCase()) || []
+                    }));
+                }
+            }
+
+            if (superStagedTopics.length === 0) {
+                Swal.fire('No Topics', 'Please enter at least one topic name.', 'warning');
+                return false;
+            }
+            return true;
+        }
+
+        function submitSuperadminDirectlyFromStep1() {
+            if (!collectSuperadminStep1Topics()) return;
+            submitSuperadminStagedTopics();
+        }
+
         function goToSuperadminTopicStep(step) {
             if (step === 2) {
-                // Validate Step 1
-                const checkedClasses = Array.from(document.querySelectorAll('#unifiedModalClassGrid input[name="targetClass"]:checked')).map(cb => cb.value);
-                if (checkedClasses.length === 0) {
-                    return Swal.fire('Select Class', 'Please select at least one class for these topics.', 'warning');
-                }
+                if (!collectSuperadminStep1Topics()) return;
+
                 const subject = document.getElementById('unifiedSubject')?.value.trim();
-                if (!subject) {
-                    return Swal.fire('Select Subject', 'Please enter or select a subject.', 'warning');
-                }
                 const chapterName = document.getElementById('unifiedChapterName')?.value.trim();
-                if (!chapterName) {
-                    return Swal.fire('Chapter Required', 'Please enter a Chapter Name.', 'warning');
-                }
-                const chapterNumber = parseInt(document.getElementById('unifiedChapterNumber')?.value, 10);
-                if (isNaN(chapterNumber) || chapterNumber < 1) {
-                    return Swal.fire('Invalid Chapter #', 'Please enter a valid Chapter Number (1 or greater).', 'warning');
-                }
-
-                // Gather topics from Step 1
-                if (currentModalMode === 'single') {
-                    const singleName = document.getElementById('singleTopicName')?.value.trim();
-                    if (!singleName && superStagedTopics.length === 0) {
-                        return Swal.fire('Topic Name Required', 'Please enter a Topic Name.', 'warning');
-                    }
-                    if (singleName) {
-                        const existingSubs = (superStagedTopics[0] && superStagedTopics[0].subTopics) ? superStagedTopics[0].subTopics : [];
-                        superStagedTopics = [{
-                            name: singleName,
-                            code: document.getElementById('singleTopicCode')?.value.trim() || '',
-                            difficulty: document.getElementById('singleTopicDifficulty')?.value || 'Medium',
-                            description: document.getElementById('singleTopicDesc')?.value.trim() || '',
-                            subTopics: existingSubs
-                        }];
-                    }
-                } else {
-                    const bulkText = document.getElementById('bulkTopicList')?.value.trim();
-                    if (!bulkText && superStagedTopics.length === 0) {
-                        return Swal.fire('Topics Required', 'Please enter topic names (one per line).', 'warning');
-                    }
-                    if (bulkText) {
-                        const lines = bulkText.split('\n').map(l => l.trim()).filter(Boolean);
-                        const subTopicsMap = new Map();
-                        superStagedTopics.forEach(t => {
-                            if (t && t.name) subTopicsMap.set(t.name.toLowerCase(), t.subTopics || []);
-                        });
-                        const bulkDiff = document.getElementById('bulkTopicDifficulty')?.value || 'Medium';
-                        superStagedTopics = lines.map(lineName => ({
-                            name: lineName,
-                            code: '',
-                            difficulty: bulkDiff,
-                            description: '',
-                            subTopics: subTopicsMap.get(lineName.toLowerCase()) || []
-                        }));
-                    }
-                }
-
-                if (superStagedTopics.length === 0) {
-                    return Swal.fire('No Topics', 'Please enter at least one topic name.', 'warning');
-                }
+                const chapterNumber = parseInt(document.getElementById('unifiedChapterNumber')?.value, 10) || 1;
 
                 // Render Step 2
                 superCurrentStep = 2;

@@ -885,8 +885,16 @@ const createTopic = async (req, res) => {
                 if (subTopicsArray.length > 0) {
                     const merged = Array.from(new Set([...(existing.subTopics || []), ...subTopicsArray]));
                     existing.subTopics = merged;
-                    await existing.save();
                 }
+                if (existing.status === 'rejected') {
+                    existing.status = topicStatus;
+                    existing.rejectionReason = '';
+                    existing.submittedBy = isTeacher ? req.session.user._id : existing.submittedBy;
+                } else if (!isTeacher) {
+                    existing.status = 'approved';
+                }
+                existing.updatedAt = new Date();
+                await existing.save();
                 createdTopics.push(existing);
             } else {
                 const newTopic = await Topic.create({
@@ -1065,8 +1073,16 @@ const bulkCreateTopics = async (req, res) => {
                     if (item.subTopics && item.subTopics.length > 0) {
                         const mergedSubTopics = Array.from(new Set([...(existing.subTopics || []), ...item.subTopics]));
                         existing.subTopics = mergedSubTopics;
-                        await existing.save();
                     }
+                    if (existing.status === 'rejected') {
+                        existing.status = topicStatus;
+                        existing.rejectionReason = '';
+                        existing.submittedBy = isTeacher ? req.session.user._id : existing.submittedBy;
+                    } else if (!isTeacher) {
+                        existing.status = 'approved';
+                    }
+                    existing.updatedAt = new Date();
+                    await existing.save();
                     createdTopics.push(existing);
                 }
             }
