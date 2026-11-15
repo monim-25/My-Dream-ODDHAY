@@ -2086,8 +2086,14 @@ router.get('/notes', teacherProtect, async (req, res) => {
             ]
         };
 
-        if (subjectFilter !== 'all') query.subject = subjectFilter;
-        if (classFilter !== 'all') query.classLevel = classFilter;
+        if (subjectFilter !== 'all') {
+            query.$and = query.$and || [];
+            query.$and.push({ $or: [{ subject: subjectFilter }, { subjects: subjectFilter }] });
+        }
+        if (classFilter !== 'all') {
+            query.$and = query.$and || [];
+            query.$and.push({ $or: [{ classLevel: classFilter }, { classLevel: { $in: [classFilter] } }] });
+        }
         if (accessFilter !== 'all') query.accessType = accessFilter;
         if (courseLinkFilter === 'global') {
             query.course = null;
@@ -2411,6 +2417,12 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
         let parsedClasses = [...new Set([...baseClasses, ...syncClasses])];
         if (parsedClasses.length === 0) parsedClasses = ['Class 10'];
 
+        const baseSubjects = extractList(subject || req.body['subjects[]'] || req.body['subject[]'] || req.body.subjects);
+        let parsedSubjects = [...new Set(baseSubjects)];
+        if (parsedSubjects.length === 0 && subject) parsedSubjects = [subject];
+        if (parsedSubjects.length === 0) parsedSubjects = ['General Academic'];
+        const primarySubject = parsedSubjects[0];
+
         const rawTopics = topics || topic || req.body['topics[]'] || req.body['topic[]'];
         let parsedTopics = [];
         if (Array.isArray(rawTopics)) {
@@ -2444,14 +2456,17 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
         }
 
         // Auto-ensure syllabus Subject and Chapter folders exist for ALL target and synced classes
-        if (chapter && subject && parsedClasses.length > 0) {
+        if (chapter && parsedSubjects.length > 0 && parsedClasses.length > 0) {
             const { ensureSyllabusFoldersForChapter } = require('../controllers/topicController');
-            await ensureSyllabusFoldersForChapter(parsedClasses, subject, chapter, req.session?.user?._id).catch(() => {});
+            for (const sub of parsedSubjects) {
+                await ensureSyllabusFoldersForChapter(parsedClasses, sub, chapter, req.session?.user?._id).catch(() => {});
+            }
         }
 
         const newNote = await new Note({
             title,
-            subject: subject || 'General Academic',
+            subject: primarySubject,
+            subjects: parsedSubjects,
             classLevel: parsedClasses.length > 0 ? parsedClasses : ['Class 10'],
             chapter: chapter || '',
             topic: primaryTopic,
@@ -2625,8 +2640,14 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
         const search = req.query.q || '';
 
         let query = { addedBy: user._id };
-        if (subjectFilter !== 'all') query.subject = subjectFilter;
-        if (classFilter !== 'all') query.classLevel = { $in: [classFilter] };
+        if (subjectFilter !== 'all') {
+            query.$and = query.$and || [];
+            query.$and.push({ $or: [{ subject: subjectFilter }, { subjects: subjectFilter }] });
+        }
+        if (classFilter !== 'all') {
+            query.$and = query.$and || [];
+            query.$and.push({ $or: [{ classLevel: classFilter }, { classLevel: { $in: [classFilter] } }] });
+        }
         if (boardFilter !== 'all') query.board = boardFilter;
         if (yearFilter !== 'all') query.year = yearFilter;
         if (statusFilter === 'pending') {
@@ -4109,7 +4130,9 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         // Global archive metadata (archive mode)
         const globalBoard    = (body.board || '').trim();
         const globalYear     = (body.year || '').trim();
-        const globalSubject  = (body.subject || 'General').trim();
+        const rawSubjects    = extractList(body.subjects || body['subjects[]'] || body.subject || body['subject[]']);
+        const parsedSubjects = rawSubjects.length > 0 ? [...new Set(rawSubjects)] : [(body.subject || 'General').trim()];
+        const globalSubject  = parsedSubjects[0] || 'General';
         let globalClass = body.classLevel || 'General';
         let parsedClassLevels = [];
         if (Array.isArray(globalClass)) {
@@ -4175,6 +4198,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 board: globalBoard || 'General Board',
                 year: globalYear || new Date().getFullYear().toString(),
                 subject: globalSubject,
+                subjects: parsedSubjects,
                 classLevel: parsedClassLevels, // Store as array
                 accessType: 'Free',
                 price: 0,
@@ -4243,6 +4267,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 board:    mode === 'archive' ? globalBoard  : (qBoards[i] || globalBoard || 'General Board'),
                 year:     mode === 'archive' ? globalYear   : (qYears[i]  || globalYear  || ''),
                 subject:  mode === 'archive' ? globalSubject : (body.qSubject?.[i] || globalSubject || 'General'),
+                subjects: mode === 'archive' ? parsedSubjects : (body.qSubject?.[i] ? [body.qSubject[i]] : parsedSubjects),
                 classLevel: mode === 'archive' ? questionClassLevel : (body.qClass?.[i] ? (Array.isArray(body.qClass[i]) ? body.qClass[i] : (body.qClass[i].includes(',') ? body.qClass[i].split(',').map(c => normalizeClass(c)).filter(Boolean) : normalizeClass(body.qClass[i]))) : questionClassLevel),
                 accessType: 'Free',
                 isBoardQuestion: true,

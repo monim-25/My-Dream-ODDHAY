@@ -375,7 +375,7 @@
                                                         <%= item.title || item.topic || (item.board ? item.board + ' Archive' : 'Question Bank') %>
                                                     </h4>
                                                     <p class="text-[10px] text-slate-400 font-normal truncate mt-0.5">
-                                                        <%= item.board || 'General' %> • <%= item.year || '---' %> • <span class="text-primary font-medium"><%= item.subject %></span>
+                                                        <%= item.board || 'General' %> • <%= item.year || '---' %> • <span class="text-primary font-medium"><%= (Array.isArray(item.subjects) && item.subjects.length > 0) ? item.subjects.join(", ") : item.subject %></span>
                                                     </p>
                                                 </div>
                                             </div>
@@ -469,7 +469,7 @@
                                                 </div>
                                                 <div class="flex flex-col max-w-[250px]">
                                                     <p class="text-[11px] font-medium text-slate-900 dark:text-white leading-tight truncate"><%= item.title || item.topic || (item.board ? item.board + ' Archive' : 'Question Bank') %></p>
-                                                    <p class="text-[9px] text-slate-400 font-normal mt-0.5"><%= item.board %> • <%= item.year %> • <%= item.subject %></p>
+                                                    <p class="text-[9px] text-slate-400 font-normal mt-0.5"><%= item.board %> • <%= item.year %> • <%= (Array.isArray(item.subjects) && item.subjects.length > 0) ? item.subjects.join(", ") : item.subject %></p>
                                                 </div>
                                             </div>
                                         </td>
@@ -491,7 +491,7 @@
                                             </span>
                                         </td>
                                         <td class="px-6 py-3 text-[10px] font-medium text-primary">
-                                            <%= item.subject %>
+                                            <%= (Array.isArray(item.subjects) && item.subjects.length > 0) ? item.subjects.join(", ") : item.subject %>
                                         </td>
                                         <td class="px-6 py-3">
                                             <span class="text-[10px] font-normal text-slate-500">
@@ -1141,11 +1141,12 @@
 
                 <!-- Class & Subject -->
                 <div class="grid grid-cols-2 gap-2.5">
-                    <!-- Class -->
+                    <!-- Class (Multi-Select) -->
                     <div class="space-y-1">
-                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Class <span class="text-rose-500">*</span></label>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Classes <span class="text-rose-500">*</span></label>
                         <% 
-                            const wizClassList = (typeof classes !== 'undefined' && classes && classes.length > 0) ? classes : [6,7,8,9,10,11,12];
+                            const defaultWizClasses = [6,7,8,9,10,11,12];
+                            const wizClassList = (typeof classes !== 'undefined' && classes && classes.length > 0) ? classes : defaultWizClasses;
                             const defaultWizClass = String(wizClassList[0]);
                             const defaultWizClassLabel = defaultWizClass.startsWith('Class') ? defaultWizClass : 'Class ' + defaultWizClass;
                         %>
@@ -1153,24 +1154,26 @@
                         <div class="relative system-dropdown" id="dropdown-wizClass">
                             <button type="button" onclick="toggleSystemDropdown('wizClass', event)" 
                                     class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
-                                <span id="wizClass-label" class="truncate text-[11px]"><%= defaultWizClassLabel %></span>
+                                <span id="wizClass-label" class="truncate text-[11px] font-medium"><%= defaultWizClassLabel %></span>
                                 <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
                             </button>
                             <div id="dropdown-menu-wizClass" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
-                                <% wizClassList.forEach((c, idx) => { const cVal = String(c); const cText = cVal.startsWith('Class') ? cVal : 'Class ' + cVal; %>
-                                    <div onclick="selectWizardOption('wizClass', '<%= cVal %>', '<%= cText %>')" data-wiz-value="<%= cVal %>"
-                                         class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors <%= idx === 0 ? 'bg-primary/10 text-primary font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
-                                        <span class="truncate"><%= cText %></span>
-                                        <% if (idx === 0) { %><span class="material-symbols-rounded text-sm text-primary wiz-check">check</span><% } %>
-                                    </div>
+                                <% wizClassList.forEach((c, idx) => { 
+                                    const cVal = String(c); 
+                                    const cText = cVal.startsWith('Class') ? cVal : 'Class ' + cVal; 
+                                %>
+                                    <label class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors select-none">
+                                        <input type="checkbox" value="<%= cVal %>" <%= idx === 0 ? 'checked' : '' %> class="accent-primary rounded size-3.5 wiz-class-cb" onchange="syncWizClasses()">
+                                        <span class="truncate font-medium"><%= cText %></span>
+                                    </label>
                                 <% }) %>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Subject -->
+                    <!-- Subject (Multi-Select) -->
                     <div class="space-y-1">
-                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Subject <span class="text-rose-500">*</span></label>
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Subjects <span class="text-rose-500">*</span></label>
                         <% 
                             const defaultWizSubs = ['Physics','Chemistry','Biology','Higher Mathematics','General Mathematics','Bangla','English','ICT'];
                             const wizSubjectList = (typeof subjects !== 'undefined' && subjects && subjects.length > 0) ? subjects : defaultWizSubs;
@@ -1180,16 +1183,15 @@
                         <div class="relative system-dropdown" id="dropdown-wizSubject">
                             <button type="button" onclick="toggleSystemDropdown('wizSubject', event)" 
                                     class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
-                                <span id="wizSubject-label" class="truncate text-[11px]"><%= defaultWizSub %></span>
+                                <span id="wizSubject-label" class="truncate text-[11px] font-medium"><%= defaultWizSub %></span>
                                 <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
                             </button>
                             <div id="dropdown-menu-wizSubject" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
                                 <% wizSubjectList.forEach((s, idx) => { %>
-                                    <div onclick="selectWizardOption('wizSubject', '<%= s %>', '<%= s %>')" data-wiz-value="<%= s %>"
-                                         class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors <%= idx === 0 ? 'bg-primary/10 text-primary font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
-                                        <span class="truncate"><%= s %></span>
-                                        <% if (idx === 0) { %><span class="material-symbols-rounded text-sm text-primary wiz-check">check</span><% } %>
-                                    </div>
+                                    <label class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors select-none">
+                                        <input type="checkbox" value="<%= s %>" <%= idx === 0 ? 'checked' : '' %> class="accent-primary rounded size-3.5 wiz-subject-cb" onchange="syncWizSubjects()">
+                                        <span class="truncate font-medium"><%= s %></span>
+                                    </label>
                                 <% }) %>
                             </div>
                         </div>

@@ -9,6 +9,7 @@ const questionBankSchema = new mongoose.Schema({
     subTopic: { type: String, default: '' },
     subTopics: [{ type: String }],
     subject: { type: String, required: true },
+    subjects: [{ type: String, trim: true }],
     classLevel: { type: [String], required: true },
     accessType: { type: String, enum: ['Free', 'Paid'], default: 'Free' },
     price: { type: Number, default: 0 },

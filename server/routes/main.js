@@ -2550,11 +2550,14 @@ router.get('/notes', protect, async (req, res) => {
             const isPurchased = purchasedNoteIds.some(id => id && (id === noteIdStr || noteIdStr.includes(id) || id.includes(noteIdStr)));
             const isFree = rawAccess === 'free' || isPurchased;
 
+            const allNoteSubs = (Array.isArray(n.subjects) && n.subjects.length > 0) ? n.subjects : [n.subject || 'General Academic'];
             allNotesList.push({
                 _id: noteIdStr,
                 title: n.title,
-                subject: n.subject || 'General Academic',
+                subject: allNoteSubs[0] || 'General Academic',
+                subjects: allNoteSubs,
                 classLevel: Array.isArray(n.classLevel) ? n.classLevel[0] : (n.classLevel || userClass),
+                classLevels: Array.isArray(n.classLevel) ? n.classLevel : [n.classLevel || userClass],
                 filePath: n.fileUrl || n.filePath || '#',
                 accessType: isPurchased ? 'free' : rawAccess,
                 price: n.price || 50,
@@ -5563,8 +5566,12 @@ router.get('/exams/subject-tests', protect, async (req, res) => {
 
         questionBanks.forEach(qb => {
             const rawTopic = (qb.topic || '').trim();
-            const subLow = (qb.subject || '').toLowerCase().trim();
-            if (rawSelected && subLow !== rawSelected && !subLow.includes(rawSelected) && !rawSelected.includes(subLow)) {
+            const qbSubjects = (Array.isArray(qb.subjects) && qb.subjects.length > 0) ? qb.subjects : [qb.subject || ''];
+            const matchesSubject = !rawSelected || qbSubjects.some(s => {
+                const subLow = (s || '').toLowerCase().trim();
+                return subLow === rawSelected || subLow.includes(rawSelected) || rawSelected.includes(subLow);
+            });
+            if (!matchesSubject) {
                 return;
             }
             const isTopicDuplicate = (rawTopic.toLowerCase() === subLow) || (rawTopic.toLowerCase() === 'custom quiz');

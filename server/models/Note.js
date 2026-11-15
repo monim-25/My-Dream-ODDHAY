@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const noteSchema = new mongoose.Schema({
     title: { type: String, required: true },
     subject: { type: String, required: true },
+    subjects: [{ type: String, trim: true }],
     classLevel: [{ type: String }],
     description: { type: String },
     chapter: { type: String },

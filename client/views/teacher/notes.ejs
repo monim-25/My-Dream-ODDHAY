@@ -339,7 +339,8 @@
                                 <% noteList.forEach(function(note) { %>
                                     <% 
                                        const title = note.title || 'Untitled Note';
-                                       const subject = note.subject || 'General Academic';
+                                       const allNoteSubjects = (Array.isArray(note.subjects) && note.subjects.length > 0) ? note.subjects : [note.subject || 'General Academic'];
+                                       const subject = allNoteSubjects.join(', ');
                                        const classLevelStr = Array.isArray(note.classLevel) ? note.classLevel.join(', ') : (note.classLevel || 'General');
                                        const rawFileUrl = note.filePath || note.fileUrl || note.url || '#';
                                        const fileUrl = typeof getImg === 'function' ? getImg(rawFileUrl) : (rawFileUrl.startsWith('http') || rawFileUrl.startsWith('/') ? rawFileUrl : '/' + rawFileUrl.replace(/\\/g, '/'));
@@ -564,17 +565,17 @@
                             </div>
                         </div>
 
-                        <!-- Subject Row (Assigned Only & Context-Locked) -->
+                        <!-- Subject Row (Multi-Subject Selection - Assigned Only & Context-Locked) -->
                         <div>
-                            <div class="flex items-center justify-between mb-1">
+                            <div class="flex items-center justify-between mb-1.5">
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                                    Subject <span class="text-rose-500">*</span>
+                                    Target Subjects <span class="text-rose-500">*</span>
                                 </label>
                                 <span id="noteSubjectBadge" class="text-[10px] font-bold text-blue-600 dark:text-blue-400 hidden"></span>
                             </div>
 
                             <!-- Locked Subject Card (Shown when inside a specific subject folder) -->
-                            <div id="noteSubjectLockedNotice" class="hidden flex items-center justify-between px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-800 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                            <div id="noteSubjectLockedNotice" class="hidden flex items-center justify-between px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-900/25 border border-blue-200 dark:border-blue-800 text-xs font-semibold text-blue-700 dark:text-blue-300 mb-1.5">
                                 <div class="flex items-center gap-1.5 truncate">
                                     <span class="material-symbols-rounded text-base text-blue-600 dark:text-blue-400 leading-none">lock</span>
                                     <span>Subject: <strong id="lockedSubjectText" class="font-bold"></strong></span>
@@ -582,22 +583,29 @@
                                 <span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-800/60 text-blue-800 dark:text-blue-200 font-bold shrink-0">Current Folder</span>
                             </div>
 
-                            <!-- Hidden field to guarantee subject POST even when dropdown is hidden/locked -->
+                            <!-- Hidden field to guarantee subject POST even when checkbox container is hidden/locked -->
                             <input type="hidden" name="subject" id="noteSubjectHidden" value="">
 
-                            <!-- Select Subject Dropdown (Visible only when not inside a subject folder) -->
-                            <select id="noteSubject" onchange="onNoteSubjectSelectChange(this.value)"
-                                class="w-full px-2.5 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500 transition-all cursor-pointer">
-                                <option value="">Select Subject</option>
+                            <!-- Select Subject Multi-Checkbox Grid (Visible only when not inside a subject folder) -->
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-36 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 rounded-xl" id="noteSubjectsContainer">
                                 <% 
                                     const strictlyAssignedSubjects = (locals.assignedSubjects && locals.assignedSubjects.length > 0) 
                                         ? locals.assignedSubjects 
                                         : (subList.length > 0 ? subList : []);
                                 %>
-                                <% strictlyAssignedSubjects.forEach(s => { %>
-                                    <option value="<%= s %>"><%= s %></option>
-                                <% }) %>
-                            </select>
+                                <% if (strictlyAssignedSubjects.length === 0) { %>
+                                    <div class="col-span-full py-2 text-center text-xs text-amber-500">
+                                        No assigned subjects found.
+                                    </div>
+                                <% } else { %>
+                                    <% strictlyAssignedSubjects.forEach(s => { %>
+                                        <label class="note-subject-card flex items-center gap-1.5 p-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-blue-500/50 dark:hover:border-blue-500/50 bg-white dark:bg-slate-900 cursor-pointer transition-colors text-[11px] select-none">
+                                            <input type="checkbox" name="subjects[]" value="<%= s %>" class="note-subject-checkbox accent-blue-600 rounded size-3.5" onchange="onNoteSubjectCheckboxChange()">
+                                            <span class="font-medium text-slate-700 dark:text-slate-200 truncate"><%= s %></span>
+                                        </label>
+                                    <% }); %>
+                                <% } %>
+                            </div>
                         </div>
 
                         <!-- Chapter Row (Dynamic & Auto-selected / Locked from current folder) -->
@@ -1246,15 +1254,29 @@
                     }
 
                     if (isInsideSubjectFolder && activeSubj) {
-                        // Lock subject: hide dropdown so no different subject can be chosen, show locked card!
-                        subjInput.classList.add('hidden');
-                        if (lockedNotice) {
-                            lockedNotice.classList.remove('hidden');
-                            if (lockedText) lockedText.textContent = activeSubj;
-                        }
+                        if (lockedNotice) lockedNotice.classList.remove('hidden');
+                        if (lockedText) lockedText.textContent = activeSubj;
+                        const subContainer = document.getElementById('noteSubjectsContainer');
+                        if (subContainer) subContainer.classList.add('hidden');
+                        if (subjectHidden) subjectHidden.value = activeSubj;
                     } else {
-                        subjInput.classList.remove('hidden');
                         if (lockedNotice) lockedNotice.classList.add('hidden');
+                        const subContainer = document.getElementById('noteSubjectsContainer');
+                        if (subContainer) subContainer.classList.remove('hidden');
+                        const cbs = document.querySelectorAll('#noteSubjectsContainer input[name="subjects[]"]');
+                        let anyChecked = false;
+                        cbs.forEach(cb => {
+                            if (activeSubj && cb.value.trim().toLowerCase() === activeSubj.toLowerCase()) {
+                                cb.checked = true;
+                                anyChecked = true;
+                            }
+                        });
+                        if (!anyChecked && cbs.length > 0) {
+                            cbs[0].checked = true;
+                        }
+                        if (typeof window.onNoteSubjectCheckboxChange === 'function') {
+                            window.onNoteSubjectCheckboxChange();
+                        }
                     }
                 }
 
