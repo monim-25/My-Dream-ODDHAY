@@ -549,10 +549,11 @@
                 return;
             }
 
-            if (syllabusWrapper) syllabusWrapper.classList.remove('hidden');
+            selectedTeacherChapters.clear();
+            updateTeacherChapterSummary();
+            if (syllabusWrapper) syllabusWrapper.classList.add('hidden');
             if (emptyState) { 
-                emptyState.classList.remove('hidden'); 
-                emptyState.innerHTML = '<span class="material-symbols-rounded text-base text-slate-300">info</span><span>Select a Chapter to view topics</span>'; 
+                emptyState.classList.add('hidden'); 
             }
             if (loadingState) loadingState.classList.remove('hidden');
             if (topicsList) { topicsList.classList.add('hidden'); topicsList.innerHTML = ''; }
@@ -690,6 +691,7 @@
 
         // ─── Render Topics matching selected chapters (Supports Multiple Chapters) ───
         window.renderQuizTopicsForSelectedChapters = function() {
+            const syllabusWrapper = document.getElementById('quizSyllabusWrapper');
             const allTopics = window._quizCachedTopics || [];
             const emptyState = document.getElementById('quizTopicsEmptyState');
             const topicsList = document.getElementById('quizTopicsList');
@@ -702,11 +704,23 @@
             const selectedList = Array.from(selectedTeacherChapters);
             const lowerSelected = selectedList.map(c => c.trim().toLowerCase());
 
+            // ONLY show topics when chapter(s) are selected
+            if (lowerSelected.length === 0) {
+                if (syllabusWrapper) syllabusWrapper.classList.add('hidden');
+                if (topicsList) { topicsList.classList.add('hidden'); topicsList.innerHTML = ''; }
+                if (countBadge) countBadge.classList.add('hidden');
+                if (badge) badge.classList.add('hidden');
+                const subTopicsSection = document.getElementById('quizSubTopicsSection');
+                if (subTopicsSection) subTopicsSection.classList.add('hidden');
+                syncQuizTopicSelection();
+                return;
+            }
+
+            // At least one chapter is selected
+            if (syllabusWrapper) syllabusWrapper.classList.remove('hidden');
+
             if (badge) {
-                if (selectedList.length === 0) {
-                    badge.textContent = 'All Chapters';
-                    badge.classList.remove('hidden');
-                } else if (selectedList.length === 1) {
+                if (selectedList.length === 1) {
                     badge.textContent = selectedList[0];
                     badge.classList.remove('hidden');
                 } else {
@@ -715,17 +729,10 @@
                 }
             }
 
-            // If chapters are selected, filter topics belonging to those chapters.
-            // If NO chapters are selected, show ALL topics of the subject!
-            let matchingTopics = [];
-            if (lowerSelected.length > 0) {
-                matchingTopics = allTopics.filter(t => {
-                    const cName = (typeof t.chapter === 'string') ? t.chapter : (t.chapter?.name || '');
-                    return lowerSelected.includes(cName.trim().toLowerCase());
-                });
-            } else {
-                matchingTopics = allTopics;
-            }
+            const matchingTopics = allTopics.filter(t => {
+                const cName = (typeof t.chapter === 'string') ? t.chapter : (t.chapter?.name || '');
+                return lowerSelected.includes(cName.trim().toLowerCase());
+            });
 
             if (matchingTopics.length > 0) {
                 renderQuizTopics(matchingTopics);
@@ -738,12 +745,9 @@
                 if (countBadge) countBadge.classList.add('hidden');
                 if (emptyState) {
                     emptyState.classList.remove('hidden');
-                    const msg = lowerSelected.length > 0 
-                        ? 'No approved topics found for the selected chapter(s)' 
-                        : 'No syllabus topics found for this subject';
                     emptyState.innerHTML = '<div class="flex flex-col items-center gap-1.5 py-2 text-center">' +
                         '<span class="material-symbols-rounded text-amber-500 text-xl">playlist_remove</span>' +
-                        '<span class="text-xs font-semibold text-slate-700 dark:text-slate-200">' + msg + '</span>' +
+                        '<span class="text-xs font-semibold text-slate-700 dark:text-slate-200">No approved topics found for the selected chapter(s)</span>' +
                         '<a href="/teacher/topics" target="_blank" class="inline-flex items-center gap-1 mt-1 px-2.5 py-1 rounded-lg bg-primary text-white text-[11px] font-bold hover:bg-primary/90 transition-all"><span class="material-symbols-rounded text-xs">add</span>Add Syllabus Topics</a>' +
                         '</div>';
                 }
