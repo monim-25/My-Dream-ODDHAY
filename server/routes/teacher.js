@@ -3073,14 +3073,44 @@ router.get('/api/bank-metadata', teacherProtect, async (req, res) => {
         await connectDB();
         const { classLevel, subject, topic, board, year } = req.query;
         
-        // Base query always filters by teacher and class/subject
-        let baseQuery = { addedBy: req.session.user._id };
+        // Base query filters by class/subject (and teacher if present)
+        let baseQuery = {};
         if (classLevel) baseQuery.classLevel = classLevel;
-        if (subject) baseQuery.subject = subject;
+        if (subject) {
+            baseQuery.$or = [
+                { subject: subject },
+                { subjects: subject }
+            ];
+        }
+
+        const rawChaps = req.query.chapters || req.query.chapter || '';
+        const chapsList = Array.isArray(rawChaps) ? rawChaps : String(rawChaps).split(',').map(c => c.trim()).filter(Boolean);
+        if (chapsList.length > 0) {
+            const escChaps = chapsList.map(c => new RegExp(`^${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'));
+            baseQuery.chapter = { $in: escChaps };
+        }
         
         // Get all banks for base query to compute available topics
-        const allBanks = await QuestionBank.find(baseQuery);
-        const topics = [...new Set(allBanks.map(b => b.topic).filter(Boolean))].sort();
+        const allBanks = await QuestionBank.find(baseQuery).lean();
+
+        // Also fetch from Topic model (Official syllabus) matching the chapters
+        const Topic = require('../models/Topic');
+        let topicFilter = {
+            isArchived: { $nin: [true, 'true', 1] },
+            status: { $nin: ['rejected'] }
+        };
+        if (classLevel) topicFilter.classLevel = new RegExp(`^${classLevel.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        if (subject) topicFilter.subject = new RegExp(`^${subject.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        if (chapsList.length > 0) {
+            const escChaps = chapsList.map(c => new RegExp(`^${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'));
+            topicFilter['chapter.name'] = { $in: escChaps };
+        }
+        const syllabusTopics = await Topic.find(topicFilter).select('name chapter').lean();
+
+        const topics = [...new Set([
+            ...allBanks.map(b => b.topic).filter(Boolean),
+            ...syllabusTopics.map(t => t.name).filter(Boolean)
+        ])].sort();
         
         // Apply topic filter for board/year computation (cascading)
         let filteredQuery = { ...baseQuery };

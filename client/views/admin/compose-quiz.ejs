@@ -136,6 +136,17 @@
                                     <span id="chapterPlaceholder" class="text-[11px] text-slate-400 italic">Select Class Level and Subject to load syllabus chapters...</span>
                                 </div>
                                 <input type="hidden" name="chapter" id="chapterSummaryInput" value="">
+
+                                <!-- Topics under Selected Chapters -->
+                                <div id="topicsSection" class="mt-4 pt-4 border-t border-dashed border-slate-200 dark:border-slate-800 hidden">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <label class="form-label mb-0 flex items-center gap-2">
+                                            <span>Topics in Selected Chapters</span>
+                                            <span id="topicCountBadge" class="text-[10px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full">0 available</span>
+                                        </label>
+                                    </div>
+                                    <div id="topicsContainer" class="flex flex-wrap gap-2"></div>
+                                </div>
                             </div>
                         </div>
 
@@ -273,8 +284,10 @@
 
             if (!classLevel || !subject) return;
 
+            const chaps = Array.from(selectedChapters).join(',');
+
             try {
-                const url = `/admin/api/bank-metadata?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}&topic=${encodeURIComponent(topic)}&board=${encodeURIComponent(board)}&year=${encodeURIComponent(year)}`;
+                const url = `/admin/api/bank-metadata?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}&chapters=${encodeURIComponent(chaps)}&topic=${encodeURIComponent(topic)}&board=${encodeURIComponent(board)}&year=${encodeURIComponent(year)}`;
                 const response = await fetch(url);
                 const data = await response.json();
 
@@ -290,19 +303,28 @@
             const classLevel = document.getElementById('classLevel').value;
             const subject = getActiveSubject();
             const container = document.getElementById('chaptersContainer');
+            const topicsSection = document.getElementById('topicsSection');
 
             if (!classLevel || !subject) {
                 container.innerHTML = '<span id="chapterPlaceholder" class="text-[11px] text-slate-400 italic">Select Class Level and Subject to load syllabus chapters...</span>';
                 selectedChapters.clear();
                 updateChapterSummary();
+                if (topicsSection) topicsSection.classList.add('hidden');
                 return;
             }
 
             container.innerHTML = '<span class="text-[11px] text-slate-400 italic flex items-center gap-1.5"><span class="material-symbols-rounded animate-spin text-sm">sync</span> Loading chapters...</span>';
 
             try {
-                const response = await fetch(`/admin/api/chapters?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}`);
-                const data = await response.json();
+                // Fetch chapters & topics concurrently
+                const [chapRes, topicRes] = await Promise.all([
+                    fetch(`/admin/api/chapters?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}`),
+                    fetch(`/admin/api/topics?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}`)
+                ]);
+                const data = await chapRes.json();
+                const topicData = await topicRes.json();
+
+                window._adminCachedTopics = (topicData && Array.isArray(topicData.topics)) ? topicData.topics : [];
 
                 container.innerHTML = '';
 
@@ -323,6 +345,8 @@
                 addCustomBtn.innerHTML = '<span class="material-symbols-rounded text-sm">add</span> Add Chapter';
                 addCustomBtn.onclick = promptAddCustomChapter;
                 container.appendChild(addCustomBtn);
+
+                renderAdminTopicsForSelectedChapters();
 
             } catch (err) {
                 console.error('Failed to fetch chapters:', err);
@@ -354,9 +378,57 @@
                     label.classList.remove('bg-primary/10', 'border-primary', 'text-primary', 'dark:text-primary');
                 }
                 updateChapterSummary();
+                renderAdminTopicsForSelectedChapters();
+                syncBankMetadata();
             };
 
             return label;
+        }
+
+        function renderAdminTopicsForSelectedChapters() {
+            const topicsSection = document.getElementById('topicsSection');
+            const container = document.getElementById('topicsContainer');
+            const countBadge = document.getElementById('topicCountBadge');
+            if (!topicsSection || !container) return;
+
+            const allTopics = window._adminCachedTopics || [];
+            const selectedList = Array.from(selectedChapters).map(c => c.trim().toLowerCase());
+
+            let matchingTopics = [];
+            if (selectedList.length > 0) {
+                matchingTopics = allTopics.filter(t => {
+                    const cName = (typeof t.chapter === 'string') ? t.chapter : (t.chapter?.name || '');
+                    return selectedList.includes(cName.trim().toLowerCase());
+                });
+            } else {
+                matchingTopics = allTopics;
+            }
+
+            if (matchingTopics.length > 0) {
+                topicsSection.classList.remove('hidden');
+                container.innerHTML = '';
+                const seen = new Set();
+                matchingTopics.forEach(t => {
+                    const name = (t.name || '').trim();
+                    if (!name || seen.has(name.toLowerCase())) return;
+                    seen.add(name.toLowerCase());
+                    const cName = (typeof t.chapter === 'string') ? t.chapter : (t.chapter?.name || '');
+                    const chip = document.createElement('div');
+                    chip.className = 'px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs flex flex-col min-w-0';
+                    chip.innerHTML = `<span class="font-bold text-slate-800 dark:text-slate-100">${name}</span>${cName ? `<span class="text-[9.5px] text-slate-400 font-medium">${cName}</span>` : ''}`;
+                    container.appendChild(chip);
+                });
+                if (countBadge) countBadge.innerText = `${seen.size} available`;
+            } else {
+                if (selectedList.length > 0) {
+                    topicsSection.classList.remove('hidden');
+                    container.innerHTML = '<span class="text-[11px] text-slate-400 italic">No topics assigned under the selected chapter(s) yet.</span>';
+                    if (countBadge) countBadge.innerText = '0 available';
+                } else {
+                    topicsSection.classList.add('hidden');
+                }
+            }
+        }
         }
 
         function promptAddCustomChapter() {

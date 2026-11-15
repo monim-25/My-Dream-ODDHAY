@@ -591,7 +591,7 @@
             } finally {
                 if (loadingState) loadingState.classList.add('hidden');
             }
-            onQuizChapterChange(chapterSelect ? chapterSelect.value : '');
+            renderQuizTopicsForSelectedChapters();
         };
 
         // ─── Multi Chapter Pills Management ─────────────────────────────────────
@@ -643,14 +643,7 @@
                     label.classList.remove('bg-primary/10', 'border-primary', 'text-primary', 'dark:text-primary');
                 }
                 updateTeacherChapterSummary();
-
-                // Sync first selected chapter with legacy dropdown for topic chips
-                const firstSelected = Array.from(selectedTeacherChapters)[0] || '';
-                const legacyChapterSelect = document.getElementById('quizChapter');
-                if (legacyChapterSelect) {
-                    legacyChapterSelect.value = firstSelected;
-                    onQuizChapterChange(firstSelected);
-                }
+                renderQuizTopicsForSelectedChapters();
             };
 
             return label;
@@ -667,6 +660,7 @@
                 if (addBtn) container.insertBefore(pill, addBtn);
                 else container.appendChild(pill);
                 updateTeacherChapterSummary();
+                renderQuizTopicsForSelectedChapters();
             }
         }
 
@@ -678,48 +672,91 @@
             if (summaryInput) summaryInput.value = Array.from(selectedTeacherChapters).join(', ');
         }
 
-        // ─── Chapter change → render topic chips ─────────────────────────────────
-        window.onQuizChapterChange = function(val) {
-            const chapterSelect = document.getElementById('quizChapter');
-            if (chapterSelect && val) chapterSelect.value = val;
-            const chapter = val || (chapterSelect ? chapterSelect.value : '');
-
-            const badge      = document.getElementById('quizChapterBadge');
+        // ─── Render Topics matching selected chapters (Supports Multiple Chapters) ───
+        window.renderQuizTopicsForSelectedChapters = function() {
+            const allTopics = window._quizCachedTopics || [];
             const emptyState = document.getElementById('quizTopicsEmptyState');
             const topicsList = document.getElementById('quizTopicsList');
             const syncPortal = document.getElementById('crossClassSyncPortal');
+            const badge      = document.getElementById('quizChapterBadge');
+            const countBadge = document.getElementById('quizTopicCountBadge');
 
-            if (badge) { badge.textContent = chapter || ''; badge.classList.toggle('hidden', !chapter); }
             if (syncPortal) syncPortal.classList.add('hidden');
 
-            if (!chapter) {
-                if (emptyState) { emptyState.classList.remove('hidden'); emptyState.innerHTML = '<span class="material-symbols-rounded text-base text-slate-300">info</span><span>Please select a Chapter to view available topics</span>'; }
-                if (topicsList) { topicsList.classList.add('hidden'); topicsList.innerHTML = ''; }
-                syncQuizTopicSelection();
-                return;
+            const selectedList = Array.from(selectedTeacherChapters);
+            const lowerSelected = selectedList.map(c => c.trim().toLowerCase());
+
+            if (badge) {
+                if (selectedList.length === 0) {
+                    badge.textContent = 'All Chapters';
+                    badge.classList.remove('hidden');
+                } else if (selectedList.length === 1) {
+                    badge.textContent = selectedList[0];
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.textContent = `${selectedList.length} Chapters`;
+                    badge.classList.remove('hidden');
+                }
             }
 
-            const allTopics = window._quizCachedTopics || [];
-            const chapterTopics = allTopics.filter(t => {
-                const cName = (typeof t.chapter === 'string') ? t.chapter : (t.chapter?.name || '');
-                return cName.trim().toLowerCase() === chapter.trim().toLowerCase();
-            });
+            // If chapters are selected, filter topics belonging to those chapters.
+            // If NO chapters are selected, show ALL topics of the subject!
+            let matchingTopics = [];
+            if (lowerSelected.length > 0) {
+                matchingTopics = allTopics.filter(t => {
+                    const cName = (typeof t.chapter === 'string') ? t.chapter : (t.chapter?.name || '');
+                    return lowerSelected.includes(cName.trim().toLowerCase());
+                });
+            } else {
+                matchingTopics = allTopics;
+            }
 
-            if (chapterTopics.length > 0) {
-                renderQuizTopics(chapterTopics);
+            if (matchingTopics.length > 0) {
+                renderQuizTopics(matchingTopics);
+                if (countBadge) {
+                    countBadge.textContent = `${matchingTopics.length} available`;
+                    countBadge.classList.remove('hidden');
+                }
             } else {
                 if (topicsList) { topicsList.classList.add('hidden'); topicsList.innerHTML = ''; }
+                if (countBadge) countBadge.classList.add('hidden');
                 if (emptyState) {
                     emptyState.classList.remove('hidden');
+                    const msg = lowerSelected.length > 0 
+                        ? 'No approved topics found for the selected chapter(s)' 
+                        : 'No syllabus topics found for this subject';
                     emptyState.innerHTML = '<div class="flex flex-col items-center gap-1.5 py-2 text-center">' +
                         '<span class="material-symbols-rounded text-amber-500 text-xl">playlist_remove</span>' +
-                        '<span class="text-xs font-semibold text-slate-700 dark:text-slate-200">No approved topics found for this chapter</span>' +
+                        '<span class="text-xs font-semibold text-slate-700 dark:text-slate-200">' + msg + '</span>' +
                         '<a href="/teacher/topics" target="_blank" class="inline-flex items-center gap-1 mt-1 px-2.5 py-1 rounded-lg bg-primary text-white text-[11px] font-bold hover:bg-primary/90 transition-all"><span class="material-symbols-rounded text-xs">add</span>Add Syllabus Topics</a>' +
                         '</div>';
                 }
                 syncQuizTopicSelection();
             }
+
+            // Sync bankTopic dropdown in Smart Generation with these topics
+            syncBankTopicDropdown(matchingTopics);
         };
+
+        window.onQuizChapterChange = function(val) {
+            renderQuizTopicsForSelectedChapters();
+        };
+
+        function syncBankTopicDropdown(matchingTopics) {
+            const bankTopicSelect = document.getElementById('bankTopic');
+            if (!bankTopicSelect) return;
+            const currentVal = bankTopicSelect.value;
+            const seen = new Set();
+            let optionsHtml = '<option value="">Any Topic</option>';
+            (matchingTopics || []).forEach(t => {
+                const name = (typeof t === 'string' ? t : (t.name || '')).trim();
+                if (name && !seen.has(name.toLowerCase())) {
+                    seen.add(name.toLowerCase());
+                    optionsHtml += `<option value="${escapeHtml(name)}" ${name === currentVal ? 'selected' : ''}>${escapeHtml(name)}</option>`;
+                }
+            });
+            bankTopicSelect.innerHTML = optionsHtml;
+        }
 
         function renderQuizTopics(topics) {
             const topicsList = document.getElementById('quizTopicsList');
@@ -732,10 +769,14 @@
                 if (!key || seen.has(key)) return;
                 seen.add(key);
                 const tName = (t.name || '').trim();
+                const cName = (typeof t.chapter === 'string') ? t.chapter : (t.chapter?.name || '');
                 const chip = document.createElement('label');
                 chip.className = 'topic-select-chip flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-primary/60 dark:hover:border-primary/60 bg-white dark:bg-slate-900 cursor-pointer text-xs select-none transition-all';
                 chip.innerHTML = '<input type="checkbox" name="topics[]" value="' + escapeHtml(tName) + '" class="quiz-topic-checkbox accent-primary rounded size-4 cursor-pointer" onchange="onQuizTopicChipChange(this)">' +
-                    '<span class="font-medium text-slate-700 dark:text-slate-200 text-xs leading-tight">' + escapeHtml(tName) + '</span>';
+                    '<div class="flex flex-col min-w-0 leading-tight">' +
+                        '<span class="font-medium text-slate-700 dark:text-slate-200 text-xs leading-tight">' + escapeHtml(tName) + '</span>' +
+                        (cName ? '<span class="text-[9.5px] text-slate-400 font-normal truncate mt-0.5">' + escapeHtml(cName) + '</span>' : '') +
+                    '</div>';
                 topicsList.appendChild(chip);
             });
             if (emptyState) emptyState.classList.add('hidden');
@@ -924,7 +965,8 @@
                 return;
             }
             try {
-                const url = `/teacher/api/bank-metadata?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}&topic=${encodeURIComponent(topic)}&board=${encodeURIComponent(board)}&year=${encodeURIComponent(year)}`;
+                const chaps = Array.from(selectedTeacherChapters).join(',');
+                const url = `/teacher/api/bank-metadata?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}&chapters=${encodeURIComponent(chaps)}&topic=${encodeURIComponent(topic)}&board=${encodeURIComponent(board)}&year=${encodeURIComponent(year)}`;
                 const data = await (await fetch(url)).json();
                 if (data.success) {
                     updateDropdown('bankTopic', data.topics, topic, 'Any Topic');

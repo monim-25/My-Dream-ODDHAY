@@ -5689,9 +5689,34 @@ router.get('/api/bank-metadata', superAdminProtect, async (req, res) => {
                 { subjects: subject }
             ];
         }
+
+        const rawChaps = req.query.chapters || req.query.chapter || '';
+        const chapsList = Array.isArray(rawChaps) ? rawChaps : String(rawChaps).split(',').map(c => c.trim()).filter(Boolean);
+        if (chapsList.length > 0) {
+            const escChaps = chapsList.map(c => new RegExp(`^${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'));
+            baseQuery.chapter = { $in: escChaps };
+        }
         
         const allBanks = await QuestionBank.find(baseQuery).lean();
-        const topics = [...new Set(allBanks.map(b => b.topic).filter(Boolean))].sort();
+
+        // Also fetch from Topic model (Official syllabus) matching the chapters
+        const Topic = require('../models/Topic');
+        let topicFilter = {
+            isArchived: { $nin: [true, 'true', 1] },
+            status: { $nin: ['rejected'] }
+        };
+        if (classLevel) topicFilter.classLevel = new RegExp(`^${classLevel.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        if (subject) topicFilter.subject = new RegExp(`^${subject.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        if (chapsList.length > 0) {
+            const escChaps = chapsList.map(c => new RegExp(`^${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'));
+            topicFilter['chapter.name'] = { $in: escChaps };
+        }
+        const syllabusTopics = await Topic.find(topicFilter).select('name chapter').lean();
+
+        const topics = [...new Set([
+            ...allBanks.map(b => b.topic).filter(Boolean),
+            ...syllabusTopics.map(t => t.name).filter(Boolean)
+        ])].sort();
         
         let filteredQuery = { ...baseQuery };
         if (topic) filteredQuery.topic = topic;
