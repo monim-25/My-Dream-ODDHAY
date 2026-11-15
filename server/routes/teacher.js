@@ -3150,11 +3150,21 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
     try {
         await connectDB();
         
-        const isModelTest = req.body.isModelTest === 'true';
+        const examCategory = req.body.examCategory || (req.body.isMockTest === 'true' ? 'mock' : (req.body.isModelTest === 'true' ? 'model' : 'course'));
+        const isModelTest = examCategory === 'model' || examCategory === 'mock' || req.body.isModelTest === 'true';
+        const isMockTest = examCategory === 'mock' || req.body.isMockTest === 'true';
         const courseId = isModelTest ? undefined : (req.body.courseId || undefined);
 
         // Extract chapter / topic / topics / subTopic / subTopics / syncClasses
-        const chapter = req.body.chapter || '';
+        const rawChapters = req.body['chapters[]'] || req.body.chapters || req.body.chapter || [];
+        let chaptersList = [];
+        if (Array.isArray(rawChapters)) {
+            chaptersList = rawChapters.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+        } else if (typeof rawChapters === 'string' && rawChapters.trim()) {
+            chaptersList = rawChapters.split(',').map(c => c.trim()).filter(Boolean);
+        }
+
+        const chapter = chaptersList.join(', ') || req.body.chapter || '';
         const topic   = req.body.topic   || '';
         const subTopic = req.body.subTopic || '';
         const rawTopics = req.body['topics[]'] || req.body.topics;
@@ -3201,6 +3211,10 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             accessType: accessType,
             status:     'draft',
             isDraft:    true,
+            isModelTest: isModelTest,
+            isMockTest: isMockTest,
+            chapter:    chapter,
+            chapters:   chaptersList,
             questions:  [],
             addedBy:    req.session.user._id
         };
@@ -3229,21 +3243,39 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         const strategy = req.body.strategy || 'manual';
         
         if (strategy === 'automated') {
-            const { bankTopic, bankBoard, bankYear, mcqCount, shortCount, mediumCount, comprehensionCount } = req.body;
+            const { bankTopic, bankBoard, bankYear } = req.body;
             
-            let bankQuery = { addedBy: req.session.user._id };
-            if (req.body.classLevel) bankQuery.classLevel = req.body.classLevel;
-            if (req.body.subject) bankQuery.subject = req.body.subject;
+            let bankQuery = {};
+            if (resolvedClass) bankQuery.classLevel = resolvedClass;
+            if (resolvedSubject) {
+                bankQuery.$or = [
+                    { subject: resolvedSubject },
+                    { subjects: resolvedSubject }
+                ];
+            }
             if (bankTopic) bankQuery.topic = bankTopic;
             if (bankBoard) bankQuery.board = bankBoard;
             if (bankYear) bankQuery.year = bankYear;
             
-            const banks = await QuestionBank.find(bankQuery);
+            const banks = await QuestionBank.find(bankQuery).select('_id').lean();
             const bankIds = banks.map(b => b._id);
             
             const pullQuestions = async (type, count) => {
                 if (!count || count <= 0) return [];
-                return await Question.find({ bankId: { $in: bankIds }, questionType: type }).limit(count);
+                let qQuery = { questionType: type };
+                const orClauses = [];
+                if (bankIds.length > 0) orClauses.push({ bankId: { $in: bankIds } });
+                if (resolvedSubject && resolvedClass) {
+                    orClauses.push({
+                        classLevel: resolvedClass,
+                        $or: [{ subject: resolvedSubject }, { subjects: resolvedSubject }],
+                        ...(bankTopic ? { topic: bankTopic } : {})
+                    });
+                }
+                if (orClauses.length > 0) qQuery.$or = orClauses;
+                if (bankBoard) qQuery.board = bankBoard;
+                if (bankYear) qQuery.year = bankYear;
+                return await Question.find(qQuery).limit(count).lean();
             };
             
             const mcqs = await pullQuestions('MCQ', parseInt(mcqCount));
@@ -3253,13 +3285,59 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             
             const allQuestions = [...mcqs, ...shorts, ...mediums, ...comps];
             
-            quizData.questions = allQuestions.map(bq => ({
-                questionText: bq.questionText,
-                options: bq.options,
-                correctAnswer: bq.correctAnswer,
-                explanation: bq.explanation || '',
-                questionType: bq.questionType || 'MCQ'
-            }));
+            if (allQuestions.length > 0) {
+                quizData.questions = allQuestions.map(bq => ({
+                    questionText: bq.questionText || '',
+                    options: bq.options || [],
+                    correctAnswer: String(bq.correctAnswer || ''),
+                    correctAnswerIndex: (typeof bq.correctAnswer === 'number') ? bq.correctAnswer : (parseInt(bq.correctAnswer) || 0),
+                    explanation: bq.explanation || '',
+                    questionType: bq.questionType || 'MCQ',
+                    chapter: bq.chapter || '',
+                    topic: bq.topic || '',
+                    subTopic: bq.subTopic || '',
+                    board: bq.board || '',
+                    year: bq.year || ''
+                }));
+            }
+
+            // Fill remaining empty slots if fewer questions found
+            for (let i = mcqs.length; i < mcqCount; i++) {
+                quizData.questions.push({ 
+                    questionText: `New MCQ Question ${i+1}`, 
+                    options: ['Option A', 'Option B', 'Option C', 'Option D'], 
+                    correctAnswer: 0, 
+                    explanation: '',
+                    questionType: 'MCQ'
+                });
+            }
+            for (let i = shorts.length; i < shortCount; i++) {
+                quizData.questions.push({ 
+                    questionText: `New Short Question ${i+1}`, 
+                    options: [], 
+                    correctAnswer: 0, 
+                    explanation: '',
+                    questionType: 'Short'
+                });
+            }
+            for (let i = mediums.length; i < mediumCount; i++) {
+                quizData.questions.push({ 
+                    questionText: `New Medium Question ${i+1}`, 
+                    options: [], 
+                    correctAnswer: 0, 
+                    explanation: '',
+                    questionType: 'Medium'
+                });
+            }
+            for (let i = comps.length; i < comprehensionCount; i++) {
+                quizData.questions.push({ 
+                    questionText: `New Comprehension Question ${i+1}`, 
+                    options: [], 
+                    correctAnswer: 0, 
+                    explanation: '',
+                    questionType: 'Comprehension'
+                });
+            }
         } else {
             // Manual Strategy: Create empty questions based on counts
             const mcqCount = parseInt(req.body.mcqCount) || 0;
