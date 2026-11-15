@@ -45,6 +45,25 @@ const getSubjectAliases = (subj) => {
     return [s];
 };
 
+// Safe parser for sub-topics (supports arrays, JSON strings, comma/newline-separated strings)
+const parseSubTopics = (raw) => {
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+        return raw.map(s => String(s || '').trim()).filter(Boolean);
+    }
+    if (typeof raw === 'string') {
+        const trimmed = raw.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) return parsed.map(s => String(s || '').trim()).filter(Boolean);
+            } catch (e) {}
+        }
+        return raw.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+    }
+    return [];
+};
+
 // Automatically ensure that the Subject folder and Chapter subfolder exist in Notes for the specified classes
 const ensureSyllabusFoldersForChapter = async (targetClasses, subjectName, chapterName, userId = null) => {
     if (!subjectName || !chapterName || !targetClasses) return;
@@ -322,6 +341,7 @@ const copyTopicsToClasses = async (req, res) => {
                         difficulty: st.difficulty,
                         keywords: st.keywords,
                         description: st.description,
+                        subTopics: st.subTopics || [],
                         order: st.order,
                         status: 'approved',
                         createdBy: req.session && req.session.user ? req.session.user._id : null
@@ -762,6 +782,8 @@ const createTopic = async (req, res) => {
             ? keywords.map(s => String(s || '').trim()).filter(Boolean)
             : String(keywords || '').split(',').map(s => s.trim()).filter(Boolean);
 
+        const subTopicsArray = parseSubTopics(req.body.subTopics || req.body['subTopics[]']);
+
         const isTeacher = req.session && req.session.user && req.session.user.role === 'teacher';
         const topicStatus = isTeacher ? 'pending' : 'approved';
 
@@ -798,6 +820,9 @@ const createTopic = async (req, res) => {
                 existingTopic.difficulty = ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : (existingTopic.difficulty || 'Medium');
                 existingTopic.keywords = keywordsArray;
                 existingTopic.description = description ? description.trim() : '';
+                if (subTopicsArray.length > 0 || req.body.subTopics !== undefined) {
+                    existingTopic.subTopics = subTopicsArray;
+                }
                 existingTopic.order = parseInt(order, 10) || 0;
                 existingTopic.status = topicStatus;
                 existingTopic.rejectionReason = '';
@@ -827,6 +852,7 @@ const createTopic = async (req, res) => {
                                 difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
                                 keywords: keywordsArray,
                                 description: description ? description.trim() : '',
+                                subTopics: existingTopic.subTopics || subTopicsArray,
                                 order: parseInt(order, 10) || 0,
                                 status: topicStatus,
                                 submittedBy: isTeacher ? req.session.user._id : null,
@@ -856,6 +882,11 @@ const createTopic = async (req, res) => {
             });
 
             if (existing) {
+                if (subTopicsArray.length > 0) {
+                    const merged = Array.from(new Set([...(existing.subTopics || []), ...subTopicsArray]));
+                    existing.subTopics = merged;
+                    await existing.save();
+                }
                 createdTopics.push(existing);
             } else {
                 const newTopic = await Topic.create({
@@ -871,6 +902,7 @@ const createTopic = async (req, res) => {
                     difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
                     keywords: keywordsArray,
                     description: description ? description.trim() : '',
+                    subTopics: subTopicsArray,
                     order: parseInt(order, 10) || 0,
                     status: topicStatus,
                     submittedBy: isTeacher ? req.session.user._id : null,
@@ -940,14 +972,43 @@ const bulkCreateTopics = async (req, res) => {
             return res.status(400).json({ success: false, error: 'At least one class level is required' });
         }
 
-        let names = [];
-        if (Array.isArray(topicList)) {
-            names = topicList.map(s => String(s || '').trim()).filter(Boolean);
-        } else if (typeof topicList === 'string') {
-            names = topicList.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+        let rawTopicsInput = req.body.topics || req.body.topicsData || topicList;
+        if (typeof rawTopicsInput === 'string') {
+            const trimmed = rawTopicsInput.trim();
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                try {
+                    rawTopicsInput = JSON.parse(trimmed);
+                } catch (e) {}
+            }
         }
 
-        if (names.length === 0) {
+        let topicsToProcess = [];
+        if (Array.isArray(rawTopicsInput)) {
+            topicsToProcess = rawTopicsInput.map(item => {
+                if (typeof item === 'string') {
+                    return { name: item.trim(), subTopics: [], difficulty: difficulty || 'Medium', code: '', description: '' };
+                } else if (item && typeof item === 'object') {
+                    return {
+                        name: String(item.name || '').trim(),
+                        subTopics: parseSubTopics(item.subTopics),
+                        difficulty: item.difficulty || difficulty || 'Medium',
+                        code: item.code ? String(item.code).trim() : '',
+                        description: item.description ? String(item.description).trim() : ''
+                    };
+                }
+                return null;
+            }).filter(t => t && t.name);
+        } else if (typeof rawTopicsInput === 'string') {
+            topicsToProcess = rawTopicsInput.split(/[\n,]/).map(s => s.trim()).filter(Boolean).map(n => ({
+                name: n,
+                subTopics: [],
+                difficulty: difficulty || 'Medium',
+                code: '',
+                description: ''
+            }));
+        }
+
+        if (topicsToProcess.length === 0) {
             return res.status(400).json({ success: false, error: 'Please enter at least one topic name' });
         }
 
@@ -969,8 +1030,9 @@ const bulkCreateTopics = async (req, res) => {
         const createdTopics = [];
 
         for (const cls of targetClasses) {
-            for (let i = 0; i < names.length; i++) {
-                const name = names[i];
+            for (let i = 0; i < topicsToProcess.length; i++) {
+                const item = topicsToProcess[i];
+                const name = item.name;
                 const existing = await Topic.findOne({
                     name: new RegExp(`^${escapeRegex(name)}$`, 'i'),
                     classLevel: new RegExp(`^${escapeRegex(cls)}$`, 'i'),
@@ -982,6 +1044,7 @@ const bulkCreateTopics = async (req, res) => {
                 if (!existing) {
                     const topic = await Topic.create({
                         name,
+                        code: item.code || '',
                         classLevel: cls,
                         group: group || 'None',
                         subject: subject.trim(),
@@ -989,7 +1052,9 @@ const bulkCreateTopics = async (req, res) => {
                             number: chNum,
                             name: chapterName.trim()
                         },
-                        difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
+                        difficulty: ['Easy', 'Medium', 'Hard'].includes(item.difficulty) ? item.difficulty : 'Medium',
+                        description: item.description || '',
+                        subTopics: item.subTopics || [],
                         order: i + 1,
                         status: topicStatus,
                         submittedBy: isTeacher ? req.session.user._id : null,
@@ -997,6 +1062,11 @@ const bulkCreateTopics = async (req, res) => {
                     });
                     createdTopics.push(topic);
                 } else {
+                    if (item.subTopics && item.subTopics.length > 0) {
+                        const mergedSubTopics = Array.from(new Set([...(existing.subTopics || []), ...item.subTopics]));
+                        existing.subTopics = mergedSubTopics;
+                        await existing.save();
+                    }
                     createdTopics.push(existing);
                 }
             }
@@ -1050,6 +1120,9 @@ const updateTopic = async (req, res) => {
             updatePayload.keywords = Array.isArray(keywords) 
                 ? keywords.map(s => String(s || '').trim()).filter(Boolean)
                 : String(keywords || '').split(',').map(s => s.trim()).filter(Boolean);
+        }
+        if (req.body.subTopics !== undefined) {
+            updatePayload.subTopics = parseSubTopics(req.body.subTopics);
         }
 
         const updated = await Topic.findByIdAndUpdate(id, { $set: updatePayload }, { new: true });

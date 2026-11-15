@@ -44,6 +44,10 @@ const topicSchema = new mongoose.Schema({
         default: '', 
         trim: true 
     },
+    subTopics: [{ 
+        type: String, 
+        trim: true 
+    }],
     order: { 
         type: Number, 
         default: 0 
@@ -84,7 +88,7 @@ const topicSchema = new mongoose.Schema({
 
 // Fast query indexes for cascaded lookups and filters
 topicSchema.index({ classLevel: 1, subject: 1, 'chapter.name': 1, status: 1, isArchived: 1, order: 1 });
-topicSchema.index({ name: 'text', keywords: 'text', description: 'text' });
+topicSchema.index({ name: 'text', keywords: 'text', description: 'text', subTopics: 'text' });
 
 module.exports = mongoose.model('Topic', topicSchema);
 
