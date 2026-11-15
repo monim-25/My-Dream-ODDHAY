@@ -8,6 +8,8 @@ const quizSchema = new mongoose.Schema({
     chapter: { type: String },    // Syllabus chapter
     topic: { type: String },      // Primary topic
     topics: [{ type: String }],   // All selected topics
+    subTopic: { type: String, default: '' },
+    subTopics: [{ type: String }],
     duration: { type: Number, default: 10 }, // Duration in minutes
     questions: [{
         questionType: { type: String, enum: ['MCQ', 'Short', 'Medium', 'Comprehension'], default: 'MCQ' },
@@ -25,6 +27,7 @@ const quizSchema = new mongoose.Schema({
         marks: { type: Number },
         chapter: { type: String, default: '' },
         topic: { type: String, default: '' },
+        subTopic: { type: String, default: '' },
         board: { type: String },
         year: { type: String }
     }],

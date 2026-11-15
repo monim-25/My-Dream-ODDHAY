@@ -36,7 +36,7 @@
         .q-row, .question-row { transition: all 0.25s ease; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .q-chapter-select, .q-topic-select {
+        .q-chapter-select, .q-topic-select, .q-subtopic-select {
             appearance: none !important;
             -webkit-appearance: none !important;
             -moz-appearance: none !important;
@@ -288,6 +288,12 @@
                         <span class="text-xs font-normal text-slate-500 dark:text-slate-400 shrink-0">Topic</span>
                         <select name="qTopic[]" disabled class="q-topic-select h-8 px-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-normal text-slate-700 dark:text-slate-200 outline-none focus:border-primary transition-all w-36 sm:w-44 min-w-[145px] sm:min-w-[175px] cursor-pointer opacity-50 cursor-not-allowed" onchange="onStudioTopicChange(this)">
                             <option value="">Select Chapter First</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-1.5 individual-subtopic">
+                        <span class="text-xs font-normal text-slate-500 dark:text-slate-400 shrink-0">Sub-topic</span>
+                        <select name="qSubTopic[]" disabled class="q-subtopic-select h-8 px-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-normal text-slate-700 dark:text-slate-200 outline-none focus:border-primary transition-all w-36 sm:w-44 min-w-[145px] sm:min-w-[175px] cursor-pointer opacity-50 cursor-not-allowed" onchange="onStudioSubTopicChange(this)">
+                            <option value="">Select Topic First</option>
                         </select>
                     </div>
                     <div class="flex items-center gap-1.5 shrink-0">
@@ -642,6 +648,7 @@
                     const marksInput = row.querySelector('input[name="qMarks[]"]');
                     const chapInput = row.querySelector('select[name="qChapter[]"], input[name="qChapter[]"]');
                     const topicInput = row.querySelector('select[name="qTopic[]"], input[name="qTopic[]"]');
+                    const subTopicInput = row.querySelector('select[name="qSubTopic[]"], input[name="qSubTopic[]"]');
                     const type = typeInput ? typeInput.value : 'MCQ';
 
                     const qData = {
@@ -650,6 +657,7 @@
                         marks: marksInput ? marksInput.value : getDefaultMarks(type),
                         chapter: chapInput ? chapInput.value : '',
                         topic: topicInput ? topicInput.value : '',
+                        subTopic: subTopicInput ? subTopicInput.value : '',
                         options: [],
                         correctIndex: 0,
                         answer: '',
@@ -794,8 +802,8 @@
             }
 
             const topicSelect = row.querySelector('.q-topic-select');
+            const targetTopic = qData.topic || '';
             if (topicSelect) {
-                const targetTopic = qData.topic || '';
                 topicSelect.setAttribute('data-prefill', targetTopic);
                 if (targetChap) {
                     topicSelect.disabled = false;
@@ -809,6 +817,32 @@
                     topicSelect.classList.add('opacity-50', 'cursor-not-allowed');
                     topicSelect.innerHTML = '<option value="">Select Chapter First</option>';
                     topicSelect.value = '';
+                }
+            }
+
+            const subTopicSelect = row.querySelector('.q-subtopic-select');
+            if (subTopicSelect) {
+                const targetSub = qData.subTopic || '';
+                subTopicSelect.setAttribute('data-prefill', targetSub);
+                if (targetTopic && typeof buildSubTopicOptionsHTML === 'function') {
+                    subTopicSelect.innerHTML = buildSubTopicOptionsHTML(targetSub, targetTopic, targetChap);
+                    const matchedTopic = (cachedStudioTopics || []).find(t => {
+                        const name = (t.name || (typeof t === 'string' ? t : '')).trim().toLowerCase();
+                        return name === targetTopic.toLowerCase();
+                    });
+                    if (matchedTopic && Array.isArray(matchedTopic.subTopics) && matchedTopic.subTopics.length > 0) {
+                        subTopicSelect.disabled = false;
+                        subTopicSelect.classList.remove('opacity-50', 'cursor-not-allowed');
+                        if (targetSub) subTopicSelect.value = targetSub;
+                    } else {
+                        subTopicSelect.disabled = true;
+                        subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                    }
+                } else {
+                    subTopicSelect.disabled = true;
+                    subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                    subTopicSelect.innerHTML = '<option value="">Select Topic First</option>';
+                    subTopicSelect.value = '';
                 }
             }
 
@@ -999,33 +1033,114 @@
             return html;
         }
 
+        function buildSubTopicOptionsHTML(selectedSubTopic = '', selectedTopic = '', selectedChapter = '') {
+            if (!selectedTopic || selectedTopic.trim() === '') {
+                return '<option value="">Select Topic First</option>';
+            }
+
+            const targetTop = selectedTopic.trim().toLowerCase();
+            const matchedTopic = (cachedStudioTopics || []).find(t => {
+                if (!t) return false;
+                const name = (t.name || (typeof t === 'string' ? t : '')).trim().toLowerCase();
+                if (name !== targetTop) return false;
+                if (selectedChapter && selectedChapter.trim()) {
+                    const chapName = typeof t.chapter === 'string' ? t.chapter.trim().toLowerCase() : (t.chapter && t.chapter.name ? t.chapter.name.trim().toLowerCase() : '');
+                    if (chapName && chapName !== selectedChapter.trim().toLowerCase()) return false;
+                }
+                return true;
+            });
+
+            if (!matchedTopic || !Array.isArray(matchedTopic.subTopics) || matchedTopic.subTopics.length === 0) {
+                return '<option value="">No sub-topics available</option>';
+            }
+
+            let html = '<option value="">Sub-topic (Optional)</option>';
+            matchedTopic.subTopics.forEach(sub => {
+                const subStr = String(sub || '').trim();
+                if (!subStr) return;
+                const isSel = selectedSubTopic && selectedSubTopic.trim().toLowerCase() === subStr.toLowerCase() ? 'selected' : '';
+                html += `<option value="${escapeTopicHtml(subStr)}" ${isSel}>${escapeTopicHtml(subStr)}</option>`;
+            });
+
+            if (selectedSubTopic && !matchedTopic.subTopics.some(s => String(s || '').trim().toLowerCase() === selectedSubTopic.trim().toLowerCase())) {
+                html += `<option value="${escapeTopicHtml(selectedSubTopic)}" selected>${escapeTopicHtml(selectedSubTopic)}</option>`;
+            }
+            return html;
+        }
+
         function onStudioChapterChange(chapterSelect) {
             const row = chapterSelect.closest('.question-row');
             if (!row) return;
             const topicSelect = row.querySelector('.q-topic-select');
-            if (!topicSelect) return;
+            const subTopicSelect = row.querySelector('.q-subtopic-select');
 
             const selectedChapter = chapterSelect.value.trim();
 
             if (selectedChapter) {
-                topicSelect.disabled = false;
-                topicSelect.classList.remove('opacity-50', 'cursor-not-allowed');
-                topicSelect.innerHTML = buildTopicOptionsHTML('', selectedChapter);
-                topicSelect.value = '';
+                if (topicSelect) {
+                    topicSelect.disabled = false;
+                    topicSelect.classList.remove('opacity-50', 'cursor-not-allowed');
+                    topicSelect.innerHTML = buildTopicOptionsHTML('', selectedChapter);
+                    topicSelect.value = '';
+                }
             } else {
-                topicSelect.disabled = true;
-                topicSelect.classList.add('opacity-50', 'cursor-not-allowed');
-                topicSelect.innerHTML = '<option value="">Select Chapter First</option>';
-                topicSelect.value = '';
+                if (topicSelect) {
+                    topicSelect.disabled = true;
+                    topicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                    topicSelect.innerHTML = '<option value="">Select Chapter First</option>';
+                    topicSelect.value = '';
+                }
+            }
+            if (subTopicSelect) {
+                subTopicSelect.disabled = true;
+                subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                subTopicSelect.innerHTML = '<option value="">Select Topic First</option>';
+                subTopicSelect.value = '';
             }
             saveStudioDraft();
         }
         window.onStudioChapterChange = onStudioChapterChange;
 
         function onStudioTopicChange(topicSelect) {
+            const row = topicSelect.closest('.question-row');
+            if (!row) return;
+            const chapSelect = row.querySelector('.q-chapter-select');
+            const subTopicSelect = row.querySelector('.q-subtopic-select');
+            const selectedTopic = topicSelect.value.trim();
+            const selectedChap = chapSelect ? chapSelect.value.trim() : '';
+
+            if (subTopicSelect) {
+                if (selectedTopic) {
+                    const matchedTopic = (cachedStudioTopics || []).find(t => {
+                        const name = (t.name || (typeof t === 'string' ? t : '')).trim().toLowerCase();
+                        return name === selectedTopic.toLowerCase();
+                    });
+                    if (matchedTopic && Array.isArray(matchedTopic.subTopics) && matchedTopic.subTopics.length > 0) {
+                        subTopicSelect.disabled = false;
+                        subTopicSelect.classList.remove('opacity-50', 'cursor-not-allowed');
+                        subTopicSelect.innerHTML = buildSubTopicOptionsHTML('', selectedTopic, selectedChap);
+                        subTopicSelect.value = '';
+                    } else {
+                        subTopicSelect.disabled = true;
+                        subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                        subTopicSelect.innerHTML = '<option value="">No sub-topics available</option>';
+                        subTopicSelect.value = '';
+                    }
+                } else {
+                    subTopicSelect.disabled = true;
+                    subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                    subTopicSelect.innerHTML = '<option value="">Select Topic First</option>';
+                    subTopicSelect.value = '';
+                }
+            }
             saveStudioDraft();
         }
         window.onStudioTopicChange = onStudioTopicChange;
+
+        function onStudioSubTopicChange(subTopicSelect) {
+            saveStudioDraft();
+        }
+        window.onStudioSubTopicChange = onStudioSubTopicChange;
 
         async function loadTopicsForQuestionStudio() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -1048,8 +1163,10 @@
             document.querySelectorAll('.question-row').forEach(row => {
                 const chapSelect = row.querySelector('.q-chapter-select');
                 const topSelect = row.querySelector('.q-topic-select');
+                const subTopSelect = row.querySelector('.q-subtopic-select');
                 const currentChap = chapSelect ? (chapSelect.value || chapSelect.getAttribute('data-prefill') || urlParams.get('chapter') || '') : '';
                 const currentTop = topSelect ? (topSelect.value || topSelect.getAttribute('data-prefill') || urlParams.get('topic') || '') : '';
+                const currentSubTop = subTopSelect ? (subTopSelect.value || subTopSelect.getAttribute('data-prefill') || urlParams.get('subTopic') || '') : '';
 
                 if (chapSelect) {
                     chapSelect.innerHTML = buildChapterOptionsHTML(currentChap);
@@ -1066,6 +1183,30 @@
                         topSelect.classList.add('opacity-50', 'cursor-not-allowed');
                         topSelect.innerHTML = '<option value="">Select Chapter First</option>';
                         topSelect.value = '';
+                    }
+                }
+                if (subTopSelect) {
+                    if (currentTop) {
+                        const matchedTopic = (cachedStudioTopics || []).find(t => {
+                            const name = (t.name || (typeof t === 'string' ? t : '')).trim().toLowerCase();
+                            return name === currentTop.toLowerCase();
+                        });
+                        if (matchedTopic && Array.isArray(matchedTopic.subTopics) && matchedTopic.subTopics.length > 0) {
+                            subTopSelect.disabled = false;
+                            subTopSelect.classList.remove('opacity-50', 'cursor-not-allowed');
+                            subTopSelect.innerHTML = buildSubTopicOptionsHTML(currentSubTop, currentTop, currentChap);
+                            if (currentSubTop) subTopSelect.value = currentSubTop;
+                        } else {
+                            subTopSelect.disabled = true;
+                            subTopSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                            subTopSelect.innerHTML = '<option value="">No sub-topics available</option>';
+                            subTopSelect.value = '';
+                        }
+                    } else {
+                        subTopSelect.disabled = true;
+                        subTopSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                        subTopSelect.innerHTML = '<option value="">Select Topic First</option>';
+                        subTopSelect.value = '';
                     }
                 }
             });
@@ -1390,6 +1531,7 @@
                 }
 
                 const topicInput = row.querySelector('.q-topic-select');
+                const subTopicInput = row.querySelector('.q-subtopic-select');
                 if (topicInput) {
                     if (defaultChapter && typeof buildTopicOptionsHTML === 'function') {
                         topicInput.disabled = false;
@@ -1401,6 +1543,32 @@
                         topicInput.classList.add('opacity-50', 'cursor-not-allowed');
                         topicInput.innerHTML = '<option value="">Select Chapter First</option>';
                         topicInput.value = '';
+                    }
+                }
+
+                if (subTopicInput) {
+                    const defaultSubTopic = urlParams.get('subTopic') || '';
+                    if (defaultTopic && typeof buildSubTopicOptionsHTML === 'function') {
+                        const matchedTopic = (cachedStudioTopics || []).find(t => {
+                            const name = (t.name || (typeof t === 'string' ? t : '')).trim().toLowerCase();
+                            return name === defaultTopic.toLowerCase();
+                        });
+                        if (matchedTopic && Array.isArray(matchedTopic.subTopics) && matchedTopic.subTopics.length > 0) {
+                            subTopicInput.disabled = false;
+                            subTopicInput.classList.remove('opacity-50', 'cursor-not-allowed');
+                            subTopicInput.innerHTML = buildSubTopicOptionsHTML(defaultSubTopic, defaultTopic, defaultChapter);
+                            if (defaultSubTopic) subTopicInput.value = defaultSubTopic;
+                        } else {
+                            subTopicInput.disabled = true;
+                            subTopicInput.classList.add('opacity-50', 'cursor-not-allowed');
+                            subTopicInput.innerHTML = '<option value="">No sub-topics available</option>';
+                            subTopicInput.value = '';
+                        }
+                    } else {
+                        subTopicInput.disabled = true;
+                        subTopicInput.classList.add('opacity-50', 'cursor-not-allowed');
+                        subTopicInput.innerHTML = '<option value="">Select Topic First</option>';
+                        subTopicInput.value = '';
                     }
                 }
 

@@ -2379,7 +2379,7 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
 }, async (req, res) => {
     try {
         await connectDB();
-        const { title, subject, classLevel, chapter, topic, topics, parentFolderId, description, accessType, course, fileUrl: bodyFileUrl, filePath: bodyFilePath } = req.body;
+        const { title, subject, classLevel, chapter, topic, topics, subTopic, subTopics, parentFolderId, description, accessType, course, fileUrl: bodyFileUrl, filePath: bodyFilePath } = req.body;
         const { processUploadedFile } = require('../services/cloudinaryService');
         const fileUrl = (req.file ? await processUploadedFile(req.file, 'notes') : null) || bodyFileUrl || bodyFilePath || null;
         
@@ -2403,6 +2403,15 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
             parsedTopics = String(rawTopics).split(',').map(tp => tp.trim()).filter(Boolean);
         }
         const primaryTopic = parsedTopics[0] || (typeof topic === 'string' ? topic.trim() : '');
+
+        const rawSubTopics = subTopics || subTopic || req.body['subTopics[]'] || req.body['subTopic[]'];
+        let parsedSubTopics = [];
+        if (Array.isArray(rawSubTopics)) {
+            parsedSubTopics = rawSubTopics.flatMap(tp => String(tp).split(',')).map(tp => tp.trim()).filter(Boolean);
+        } else if (rawSubTopics) {
+            parsedSubTopics = String(rawSubTopics).split(',').map(tp => tp.trim()).filter(Boolean);
+        }
+        const primarySubTopic = parsedSubTopics[0] || (typeof subTopic === 'string' ? subTopic.trim() : '');
 
         let resolvedParentFolderId = parentFolderId && parentFolderId !== 'null' && parentFolderId !== '' ? parentFolderId : null;
         if (!resolvedParentFolderId && chapter && subject && parsedClasses.length > 0) {
@@ -2431,6 +2440,8 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
             chapter: chapter || '',
             topic: primaryTopic,
             topics: parsedTopics.length > 0 ? parsedTopics : (primaryTopic ? [primaryTopic] : []),
+            subTopic: primarySubTopic,
+            subTopics: parsedSubTopics.length > 0 ? parsedSubTopics : (primarySubTopic ? [primarySubTopic] : []),
             parentFolderId: resolvedParentFolderId,
             description: description || '',
             accessType: 'Free', // Set up from SuperAdmin panel later; teacher cannot configure
@@ -3088,13 +3099,19 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         const isModelTest = req.body.isModelTest === 'true';
         const courseId = isModelTest ? undefined : (req.body.courseId || undefined);
 
-        // Extract chapter / topic / topics / syncClasses
+        // Extract chapter / topic / topics / subTopic / subTopics / syncClasses
         const chapter = req.body.chapter || '';
         const topic   = req.body.topic   || '';
+        const subTopic = req.body.subTopic || '';
         const rawTopics = req.body['topics[]'] || req.body.topics;
         let topics = [];
         if (Array.isArray(rawTopics)) topics = rawTopics.map(t => t.trim()).filter(Boolean);
         else if (rawTopics) topics = String(rawTopics).split(',').map(t => t.trim()).filter(Boolean);
+
+        const rawSubTopics = req.body['subTopics[]'] || req.body.subTopics;
+        let subTopics = [];
+        if (Array.isArray(rawSubTopics)) subTopics = rawSubTopics.map(t => t.trim()).filter(Boolean);
+        else if (rawSubTopics) subTopics = String(rawSubTopics).split(',').map(t => t.trim()).filter(Boolean);
 
         const rawSync = req.body['syncClasses[]'] || req.body.syncClasses;
         let syncClasses = [];
@@ -3134,10 +3151,13 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             addedBy:    req.session.user._id
         };
 
-        // Always store chapter / topic / topics regardless of exam type
+        // Always store chapter / topic / topics / subTopic / subTopics regardless of exam type
         if (chapter) quizData.chapter = chapter;
         if (topic)   quizData.topic   = topic;
         if (topics.length > 0) quizData.topics = topics;
+        if (subTopic) quizData.subTopic = subTopic;
+        if (subTopics.length > 0) quizData.subTopics = subTopics;
+        else if (subTopic) quizData.subTopics = [subTopic];
 
         const mcqCount = parseInt(req.body.mcqCount) || 0;
         const shortCount = parseInt(req.body.shortCount) || 0;
@@ -3427,7 +3447,7 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
             return res.status(403).json({ success: false, error: 'Access denied' });
         }
 
-        let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation, answer, context, q1, q2, a1, a2, marks, board, year, questionType, topic, chapter } = req.body;
+        let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation, answer, context, q1, q2, a1, a2, marks, board, year, questionType, topic, chapter, subTopic } = req.body;
         
         if (!options || !Array.isArray(options)) {
             options = [optionA, optionB, optionC, optionD].filter(o => o !== undefined && o !== null);
@@ -3454,6 +3474,10 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
 
         if (topic !== undefined) {
             updateData['questions.$.topic'] = String(topic).trim();
+        }
+
+        if (subTopic !== undefined) {
+            updateData['questions.$.subTopic'] = String(subTopic).trim();
         }
         
         if (questionType === 'MCQ' || !questionType) {
@@ -3998,6 +4022,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const qMarks     = [].concat(body['qMarks[]']    || body.qMarks    || []);
         const qChapters  = [].concat(body['qChapter[]']  || body.qChapter  || []);
         const qTopics    = [].concat(body['qTopic[]']    || body.qTopic    || []);
+        const qSubTopics = [].concat(body['qSubTopic[]'] || body.qSubTopic || []);
 
         // Comprehension specific fields
         const qContexts  = [].concat(body['qContext[]']  || body.qContext  || []);
@@ -4072,9 +4097,14 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             const autoTitle = body.title || `${globalSubject} - ${boardYear || 'Board Exam'}`.trim();
 
             const fileUrl = req.file ? await processUploadedFile(req.file, 'questions') : (body.fileUrl || null);
+            const firstChap = (qChapters[0] !== undefined && qChapters[0] !== null) ? String(qChapters[0]).trim() : '';
+            const firstSubTop = (qSubTopics[0] !== undefined && qSubTopics[0] !== null) ? String(qSubTopics[0]).trim() : '';
             const newBank = await new QuestionBank({
                 title: autoTitle,
+                chapter: firstChap || '',
                 topic: globalTopic || '',
+                subTopic: firstSubTop || '',
+                subTopics: firstSubTop ? [firstSubTop] : [],
                 board: globalBoard || 'General Board',
                 year: globalYear || new Date().getFullYear().toString(),
                 subject: globalSubject,
@@ -4118,6 +4148,9 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             const assignedTopic = (qTopics[i] !== undefined && qTopics[i] !== null && String(qTopics[i]).trim() !== '')
                 ? String(qTopics[i]).trim()
                 : (globalTopic || '');
+            const assignedSubTopic = (qSubTopics[i] !== undefined && qSubTopics[i] !== null)
+                ? String(qSubTopics[i]).trim()
+                : '';
 
             return {
                 questionText: questionTextFinal,
@@ -4138,6 +4171,8 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 marks: parseInt(qMarks[i] || (isComprehension ? 10 : 1)) || (isComprehension ? 10 : 1),
                 chapter: assignedChapter,
                 topic: assignedTopic,
+                subTopic: assignedSubTopic,
+                subTopics: assignedSubTopic ? [assignedSubTopic] : [],
                 board:    mode === 'archive' ? globalBoard  : (qBoards[i] || globalBoard || 'General Board'),
                 year:     mode === 'archive' ? globalYear   : (qYears[i]  || globalYear  || ''),
                 subject:  mode === 'archive' ? globalSubject : (body.qSubject?.[i] || globalSubject || 'General'),
@@ -4173,7 +4208,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
 router.post('/edit-question/:id', teacherProtect, async (req, res) => {
     try {
         await connectDB();
-        const { questionText, questionType, options, correctAnswerIndex, correctAnswer, explanation, board, year, subject, classLevel, accessType, context, q1, q2, a1, a2, s1, s2, solution1, solution2 } = req.body;
+        const { questionText, questionType, options, correctAnswerIndex, correctAnswer, explanation, board, year, subject, classLevel, accessType, context, q1, q2, a1, a2, s1, s2, solution1, solution2, chapter, topic, subTopic } = req.body;
         const q = await Question.findById(req.params.id);
         if (!q) return res.status(404).send('Not found');
         if (q.addedBy.toString() !== req.session.user._id.toString()) return res.status(403).send('Unauthorized');
@@ -4183,6 +4218,13 @@ router.post('/edit-question/:id', teacherProtect, async (req, res) => {
             correctAnswer: correctAnswer || '',
             updatedAt: new Date()
         };
+
+        if (chapter !== undefined) updateData.chapter = chapter;
+        if (topic !== undefined) updateData.topic = topic;
+        if (subTopic !== undefined) {
+            updateData.subTopic = subTopic;
+            updateData.subTopics = subTopic ? [subTopic] : [];
+        }
 
         if (questionType === 'MCQ') {
             const filledOpts = (options || []).filter(o => o && String(o).trim().length > 0);

@@ -360,6 +360,23 @@
                                 </div>
                             </div>
 
+                            <!-- Dynamic Sub-topics Container (Shown when selected topic(s) have sub-topics) -->
+                            <div id="adminNoteSubTopicsSection" class="md:col-span-2 hidden space-y-1.5 transition-all">
+                                <div class="flex items-center justify-between">
+                                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                        <span class="material-symbols-rounded text-sm text-indigo-500">subdirectory_arrow_right</span>
+                                        <span>Select Sub-topic(s) <span class="text-slate-400 font-normal">(Optional)</span></span>
+                                    </label>
+                                    <span id="adminNoteSubTopicCountBadge" class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hidden">0 selected</span>
+                                </div>
+                                <input type="hidden" name="subTopic" id="adminNotePrimarySubTopicInput" value="">
+                                <div id="adminNoteSubTopicsWrapper" class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 min-h-[46px] max-h-36 overflow-y-auto">
+                                    <div id="adminNoteSubTopicsList" class="flex flex-wrap gap-1.5">
+                                        <!-- Dynamic Sub-topic Checkboxes / Pills will be injected here -->
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Cross-Class Auto-Sync Portal (Shown when same topic exists in other classes) -->
                             <div id="adminCrossClassSyncPortal" class="md:col-span-2 hidden p-3 rounded-xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 space-y-2 transition-all">
                                 <div class="flex items-center justify-between">
@@ -988,7 +1005,101 @@
                         chip.classList.remove('bg-primary/5', 'dark:bg-primary/15', 'border-primary', 'dark:border-primary');
                     }
                 });
+
+                renderAdminNoteSubTopicsForSelectedTopics();
             };
+
+            window.onAdminNoteSubTopicChipChange = function(cb) {
+                const chip = cb ? cb.closest('.admin-subtopic-chip') : null;
+                if (chip) {
+                    if (cb.checked) {
+                        chip.classList.add('bg-indigo-50', 'dark:bg-indigo-950/40', 'border-indigo-500', 'dark:border-indigo-400');
+                    } else {
+                        chip.classList.remove('bg-indigo-50', 'dark:bg-indigo-950/40', 'border-indigo-500', 'dark:border-indigo-400');
+                    }
+                }
+                syncAdminNoteSubTopicSelection();
+            };
+
+            window.syncAdminNoteSubTopicSelection = function() {
+                const primarySubInput = document.getElementById('adminNotePrimarySubTopicInput');
+                const badge = document.getElementById('adminNoteSubTopicCountBadge');
+                const checkedBoxes = Array.from(document.querySelectorAll('#adminNoteSubTopicsList input[name="subTopics[]"]:checked'));
+                if (badge) {
+                    if (checkedBoxes.length > 0) {
+                        badge.textContent = checkedBoxes.length + ' selected';
+                        badge.classList.remove('hidden');
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                }
+                if (primarySubInput) {
+                    primarySubInput.value = checkedBoxes.length > 0 ? checkedBoxes[0].value.trim() : '';
+                }
+            };
+
+            function renderAdminNoteSubTopicsForSelectedTopics() {
+                const section = document.getElementById('adminNoteSubTopicsSection');
+                const list = document.getElementById('adminNoteSubTopicsList');
+                if (!section || !list) return;
+
+                const checkedTopicBoxes = Array.from(document.querySelectorAll('#adminNoteTopicsList input[name="topics[]"]:checked'));
+                const topicDropdown = document.getElementById('adminNoteTopicDropdown');
+                const dropdownVal = topicDropdown ? topicDropdown.value.trim().toLowerCase() : '';
+
+                const selectedTopicNames = checkedTopicBoxes.map(b => b.value.trim().toLowerCase());
+                if (dropdownVal && !selectedTopicNames.includes(dropdownVal)) {
+                    selectedTopicNames.push(dropdownVal);
+                }
+
+                if (selectedTopicNames.length === 0) {
+                    section.classList.add('hidden');
+                    list.innerHTML = '';
+                    syncAdminNoteSubTopicSelection();
+                    return;
+                }
+
+                const allSubTopics = [];
+                const seenSubs = new Set();
+
+                (window._saCachedSyllabusTopics || []).forEach(t => {
+                    const tName = (t.name || '').trim().toLowerCase();
+                    if (selectedTopicNames.includes(tName) && Array.isArray(t.subTopics)) {
+                        t.subTopics.forEach(sub => {
+                            const subStr = String(sub || '').trim();
+                            if (subStr && !seenSubs.has(subStr.toLowerCase())) {
+                                seenSubs.add(subStr.toLowerCase());
+                                allSubTopics.push({ name: subStr, topic: t.name });
+                            }
+                        });
+                    }
+                });
+
+                if (allSubTopics.length === 0) {
+                    section.classList.add('hidden');
+                    list.innerHTML = '';
+                    syncAdminNoteSubTopicSelection();
+                    return;
+                }
+
+                const currentlyChecked = new Set(
+                    Array.from(list.querySelectorAll('input[name="subTopics[]"]:checked')).map(cb => cb.value.trim().toLowerCase())
+                );
+
+                list.innerHTML = '';
+                allSubTopics.forEach(item => {
+                    const isChecked = currentlyChecked.has(item.name.toLowerCase());
+                    const chip = document.createElement('label');
+                    chip.className = 'admin-subtopic-chip flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs select-none transition-all cursor-pointer ' + 
+                        (isChecked ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-500 dark:border-indigo-400' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-indigo-400');
+                    chip.innerHTML = '<input type="checkbox" name="subTopics[]" value="' + escapeHtml(item.name) + '" class="accent-indigo-600 rounded size-3.5 cursor-pointer"' + (isChecked ? ' checked' : '') + ' onchange="onAdminNoteSubTopicChipChange(this)">' +
+                        '<span class="font-medium text-slate-700 dark:text-slate-200 text-[11px] leading-tight">' + escapeHtml(item.name) + '</span>';
+                    list.appendChild(chip);
+                });
+
+                section.classList.remove('hidden');
+                syncAdminNoteSubTopicSelection();
+            }
 
             async function checkAndRenderAdminCrossClassSync(subject, topicName, chapterName, checkedClasses) {
                 const portal = document.getElementById('adminCrossClassSyncPortal');

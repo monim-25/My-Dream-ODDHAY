@@ -2509,7 +2509,7 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
 }, async (req, res) => {
     await connectDB();
     if (req.session.user.role === 'superadmin') return res.status(403).send('সুপার অ্যাডমিন কন্টেন্ট যোগ করতে পারবেন না।');
-    const { title, subject, chapter, topic, topics, description, accessType, course } = req.body;
+    const { title, subject, chapter, topic, topics, subTopic, subTopics, description, accessType, course } = req.body;
     const extractList = (val) => {
         if (!val) return [];
         if (Array.isArray(val)) return val.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
@@ -2528,6 +2528,15 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
         parsedTopics = String(rawTopics).split(',').map(tp => tp.trim()).filter(Boolean);
     }
     const primaryTopic = parsedTopics[0] || (typeof topic === 'string' ? topic.trim() : '');
+
+    const rawSubTopics = subTopics || subTopic || req.body['subTopics[]'] || req.body['subTopic[]'];
+    let parsedSubTopics = [];
+    if (Array.isArray(rawSubTopics)) {
+        parsedSubTopics = rawSubTopics.flatMap(tp => String(tp).split(',')).map(tp => tp.trim()).filter(Boolean);
+    } else if (rawSubTopics) {
+        parsedSubTopics = String(rawSubTopics).split(',').map(tp => tp.trim()).filter(Boolean);
+    }
+    const primarySubTopic = parsedSubTopics[0] || (typeof subTopic === 'string' ? subTopic.trim() : '');
 
     let resolvedParentFolderId = (req.body.parentFolderId && req.body.parentFolderId !== 'null' && req.body.parentFolderId !== '') ? req.body.parentFolderId : null;
     if (!resolvedParentFolderId && chapter && subject && classLevelArray.length > 0) {
@@ -2555,6 +2564,8 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
         chapter: chapter || '', 
         topic: primaryTopic,
         topics: parsedTopics.length > 0 ? parsedTopics : (primaryTopic ? [primaryTopic] : []),
+        subTopic: primarySubTopic,
+        subTopics: parsedSubTopics.length > 0 ? parsedSubTopics : (primarySubTopic ? [primarySubTopic] : []),
         description: description || '',
         accessType: accessType || 'Free',
         fileUrl,

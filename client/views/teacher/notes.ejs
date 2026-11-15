@@ -658,6 +658,23 @@
                             </div>
                         </div>
 
+                        <!-- Dynamic Sub-topics Container (Shown when selected topic(s) have sub-topics) -->
+                        <div id="noteSubTopicsSection" class="hidden space-y-1.5 transition-all">
+                            <div class="flex items-center justify-between">
+                                <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <span class="material-symbols-rounded text-sm text-indigo-500">subdirectory_arrow_right</span>
+                                    <span>Select Sub-topic(s) <span class="text-slate-400 font-normal">(Optional)</span></span>
+                                </label>
+                                <span id="noteSubTopicCountBadge" class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hidden">0 selected</span>
+                            </div>
+                            <input type="hidden" name="subTopic" id="notePrimarySubTopicInput" value="">
+                            <div id="noteSubTopicsWrapper" class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 min-h-[46px] max-h-36 overflow-y-auto">
+                                <div id="noteSubTopicsList" class="flex flex-wrap gap-1.5">
+                                    <!-- Dynamic Sub-topic Checkboxes / Pills will be injected here -->
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Cross-Class Auto-Sync Portal (Shown when same subject, chapter & topic exist in other classes) -->
                         <div id="crossClassSyncPortal" class="hidden p-2.5 rounded-xl bg-emerald-50/90 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 space-y-1.5 transition-all">
                             <div class="flex items-center justify-between">
@@ -2295,7 +2312,95 @@
                         chip.classList.remove('bg-primary/5', 'dark:bg-primary/15', 'border-primary', 'dark:border-primary');
                     }
                 });
+
+                renderNoteSubTopicsForSelectedTopics();
             };
+
+            window.onNoteSubTopicChipChange = function(cb) {
+                const chip = cb ? cb.closest('.subtopic-select-chip') : null;
+                if (chip) {
+                    if (cb.checked) {
+                        chip.classList.add('bg-indigo-50', 'dark:bg-indigo-950/40', 'border-indigo-500', 'dark:border-indigo-400');
+                    } else {
+                        chip.classList.remove('bg-indigo-50', 'dark:bg-indigo-950/40', 'border-indigo-500', 'dark:border-indigo-400');
+                    }
+                }
+                syncNoteSubTopicSelection();
+            };
+
+            window.syncNoteSubTopicSelection = function() {
+                const primarySubInput = document.getElementById('notePrimarySubTopicInput');
+                const badge = document.getElementById('noteSubTopicCountBadge');
+                const checkedBoxes = Array.from(document.querySelectorAll('#noteSubTopicsList input[name="subTopics[]"]:checked'));
+                if (badge) {
+                    if (checkedBoxes.length > 0) {
+                        badge.textContent = checkedBoxes.length + ' selected';
+                        badge.classList.remove('hidden');
+                    } else {
+                        badge.classList.add('hidden');
+                    }
+                }
+                if (primarySubInput) {
+                    primarySubInput.value = checkedBoxes.length > 0 ? checkedBoxes[0].value.trim() : '';
+                }
+            };
+
+            function renderNoteSubTopicsForSelectedTopics() {
+                const section = document.getElementById('noteSubTopicsSection');
+                const list = document.getElementById('noteSubTopicsList');
+                if (!section || !list) return;
+
+                const checkedTopicBoxes = Array.from(document.querySelectorAll('#noteTopicsList input[name="topics[]"]:checked'));
+                if (checkedTopicBoxes.length === 0) {
+                    section.classList.add('hidden');
+                    list.innerHTML = '';
+                    syncNoteSubTopicSelection();
+                    return;
+                }
+
+                const selectedTopicNames = checkedTopicBoxes.map(b => b.value.trim().toLowerCase());
+                const allSubTopics = [];
+                const seenSubs = new Set();
+
+                (window._cachedSyllabusTopics || []).forEach(t => {
+                    const tName = (t.name || '').trim().toLowerCase();
+                    if (selectedTopicNames.includes(tName) && Array.isArray(t.subTopics)) {
+                        t.subTopics.forEach(sub => {
+                            const subStr = String(sub || '').trim();
+                            if (subStr && !seenSubs.has(subStr.toLowerCase())) {
+                                seenSubs.add(subStr.toLowerCase());
+                                allSubTopics.push({ name: subStr, topic: t.name });
+                            }
+                        });
+                    }
+                });
+
+                if (allSubTopics.length === 0) {
+                    section.classList.add('hidden');
+                    list.innerHTML = '';
+                    syncNoteSubTopicSelection();
+                    return;
+                }
+
+                // Preserve previously checked sub-topics if still present
+                const currentlyChecked = new Set(
+                    Array.from(list.querySelectorAll('input[name="subTopics[]"]:checked')).map(cb => cb.value.trim().toLowerCase())
+                );
+
+                list.innerHTML = '';
+                allSubTopics.forEach(item => {
+                    const isChecked = currentlyChecked.has(item.name.toLowerCase());
+                    const chip = document.createElement('label');
+                    chip.className = 'subtopic-select-chip flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs select-none transition-all cursor-pointer ' + 
+                        (isChecked ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-500 dark:border-indigo-400' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-indigo-400');
+                    chip.innerHTML = '<input type="checkbox" name="subTopics[]" value="' + escapeHtml(item.name) + '" class="note-subtopic-checkbox accent-indigo-600 rounded size-3.5 cursor-pointer"' + (isChecked ? ' checked' : '') + ' onchange="onNoteSubTopicChipChange(this)">' +
+                        '<span class="font-medium text-slate-700 dark:text-slate-200 text-xs leading-tight">' + escapeHtml(item.name) + '</span>';
+                    list.appendChild(chip);
+                });
+
+                section.classList.remove('hidden');
+                syncNoteSubTopicSelection();
+            }
 
             async function checkAndRenderCrossClassSync(subject, topicNames, chapterName, checkedClasses) {
                 const portal = document.getElementById('crossClassSyncPortal');

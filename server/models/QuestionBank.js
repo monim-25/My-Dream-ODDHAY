@@ -4,7 +4,10 @@ const questionBankSchema = new mongoose.Schema({
     title: { type: String, default: '' },
     year: { type: String, default: '' },
     board: { type: String, default: '' }, // e.g., Dhaka Board, Comilla Board
+    chapter: { type: String, default: '' },
     topic: { type: String, default: '' }, // e.g., Mechanics, Electromagnetism
+    subTopic: { type: String, default: '' },
+    subTopics: [{ type: String }],
     subject: { type: String, required: true },
     classLevel: { type: [String], required: true },
     accessType: { type: String, enum: ['Free', 'Paid'], default: 'Free' },

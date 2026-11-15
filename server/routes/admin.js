@@ -2495,7 +2495,7 @@ router.post('/edit-question/:id', adminProtect, async (req, res) => {
         await connectDB();
         const {
             board, year, subject, classLevel, accessType,
-            questionType, topic, questionText,
+            questionType, chapter, topic, subTopic, questionText,
             options, optionA, optionB, optionC, optionD,
             correctAnswerIndex, correctAnswer, explanation
         } = req.body;
@@ -2506,6 +2506,12 @@ router.post('/edit-question/:id', adminProtect, async (req, res) => {
             correctAnswer: correctAnswer || '',
             explanation: explanation || ''
         };
+
+        if (chapter !== undefined) updateData.chapter = chapter;
+        if (subTopic !== undefined) {
+            updateData.subTopic = subTopic;
+            updateData.subTopics = subTopic ? [subTopic] : [];
+        }
 
         if (questionType === 'MCQ') {
             if (options && Array.isArray(options)) {
@@ -2748,7 +2754,7 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
 }, async (req, res) => {
     await connectDB();
     if (req.session.user.role === 'superadmin') return res.status(403).send('সুপার অ্যাডমিন কন্টেন্ট যোগ করতে পারবেন না।');
-    const { title, subject, chapter, topic, topics, description, accessType, course } = req.body;
+    const { title, subject, chapter, topic, topics, subTopic, subTopics, description, accessType, course } = req.body;
     const extractList = (val) => {
         if (!val) return [];
         if (Array.isArray(val)) return val.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
@@ -2767,6 +2773,15 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
         parsedTopics = String(rawTopics).split(',').map(tp => tp.trim()).filter(Boolean);
     }
     const primaryTopic = parsedTopics[0] || (typeof topic === 'string' ? topic.trim() : '');
+
+    const rawSubTopics = subTopics || subTopic || req.body['subTopics[]'] || req.body['subTopic[]'];
+    let parsedSubTopics = [];
+    if (Array.isArray(rawSubTopics)) {
+        parsedSubTopics = rawSubTopics.flatMap(tp => String(tp).split(',')).map(tp => tp.trim()).filter(Boolean);
+    } else if (rawSubTopics) {
+        parsedSubTopics = String(rawSubTopics).split(',').map(tp => tp.trim()).filter(Boolean);
+    }
+    const primarySubTopic = parsedSubTopics[0] || (typeof subTopic === 'string' ? subTopic.trim() : '');
 
     let resolvedParentFolderId = (req.body.parentFolderId && req.body.parentFolderId !== 'null' && req.body.parentFolderId !== '') ? req.body.parentFolderId : null;
     if (!resolvedParentFolderId && chapter && subject && classLevelArray.length > 0) {
@@ -2794,6 +2809,8 @@ router.post('/add-note', contentAdminProtect, (req, res, next) => {
         chapter: chapter || '',
         topic: primaryTopic,
         topics: parsedTopics.length > 0 ? parsedTopics : (primaryTopic ? [primaryTopic] : []),
+        subTopic: primarySubTopic,
+        subTopics: parsedSubTopics.length > 0 ? parsedSubTopics : (primarySubTopic ? [primarySubTopic] : []),
         description: description || '',
         accessType: accessType || 'Free',
         fileUrl,
@@ -3298,6 +3315,9 @@ router.post('/add-question-full', contentAdminProtect, (req, res, next) => {
         } = req.body;
 
         const qMarksArr = [].concat(qMarks || []);
+        const qChapters = [].concat(req.body['qChapter[]'] || req.body.qChapter || []);
+        const qTopics = [].concat(req.body['qTopic[]'] || req.body.qTopic || []);
+        const qSubTopics = [].concat(req.body['qSubTopic[]'] || req.body.qSubTopic || []);
 
         // Fix: If board/year/subject/class arrive as arrays (due to duplicate form fields), pick the first one
         const getVal = (val) => Array.isArray(val) ? val.filter(v => v !== '').shift() || '' : (val || '');
@@ -3318,11 +3338,18 @@ router.post('/add-question-full', contentAdminProtect, (req, res, next) => {
         // Create a bank ONLY if mode is 'archive' and we have the metadata
         if (finalMode === 'archive' && !targetBankId && finalSubject && finalClass) {
             const fileUrl = req.file ? await processUploadedFile(req.file, 'questions') : null;
+            const firstChap = (qChapters[0] !== undefined && qChapters[0] !== null) ? String(qChapters[0]).trim() : '';
+            const firstTop = (qTopics[0] !== undefined && qTopics[0] !== null) ? String(qTopics[0]).trim() : '';
+            const firstSubTop = (qSubTopics[0] !== undefined && qSubTopics[0] !== null) ? String(qSubTopics[0]).trim() : '';
             const newBank = await new QuestionBank({
                 board: finalBoard || 'Board',
                 year: finalYear || new Date().getFullYear().toString(),
                 subject: finalSubject,
                 classLevel: finalClass,
+                chapter: firstChap || '',
+                topic: firstTop || '',
+                subTopic: firstSubTop || '',
+                subTopics: firstSubTop ? [firstSubTop] : [],
                 fileUrl,
                 addedBy: req.session.user._id,
                 status: 'approved'
@@ -3350,6 +3377,10 @@ router.post('/add-question-full', contentAdminProtect, (req, res, next) => {
                 correctAnswer = qAnswer[i] || '';
             }
 
+            const assignedChapter = (qChapters[i] !== undefined && qChapters[i] !== null) ? String(qChapters[i]).trim() : '';
+            const assignedTopic = (qTopics[i] !== undefined && qTopics[i] !== null) ? String(qTopics[i]).trim() : '';
+            const assignedSubTopic = (qSubTopics[i] !== undefined && qSubTopics[i] !== null) ? String(qSubTopics[i]).trim() : '';
+
             const questionData = {
                 questionText: qText[i],
                 questionType: type,
@@ -3358,6 +3389,10 @@ router.post('/add-question-full', contentAdminProtect, (req, res, next) => {
                 correctAnswer,
                 explanation: qExplanation[i] || '',
                 marks: parseInt(qMarksArr[i] || 1) || 1,
+                chapter: assignedChapter,
+                topic: assignedTopic,
+                subTopic: assignedSubTopic,
+                subTopics: assignedSubTopic ? [assignedSubTopic] : [],
                 board: finalBoard,
                 year: finalYear,
                 subject: finalSubject,
