@@ -190,6 +190,11 @@
                         </div>
 
                         <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <button type="button" id="btnToolbarCancelDelete" onclick="bulkCancelDeleteLive()" disabled
+                                    class="h-7 px-2.5 sm:px-3 rounded bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-medium hidden items-center gap-1 transition-all shadow-xs shrink-0 cursor-pointer">
+                                <span class="material-symbols-rounded text-sm">hourglass_disabled</span>
+                                <span id="btnToolbarCancelDeleteText">অনুরোধ প্রত্যাহার</span>
+                            </button>
                             <button type="button" id="btnToolbarRequestDelete" onclick="bulkRequestDeleteLive()" disabled
                                     class="h-7 px-2.5 sm:px-3 rounded bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-medium flex items-center gap-1 transition-all shadow-xs shrink-0 cursor-pointer">
                                 <span class="material-symbols-rounded text-sm">delete_sweep</span>
@@ -259,13 +264,30 @@
                                                 </div>
 
                                                 <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
-                                                    <!-- Request Delete Chapter Icon -->
-                                                    <button type="button" 
-                                                            onclick="openRequestDeleteModal(<%= JSON.stringify(ch.name) %>, <%= JSON.stringify(ch.topics.map(t => t._id)) %>, 'chapter')" 
-                                                            class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors shrink-0" 
-                                                            title="Request to Delete Chapter">
-                                                        <span class="material-symbols-rounded text-base">delete_sweep</span>
-                                                    </button>
+                                                    <% 
+                                                        const chPendingDelTopics = ch.topics.filter(t => t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending');
+                                                        const chPendingDelIds = chPendingDelTopics.map(t => t._id);
+                                                        const chUnrequestedTopics = ch.topics.filter(t => !(t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending'));
+                                                        const chUnrequestedIds = chUnrequestedTopics.map(t => t._id);
+                                                    %>
+                                                    <% if (chPendingDelTopics.length > 0) { %>
+                                                        <!-- Cancel Deletion Request for Chapter / Pending Topics -->
+                                                        <button type="button" 
+                                                                onclick="cancelDeletionRequest(<%= JSON.stringify(chPendingDelIds) %>, <%= JSON.stringify(ch.name) %>, 'chapter')" 
+                                                                class="size-7 rounded hover:bg-amber-100 dark:hover:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center transition-colors shrink-0" 
+                                                                title="Deletion Requested for <%= chPendingDelTopics.length %> topic(s) (Click to cancel request / অনুরোধ প্রত্যাহার)">
+                                                            <span class="material-symbols-rounded text-base">hourglass_top</span>
+                                                        </button>
+                                                    <% } %>
+                                                    <% if (chUnrequestedTopics.length > 0) { %>
+                                                        <!-- Request Delete Chapter Icon -->
+                                                        <button type="button" 
+                                                                onclick="openRequestDeleteModal(<%= JSON.stringify(ch.name) %>, <%= JSON.stringify(chUnrequestedIds) %>, 'chapter')" 
+                                                                class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors shrink-0" 
+                                                                title="Request to Delete Chapter<%= chPendingDelTopics.length > 0 ? ' (' + chUnrequestedTopics.length + ' remaining topics)' : '' %>">
+                                                            <span class="material-symbols-rounded text-base">delete_sweep</span>
+                                                        </button>
+                                                    <% } %>
                                                     <!-- Accordion Chevron -->
                                                     <button type="button" onclick="toggleChapterAccordion('ch_<%= chIdx %>')" class="size-7 rounded hover:bg-slate-200/50 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400" title="Expand / Collapse Chapter">
                                                         <span id="icon_ch_<%= chIdx %>" class="material-symbols-rounded text-base transition-transform">expand_more</span>
@@ -477,15 +499,20 @@
                                             <% const chApprovedTopicIds = chApproved.map(t => t._id); %>
                                             <% const chPendingDeletion = chApproved.filter(t => t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending'); %>
                                             <% if (chApproved.length > 0) { %>
-                                                <% if (chPendingDeletion.length === chApproved.length && chApproved.length > 0) { %>
-                                                    <span class="size-7 rounded bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0" title="Deletion requested for this chapter">
-                                                        <span class="material-symbols-rounded text-base">hourglass_top</span>
-                                                    </span>
-                                                <% } else { %>
+                                                <% if (chPendingDeletion.length > 0) { %>
                                                     <button type="button" 
-                                                            onclick="openRequestDeleteModal(<%= JSON.stringify(ch.name) %>, <%= JSON.stringify(chApprovedTopicIds) %>, 'chapter')" 
+                                                            onclick="cancelDeletionRequest(<%= JSON.stringify(chPendingDeletion.map(t => t._id)) %>, <%= JSON.stringify(ch.name) %>, 'chapter')" 
+                                                            class="size-7 rounded hover:bg-amber-100 dark:hover:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center transition-colors shrink-0" 
+                                                            title="Deletion requested for <%= chPendingDeletion.length %> topic(s) (Click to cancel request / অনুরোধ প্রত্যাহার)">
+                                                        <span class="material-symbols-rounded text-base">hourglass_top</span>
+                                                    </button>
+                                                <% } %>
+                                                <% const chRemainingApprovedIds = chApproved.filter(t => !(t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending')).map(t => t._id); %>
+                                                <% if (chRemainingApprovedIds.length > 0) { %>
+                                                    <button type="button" 
+                                                            onclick="openRequestDeleteModal(<%= JSON.stringify(ch.name) %>, <%= JSON.stringify(chRemainingApprovedIds) %>, 'chapter')" 
                                                             class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors shrink-0" 
-                                                            title="Request to Delete Chapter">
+                                                            title="Request to Delete Chapter<%= chPendingDeletion.length > 0 ? ' (' + chRemainingApprovedIds.length + ' remaining)' : '' %>">
                                                         <span class="material-symbols-rounded text-base">delete_sweep</span>
                                                     </button>
                                                 <% } %>
@@ -1375,12 +1402,28 @@
             const badge = document.getElementById('toolbarSelectedCountBadge');
             if (badge) badge.innerText = `${count} Selected`;
 
+            const pendingTopics = Array.from(checked).filter(cb => cb.dataset.pending === 'true');
+            const unrequestedTopics = Array.from(checked).filter(cb => cb.dataset.pending !== 'true');
+
+            const btnCancelDelete = document.getElementById('btnToolbarCancelDelete');
+            const textCancelDelete = document.getElementById('btnToolbarCancelDeleteText');
+            if (btnCancelDelete) {
+                if (pendingTopics.length > 0) {
+                    btnCancelDelete.classList.remove('hidden');
+                    btnCancelDelete.disabled = false;
+                    if (textCancelDelete) textCancelDelete.innerText = `অনুরোধ প্রত্যাহার (${pendingTopics.length})`;
+                } else {
+                    btnCancelDelete.classList.add('hidden');
+                    btnCancelDelete.disabled = true;
+                }
+            }
+
             const btnRequestDelete = document.getElementById('btnToolbarRequestDelete');
             const textRequestDelete = document.getElementById('btnToolbarRequestDeleteText');
             if (btnRequestDelete) {
-                btnRequestDelete.disabled = (count === 0);
+                btnRequestDelete.disabled = (unrequestedTopics.length === 0);
                 if (textRequestDelete) {
-                    textRequestDelete.innerText = count > 0 ? `Request Delete (${count})` : 'Request Delete';
+                    textRequestDelete.innerText = unrequestedTopics.length > 0 ? `Request Delete (${unrequestedTopics.length})` : 'Request Delete';
                 }
             }
 
@@ -1407,6 +1450,14 @@
                     }
                 }
             });
+        }
+
+        async function bulkCancelDeleteLive() {
+            const checked = Array.from(document.querySelectorAll('.topic-checkbox:checked'));
+            const pending = checked.filter(cb => cb.dataset.pending === 'true');
+            if (pending.length === 0) return;
+            const ids = pending.map(cb => cb.dataset.id);
+            cancelDeletionRequest(ids, `${pending.length}টি নির্বাচিত টপিক`, 'chapter');
         }
 
         async function bulkRequestDeleteLive() {
@@ -2217,10 +2268,14 @@
             }
         }
 
-        async function cancelDeletionRequest(topicId, topicName) {
+        async function cancelDeletionRequest(topicIds, targetName, targetType = 'topic') {
+            const ids = Array.isArray(topicIds) ? topicIds : [topicIds];
+            if (!ids || ids.length === 0) return;
+
+            const label = targetType === 'chapter' ? `চ্যাপ্টার "${targetName}"-এর ${ids.length > 1 ? ids.length + 'টি ' : ''}` : `"${targetName}" `;
             const confirm = await Swal.fire({
                 title: 'অনুরোধ প্রত্যাহার করবেন?',
-                text: `"${topicName}" টপিক মুছে ফেলার অনুরোধটি বাতিল করতে চান?`,
+                text: `${label}টপিক মুছে ফেলার অনুরোধটি বাতিল করতে চান?`,
                 icon: 'question',
                 showCancelButton: true,
                 confirmButtonColor: '#059669',
@@ -2236,7 +2291,7 @@
                 const res = await fetch(`${apiBase}/topics/cancel-delete-request`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({ topicId })
+                    body: JSON.stringify({ topicIds: ids })
                 });
                 const data = await res.json();
                 if (res.ok && data.success) {
