@@ -1839,6 +1839,22 @@ const deletePendingTeacherTopic = async (req, res) => {
     try {
         await connectDB();
         const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, error: 'Valid topic ID required' });
+        }
+
+        const existing = await Topic.findById(id).lean();
+        if (!existing) {
+            return res.status(404).json({ success: false, error: 'Topic not found' });
+        }
+
+        if (existing.status === 'approved') {
+            return res.status(403).json({
+                success: false,
+                error: 'Approved topics cannot be deleted by teachers. Only administrators have permission to delete approved syllabus topics.'
+            });
+        }
+
         const topic = await Topic.findOneAndDelete({
             _id: id,
             $or: [{ submittedBy: req.session.user._id }, { createdBy: req.session.user._id }],
@@ -1846,7 +1862,7 @@ const deletePendingTeacherTopic = async (req, res) => {
         });
 
         if (!topic) {
-            return res.status(404).json({ success: false, error: 'Topic submission not found or already live' });
+            return res.status(403).json({ success: false, error: 'You do not have permission to delete this topic submission.' });
         }
 
         res.json({ success: true, message: 'Submission removed successfully' });
@@ -1876,13 +1892,26 @@ const bulkActionTeacherSubmissions = async (req, res) => {
             return res.status(401).json({ success: false, error: 'Unauthorized' });
         }
 
-        const baseQuery = {
-            _id: { $in: validIds },
-            $or: [{ submittedBy: userId }, { createdBy: userId }],
-            status: { $in: ['pending', 'rejected'] }
-        };
-
         if (action === 'delete') {
+            // Strictly check if ANY of the topics are approved
+            const approvedItems = await Topic.find({
+                _id: { $in: validIds },
+                status: 'approved'
+            }).select('name').lean();
+
+            if (approvedItems.length > 0) {
+                return res.status(403).json({
+                    success: false,
+                    error: `Deletion rejected: ${approvedItems.length} selected topic(s) (including "${approvedItems[0].name}") are already approved. Teachers cannot delete approved topics or chapters.`
+                });
+            }
+
+            const baseQuery = {
+                _id: { $in: validIds },
+                $or: [{ submittedBy: userId }, { createdBy: userId }],
+                status: { $in: ['pending', 'rejected'] }
+            };
+
             const result = await Topic.deleteMany(baseQuery);
             return res.json({
                 success: true,

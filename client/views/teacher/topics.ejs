@@ -392,7 +392,7 @@
                                     <!-- Chapter Header with Expand / Collapse Accordion -->
                                     <div class="px-3 sm:px-3.5 py-2.5 bg-slate-50/80 dark:bg-slate-900/60 border-b border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-2 cursor-pointer select-none" onclick="toggleChapterAccordion('sub_ch_<%= sIdx %>')">
                                         <div class="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
-                                            <% if (chPending.length > 0 || chRejected.length > 0) { %>
+                                            <% if (chApproved.length === 0 && (chPending.length > 0 || chRejected.length > 0)) { %>
                                                 <div class="shrink-0" onclick="event.stopPropagation()">
                                                     <input type="checkbox" id="sub_ch_cb_<%= sIdx %>" class="sub-chapter-cb size-3.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer" title="Select all selectable topics in this chapter" onchange="toggleChapterSubmissions(this, <%= sIdx %>)">
                                                 </div>
@@ -432,12 +432,17 @@
                                             </div>
 
                                             <% const chSelectable = ch.topics.filter(t => t.status === 'pending' || t.status === 'rejected'); %>
-                                            <% if (chSelectable.length > 0) { %>
-                                                <!-- Delete Chapter Submissions Button -->
+                                            <% if (chApproved.length > 0) { %>
+                                                <!-- Approved Chapter: Deletion is locked -->
+                                                <span class="size-7 rounded text-slate-400 dark:text-slate-500 flex items-center justify-center shrink-0 cursor-not-allowed" title="Approved chapter cannot be deleted by teachers">
+                                                    <span class="material-symbols-rounded text-sm text-emerald-600 dark:text-emerald-400">lock</span>
+                                                </span>
+                                            <% } else if (chSelectable.length > 0) { %>
+                                                <!-- Delete Chapter Submissions Button (only if NO approved topics exist in this chapter) -->
                                                 <button type="button" 
                                                         onclick="deleteChapterSubmissions(<%= JSON.stringify(ch.name) %>, <%= chSelectable.length %>, <%= JSON.stringify(chSelectable.map(t => t._id)) %>)" 
                                                         class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors shrink-0" 
-                                                        title="Delete all <%= chSelectable.length %> submission(s) in chapter <%= ch.name %>">
+                                                        title="Delete all <%= chSelectable.length %> unapproved submission(s) in chapter <%= ch.name %>">
                                                     <span class="material-symbols-rounded text-base">delete</span>
                                                 </button>
                                             <% } %>
@@ -571,6 +576,10 @@
                                                                     <span>Delete</span>
                                                                 </button>
                                                             </div>
+                                                        <% } else { %>
+                                                            <span class="inline-flex items-center gap-1 text-slate-400 text-[11px] font-medium" title="Approved topics cannot be modified or deleted">
+                                                                <span class="material-symbols-rounded text-xs text-slate-400">lock</span> Published
+                                                            </span>
                                                         <% } %>
                                                     </div>
                                                 </div>
@@ -583,7 +592,7 @@
                                                 <thead class="bg-slate-50/50 dark:bg-slate-900/30 text-slate-400 text-[10px] uppercase font-semibold border-b border-slate-100 dark:border-slate-800/60">
                                                     <tr>
                                                         <th class="py-2 px-3 w-10 text-center">
-                                                            <% if (chPending.length > 0 || chRejected.length > 0) { %>
+                                                            <% if (chApproved.length === 0 && (chPending.length > 0 || chRejected.length > 0)) { %>
                                                                 <input type="checkbox" id="sub_ch_table_cb_<%= sIdx %>" class="sub-ch-table-header-cb size-3.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer" title="Select all selectable in this chapter" onchange="toggleChapterSubmissions(this, <%= sIdx %>)">
                                                             <% } else { %>
                                                                 #
@@ -686,7 +695,9 @@
                                                                         </button>
                                                                     </div>
                                                                 <% } else { %>
-                                                                    <span class="text-slate-400 text-[11px] italic">Published</span>
+                                                                    <span class="inline-flex items-center gap-1 text-slate-400 text-[11px] font-medium" title="Approved topics cannot be modified or deleted">
+                                                                        <span class="material-symbols-rounded text-xs text-slate-400">lock</span> Published
+                                                                    </span>
                                                                 <% } %>
                                                             </td>
                                                         </tr>
@@ -1811,12 +1822,12 @@
 
             const confirm = await Swal.fire({
                 title: 'Delete Chapter Submissions?',
-                html: `Remove all <strong>${count}</strong> topic submission(s) in chapter <strong>"${chapterName}"</strong>? This action cannot be undone.`,
+                html: `Remove all <strong>${count}</strong> unapproved topic submission(s) in chapter <strong>"${chapterName}"</strong>? This action cannot be undone.`,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#e11d48',
                 cancelButtonColor: '#64748b',
-                confirmButtonText: 'Yes, Delete Chapter Submissions'
+                confirmButtonText: 'Yes, Delete Submissions'
             });
 
             if (confirm.isConfirmed) {
