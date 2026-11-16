@@ -91,7 +91,7 @@
                             </button>
                         </div>
 
-                        <!-- Right Actions: Quick Search, Selection System & Add Topics -->
+                        <!-- Right Actions: Quick Search & Add Topics Button -->
                         <div class="flex items-center gap-2 shrink-0">
                             <!-- Quick Search Input -->
                             <div class="relative hidden sm:block w-36 md:w-48 lg:w-56">
@@ -99,6 +99,70 @@
                                 <input type="text" id="topicSearchInput" onkeyup="filterTopicsClientSide(this.value)" placeholder="Search topics..." class="w-full h-8 pl-7 pr-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
                             </div>
 
+                            <!-- Add Topics Button -->
+                            <button type="button" id="unifiedModalOpenBtn" onclick="openUnifiedModal()"
+                                    class="h-8 px-3 sm:px-3.5 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 shadow-xs transition-all shrink-0 whitespace-nowrap cursor-pointer">
+                                <span class="material-symbols-rounded text-[17px]">add</span>
+                                <span>Add Topics</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Line 2: Dropdown Filters (Class, Group, Subject) and Tools (Expand All & Select Topics) -->
+                    <div id="liveFiltersBar" class="flex items-center justify-between gap-2.5 sm:gap-4 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800/60">
+                        <!-- Left: Filters -->
+                        <div class="flex items-center gap-2.5 sm:gap-4 flex-wrap">
+                            <!-- Class Dropdown -->
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Class:</span>
+                                <select id="classSelector" onchange="onClassChange(this.value)" 
+                                        class="h-8 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-primary shadow-2xs min-w-[130px] sm:min-w-[145px] cursor-pointer">
+                                    <% safeClasses.forEach(c => { %>
+                                        <option value="<%= c.name %>" <%= c.name.toLowerCase() === selClass.toLowerCase() ? 'selected' : '' %>>
+                                            <%= c.name %> <%= c.hasGroups ? '(Grouped)' : '' %>
+                                        </option>
+                                    <% }) %>
+                                </select>
+                            </div>
+
+                            <!-- Stream / Group Filter if class has groups -->
+                            <% if (safeCurrentClass && safeCurrentClass.hasGroups) { %>
+                                <div class="flex items-center gap-1.5">
+                                    <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Group:</span>
+                                    <select id="groupSelector" onchange="onGroupChange(this.value)" 
+                                            class="h-8 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-primary shadow-2xs cursor-pointer">
+                                        <option value="all" <%= selGroup === 'all' ? 'selected' : '' %>>All Groups</option>
+                                        <option value="Science" <%= selGroup === 'Science' ? 'selected' : '' %>>Science</option>
+                                        <option value="Commerce" <%= selGroup === 'Commerce' ? 'selected' : '' %>>Commerce</option>
+                                        <option value="Humanities" <%= selGroup === 'Humanities' ? 'selected' : '' %>>Humanities</option>
+                                    </select>
+                                </div>
+                            <% } %>
+
+                            <!-- Subject Dropdown -->
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Subject:</span>
+                                <select id="subjectSelector" onchange="onSubjectChange(this.value)" 
+                                        class="h-8 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-primary shadow-2xs min-w-[140px] cursor-pointer">
+                                    <% if (availSubjects.length === 0) { %>
+                                        <option value="">No Subjects</option>
+                                    <% } else { %>
+                                        <% availSubjects.forEach(sub => { %>
+                                            <option value="<%= sub %>" <%= sub.toLowerCase() === selSubject.toLowerCase() ? 'selected' : '' %>>
+                                                <%= sub %>
+                                            </option>
+                                        <% }) %>
+                                    <% } %>
+                                </select>
+                                <button type="button" onclick="openAddSubjectModal()" class="h-8 px-2 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-primary border border-slate-200 dark:border-slate-700 text-xs font-medium flex items-center gap-1 transition-all cursor-pointer" title="Add Subject to classes">
+                                    <span class="material-symbols-rounded text-sm">add_circle</span>
+                                    <span class="hidden sm:inline">Add Subject</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Right: Expand All & Select Topics (Same Line as Filters) -->
+                        <div class="flex items-center gap-2 shrink-0 ml-auto sm:ml-0">
                             <!-- Expand / Collapse All Chapters (Live Tab) -->
                             <button type="button" id="topBarToggleAllLiveChapters" onclick="toggleAllLiveChapters()"
                                     class="h-8 px-2.5 sm:px-3 rounded-md bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 shadow-xs transition-all shrink-0 cursor-pointer"
@@ -109,70 +173,13 @@
 
                             <!-- Selection System Button -->
                             <button type="button" id="btnToggleSelection" onclick="toggleSelectionMode()"
-                                    class="h-8 px-2.5 sm:px-3 rounded-md bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all shrink-0"
+                                    class="h-8 px-2.5 sm:px-3 rounded-md bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all shrink-0 cursor-pointer"
                                     title="Open selection mode to select multiple topics and move to bucket">
                                 <span id="btnSelectionIcon" class="material-symbols-rounded text-[17px] text-slate-500">checklist</span>
                                 <span id="btnSelectionLabel" class="hidden md:inline">Select Topics</span>
                             </button>
-
-                            <!-- Add Topics Button -->
-                            <button type="button" id="unifiedModalOpenBtn" onclick="openUnifiedModal()"
-                                    class="h-8 px-3 sm:px-3.5 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 shadow-xs transition-all shrink-0 whitespace-nowrap">
-                                <span class="material-symbols-rounded text-[17px]">add</span>
-                                <span>Add Topics</span>
-                            </button>
                         </div>
                     </div>
-
-                    <!-- Line 2: Dropdown Filters (Class, Group, Subject) -->
-                    <div id="liveFiltersBar" class="flex items-center gap-2.5 sm:gap-4 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800/60">
-                        <!-- Class Dropdown -->
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Class:</span>
-                            <select id="classSelector" onchange="onClassChange(this.value)" 
-                                    class="h-8 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-primary shadow-2xs min-w-[130px] sm:min-w-[145px] cursor-pointer">
-                                <% safeClasses.forEach(c => { %>
-                                    <option value="<%= c.name %>" <%= c.name.toLowerCase() === selClass.toLowerCase() ? 'selected' : '' %>>
-                                        <%= c.name %> <%= c.hasGroups ? '(Grouped)' : '' %>
-                                    </option>
-                                <% }) %>
-                            </select>
-                        </div>
-
-                        <!-- Stream / Group Filter if class has groups -->
-                        <% if (safeCurrentClass && safeCurrentClass.hasGroups) { %>
-                            <div class="flex items-center gap-1.5">
-                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Group:</span>
-                                <select id="groupSelector" onchange="onGroupChange(this.value)" 
-                                        class="h-8 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-primary shadow-2xs cursor-pointer">
-                                    <option value="all" <%= selGroup === 'all' ? 'selected' : '' %>>All Groups</option>
-                                    <option value="Science" <%= selGroup === 'Science' ? 'selected' : '' %>>Science</option>
-                                    <option value="Commerce" <%= selGroup === 'Commerce' ? 'selected' : '' %>>Commerce</option>
-                                    <option value="Humanities" <%= selGroup === 'Humanities' ? 'selected' : '' %>>Humanities</option>
-                                </select>
-                            </div>
-                        <% } %>
-
-                        <!-- Subject Dropdown -->
-                        <div class="flex items-center gap-1.5">
-                            <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Subject:</span>
-                            <select id="subjectSelector" onchange="onSubjectChange(this.value)" 
-                                    class="h-8 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-primary shadow-2xs min-w-[140px] cursor-pointer">
-                                <% if (availSubjects.length === 0) { %>
-                                    <option value="">No Subjects</option>
-                                <% } else { %>
-                                    <% availSubjects.forEach(sub => { %>
-                                        <option value="<%= sub %>" <%= sub.toLowerCase() === selSubject.toLowerCase() ? 'selected' : '' %>>
-                                            <%= sub %>
-                                        </option>
-                                    <% }) %>
-                                <% } %>
-                            </select>
-                            <button type="button" onclick="openAddSubjectModal()" class="h-8 px-2 rounded-md bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-primary border border-slate-200 dark:border-slate-700 text-xs font-medium flex items-center gap-1 transition-all" title="Add Subject to classes">
-                                <span class="material-symbols-rounded text-sm">add_circle</span>
-                                <span class="hidden sm:inline">Add Subject</span>
-                            </button>
-                        </div>
                     </div>
                 </div>
 
@@ -223,18 +230,12 @@
                 <!-- 2. LIVE SYLLABUS LIST VIEW -->
                 <div id="liveTopicsView" class="p-3 sm:p-4 flex-1 max-w-7xl mx-auto w-full space-y-3">
                     <% if (safeChapters.length > 0) { %>
-                        <!-- Live Chapters Stats & Mini Toolbar -->
-                        <div class="flex items-center justify-between gap-2 px-1 text-xs">
-                            <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 font-medium">
-                                <span class="material-symbols-rounded text-base text-primary">folder_open</span>
-                                <span><%= safeChapters.length %> Chapters</span>
-                                <span class="text-slate-300 dark:text-slate-700">•</span>
-                                <span><%= safeActiveTopics.length %> Topics</span>
-                            </div>
-                            <button type="button" onclick="toggleAllLiveChapters()" class="text-xs text-primary hover:underline font-medium flex items-center gap-1 cursor-pointer">
-                                <span class="material-symbols-rounded text-sm" id="iconToggleAllLiveChapters">unfold_less</span>
-                                <span id="textToggleAllLiveChapters">Collapse All</span>
-                            </button>
+                        <!-- Live Chapters Stats -->
+                        <div class="flex items-center gap-1.5 px-1 text-xs text-slate-600 dark:text-slate-400 font-medium">
+                            <span class="material-symbols-rounded text-base text-primary">folder_open</span>
+                            <span><%= safeChapters.length %> Chapters</span>
+                            <span class="text-slate-300 dark:text-slate-700">•</span>
+                            <span><%= safeActiveTopics.length %> Topics</span>
                         </div>
                     <% } %>
 
