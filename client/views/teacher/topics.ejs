@@ -128,12 +128,20 @@
                         </div>
                     </div>
 
-                    <!-- Right Actions: Quick Search & Add Topics -->
+                    <!-- Right Actions: Quick Search, Expand/Collapse & Add Topics -->
                     <div class="flex items-center gap-2 shrink-0">
-                        <div class="relative hidden lg:block w-40 sm:w-52">
+                        <div class="relative hidden lg:block w-36 sm:w-48 xl:w-52">
                             <span class="material-symbols-rounded absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
                             <input type="text" id="topicSearchInput" onkeyup="filterTopicsClientSide(this.value)" placeholder="Search topics..." class="w-full h-8 pl-7 pr-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
                         </div>
+
+                        <!-- Expand / Collapse All Chapters (Live Tab) -->
+                        <button type="button" id="topBarToggleAllLiveChapters" onclick="toggleAllLiveChapters()"
+                                class="h-8 px-2.5 sm:px-3 rounded-md bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 shadow-xs transition-all shrink-0 cursor-pointer"
+                                title="Expand / Collapse all chapters">
+                            <span class="material-symbols-rounded text-base text-slate-500" id="topBarIconToggleLive">unfold_less</span>
+                            <span id="topBarTextToggleLive" class="hidden sm:inline">Collapse All</span>
+                        </button>
 
                         <button type="button" onclick="openUnifiedModal()"
                                 class="h-8 px-3 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 shadow-xs transition-all whitespace-nowrap">
@@ -145,7 +153,22 @@
 
                 <!-- 2. LIVE SYLLABUS LIST VIEW -->
                 <div id="liveTopicsView" class="p-3 sm:p-4 flex-1 max-w-7xl mx-auto w-full space-y-3">
-                    <div id="chaptersContainer" class="space-y-3">
+                    <% if (safeChapters.length > 0) { %>
+                    <!-- Live Chapters Stats & Mini Toolbar -->
+                    <div class="flex items-center justify-between gap-2 px-1 text-xs">
+                        <div class="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 font-medium">
+                            <span class="material-symbols-rounded text-base text-primary">folder_open</span>
+                            <span><%= safeChapters.length %> Chapters</span>
+                            <span class="text-slate-300 dark:text-slate-700">•</span>
+                            <span><%= safeActiveTopics.length %> Topics</span>
+                        </div>
+                        <button type="button" onclick="toggleAllLiveChapters()" class="text-xs text-primary hover:underline font-medium flex items-center gap-1 cursor-pointer">
+                            <span class="material-symbols-rounded text-sm" id="iconToggleAllLiveChapters">unfold_less</span>
+                            <span id="textToggleAllLiveChapters">Collapse All</span>
+                        </button>
+                    </div>
+                <% } %>
+                <div id="chaptersContainer" class="space-y-3">
                                 <% if (safeClasses.length === 0) { %>
                                     <div class="p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] rounded-md">
                                         <span class="material-symbols-rounded text-3xl text-amber-500 mb-1">school</span>
@@ -1100,6 +1123,7 @@
             if (tab === 'live') {
                 liveView.classList.remove('hidden');
                 if (liveFiltersBar) liveFiltersBar.classList.remove('hidden');
+                if (document.getElementById('topBarToggleAllLiveChapters')) document.getElementById('topBarToggleAllLiveChapters').classList.remove('hidden');
                 submissionsView.classList.add('hidden');
                 tabLiveBtn.className = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs';
                 tabSubmissionsBtn.className = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white';
@@ -1111,6 +1135,7 @@
             } else {
                 liveView.classList.add('hidden');
                 if (liveFiltersBar) liveFiltersBar.classList.add('hidden');
+                if (document.getElementById('topBarToggleAllLiveChapters')) document.getElementById('topBarToggleAllLiveChapters').classList.add('hidden');
                 submissionsView.classList.remove('hidden');
                 tabSubmissionsBtn.className = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs';
                 tabLiveBtn.className = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white';
@@ -1155,6 +1180,31 @@
                 content.classList.add('hidden');
                 if (icon) icon.style.transform = 'rotate(-90deg)';
             }
+        }
+
+        let allLiveChaptersExpanded = true;
+        function toggleAllLiveChapters() {
+            allLiveChaptersExpanded = !allLiveChaptersExpanded;
+            const contents = document.querySelectorAll('#chaptersContainer [id^="content_ch_"]');
+            const icons = document.querySelectorAll('#chaptersContainer [id^="icon_ch_"]');
+
+            contents.forEach(el => {
+                if (allLiveChaptersExpanded) el.classList.remove('hidden');
+                else el.classList.add('hidden');
+            });
+            icons.forEach(ic => {
+                ic.style.transform = allLiveChaptersExpanded ? 'rotate(0deg)' : 'rotate(-90deg)';
+            });
+
+            const topText = document.getElementById('topBarTextToggleLive');
+            const topIcon = document.getElementById('topBarIconToggleLive');
+            if (topText) topText.textContent = allLiveChaptersExpanded ? 'Collapse All' : 'Expand All';
+            if (topIcon) topIcon.textContent = allLiveChaptersExpanded ? 'unfold_less' : 'unfold_more';
+
+            const inText = document.getElementById('textToggleAllLiveChapters');
+            const inIcon = document.getElementById('iconToggleAllLiveChapters');
+            if (inText) inText.textContent = allLiveChaptersExpanded ? 'Collapse All' : 'Expand All';
+            if (inIcon) inIcon.textContent = allLiveChaptersExpanded ? 'unfold_less' : 'unfold_more';
         }
 
         let allSubmissionsExpanded = true;
