@@ -156,6 +156,59 @@ const syncAllSyllabusFolders = async () => {
 };
 
 
+// ==========================================
+// TEACHER ASSIGNMENT & SCOPE HELPERS
+// ==========================================
+const matchesClass = (targetClass, allowedList) => {
+    if (!targetClass || !allowedList || allowedList.length === 0) return false;
+    const t = String(targetClass).toLowerCase().replace(/\bclass\b/gi, '').trim();
+    const tNum = t.replace(/[^0-9]/g, '');
+    return allowedList.some(raw => {
+        const a = String(raw).toLowerCase().replace(/\bclass\b/gi, '').trim();
+        const aNum = a.replace(/[^0-9]/g, '');
+        if (t === a) return true;
+        if (t.replace(/\s+/g, '') === a.replace(/\s+/g, '')) return true;
+        if (tNum && aNum && tNum === aNum) return true;
+        if (t && a && (t.includes(a) || a.includes(t))) return true;
+        return false;
+    });
+};
+
+const matchesSubject = (targetSubject, allowedList) => {
+    if (!targetSubject || !allowedList || allowedList.length === 0) return false;
+    const cleanSub = (s) => String(s || '').toLowerCase().trim()
+        .replace(/\bmathematics\b/g, 'math')
+        .replace(/\b1st\s+paper\b/g, '')
+        .replace(/\b2nd\s+paper\b/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const t = cleanSub(targetSubject);
+    return allowedList.some(raw => {
+        const a = cleanSub(raw);
+        if (!a) return false;
+        if (t === a) return true;
+        if (t.replace(/\s+/g, '') === a.replace(/\s+/g, '')) return true;
+
+        const checkWordMatch = (container, needle) => {
+            const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp('(^|[^a-z0-9])' + escaped + '([^a-z0-9]|$)', 'i');
+            if (regex.test(container)) {
+                if (needle === 'bangla' && container.includes('bangladesh') && !container.includes('bangla ')) {
+                    return false;
+                }
+                return true;
+            }
+            return false;
+        };
+
+        if (checkWordMatch(t, a)) return true;
+        if (checkWordMatch(a, t)) return true;
+
+        return false;
+    });
+};
+
 // Helper to automatically detect group (Science, Commerce, Humanities, all) from AcademicClass
 const resolveGroupByClassAndSubject = async (clsName, subjectName, explicitGroup = '') => {
     if (explicitGroup && explicitGroup !== 'all' && explicitGroup !== 'None') {
@@ -173,11 +226,11 @@ const resolveGroupByClassAndSubject = async (clsName, subjectName, explicitGroup
             return 'None';
         }
         for (const grp of ac.groups) {
-            if (grp.subjects && grp.subjects.some(s => String(s).trim().toLowerCase() === cleanSub)) {
+            if (grp.subjects && grp.subjects.some(s => String(s).trim().toLowerCase() === cleanSub || matchesSubject(s, [cleanSub]))) {
                 return grp.name;
             }
         }
-        if (ac.commonSubjects && ac.commonSubjects.some(s => String(s).trim().toLowerCase() === cleanSub)) {
+        if (ac.commonSubjects && ac.commonSubjects.some(s => String(s).trim().toLowerCase() === cleanSub || matchesSubject(s, [cleanSub]))) {
             return 'all';
         }
     } catch (err) {
@@ -1573,59 +1626,6 @@ const bulkRejectTopics = async (req, res) => {
     }
 };
 
-// ==========================================
-// TEACHER ASSIGNMENT & SCOPE HELPERS
-// ==========================================
-const matchesClass = (targetClass, allowedList) => {
-    if (!targetClass || !allowedList || allowedList.length === 0) return false;
-    const t = String(targetClass).toLowerCase().replace(/\bclass\b/gi, '').trim();
-    const tNum = t.replace(/[^0-9]/g, '');
-    return allowedList.some(raw => {
-        const a = String(raw).toLowerCase().replace(/\bclass\b/gi, '').trim();
-        const aNum = a.replace(/[^0-9]/g, '');
-        if (t === a) return true;
-        if (t.replace(/\s+/g, '') === a.replace(/\s+/g, '')) return true;
-        if (tNum && aNum && tNum === aNum) return true;
-        if (t && a && (t.includes(a) || a.includes(t))) return true;
-        return false;
-    });
-};
-
-const matchesSubject = (targetSubject, allowedList) => {
-    if (!targetSubject || !allowedList || allowedList.length === 0) return false;
-    const cleanSub = (s) => String(s || '').toLowerCase().trim()
-        .replace(/\bmathematics\b/g, 'math')
-        .replace(/\b1st\s+paper\b/g, '')
-        .replace(/\b2nd\s+paper\b/g, '')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-    const t = cleanSub(targetSubject);
-    return allowedList.some(raw => {
-        const a = cleanSub(raw);
-        if (!a) return false;
-        if (t === a) return true;
-        if (t.replace(/\s+/g, '') === a.replace(/\s+/g, '')) return true;
-
-        const checkWordMatch = (container, needle) => {
-            const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp('(^|[^a-z0-9])' + escaped + '([^a-z0-9]|$)', 'i');
-            if (regex.test(container)) {
-                if (needle === 'bangla' && container.includes('bangladesh') && !container.includes('bangla ')) {
-                    return false;
-                }
-                return true;
-            }
-            return false;
-        };
-
-        if (checkWordMatch(t, a)) return true;
-        if (checkWordMatch(a, t)) return true;
-
-        return false;
-    });
-};
-
 const getTeacherAssignments = async (userId) => {
     const user = await User.findById(userId).lean();
     let assignedClasses = [];
@@ -1774,10 +1774,10 @@ const getTeacherTopicsPage = async (req, res) => {
         let autoGroup = 'None';
         if (currentClassObj && currentClassObj.hasGroups && currentClassObj.groups) {
             const cleanSub = selectedSubject.trim().toLowerCase();
-            const foundGroup = currentClassObj.groups.find(g => (g.subjects || []).some(s => s.trim().toLowerCase() === cleanSub));
+            const foundGroup = currentClassObj.groups.find(g => (g.subjects || []).some(s => s.trim().toLowerCase() === cleanSub || matchesSubject(s, [cleanSub])));
             if (foundGroup) {
                 autoGroup = foundGroup.name; // 'Science', 'Commerce', 'Humanities'
-            } else if (currentClassObj.commonSubjects && currentClassObj.commonSubjects.some(s => s.trim().toLowerCase() === cleanSub)) {
+            } else if (currentClassObj.commonSubjects && currentClassObj.commonSubjects.some(s => s.trim().toLowerCase() === cleanSub || matchesSubject(s, [cleanSub]))) {
                 autoGroup = 'all';
             }
         }
