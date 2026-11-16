@@ -156,6 +156,36 @@ const syncAllSyllabusFolders = async () => {
 };
 
 
+// Helper to automatically detect group (Science, Commerce, Humanities, all) from AcademicClass
+const resolveGroupByClassAndSubject = async (clsName, subjectName, explicitGroup = '') => {
+    if (explicitGroup && explicitGroup !== 'all' && explicitGroup !== 'None') {
+        return explicitGroup;
+    }
+    if (!clsName || !subjectName) return 'None';
+    try {
+        const cleanName = String(clsName).trim();
+        const cleanSub = String(subjectName).trim().toLowerCase();
+        const ac = await AcademicClass.findOne({ 
+            name: new RegExp('^' + escapeRegex(cleanName) + '$', 'i'),
+            isArchived: { $ne: true }
+        }).lean();
+        if (!ac || !ac.hasGroups || !ac.groups || ac.groups.length === 0) {
+            return 'None';
+        }
+        for (const grp of ac.groups) {
+            if (grp.subjects && grp.subjects.some(s => String(s).trim().toLowerCase() === cleanSub)) {
+                return grp.name;
+            }
+        }
+        if (ac.commonSubjects && ac.commonSubjects.some(s => String(s).trim().toLowerCase() === cleanSub)) {
+            return 'all';
+        }
+    } catch (err) {
+        console.warn('resolveGroupByClassAndSubject warning:', err.message);
+    }
+    return explicitGroup || 'None';
+};
+
 // Helper to automatically register/ensure a subject exists in AcademicClass
 const ensureSubjectInAcademicClass = async (clsName, subjectName, groupName) => {
     try {
@@ -834,6 +864,7 @@ const createTopic = async (req, res) => {
                     existingTopic.subTopics = subTopicsArray;
                 }
                 existingTopic.order = parseInt(order, 10) || 0;
+                existingTopic.group = await resolveGroupByClassAndSubject(targetClasses[0], subject.trim(), group || existingTopic.group);
                 existingTopic.status = topicStatus;
                 existingTopic.rejectionReason = '';
                 existingTopic.updatedAt = new Date();
@@ -856,7 +887,7 @@ const createTopic = async (req, res) => {
                                 name: name.trim(),
                                 code: code ? code.trim() : '',
                                 classLevel: extraCls,
-                                group: group || 'None',
+                                group: await resolveGroupByClassAndSubject(extraCls, subject.trim(), group),
                                 subject: subject.trim(),
                                 chapter: { number: parseInt(chapterNumber, 10) || 1, name: chapterName.trim() },
                                 difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
@@ -911,7 +942,7 @@ const createTopic = async (req, res) => {
                     name: name.trim(),
                     code: code ? code.trim() : '',
                     classLevel: cls,
-                    group: group || 'None',
+                    group: await resolveGroupByClassAndSubject(cls, subject.trim(), group),
                     subject: subject.trim(),
                     chapter: {
                         number: parseInt(chapterNumber, 10) || 1,
@@ -1067,7 +1098,7 @@ const bulkCreateTopics = async (req, res) => {
                         name,
                         code: item.code || '',
                         classLevel: cls,
-                        group: group || 'None',
+                        group: await resolveGroupByClassAndSubject(cls, subject.trim(), group),
                         subject: subject.trim(),
                         chapter: {
                             number: chNum,
@@ -1694,23 +1725,20 @@ const getTeacherTopicsPage = async (req, res) => {
         }
 
         let selectedClass = selectedClasses[0] || '';
-        let selectedGroup = (req.query.group || 'all').trim();
         let selectedSubject = (req.query.subject || '').trim();
 
         const currentClassObj = classes.find(c => c.name.toLowerCase() === selectedClass.toLowerCase()) || classes[0] || null;
 
-        // Resolve class subjects
+        // Resolve class subjects (Include common subjects + all group subjects + flat subjects)
         let classSubjects = [];
         if (currentClassObj) {
             if (currentClassObj.hasGroups && currentClassObj.groups && currentClassObj.groups.length > 0) {
-                if (selectedGroup && selectedGroup !== 'all') {
-                    const grp = currentClassObj.groups.find(g => g.name.toLowerCase() === selectedGroup.toLowerCase());
-                    const grpSubs = grp ? grp.subjects : [];
-                    classSubjects = Array.from(new Set([...(currentClassObj.commonSubjects || []), ...grpSubs]));
-                } else {
-                    const allGrpSubs = currentClassObj.groups.flatMap(g => g.subjects || []);
-                    classSubjects = Array.from(new Set([...(currentClassObj.commonSubjects || []), ...(currentClassObj.subjects || []), ...allGrpSubs]));
-                }
+                const allGrpSubs = currentClassObj.groups.flatMap(g => g.subjects || []);
+                classSubjects = Array.from(new Set([
+                    ...(currentClassObj.commonSubjects || []), 
+                    ...(currentClassObj.subjects || []), 
+                    ...allGrpSubs
+                ]));
             } else {
                 classSubjects = currentClassObj.subjects || [];
             }
@@ -1742,6 +1770,19 @@ const getTeacherTopicsPage = async (req, res) => {
             selectedSubject = '';
         }
 
+        // Automatically determine which group selectedSubject belongs to in this class
+        let autoGroup = 'None';
+        if (currentClassObj && currentClassObj.hasGroups && currentClassObj.groups) {
+            const cleanSub = selectedSubject.trim().toLowerCase();
+            const foundGroup = currentClassObj.groups.find(g => (g.subjects || []).some(s => s.trim().toLowerCase() === cleanSub));
+            if (foundGroup) {
+                autoGroup = foundGroup.name; // 'Science', 'Commerce', 'Humanities'
+            } else if (currentClassObj.commonSubjects && currentClassObj.commonSubjects.some(s => s.trim().toLowerCase() === cleanSub)) {
+                autoGroup = 'all';
+            }
+        }
+        let selectedGroup = autoGroup;
+
         // 2. Query Live Approved Topics (Only for assigned class & subject)
         let activeTopics = [];
         let chapters = [];
@@ -1755,9 +1796,6 @@ const getTeacherTopicsPage = async (req, res) => {
                 classLevel: new RegExp('^' + escClass + '$', 'i'),
                 subject: new RegExp('^' + escSub + '$', 'i')
             };
-            if (selectedGroup && selectedGroup !== 'all') {
-                activeFilter.group = { $in: [selectedGroup, 'all', 'None', null] };
-            }
 
             activeTopics = await Topic.find(activeFilter).sort({ 'chapter.number': 1, order: 1, createdAt: 1 }).lean();
 
