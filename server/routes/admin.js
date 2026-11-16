@@ -6049,6 +6049,8 @@ router.post('/topics/bulk-approve', adminProtect, topicController.bulkApproveTop
 router.post('/topics/reject', adminProtect, topicController.rejectTopic);
 router.post('/topics/bulk-reject', adminProtect, topicController.bulkRejectTopics);
 router.post('/topics/permanent', adminProtect, topicController.permanentDeleteTopic);
+router.post('/topics/deletion-request/approve', adminProtect, topicController.approveDeletionRequest);
+router.post('/topics/deletion-request/decline', adminProtect, topicController.declineDeletionRequest);
 router.post('/topics/:id/edit', adminProtect, topicController.updateTopic);
 router.put('/topics/:id', adminProtect, topicController.updateTopic);
 router.post('/topics/:id/archive', adminProtect, topicController.archiveTopic);

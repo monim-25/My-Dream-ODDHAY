@@ -578,6 +578,14 @@ const getTopicsPage = async (req, res) => {
         }).populate('submittedBy', 'name email profilePicture profileImage').populate('createdBy', 'name email profilePicture profileImage').sort({ createdAt: -1 }).lean();
         const pendingTopicCount = await Topic.countDocuments({ status: 'pending', isArchived: { $nin: [true, 'true', 1] } });
 
+        // Deletion Requests Query (Awaiting Admin Review)
+        const deletionRequests = await Topic.find({ 
+            'deletionRequest.isRequested': true, 
+            'deletionRequest.status': 'pending', 
+            isArchived: { $nin: [true, 'true', 1] } 
+        }).populate('deletionRequest.requestedBy', 'name email profilePicture profileImage').sort({ 'deletionRequest.requestedAt': -1 }).lean();
+        const deletionRequestCount = deletionRequests.length;
+
         // Overall Global Counts
         const totalTopicCount = await Topic.countDocuments({ isArchived: { $nin: [true, 'true', 1] }, status: { $nin: ['pending', 'rejected'] } });
         const archivedTopicCount = archivedTopics.length;
@@ -600,6 +608,8 @@ const getTopicsPage = async (req, res) => {
             archivedTopicCount,
             pendingTopics,
             pendingTopicCount,
+            deletionRequests,
+            deletionRequestCount,
             apiBase
         });
     } catch (error) {
@@ -1783,6 +1793,7 @@ const getTeacherTopicsPage = async (req, res) => {
         const myPendingTopics = mySubmissions.filter(t => t.status === 'pending');
         const myRejectedTopics = mySubmissions.filter(t => t.status === 'rejected');
         const myApprovedTopics = mySubmissions.filter(t => t.status === 'approved');
+        const myDeletionRequests = mySubmissions.filter(t => t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending');
 
         // Group Teacher Submissions Chapter-wise
         const submissionChaptersMap = new Map();
@@ -1824,8 +1835,10 @@ const getTeacherTopicsPage = async (req, res) => {
             myPendingTopics,
             myRejectedTopics,
             myApprovedTopics,
+            myDeletionRequests,
             totalActiveCount: activeTopics.length,
             pendingCount: myPendingTopics.length,
+            deletionRequestCount: myDeletionRequests.length,
             apiBase: '/teacher'
         });
     } catch (error) {
@@ -2084,6 +2097,249 @@ const checkCrossClassTopic = async (req, res) => {
     }
 };
 
+// ==========================================
+// DELETION REQUEST SYSTEM (TEACHER & ADMIN)
+// ==========================================
+
+// Teacher: Request Delete Topics (with mandatory reason)
+const requestDeleteTopics = async (req, res) => {
+    try {
+        await connectDB();
+        const userId = req.session.user ? (req.session.user._id || req.session.user.id) : null;
+        const userName = req.session.user ? req.session.user.name : 'Teacher';
+        const { topicIds, reason } = req.body;
+
+        if (!reason || !reason.trim()) {
+            return res.status(400).json({ success: false, error: 'অনুগ্রহ করে মুছে ফেলার কারণ উল্লেখ করুন (Please provide a reason for deletion).' });
+        }
+
+        const ids = Array.isArray(topicIds) ? topicIds : [topicIds];
+        const validIds = ids.filter(id => id && mongoose.Types.ObjectId.isValid(id));
+
+        if (validIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'No valid topic IDs provided' });
+        }
+
+        const trimmedReason = reason.trim();
+
+        // Update topics with deletion request details
+        const result = await Topic.updateMany(
+            { _id: { $in: validIds } },
+            {
+                $set: {
+                    'deletionRequest.isRequested': true,
+                    'deletionRequest.reason': trimmedReason,
+                    'deletionRequest.requestedBy': userId,
+                    'deletionRequest.requestedByName': userName,
+                    'deletionRequest.requestedAt': new Date(),
+                    'deletionRequest.status': 'pending',
+                    'deletionRequest.declinedReason': ''
+                }
+            }
+        );
+
+        if (result.modifiedCount > 0) {
+            try {
+                const pushNotificationService = require('../services/pushNotificationService');
+                const notifPayload = {
+                    title: 'Topic Deletion Request ⚠️',
+                    body: `Teacher ${userName} requested deletion for ${result.modifiedCount} topic(s). Reason: ${trimmedReason.substring(0, 80)}`,
+                    url: '/superadmin/topics?tab=deletion',
+                    type: 'system'
+                };
+                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
+                pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
+            } catch (e) {}
+        }
+
+        return res.json({
+            success: true,
+            message: `${result.modifiedCount} টি টপিক মুছে ফেলার অনুরোধ এডমিনের অনুমোদনের জন্য পাঠানো হয়েছে।`,
+            count: result.modifiedCount
+        });
+    } catch (error) {
+        console.error('requestDeleteTopics Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Teacher: Cancel Pending Deletion Request
+const cancelDeleteRequest = async (req, res) => {
+    try {
+        await connectDB();
+        const userId = req.session.user ? (req.session.user._id || req.session.user.id) : null;
+        const { topicId, topicIds } = req.body;
+        const rawIds = topicIds || (topicId ? [topicId] : []);
+        const ids = Array.isArray(rawIds) ? rawIds : [rawIds];
+        const validIds = ids.filter(id => id && mongoose.Types.ObjectId.isValid(id));
+
+        if (validIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'No valid topic IDs provided' });
+        }
+
+        const query = {
+            _id: { $in: validIds },
+            'deletionRequest.isRequested': true,
+            'deletionRequest.status': 'pending'
+        };
+
+        // If teacher, only allow cancelling own requests
+        if (req.session.user && req.session.user.role === 'teacher') {
+            query['deletionRequest.requestedBy'] = userId;
+        }
+
+        const result = await Topic.updateMany(query, {
+            $set: {
+                'deletionRequest.isRequested': false,
+                'deletionRequest.status': 'none',
+                'deletionRequest.reason': ''
+            }
+        });
+
+        return res.json({
+            success: true,
+            message: 'মুছে ফেলার অনুরোধ বাতিল করা হয়েছে।',
+            count: result.modifiedCount
+        });
+    } catch (error) {
+        console.error('cancelDeleteRequest Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Admin / SuperAdmin: Approve Deletion Request (Permanent delete or Archive to History Bucket)
+const approveDeletionRequest = async (req, res) => {
+    try {
+        await connectDB();
+        const { topicIds, ids, id, deleteMode } = req.body;
+        const rawIds = topicIds || ids || (id ? [id] : []);
+        const idList = Array.isArray(rawIds) ? rawIds : [rawIds];
+        const validIds = idList.filter(i => i && mongoose.Types.ObjectId.isValid(i));
+
+        if (validIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'No valid topic IDs provided' });
+        }
+
+        const topics = await Topic.find({ _id: { $in: validIds } }).lean();
+        if (topics.length === 0) {
+            return res.status(404).json({ success: false, error: 'No matching topics found' });
+        }
+
+        const adminId = req.session.user ? (req.session.user._id || req.session.user.id) : null;
+        const adminName = req.session.user ? req.session.user.name : 'Administrator';
+
+        if (deleteMode === 'permanent') {
+            await Topic.deleteMany({ _id: { $in: validIds } });
+        } else {
+            // Default: archive to History Bucket and clear pending request status
+            await Topic.updateMany({ _id: { $in: validIds } }, {
+                $set: {
+                    isArchived: true,
+                    'deletionRequest.isRequested': false,
+                    'deletionRequest.status': 'none',
+                    'deletionRequest.reviewedBy': adminId,
+                    'deletionRequest.reviewedAt': new Date()
+                }
+            });
+        }
+
+        // Notify requesting teachers
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            const teacherMap = new Map();
+            topics.forEach(t => {
+                const reqUser = t.deletionRequest?.requestedBy || t.submittedBy || t.createdBy;
+                if (reqUser) {
+                    const strId = String(reqUser);
+                    if (!teacherMap.has(strId)) teacherMap.set(strId, []);
+                    teacherMap.get(strId).push(t);
+                }
+            });
+
+            teacherMap.forEach((tList, uid) => {
+                pushNotificationService.sendToUser(uid, {
+                    title: 'Deletion Request Approved ✅',
+                    body: `Admin ${adminName} approved deletion for ${tList.length} topic(s).`,
+                    url: '/teacher/topics',
+                    type: 'system'
+                }).catch(() => {});
+            });
+        } catch (e) {}
+
+        return res.json({
+            success: true,
+            message: `${topics.length} টি টপিক মুছে ফেলার অনুরোধ সফলভাবে অনুমোদন করা হয়েছে (${deleteMode === 'permanent' ? 'Permanently Deleted' : 'Moved to History Bucket'})।`,
+            count: topics.length
+        });
+    } catch (error) {
+        console.error('approveDeletionRequest Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
+// Admin / SuperAdmin: Decline Deletion Request (with feedback reason)
+const declineDeletionRequest = async (req, res) => {
+    try {
+        await connectDB();
+        const { topicIds, ids, id, reason } = req.body;
+        const rawIds = topicIds || ids || (id ? [id] : []);
+        const idList = Array.isArray(rawIds) ? rawIds : [rawIds];
+        const validIds = idList.filter(i => i && mongoose.Types.ObjectId.isValid(i));
+
+        if (validIds.length === 0) {
+            return res.status(400).json({ success: false, error: 'No valid topic IDs provided' });
+        }
+
+        const declineReason = (reason && String(reason).trim()) ? String(reason).trim() : 'Deletion request declined by administrator.';
+        const adminId = req.session.user ? (req.session.user._id || req.session.user.id) : null;
+        const adminName = req.session.user ? req.session.user.name : 'Administrator';
+
+        const topics = await Topic.find({ _id: { $in: validIds } }).lean();
+
+        await Topic.updateMany({ _id: { $in: validIds } }, {
+            $set: {
+                'deletionRequest.isRequested': false,
+                'deletionRequest.status': 'declined',
+                'deletionRequest.declinedReason': declineReason,
+                'deletionRequest.reviewedBy': adminId,
+                'deletionRequest.reviewedAt': new Date()
+            }
+        });
+
+        // Notify teachers
+        try {
+            const pushNotificationService = require('../services/pushNotificationService');
+            const teacherMap = new Map();
+            topics.forEach(t => {
+                const reqUser = t.deletionRequest?.requestedBy || t.submittedBy || t.createdBy;
+                if (reqUser) {
+                    const strId = String(reqUser);
+                    if (!teacherMap.has(strId)) teacherMap.set(strId, []);
+                    teacherMap.get(strId).push(t);
+                }
+            });
+
+            teacherMap.forEach((tList, uid) => {
+                pushNotificationService.sendToUser(uid, {
+                    title: 'Deletion Request Declined ⚠️',
+                    body: `Deletion request for ${tList.length} topic(s) was declined: ${declineReason}`,
+                    url: '/teacher/topics',
+                    type: 'system'
+                }).catch(() => {});
+            });
+        } catch (e) {}
+
+        return res.json({
+            success: true,
+            message: `${topics.length} টি টপিক মুছে ফেলার অনুরোধ প্রত্যাখ্যান করা হয়েছে।`,
+            count: topics.length
+        });
+    } catch (error) {
+        console.error('declineDeletionRequest Error:', error);
+        res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
 module.exports = {
     ensureSyllabusFoldersForChapter,
     syncAllSyllabusFolders,
@@ -2107,5 +2363,9 @@ module.exports = {
     bulkActionTeacherSubmissions,
     addSubjectToClasses,
     copyTopicsToClasses,
-    checkCrossClassTopic
+    checkCrossClassTopic,
+    requestDeleteTopics,
+    cancelDeleteRequest,
+    approveDeletionRequest,
+    declineDeletionRequest
 };

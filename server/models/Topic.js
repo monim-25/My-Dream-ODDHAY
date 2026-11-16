@@ -78,6 +78,17 @@ const topicSchema = new mongoose.Schema({
         default: '', 
         trim: true 
     },
+    deletionRequest: {
+        isRequested: { type: Boolean, default: false },
+        reason: { type: String, default: '', trim: true },
+        requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        requestedByName: { type: String, default: '' },
+        requestedAt: { type: Date },
+        status: { type: String, enum: ['none', 'pending', 'declined'], default: 'none' },
+        declinedReason: { type: String, default: '', trim: true },
+        reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        reviewedAt: { type: Date }
+    },
     createdBy: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'User' 
@@ -88,6 +99,7 @@ const topicSchema = new mongoose.Schema({
 
 // Fast query indexes for cascaded lookups and filters
 topicSchema.index({ classLevel: 1, subject: 1, 'chapter.name': 1, status: 1, isArchived: 1, order: 1 });
+topicSchema.index({ 'deletionRequest.isRequested': 1, 'deletionRequest.status': 1 });
 topicSchema.index({ name: 'text', keywords: 'text', description: 'text', subTopics: 'text' });
 
 module.exports = mongoose.model('Topic', topicSchema);

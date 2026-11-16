@@ -5634,6 +5634,8 @@ router.post('/topics/bulk', teacherProtect, topicController.bulkCreateTopics);
 router.delete('/topics/:id/pending', teacherProtect, topicController.deletePendingTeacherTopic);
 router.post('/topics/:id/delete-pending', teacherProtect, topicController.deletePendingTeacherTopic);
 router.post('/topics/submissions/bulk-action', teacherProtect, topicController.bulkActionTeacherSubmissions);
+router.post('/topics/request-delete', teacherProtect, topicController.requestDeleteTopics);
+router.post('/topics/cancel-delete-request', teacherProtect, topicController.cancelDeleteRequest);
 
 module.exports = router;
 

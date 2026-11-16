@@ -6,6 +6,8 @@
     const safePendingTopics = (typeof myPendingTopics !== 'undefined' && Array.isArray(myPendingTopics)) ? myPendingTopics : [];
     const safeRejectedTopics = (typeof myRejectedTopics !== 'undefined' && Array.isArray(myRejectedTopics)) ? myRejectedTopics : [];
     const safeApprovedTopics = (typeof myApprovedTopics !== 'undefined' && Array.isArray(myApprovedTopics)) ? myApprovedTopics : [];
+    const safeDeletionRequests = (typeof myDeletionRequests !== 'undefined' && Array.isArray(myDeletionRequests)) ? myDeletionRequests : [];
+    const safeDeletionCount = (typeof deletionRequestCount !== 'undefined') ? deletionRequestCount : safeDeletionRequests.length;
     const safeSubmissions = (typeof mySubmissions !== 'undefined' && Array.isArray(mySubmissions)) ? mySubmissions : [];
     const safeSubmissionChapters = (typeof mySubmissionChapters !== 'undefined' && Array.isArray(mySubmissionChapters)) ? mySubmissionChapters : [];
     const selClass = (typeof selectedClass !== 'undefined') ? selectedClass : '';
@@ -256,6 +258,14 @@
                                                 </div>
 
                                                 <div class="flex items-center gap-1.5" onclick="event.stopPropagation()">
+                                                    <!-- Request Delete Chapter Button -->
+                                                    <button type="button" 
+                                                            onclick="openRequestDeleteModal(<%= JSON.stringify(ch.name) %>, <%= JSON.stringify(ch.topics.map(t => t._id)) %>, 'chapter')" 
+                                                            class="h-7 px-2 sm:px-2.5 rounded bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 text-xs font-medium flex items-center gap-1 transition-colors border border-rose-200/60 dark:border-rose-800/40" 
+                                                            title="Request Admin to delete this approved chapter">
+                                                        <span class="material-symbols-rounded text-xs">delete_sweep</span>
+                                                        <span class="hidden sm:inline">Request Delete Chapter</span>
+                                                    </button>
                                                     <!-- Accordion Chevron -->
                                                     <button type="button" onclick="toggleChapterAccordion('ch_<%= chIdx %>')" class="size-7 rounded hover:bg-slate-200/50 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400" title="Expand / Collapse Chapter">
                                                         <span id="icon_ch_<%= chIdx %>" class="material-symbols-rounded text-base transition-transform">expand_more</span>
@@ -303,7 +313,26 @@
                                                                 <% } %>
                                                             </div>
                                                         </div>
-                                                        <span class="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded font-medium">Live</span>
+                                                        <div class="flex items-center gap-1.5 shrink-0">
+                                                            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded font-medium">Live</span>
+                                                            <% if (t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending') { %>
+                                                                <span class="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded font-medium flex items-center gap-1" title="Deletion requested: <%= t.deletionRequest.reason || '' %>">
+                                                                    <span class="material-symbols-rounded text-xs">pending</span>
+                                                                    <span>Deletion Pending</span>
+                                                                </span>
+                                                                <button type="button" onclick="cancelDeletionRequest('<%= t._id %>', <%= JSON.stringify(t.name) %>)" class="text-[11px] text-slate-400 hover:text-rose-600 underline ml-0.5" title="Cancel this deletion request">Cancel</button>
+                                                            <% } else if (t.deletionRequest && t.deletionRequest.status === 'declined') { %>
+                                                                <span class="text-[10px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded font-medium" title="Declined by admin: <%= t.deletionRequest.declinedReason || '' %>">
+                                                                    Declined
+                                                                </span>
+                                                                <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="text-xs text-rose-600 hover:text-rose-700 font-medium">Re-request</button>
+                                                            <% } else { %>
+                                                                <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="h-6 px-2 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 text-xs font-medium transition-colors flex items-center gap-1 border border-slate-200/80 dark:border-slate-800" title="Request Admin to delete this approved topic">
+                                                                    <span class="material-symbols-rounded text-xs">delete</span>
+                                                                    <span class="hidden sm:inline">Request Delete</span>
+                                                                </button>
+                                                            <% } %>
+                                                        </div>
                                                     </div>
                                                 <% }) %>
                                             </div>
@@ -356,6 +385,14 @@
                                 <span class="size-2 rounded-full bg-emerald-500"></span>
                                 <span>Approved & Live</span>
                                 <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"><%= safeApprovedTopics.length %></span>
+                            </button>
+
+                            <!-- Deletion Requested Filter Button -->
+                            <button type="button" onclick="filterSubmissions('deletion')" id="filterSubBtn_deletion"
+                                    class="sub-filter-btn shrink-0 whitespace-nowrap px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700">
+                                <span class="size-2 rounded-full bg-rose-500"></span>
+                                <span>Deletion Requested</span>
+                                <span class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400"><%= safeDeletionCount %></span>
                             </button>
                         </div>
 
@@ -432,11 +469,23 @@
                                             </div>
 
                                             <% const chSelectable = ch.topics.filter(t => t.status === 'pending' || t.status === 'rejected'); %>
+                                            <% const chApprovedTopicIds = chApproved.map(t => t._id); %>
+                                            <% const chPendingDeletion = chApproved.filter(t => t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending'); %>
                                             <% if (chApproved.length > 0) { %>
-                                                <!-- Approved Chapter: Deletion is locked -->
-                                                <span class="size-7 rounded text-slate-400 dark:text-slate-500 flex items-center justify-center shrink-0 cursor-not-allowed" title="Approved chapter cannot be deleted by teachers">
-                                                    <span class="material-symbols-rounded text-sm text-emerald-600 dark:text-emerald-400">lock</span>
-                                                </span>
+                                                <% if (chPendingDeletion.length === chApproved.length && chApproved.length > 0) { %>
+                                                    <span class="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-600 border border-amber-500/20 font-medium flex items-center gap-1 shrink-0" title="Deletion requested for this chapter">
+                                                        <span class="material-symbols-rounded text-xs">pending</span>
+                                                        <span class="hidden sm:inline">Deletion Pending</span>
+                                                    </span>
+                                                <% } else { %>
+                                                    <button type="button" 
+                                                            onclick="openRequestDeleteModal(<%= JSON.stringify(ch.name) %>, <%= JSON.stringify(chApprovedTopicIds) %>, 'chapter')" 
+                                                            class="h-7 px-2 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 text-xs font-medium transition-colors flex items-center gap-1 shrink-0" 
+                                                            title="Request Admin to delete this approved chapter">
+                                                        <span class="material-symbols-rounded text-xs">delete_sweep</span>
+                                                        <span class="hidden sm:inline">Request Delete Chapter</span>
+                                                    </button>
+                                                <% } %>
                                             <% } else if (chSelectable.length > 0) { %>
                                                 <!-- Delete Chapter Submissions Button (only if NO approved topics exist in this chapter) -->
                                                 <button type="button" 
@@ -465,7 +514,7 @@
                                                 else if (diff === 'hard') diffColor = 'text-purple-700 bg-purple-50 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40';
                                                 else diffColor = 'text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40';
                                             %>
-                                                <div class="submission-topic-row p-3 space-y-2.5 transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-900/30" data-status="<%= t.status %>" data-id="<%= t._id %>">
+                                                <div class="submission-topic-row p-3 space-y-2.5 transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-900/30" data-status="<%= t.status %>" data-deletion-status="<%= (t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending') ? 'pending' : (t.deletionRequest?.status || 'none') %>" data-id="<%= t._id %>">
                                                     <!-- Top Line: #, Topic Name & Difficulty -->
                                                     <div class="flex items-start justify-between gap-2">
                                                         <div class="flex items-start gap-2 min-w-0">
@@ -577,9 +626,27 @@
                                                                 </button>
                                                             </div>
                                                         <% } else { %>
-                                                            <span class="inline-flex items-center gap-1 text-slate-400 text-[11px] font-medium" title="Approved topics cannot be modified or deleted">
-                                                                <span class="material-symbols-rounded text-xs text-slate-400">lock</span> Published
-                                                            </span>
+                                                            <div class="inline-flex items-center gap-1.5 flex-wrap">
+                                                                <% if (t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending') { %>
+                                                                    <span class="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded text-[10px] font-medium" title="<%= t.deletionRequest.reason || '' %>">
+                                                                        <span class="material-symbols-rounded text-xs">pending</span> Deletion Pending
+                                                                    </span>
+                                                                    <button type="button" onclick="cancelDeletionRequest('<%= t._id %>', <%= JSON.stringify(t.name) %>)" class="text-[11px] text-slate-400 hover:text-rose-600 underline">Cancel</button>
+                                                                <% } else if (t.deletionRequest && t.deletionRequest.status === 'declined') { %>
+                                                                    <span class="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded text-[10px] font-medium" title="Declined: <%= t.deletionRequest.declinedReason || '' %>">
+                                                                        Declined
+                                                                    </span>
+                                                                    <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="text-xs text-rose-600 hover:text-rose-700 font-medium">Re-request</button>
+                                                                <% } else { %>
+                                                                    <span class="inline-flex items-center gap-1 text-slate-400 text-[11px] font-medium">
+                                                                        <span class="material-symbols-rounded text-xs text-slate-400">lock</span> Published
+                                                                    </span>
+                                                                    <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="h-6 px-2 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 text-xs font-medium transition-colors flex items-center gap-1 border border-slate-200 dark:border-slate-700" title="Request Admin to delete this approved topic">
+                                                                        <span class="material-symbols-rounded text-xs">delete</span>
+                                                                        <span>Request Delete</span>
+                                                                    </button>
+                                                                <% } %>
+                                                            </div>
                                                         <% } %>
                                                     </div>
                                                 </div>
@@ -616,7 +683,7 @@
                                                         else if (diff === 'hard') diffColor = 'text-purple-700 bg-purple-50 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40';
                                                         else diffColor = 'text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40';
                                                     %>
-                                                        <tr class="submission-topic-row hover:bg-slate-50/60 dark:hover:bg-slate-900/40 transition-colors" data-status="<%= t.status %>" data-id="<%= t._id %>">
+                                                        <tr class="submission-topic-row hover:bg-slate-50/60 dark:hover:bg-slate-900/40 transition-colors" data-status="<%= t.status %>" data-deletion-status="<%= (t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending') ? 'pending' : (t.deletionRequest?.status || 'none') %>" data-id="<%= t._id %>">
                                                             <td class="py-2.5 px-3 text-center">
                                                                 <% if (t.status === 'pending' || t.status === 'rejected') { %>
                                                                     <input type="checkbox" class="sub-topic-checkbox sub-ch-<%= sIdx %> size-3.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer" data-id="<%= t._id %>" data-status="<%= t.status %>" data-name="<%= t.name %>" data-ch-idx="<%= sIdx %>" onchange="onSubCheckboxChange(this)">
@@ -695,9 +762,27 @@
                                                                         </button>
                                                                     </div>
                                                                 <% } else { %>
-                                                                    <span class="inline-flex items-center gap-1 text-slate-400 text-[11px] font-medium" title="Approved topics cannot be modified or deleted">
-                                                                        <span class="material-symbols-rounded text-xs text-slate-400">lock</span> Published
-                                                                    </span>
+                                                                    <div class="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                                                                        <% if (t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending') { %>
+                                                                            <span class="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded text-[10px] font-medium" title="<%= t.deletionRequest.reason || '' %>">
+                                                                                <span class="material-symbols-rounded text-xs">pending</span> Deletion Pending
+                                                                            </span>
+                                                                            <button type="button" onclick="cancelDeletionRequest('<%= t._id %>', <%= JSON.stringify(t.name) %>)" class="text-[11px] text-slate-400 hover:text-rose-600 underline">Cancel</button>
+                                                                        <% } else if (t.deletionRequest && t.deletionRequest.status === 'declined') { %>
+                                                                            <span class="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded text-[10px] font-medium" title="Declined: <%= t.deletionRequest.declinedReason || '' %>">
+                                                                                Declined
+                                                                            </span>
+                                                                            <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="text-xs text-rose-600 hover:text-rose-700 font-medium">Re-request</button>
+                                                                        <% } else { %>
+                                                                            <span class="inline-flex items-center gap-1 text-slate-400 text-[11px] font-medium mr-1">
+                                                                                <span class="material-symbols-rounded text-xs text-slate-400">lock</span> Published
+                                                                            </span>
+                                                                            <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="h-6 px-2 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 text-[11px] font-medium transition-colors inline-flex items-center gap-1 border border-slate-200 dark:border-slate-700" title="Request Admin to delete this approved topic">
+                                                                                <span class="material-symbols-rounded text-xs">delete</span>
+                                                                                <span>Request Delete</span>
+                                                                            </button>
+                                                                        <% } %>
+                                                                    </div>
                                                                 <% } %>
                                                             </td>
                                                         </tr>
@@ -1723,6 +1808,8 @@
                     let matches = false;
                     if (status === 'all') {
                         matches = true;
+                    } else if (status === 'deletion') {
+                        matches = (row.dataset.deletionStatus === 'pending');
                     } else if (status === rowStatus) {
                         matches = true;
                     }
@@ -1759,6 +1846,7 @@
                             pending: 'Pending Approval', 
                             rejected: 'Needs Revision', 
                             approved: 'Approved & Live', 
+                            deletion: 'Deletion Requested',
                             all: 'Submitted' 
                         };
                         labelSpan.textContent = labelMap[status] || status;
@@ -1871,6 +1959,112 @@
                 } catch (err) {
                     Swal.fire('Error', err.message || 'Connection error', 'error');
                 }
+            }
+        }
+
+        // ==========================================
+        // DELETION REQUEST FOR APPROVED CONTENT
+        // ==========================================
+        async function openRequestDeleteModal(targetName, topicIds, targetType = 'topic') {
+            if (!topicIds || (Array.isArray(topicIds) && topicIds.length === 0)) {
+                Swal.fire('Notice', 'No topics found to delete.', 'info');
+                return;
+            }
+            const ids = Array.isArray(topicIds) ? topicIds : [topicIds];
+            const typeLabel = targetType === 'chapter' ? `অধ্যায় "${targetName}"` : `টপিক "${targetName}"`;
+            const countNote = ids.length > 1 ? ` (${ids.length}টি টপিক)` : '';
+
+            const { value: reason } = await Swal.fire({
+                title: `মুছে ফেলার অনুরোধ: ${typeLabel}`,
+                html: `
+                    <div class="text-left text-xs text-slate-600 dark:text-slate-300 space-y-2 mb-2">
+                        <p>অনুমোদিত ${typeLabel}${countNote} সরাসরি মুছে ফেলা সম্ভব নয়। এডমিনের অনুমোদনের জন্য মুছে ফেলার সুনির্দিষ্ট কারণ প্রদান করুন।</p>
+                    </div>
+                `,
+                input: 'textarea',
+                inputLabel: 'মুছে ফেলার কারণ (Reason for Deletion) *',
+                inputPlaceholder: 'উদাহরণ: সিলেবাসের পরিবর্তন হয়েছে / এই বিষয়ে ভুল তথ্য রয়েছে...',
+                showCancelButton: true,
+                confirmButtonText: 'অনুরোধ পাঠান (Submit Request)',
+                cancelButtonText: 'বাতিল (Cancel)',
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'অনুগ্রহ করে মুছে ফেলার কারণ লিখুন!';
+                    }
+                    if (value.trim().length < 5) {
+                        return 'কারণ অন্তত ৫ অক্ষরের হতে হবে!';
+                    }
+                }
+            });
+
+            if (!reason || !reason.trim()) return;
+
+            try {
+                Swal.fire({ title: 'অনুরোধ পাঠানো হচ্ছে...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const res = await fetch(`${apiBase}/topics/request-delete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ topicIds: ids, reason: reason.trim() })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'অনুরোধ পাঠানো হয়েছে!',
+                        text: data.message || 'এডমিনের অনুমোদনের জন্য অপেক্ষা করুন।',
+                        timer: 1800,
+                        showConfirmButton: false
+                    });
+                    window.location.reload();
+                } else {
+                    Swal.fire('ত্রুটি (Error)', data.error || 'অনুরোধ পাঠানো সম্ভব হয়নি।', 'error');
+                }
+            } catch (err) {
+                Swal.fire('নেটওয়ার্ক ত্রুটি', err.message || 'সার্ভারে সংযোগ দেওয়া যাচ্ছে না।', 'error');
+            }
+        }
+
+        async function cancelDeletionRequest(topicId, topicName) {
+            const confirm = await Swal.fire({
+                title: 'অনুরোধ প্রত্যাহার করবেন?',
+                text: `"${topicName}" টপিক মুছে ফেলার অনুরোধটি বাতিল করতে চান?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#059669',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'হ্যাঁ, বাতিল করুন',
+                cancelButtonText: 'না'
+            });
+
+            if (!confirm.isConfirmed) return;
+
+            try {
+                Swal.fire({ title: 'প্রক্রিয়াধীন...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const res = await fetch(`${apiBase}/topics/cancel-delete-request`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ topicId })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'বাতিল হয়েছে!',
+                        text: data.message || 'মুছে ফেলার অনুরোধ বাতিল করা হয়েছে।',
+                        timer: 1200,
+                        showConfirmButton: false
+                    });
+                    window.location.reload();
+                } else {
+                    Swal.fire('Error', data.error || 'Failed to cancel deletion request', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', err.message || 'Connection error', 'error');
             }
         }
 

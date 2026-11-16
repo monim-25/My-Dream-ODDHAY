@@ -15,6 +15,8 @@
     const safeActiveTopics = (typeof activeTopics !== 'undefined' && Array.isArray(activeTopics)) ? activeTopics : [];
     const safePending = (typeof pendingTopics !== 'undefined' && Array.isArray(pendingTopics)) ? pendingTopics : [];
     const safePendingCount = (typeof pendingTopicCount !== 'undefined') ? pendingTopicCount : safePending.length;
+    const safeDeletionRequests = (typeof deletionRequests !== 'undefined' && Array.isArray(deletionRequests)) ? deletionRequests : [];
+    const safeDeletionRequestCount = (typeof deletionRequestCount !== 'undefined') ? deletionRequestCount : safeDeletionRequests.length;
 %>
 <!DOCTYPE html>
 <html lang="en" class="<%= (safeUser.theme === 'dark') ? 'dark' : '' %>">
@@ -72,6 +74,12 @@
                             <span class="material-symbols-rounded text-[17px]">rate_review</span>
                             <span>Pending Approvals</span>
                             <span id="badgePendingTopics" class="px-1.5 py-0.5 rounded-full text-[10px] <%= safePendingCount > 0 ? 'bg-amber-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300' %> font-bold leading-none"><%= safePendingCount %></span>
+                        </button>
+                        <button type="button" id="tabDeletionBtn" onclick="switchTopicTab('deletion')"
+                                class="px-2.5 sm:px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white shrink-0 whitespace-nowrap">
+                            <span class="material-symbols-rounded text-[17px]">delete_sweep</span>
+                            <span>Deletion Requests</span>
+                            <span id="badgeDeletionRequests" class="px-1.5 py-0.5 rounded-full text-[10px] <%= safeDeletionRequestCount > 0 ? 'bg-rose-500 text-white font-bold' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300' %> leading-none"><%= safeDeletionRequestCount %></span>
                         </button>
                         <button type="button" id="tabArchiveBtn" onclick="switchTopicTab('archive')"
                                 class="px-2.5 sm:px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white shrink-0 whitespace-nowrap">
@@ -593,6 +601,141 @@
                                                                 class="h-7 px-2 rounded bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-medium flex items-center gap-1 transition-all" title="Reject with feedback">
                                                             <span class="material-symbols-rounded text-sm">close</span>
                                                             <span>Reject</span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <% }) %>
+                                    <% } %>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2.7 DELETION REQUESTS VIEW (TEACHER REMOVAL QUEUE) -->
+                <div id="deletionRequestsView" class="p-3 sm:p-4 hidden space-y-3">
+                    <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-lg px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                        <div class="flex items-center gap-2.5">
+                            <div class="size-8 rounded-md bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-[18px]">delete_sweep</span>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h4 class="text-xs font-semibold text-slate-800 dark:text-slate-100">Topic Deletion Requests</h4>
+                                    <span class="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"><%= safeDeletionRequestCount %> pending</span>
+                                </div>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Review teacher deletion requests with submitted reasons. Approve to remove/archive, or decline with feedback.</p>
+                            </div>
+                        </div>
+
+                        <!-- Bulk Actions -->
+                        <div class="flex items-center gap-2">
+                            <button type="button" id="btnBulkApproveDeletion" onclick="bulkApproveSelectedDeletion()" disabled
+                                    class="h-8 px-3 rounded-md bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-medium flex items-center gap-1.5 shadow-xs transition-all">
+                                <span class="material-symbols-rounded text-base">check_circle</span>
+                                <span id="btnBulkApproveDeletionText">Approve Selected</span>
+                            </button>
+                            <button type="button" id="btnBulkDeclineDeletion" onclick="bulkDeclineSelectedDeletion()" disabled
+                                    class="h-8 px-3 rounded-md bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 disabled:opacity-40 disabled:pointer-events-none text-xs font-medium flex items-center gap-1.5 transition-all">
+                                <span class="material-symbols-rounded text-base">cancel</span>
+                                <span>Decline Selected</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-[#0f172a] rounded-md border border-slate-200 dark:border-slate-800/80 overflow-hidden shadow-xs">
+                        <div class="overflow-x-auto">
+                            <table class="w-full min-w-[760px] text-left text-xs">
+                                <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-500 font-medium border-b border-slate-200 dark:border-slate-800">
+                                    <tr>
+                                        <th class="p-3 w-8">
+                                            <input type="checkbox" id="selectAllDeletion" onchange="toggleSelectAllDeletion(this.checked)" class="size-3.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer">
+                                        </th>
+                                        <th class="p-3">Topic & Chapter</th>
+                                        <th class="p-3">Class & Subject</th>
+                                        <th class="p-3">Requested By (Teacher)</th>
+                                        <th class="p-3">Deletion Reason</th>
+                                        <th class="p-3">Requested At</th>
+                                        <th class="p-3 text-right">Review Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                                    <% if (safeDeletionRequests.length === 0) { %>
+                                        <tr>
+                                            <td colspan="7" class="p-10 text-center text-slate-400">
+                                                <span class="material-symbols-rounded text-3xl text-emerald-500 mb-1">task_alt</span>
+                                                <p class="text-xs font-medium text-slate-600 dark:text-slate-400">No pending deletion requests!</p>
+                                                <p class="text-[11px] text-slate-400 mt-0.5">All topic and chapter deletion requests from teachers have been reviewed.</p>
+                                            </td>
+                                        </tr>
+                                    <% } else { %>
+                                        <% safeDeletionRequests.forEach(dr => { %>
+                                            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/40 transition-colors">
+                                                <td class="p-3 w-8">
+                                                    <input type="checkbox" class="deletion-request-checkbox size-3.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer" data-id="<%= dr._id %>" onchange="updateSelectedDeletionCount()">
+                                                </td>
+                                                <td class="p-3">
+                                                    <div class="font-medium text-slate-800 dark:text-slate-100">
+                                                        <%= dr.name %>
+                                                        <% if (dr.code) { %>
+                                                            <span class="text-[9px] font-mono px-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 ml-1"><%= dr.code %></span>
+                                                        <% } %>
+                                                    </div>
+                                                    <p class="text-[10px] text-slate-500 mt-0.5">
+                                                        Ch <%= dr.chapter?.number || 1 %>: <%= dr.chapter?.name || 'General' %>
+                                                    </p>
+                                                </td>
+                                                <td class="p-3">
+                                                    <span class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium"><%= dr.classLevel %></span>
+                                                    <% if (dr.group && dr.group !== 'None') { %>
+                                                        <span class="text-[10px] text-slate-400 ml-0.5">(<%= dr.group %>)</span>
+                                                    <% } %>
+                                                    <p class="text-[11px] font-medium text-primary mt-1"><%= dr.subject %></p>
+                                                </td>
+                                                <td class="p-3">
+                                                    <div class="flex items-center gap-2">
+                                                        <% const reqUser = dr.deletionRequest?.requestedBy; %>
+                                                        <% if (reqUser && (reqUser.profilePicture || reqUser.profileImage)) { %>
+                                                            <img src="<%= reqUser.profilePicture || reqUser.profileImage %>" class="size-6 rounded-full object-cover">
+                                                        <% } else { %>
+                                                            <div class="size-6 rounded-full bg-rose-500/10 text-rose-600 flex items-center justify-center font-bold text-[10px]">
+                                                                <%= dr.deletionRequest?.requestedByName ? dr.deletionRequest.requestedByName[0] : (reqUser ? reqUser.name[0] : 'T') %>
+                                                            </div>
+                                                        <% } %>
+                                                        <div>
+                                                            <p class="text-xs font-medium text-slate-800 dark:text-slate-200"><%= dr.deletionRequest?.requestedByName || (reqUser ? reqUser.name : 'Teacher') %></p>
+                                                            <p class="text-[10px] text-slate-400"><%= reqUser ? reqUser.email : '' %></p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td class="p-3 max-w-xs">
+                                                    <div class="p-2 rounded bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-900/40 text-rose-900 dark:text-rose-200 text-xs">
+                                                        <div class="flex items-center gap-1 font-semibold text-[10px] text-rose-700 dark:text-rose-400 uppercase tracking-wider mb-0.5">
+                                                            <span class="material-symbols-rounded text-xs">format_quote</span>
+                                                            <span>Reason:</span>
+                                                        </div>
+                                                        <p class="break-words line-clamp-3 italic"><%= dr.deletionRequest?.reason || 'No specific reason provided' %></p>
+                                                    </div>
+                                                </td>
+                                                <td class="p-3 text-slate-400 text-[11px]">
+                                                    <%= dr.deletionRequest?.requestedAt ? new Date(dr.deletionRequest.requestedAt).toLocaleDateString() : new Date().toLocaleDateString() %>
+                                                    <span class="text-[10px] block text-slate-400/80"><%= dr.deletionRequest?.requestedAt ? new Date(dr.deletionRequest.requestedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '' %></span>
+                                                </td>
+                                                <td class="p-3 text-right">
+                                                    <div class="inline-flex items-center gap-1.5">
+                                                        <!-- Approve Deletion -->
+                                                        <button type="button" onclick="approveSingleDeletion('<%= dr._id %>', <%= JSON.stringify(dr.name) %>)"
+                                                                class="h-7 px-2.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs flex items-center gap-1 shadow-xs transition-all" title="Approve deletion">
+                                                            <span class="material-symbols-rounded text-sm">check</span>
+                                                            <span>Approve</span>
+                                                        </button>
+
+                                                        <!-- Decline Request -->
+                                                        <button type="button" onclick="declineSingleDeletion('<%= dr._id %>', <%= JSON.stringify(dr.name) %>)"
+                                                                class="h-7 px-2 rounded bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 text-xs font-medium flex items-center gap-1 transition-all" title="Decline deletion with reason">
+                                                            <span class="material-symbols-rounded text-sm">close</span>
+                                                            <span>Decline</span>
                                                         </button>
                                                     </div>
                                                 </td>
@@ -1242,9 +1385,11 @@
         function switchTopicTab(tab) {
             const liveView = document.getElementById('liveTopicsView');
             const pendingView = document.getElementById('pendingTopicsView');
+            const deletionView = document.getElementById('deletionRequestsView');
             const archiveView = document.getElementById('archivedTopicsView');
             const tabActiveBtn = document.getElementById('tabActiveBtn');
             const tabPendingBtn = document.getElementById('tabPendingBtn');
+            const tabDeletionBtn = document.getElementById('tabDeletionBtn');
             const tabArchiveBtn = document.getElementById('tabArchiveBtn');
             const btnToggleSelection = document.getElementById('btnToggleSelection');
             const unifiedModalOpenBtn = document.getElementById('unifiedModalOpenBtn');
@@ -1253,15 +1398,17 @@
             deselectAllArchive();
 
             // Reset tab button styles
-            const inactiveClass = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white';
-            const activeClass = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs';
+            const inactiveClass = 'px-2.5 sm:px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white shrink-0 whitespace-nowrap';
+            const activeClass = 'px-2.5 sm:px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs shrink-0 whitespace-nowrap';
 
             if (tabActiveBtn) tabActiveBtn.className = inactiveClass;
             if (tabPendingBtn) tabPendingBtn.className = inactiveClass;
+            if (tabDeletionBtn) tabDeletionBtn.className = inactiveClass;
             if (tabArchiveBtn) tabArchiveBtn.className = inactiveClass;
 
             if (liveView) liveView.classList.add('hidden');
             if (pendingView) pendingView.classList.add('hidden');
+            if (deletionView) deletionView.classList.add('hidden');
             if (archiveView) archiveView.classList.add('hidden');
 
             if (tab === 'active') {
@@ -1282,6 +1429,16 @@
                 if (window.history.replaceState) {
                     const u = new URL(window.location.href);
                     u.searchParams.set('tab', 'pending');
+                    window.history.replaceState(null, '', u.toString());
+                }
+            } else if (tab === 'deletion') {
+                if (deletionView) deletionView.classList.remove('hidden');
+                if (tabDeletionBtn) tabDeletionBtn.className = activeClass;
+                if (btnToggleSelection) btnToggleSelection.classList.add('hidden');
+                if (unifiedModalOpenBtn) unifiedModalOpenBtn.classList.add('hidden');
+                if (window.history.replaceState) {
+                    const u = new URL(window.location.href);
+                    u.searchParams.set('tab', 'deletion');
                     window.history.replaceState(null, '', u.toString());
                 }
             } else {
@@ -2499,6 +2656,229 @@
             }
         }
 
+        // ==========================================
+        // DELETION REQUEST MANAGEMENT (ADMIN)
+        // ==========================================
+        function toggleSelectAllDeletion(checked) {
+            const checkboxes = document.querySelectorAll('.deletion-request-checkbox');
+            checkboxes.forEach(cb => cb.checked = checked);
+            updateSelectedDeletionCount();
+        }
+
+        function updateSelectedDeletionCount() {
+            const checkedBoxes = document.querySelectorAll('.deletion-request-checkbox:checked');
+            const count = checkedBoxes.length;
+            const btnApprove = document.getElementById('btnBulkApproveDeletion');
+            const btnDecline = document.getElementById('btnBulkDeclineDeletion');
+            const btnApproveText = document.getElementById('btnBulkApproveDeletionText');
+
+            if (btnApprove) btnApprove.disabled = (count === 0);
+            if (btnDecline) btnDecline.disabled = (count === 0);
+            if (btnApproveText) {
+                btnApproveText.textContent = count > 0 ? `Approve Selected (${count})` : 'Approve Selected';
+            }
+        }
+
+        async function approveSingleDeletion(id, name) {
+            const { value: deleteMode } = await Swal.fire({
+                title: 'Approve Deletion Request?',
+                html: `
+                    <p class="text-xs text-slate-600 dark:text-slate-300 mb-3">Topic <strong>"${name}"</strong> deletion request was submitted by teacher.</p>
+                    <p class="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Choose deletion method:</p>
+                `,
+                input: 'radio',
+                inputOptions: {
+                    'archive': 'Move to History Bucket (Recommended - keeps question attempts intact)',
+                    'permanent': 'Permanently Delete from Database'
+                },
+                inputValue: 'archive',
+                showCancelButton: true,
+                confirmButtonColor: '#059669',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Confirm & Approve',
+                cancelButtonText: 'Cancel'
+            });
+
+            if (!deleteMode) return;
+
+            try {
+                Swal.fire({ title: 'Processing...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const res = await fetch(`${apiBase}/topics/deletion-request/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ topicIds: [id], deleteMode })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Approved!',
+                        text: data.message || 'Deletion request approved successfully.',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    window.location.href = window.location.pathname + '?tab=deletion';
+                } else {
+                    Swal.fire('Error', (data && data.error) || 'Failed to approve deletion', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Network Error', err.message || 'Could not connect to server', 'error');
+            }
+        }
+
+        async function declineSingleDeletion(id, name) {
+            const { value: reason } = await Swal.fire({
+                title: 'Decline Deletion Request',
+                text: `Provide a reason to inform the teacher why "${name}" will not be deleted:`,
+                input: 'textarea',
+                inputPlaceholder: 'e.g. This topic is essential for the upcoming exam syllabus...',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Decline Request',
+                cancelButtonText: 'Cancel',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Please provide a reason for declining!';
+                    }
+                }
+            });
+
+            if (!reason) return;
+
+            try {
+                Swal.fire({ title: 'Processing...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const res = await fetch(`${apiBase}/topics/deletion-request/decline`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ topicIds: [id], reason: reason.trim() })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'info',
+                        title: 'Request Declined',
+                        text: data.message || 'Deletion request declined and feedback sent to teacher.',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    window.location.href = window.location.pathname + '?tab=deletion';
+                } else {
+                    Swal.fire('Error', (data && data.error) || 'Failed to decline deletion', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Network Error', err.message || 'Could not connect to server', 'error');
+            }
+        }
+
+        async function bulkApproveSelectedDeletion() {
+            const checkedBoxes = document.querySelectorAll('.deletion-request-checkbox:checked');
+            const topicIds = Array.from(checkedBoxes).map(cb => cb.dataset.id).filter(Boolean);
+
+            if (topicIds.length === 0) {
+                Swal.fire('Notice', 'Please select at least one topic to approve deletion.', 'info');
+                return;
+            }
+
+            const { value: deleteMode } = await Swal.fire({
+                title: `Approve ${topicIds.length} Deletion Requests?`,
+                html: `
+                    <p class="text-xs text-slate-600 dark:text-slate-300 mb-3">You are about to approve deletion requests for <strong>${topicIds.length}</strong> topic(s).</p>
+                    <p class="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Choose deletion method:</p>
+                `,
+                input: 'radio',
+                inputOptions: {
+                    'archive': 'Move to History Bucket (Recommended)',
+                    'permanent': 'Permanently Delete from Database'
+                },
+                inputValue: 'archive',
+                showCancelButton: true,
+                confirmButtonColor: '#059669',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: `Yes, Approve (${topicIds.length})`,
+                cancelButtonText: 'Cancel'
+            });
+
+            if (!deleteMode) return;
+
+            try {
+                Swal.fire({ title: 'Processing...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const res = await fetch(`${apiBase}/topics/deletion-request/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ topicIds, deleteMode })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Approved!',
+                        text: data.message || `${topicIds.length} topic deletion requests approved.`,
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    window.location.href = window.location.pathname + '?tab=deletion';
+                } else {
+                    Swal.fire('Error', (data && data.error) || 'Failed to bulk approve deletion requests', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Network Error', err.message || 'Could not connect to server', 'error');
+            }
+        }
+
+        async function bulkDeclineSelectedDeletion() {
+            const checkedBoxes = document.querySelectorAll('.deletion-request-checkbox:checked');
+            const topicIds = Array.from(checkedBoxes).map(cb => cb.dataset.id).filter(Boolean);
+
+            if (topicIds.length === 0) {
+                Swal.fire('Notice', 'Please select at least one topic to decline deletion.', 'info');
+                return;
+            }
+
+            const { value: reason } = await Swal.fire({
+                title: `Decline ${topicIds.length} Deletion Requests`,
+                text: 'Provide a reason why these deletion requests are being declined:',
+                input: 'textarea',
+                inputPlaceholder: 'e.g. These topics are required for the standard curriculum...',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: `Decline Selected (${topicIds.length})`,
+                cancelButtonText: 'Cancel',
+                inputValidator: (value) => {
+                    if (!value || !value.trim()) {
+                        return 'Please provide a reason for declining!';
+                    }
+                }
+            });
+
+            if (!reason) return;
+
+            try {
+                Swal.fire({ title: 'Processing...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const res = await fetch(`${apiBase}/topics/deletion-request/decline`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ topicIds, reason: reason.trim() })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'info',
+                        title: 'Requests Declined',
+                        text: data.message || `${topicIds.length} deletion requests declined.`,
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                    window.location.href = window.location.pathname + '?tab=deletion';
+                } else {
+                    Swal.fire('Error', (data && data.error) || 'Failed to bulk decline deletion requests', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Network Error', err.message || 'Could not connect to server', 'error');
+            }
+        }
+
         // Auto Tab from URL
         document.addEventListener('DOMContentLoaded', () => {
             const p = new URLSearchParams(window.location.search);
@@ -2506,6 +2886,8 @@
                 switchTopicTab('archive');
             } else if (p.get('tab') === 'pending' || window.location.hash === '#pending') {
                 switchTopicTab('pending');
+            } else if (p.get('tab') === 'deletion' || window.location.hash === '#deletion') {
+                switchTopicTab('deletion');
             } else {
                 switchTopicTab('active');
             }
