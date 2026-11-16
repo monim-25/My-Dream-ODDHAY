@@ -51,6 +51,12 @@
             .admin-sidebar.active, #adminSidebar.active { transform: translateX(0); }
             .admin-main { margin-left: 0; width: 100%; }
         }
+        /* Selection System Styles */
+        .selection-checkbox-wrap { display: none; }
+        body.selection-mode-active .selection-checkbox-wrap { display: inline-flex; align-items: center; }
+        body.selection-mode-active .chapter-card { cursor: pointer; }
+        body.selection-mode-active .topic-item { cursor: pointer; }
+        body.selection-mode-active .topic-item:hover { border-color: rgba(99, 102, 241, 0.4); }
     </style>
 </head>
 
@@ -143,11 +149,53 @@
                             <span id="topBarTextToggleLive" class="hidden sm:inline">Collapse All</span>
                         </button>
 
-                        <button type="button" onclick="openUnifiedModal()"
-                                class="h-8 px-3 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 shadow-xs transition-all whitespace-nowrap">
+                        <!-- Selection System Button for Bulk Actions -->
+                        <button type="button" id="btnToggleSelection" onclick="toggleSelectionMode()"
+                                class="h-8 px-2.5 sm:px-3 rounded-md bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all shrink-0 cursor-pointer"
+                                title="Toggle selection mode for bulk actions">
+                            <span id="btnSelectionIcon" class="material-symbols-rounded text-[17px] text-slate-500">checklist</span>
+                            <span id="btnSelectionLabel" class="hidden md:inline">Select Topics</span>
+                        </button>
+
+                        <button type="button" id="unifiedModalOpenBtn" onclick="openUnifiedModal()"
+                                class="h-8 px-3 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 shadow-xs transition-all whitespace-nowrap cursor-pointer">
                             <span class="material-symbols-rounded text-base">add</span>
                             <span>Add Topics</span>
                         </button>
+                    </div>
+                </div>
+
+                <!-- Selection System Toolbar (Opens when Select button is clicked) -->
+                <div id="selectionToolbar" class="bg-primary/5 dark:bg-primary/10 border-b border-primary/20 px-2.5 sm:px-4 py-2 hidden transition-all sticky top-[48px] sm:top-[50px] z-20 backdrop-blur-xs">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-2.5">
+                        <div class="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                            <div class="flex items-center gap-1.5 text-xs font-medium text-primary shrink-0">
+                                <span class="material-symbols-rounded text-base">checklist_rtl</span>
+                                <span>Selection Mode</span>
+                                <span id="toolbarSelectedCountBadge" class="px-2 py-0.5 rounded-full text-[10px] bg-primary text-white font-semibold ml-0.5">0 Selected</span>
+                            </div>
+                            <div class="h-3.5 w-px bg-primary/20 hidden sm:block"></div>
+                            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                                <button type="button" onclick="selectAllLiveTopics()"
+                                        class="h-7 px-2 sm:px-2.5 rounded bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-all shrink-0 whitespace-nowrap cursor-pointer">
+                                    <span class="material-symbols-rounded text-sm">select_all</span>
+                                    <span>Select All (<%= safeActiveTopics.length %>)</span>
+                                </button>
+                                <button type="button" onclick="deselectAllLive()"
+                                        class="h-7 px-2 rounded bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-all shrink-0 whitespace-nowrap cursor-pointer">
+                                    <span class="material-symbols-rounded text-sm">deselect</span>
+                                    <span>Deselect</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                            <button type="button" id="btnToolbarRequestDelete" onclick="bulkRequestDeleteLive()" disabled
+                                    class="h-7 px-2.5 sm:px-3 rounded bg-rose-600 hover:bg-rose-700 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-medium flex items-center gap-1 transition-all shadow-xs shrink-0 cursor-pointer">
+                                <span class="material-symbols-rounded text-sm">delete_sweep</span>
+                                <span id="btnToolbarRequestDeleteText">Request Delete</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -191,8 +239,12 @@
                                     <% safeChapters.forEach((ch, chIdx) => { %>
                                         <div class="chapter-card bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-md shadow-xs overflow-hidden" data-chapter-name="<%= ch.name %>">
                                             <!-- Chapter Header -->
-                                            <div class="px-3.5 py-2.5 bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-800/60 flex flex-wrap items-center justify-between gap-2 cursor-pointer select-none" onclick="toggleChapterAccordion('ch_<%= chIdx %>')">
+                                            <div class="px-3.5 py-2.5 bg-slate-50/70 dark:bg-slate-900/60 border-b border-slate-100 dark:border-slate-800/60 flex flex-wrap items-center justify-between gap-2 cursor-pointer select-none" onclick="onChapterHeaderClick(event, '<%= chIdx %>')">
                                                 <div class="flex items-center gap-2.5 flex-1 min-w-[240px]">
+                                                    <!-- Multi-select checkbox for whole chapter (Visible in Selection Mode) -->
+                                                    <div class="selection-checkbox-wrap shrink-0" onclick="event.stopPropagation()">
+                                                        <input type="checkbox" id="chapter_cb_<%= chIdx %>" class="chapter-checkbox size-3.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer" onchange="toggleSelectChapterTopics('<%= chIdx %>', this.checked)">
+                                                    </div>
                                                     <span class="size-6 rounded bg-primary/10 text-primary font-semibold text-xs flex items-center justify-center shrink-0">
                                                         <%= ch.number %>
                                                     </span>
@@ -224,8 +276,12 @@
                                             <!-- Chapter Topics List -->
                                             <div id="content_ch_<%= chIdx %>" class="p-3 space-y-2">
                                                 <% ch.topics.forEach((t, tIdx) => { %>
-                                                    <div class="topic-item p-2.5 rounded-md bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200/70 dark:border-slate-800/60 flex flex-wrap items-center justify-between gap-2.5 hover:border-primary/40 transition-all select-none" data-topic-name="<%= t.name %>">
+                                                    <div class="topic-item p-2.5 rounded-md bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200/70 dark:border-slate-800/60 flex flex-wrap items-center justify-between gap-2.5 hover:border-primary/40 transition-all select-none" data-topic-name="<%= t.name %>" onclick="onTopicItemClick(event, '<%= t._id %>', '<%= chIdx %>')">
                                                         <div class="flex items-start gap-2.5 flex-1 min-w-[240px]">
+                                                            <!-- Multi-select checkbox (Visible in Selection Mode) -->
+                                                            <div class="selection-checkbox-wrap shrink-0" onclick="event.stopPropagation()">
+                                                                <input type="checkbox" class="topic-checkbox ch-topic-<%= chIdx %> size-3.5 mt-0.5 rounded border-slate-300 dark:border-slate-700 text-primary focus:ring-0 cursor-pointer" data-id="<%= t._id %>" data-name="<%= t.name %>" data-pending="<%= (t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending') ? 'true' : 'false' %>" onchange="updateSelectedTopicsCount()">
+                                                            </div>
                                                             <span class="text-slate-400 font-medium text-xs mt-0.5">#<%= t.order || (tIdx + 1) %></span>
                                                             <div>
                                                                 <div class="flex items-center gap-2 flex-wrap">
@@ -1124,6 +1180,7 @@
                 liveView.classList.remove('hidden');
                 if (liveFiltersBar) liveFiltersBar.classList.remove('hidden');
                 if (document.getElementById('topBarToggleAllLiveChapters')) document.getElementById('topBarToggleAllLiveChapters').classList.remove('hidden');
+                if (document.getElementById('btnToggleSelection')) document.getElementById('btnToggleSelection').classList.remove('hidden');
                 submissionsView.classList.add('hidden');
                 tabLiveBtn.className = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs';
                 tabSubmissionsBtn.className = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white';
@@ -1133,9 +1190,11 @@
                     window.history.replaceState(null, '', u.toString());
                 }
             } else {
+                exitSelectionMode();
                 liveView.classList.add('hidden');
                 if (liveFiltersBar) liveFiltersBar.classList.add('hidden');
                 if (document.getElementById('topBarToggleAllLiveChapters')) document.getElementById('topBarToggleAllLiveChapters').classList.add('hidden');
+                if (document.getElementById('btnToggleSelection')) document.getElementById('btnToggleSelection').classList.add('hidden');
                 submissionsView.classList.remove('hidden');
                 tabSubmissionsBtn.className = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs';
                 tabLiveBtn.className = 'px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white';
@@ -1205,6 +1264,178 @@
             const inIcon = document.getElementById('iconToggleAllLiveChapters');
             if (inText) inText.textContent = allLiveChaptersExpanded ? 'Collapse All' : 'Expand All';
             if (inIcon) inIcon.textContent = allLiveChaptersExpanded ? 'unfold_less' : 'unfold_more';
+        }
+
+        // ==========================================
+        // SELECTION MODE & BULK ACTIONS FOR LIVE TOPICS
+        // ==========================================
+        let isSelectionMode = false;
+
+        function toggleSelectionMode() {
+            if (isSelectionMode) {
+                exitSelectionMode();
+            } else {
+                enterSelectionMode();
+            }
+        }
+
+        function enterSelectionMode() {
+            isSelectionMode = true;
+            document.body.classList.add('selection-mode-active');
+            const toolbar = document.getElementById('selectionToolbar');
+            if (toolbar) toolbar.classList.remove('hidden');
+
+            const btn = document.getElementById('btnToggleSelection');
+            const icon = document.getElementById('btnSelectionIcon');
+            const label = document.getElementById('btnSelectionLabel');
+            if (btn) btn.className = 'h-8 px-2.5 sm:px-3 rounded-md bg-primary/10 text-primary border border-primary/40 font-semibold text-xs flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all shrink-0 cursor-pointer';
+            if (icon) {
+                icon.innerText = 'close';
+                icon.className = 'material-symbols-rounded text-[17px] text-primary';
+            }
+            if (label) label.innerText = 'Exit Selection';
+
+            updateSelectedTopicsCount();
+        }
+
+        function exitSelectionMode() {
+            isSelectionMode = false;
+            document.body.classList.remove('selection-mode-active');
+            const toolbar = document.getElementById('selectionToolbar');
+            if (toolbar) toolbar.classList.add('hidden');
+
+            const btn = document.getElementById('btnToggleSelection');
+            const icon = document.getElementById('btnSelectionIcon');
+            const label = document.getElementById('btnSelectionLabel');
+            if (btn) btn.className = 'h-8 px-2.5 sm:px-3 rounded-md bg-white hover:bg-slate-50 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all shrink-0 cursor-pointer';
+            if (icon) {
+                icon.innerText = 'checklist';
+                icon.className = 'material-symbols-rounded text-[17px] text-slate-500';
+            }
+            if (label) label.innerText = 'Select Topics';
+
+            deselectAllLive();
+        }
+
+        function selectAllLiveTopics() {
+            document.querySelectorAll('.topic-checkbox').forEach(cb => cb.checked = true);
+            document.querySelectorAll('.chapter-checkbox').forEach(cb => {
+                cb.checked = true;
+                cb.indeterminate = false;
+            });
+            updateSelectedTopicsCount();
+        }
+
+        function deselectAllLive() {
+            document.querySelectorAll('.topic-checkbox').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.chapter-checkbox').forEach(cb => {
+                cb.checked = false;
+                cb.indeterminate = false;
+            });
+            updateSelectedTopicsCount();
+        }
+
+        function toggleSelectChapterTopics(chIdx, checked) {
+            document.querySelectorAll(`.ch-topic-${chIdx}`).forEach(cb => cb.checked = checked);
+            updateSelectedTopicsCount();
+        }
+
+        function onChapterHeaderClick(event, chIdx) {
+            if (isSelectionMode) {
+                if (event.target.closest('button') || event.target.closest('input[type="checkbox"]')) {
+                    return;
+                }
+                const chCb = document.getElementById(`chapter_cb_${chIdx}`);
+                if (chCb) {
+                    const newChecked = !chCb.checked;
+                    chCb.checked = newChecked;
+                    toggleSelectChapterTopics(chIdx, newChecked);
+                }
+                return;
+            }
+            toggleChapterAccordion('ch_' + chIdx);
+        }
+
+        function onTopicItemClick(event, topicId, chIdx) {
+            if (!isSelectionMode) return;
+            if (event.target.closest('button') || event.target.closest('input[type="checkbox"]')) {
+                return;
+            }
+            const cb = document.querySelector(`.topic-checkbox[data-id="${topicId}"]`);
+            if (cb) {
+                cb.checked = !cb.checked;
+                updateSelectedTopicsCount();
+            }
+        }
+
+        function updateSelectedTopicsCount() {
+            const checked = document.querySelectorAll('.topic-checkbox:checked');
+            const count = checked.length;
+
+            const badge = document.getElementById('toolbarSelectedCountBadge');
+            if (badge) badge.innerText = `${count} Selected`;
+
+            const btnRequestDelete = document.getElementById('btnToolbarRequestDelete');
+            const textRequestDelete = document.getElementById('btnToolbarRequestDeleteText');
+            if (btnRequestDelete) {
+                btnRequestDelete.disabled = (count === 0);
+                if (textRequestDelete) {
+                    textRequestDelete.innerText = count > 0 ? `Request Delete (${count})` : 'Request Delete';
+                }
+            }
+
+            // Sync chapter checkboxes
+            document.querySelectorAll('.chapter-card').forEach((card, idx) => {
+                const chCb = document.getElementById(`chapter_cb_${idx}`);
+                if (chCb) {
+                    const topicCbs = card.querySelectorAll('.topic-checkbox');
+                    if (topicCbs.length === 0) {
+                        chCb.checked = false;
+                        chCb.indeterminate = false;
+                    } else {
+                        const checkedCount = card.querySelectorAll('.topic-checkbox:checked').length;
+                        if (checkedCount === 0) {
+                            chCb.checked = false;
+                            chCb.indeterminate = false;
+                        } else if (checkedCount === topicCbs.length) {
+                            chCb.checked = true;
+                            chCb.indeterminate = false;
+                        } else {
+                            chCb.checked = false;
+                            chCb.indeterminate = true;
+                        }
+                    }
+                }
+            });
+        }
+
+        async function bulkRequestDeleteLive() {
+            const checked = Array.from(document.querySelectorAll('.topic-checkbox:checked'));
+            if (checked.length === 0) return;
+
+            const pendingCount = checked.filter(cb => cb.dataset.pending === 'true').length;
+            const targetTopics = checked.filter(cb => cb.dataset.pending !== 'true');
+
+            if (targetTopics.length === 0) {
+                Swal.fire('তথ্য', 'নির্বাচিত সব টপিকের জন্য ইতিমধ্যে মুছে ফেলার অনুরোধ পেন্ডিং রয়েছে।', 'info');
+                return;
+            }
+
+            if (pendingCount > 0) {
+                const proceed = await Swal.fire({
+                    title: 'সতর্কতা',
+                    text: `নির্বাচিত ${checked.length}টির মধ্যে ${pendingCount}টি টপিকে ইতিমধ্যে ডিলিট রিকোয়েস্ট পেন্ডিং আছে। বাকি ${targetTopics.length}টি টপিকের জন্য রিকোয়েস্ট পাঠাতে চান?`,
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'হ্যাঁ, এগিয়ে যান',
+                    cancelButtonText: 'বাতিল'
+                });
+                if (!proceed.isConfirmed) return;
+            }
+
+            const ids = targetTopics.map(cb => cb.dataset.id);
+            const targetName = `${targetTopics.length}টি নির্বাচিত টপিক`;
+            openRequestDeleteModal(targetName, ids, 'topic');
         }
 
         let allSubmissionsExpanded = true;
