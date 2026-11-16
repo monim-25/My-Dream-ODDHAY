@@ -291,7 +291,7 @@ router.get('/auth/facebook/callback', async (req, res) => {
             return res.redirect('/login?error=' + encodeURIComponent(error_description || error || 'Facebook authorization cancelled.'));
         }
 
-        const redirectUri = `${req.protocol}://${req.get('host')}/auth/facebook/callback`;
+        const redirectUri = getOAuthRedirectUri(req, '/auth/facebook/callback');
 
         // 1. Exchange authorization code for access token
         const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?` + new URLSearchParams({
@@ -336,6 +336,7 @@ router.get('/auth/facebook/callback', async (req, res) => {
                 password: hashedPassword,
                 role: 'student',
                 profilePicture: pictureUrl,
+                profileImage: pictureUrl,
                 isEmailVerified: Boolean(fbProfile.email),
                 isPasswordSet: false
             });
@@ -349,8 +350,13 @@ router.get('/auth/facebook/callback', async (req, res) => {
             }
         } else {
             // Existing user update
-            if (!user.profilePicture && pictureUrl) {
-                user.profilePicture = pictureUrl;
+            if (pictureUrl) {
+                if (!user.profilePicture || user.profilePicture.includes('ui-avatars.com') || user.profilePicture.includes('default-avatar')) {
+                    user.profilePicture = pictureUrl;
+                }
+                if (!user.profileImage || user.profileImage.includes('ui-avatars.com') || user.profileImage.includes('default-avatar')) {
+                    user.profileImage = pictureUrl;
+                }
             }
             if (fbProfile.email && !user.isEmailVerified) {
                 user.isEmailVerified = true;
