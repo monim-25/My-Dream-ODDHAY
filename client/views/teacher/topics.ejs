@@ -72,154 +72,96 @@
 
             <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5 flex-1">
                 
-                <!-- 1. Sticky Action Bar -->
-                <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/80 px-3 sm:px-4 py-2.5 flex items-center justify-between gap-2.5 sticky top-0 z-30 shadow-xs">
-                    <!-- Tab Switcher -->
-                    <div class="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-md border border-slate-200 dark:border-slate-700/60 overflow-x-auto no-scrollbar">
-                        <button type="button" id="tabLiveBtn" onclick="switchTeacherTab('live')"
-                                class="px-2.5 sm:px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs shrink-0 whitespace-nowrap">
-                            <span class="material-symbols-rounded text-[17px]">account_tree</span>
-                            <span class="hidden xs:inline">Live Syllabus</span>
-                            <span class="xs:hidden">Live</span>
-                            <span class="px-1.5 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary font-bold leading-none"><%= safeActiveTopics.length %></span>
-                        </button>
-                        <button type="button" id="tabSubmissionsBtn" onclick="switchTeacherTab('submissions')"
-                                class="px-2.5 sm:px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white shrink-0 whitespace-nowrap">
-                            <span class="material-symbols-rounded text-[17px]">send_and_archive</span>
-                            <span class="hidden xs:inline">My Submissions</span>
-                            <span class="xs:hidden">Submissions</span>
-                            <span class="px-1.5 py-0.5 rounded-full text-[10px] <%= safePendingTopics.length > 0 ? 'bg-amber-500 text-white font-bold' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300' %> leading-none"><%= safePendingTopics.length %></span>
-                        </button>
+                <!-- 1. Sticky Action Bar with Inline Dropdown Filters -->
+                <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/80 px-2.5 sm:px-4 py-2 sm:py-2.5 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 sticky top-0 z-30 shadow-xs">
+                    <!-- Left: Tab Switcher & Dropdown Filtering in the SAME Line -->
+                    <div class="flex flex-wrap items-center gap-2 sm:gap-2.5 flex-1 min-w-0">
+                        <!-- Tab Switcher -->
+                        <div class="flex items-center gap-1 p-0.5 bg-slate-100 dark:bg-slate-800/80 rounded-md border border-slate-200 dark:border-slate-700/60 shrink-0">
+                            <button type="button" id="tabLiveBtn" onclick="switchTeacherTab('live')"
+                                    class="px-2.5 sm:px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 bg-white dark:bg-slate-900 text-primary shadow-xs shrink-0 whitespace-nowrap">
+                                <span class="material-symbols-rounded text-[17px]">account_tree</span>
+                                <span>Live</span>
+                                <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-primary/10 text-primary font-bold leading-none"><%= safeActiveTopics.length %></span>
+                            </button>
+                            <button type="button" id="tabSubmissionsBtn" onclick="switchTeacherTab('submissions')"
+                                    class="px-2.5 sm:px-3 py-1.5 rounded-md font-medium text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white shrink-0 whitespace-nowrap">
+                                <span class="material-symbols-rounded text-[17px]">send_and_archive</span>
+                                <span>Submissions</span>
+                                <span class="px-1.5 py-0.2 rounded-full text-[10px] <%= safePendingTopics.length > 0 ? 'bg-amber-500 text-white font-bold' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300' %> leading-none"><%= safePendingTopics.length %></span>
+                            </button>
+                        </div>
+
+                        <div class="h-4 w-px bg-slate-200 dark:bg-slate-700 hidden sm:block shrink-0"></div>
+
+                        <!-- Dropdown Filters inline with Live / Submissions -->
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <!-- Class Dropdown -->
+                            <div class="flex items-center gap-1">
+                                <span class="text-[11px] text-slate-400 font-medium hidden md:inline">Class:</span>
+                                <select id="classSelector" onchange="onClassChange(this.value)" 
+                                        class="h-8 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-primary shadow-2xs cursor-pointer">
+                                    <% safeClasses.forEach(c => { %>
+                                        <option value="<%= c.name %>" <%= c.name.toLowerCase() === selClass.toLowerCase() ? 'selected' : '' %>>
+                                            <%= c.name %> <%= c.hasGroups ? '(Grouped)' : '' %>
+                                        </option>
+                                    <% }) %>
+                                </select>
+                            </div>
+
+                            <!-- Stream / Group Filter if class has groups -->
+                            <% if (safeCurrentClass && safeCurrentClass.hasGroups) { %>
+                                <div class="flex items-center gap-1">
+                                    <span class="text-[11px] text-slate-400 font-medium hidden md:inline">Group:</span>
+                                    <select id="groupSelector" onchange="onGroupChange(this.value)" 
+                                            class="h-8 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-primary shadow-2xs cursor-pointer">
+                                        <option value="all" <%= selGroup === 'all' ? 'selected' : '' %>>All Groups</option>
+                                        <option value="Science" <%= selGroup === 'Science' ? 'selected' : '' %>>Science</option>
+                                        <option value="Commerce" <%= selGroup === 'Commerce' ? 'selected' : '' %>>Commerce</option>
+                                        <option value="Humanities" <%= selGroup === 'Humanities' ? 'selected' : '' %>>Humanities</option>
+                                    </select>
+                                </div>
+                            <% } %>
+
+                            <!-- Subject Dropdown -->
+                            <div class="flex items-center gap-1">
+                                <span class="text-[11px] text-slate-400 font-medium hidden md:inline">Subject:</span>
+                                <select id="subjectSelector" onchange="onSubjectChange(this.value)" 
+                                        class="h-8 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-primary shadow-2xs min-w-[130px] cursor-pointer">
+                                    <% if (availSubjects.length === 0) { %>
+                                        <option value="">No Subjects</option>
+                                    <% } else { %>
+                                        <% availSubjects.forEach(sub => { %>
+                                            <option value="<%= sub %>" <%= sub.toLowerCase() === selSubject.toLowerCase() ? 'selected' : '' %>>
+                                                <%= sub %>
+                                            </option>
+                                        <% }) %>
+                                    <% } %>
+                                </select>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Right Action Button: Add Topics -->
+                    <!-- Right Action Buttons -->
                     <div class="flex items-center gap-2 shrink-0">
+                        <!-- Quick Search Input -->
+                        <div class="relative hidden lg:block w-44 xl:w-56">
+                            <span class="material-symbols-rounded absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+                            <input type="text" id="topicSearchInput" onkeyup="filterTopicsClientSide(this.value)" placeholder="Search topics..." class="w-full h-8 pl-7 pr-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
+                        </div>
+
+                        <!-- Add Topics Button -->
                         <button type="button" onclick="openUnifiedModal()"
-                                class="h-8 sm:h-9 px-2.5 sm:px-3.5 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 sm:gap-1.5 shadow-xs transition-all">
-                            <span class="material-symbols-rounded text-[17px] sm:text-[18px]">add</span>
-                            <span class="hidden xs:inline">Add Topics</span>
-                            <span class="xs:hidden">Add</span>
+                                class="h-8 px-3 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 shadow-xs transition-all">
+                            <span class="material-symbols-rounded text-base">add</span>
+                            <span>Add Topics</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- 2. LIVE SYLLABUS DUAL-PANE VIEW -->
-                <div id="liveTopicsView" class="p-3 sm:p-4 flex-1">
-                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                        
-                        <!-- Left Rail: Academic Class & Subject Filter Rail -->
-                        <div class="lg:col-span-4 xl:col-span-3 space-y-3">
-                            <div class="bg-white dark:bg-[#0f172a] rounded-md border border-slate-200 dark:border-slate-800/80 p-3.5 shadow-xs space-y-3">
-                                <div>
-                                    <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 block mb-1">
-                                        Assigned Class (<%= safeClasses.length %>)
-                                    </label>
-                                    <% if (safeClasses.length === 0) { %>
-                                        <div class="p-2.5 bg-amber-50 dark:bg-amber-950/20 rounded border border-amber-200/80 dark:border-amber-800/60 text-[11px] text-amber-700 dark:text-amber-300">
-                                            No classes assigned to your profile.
-                                        </div>
-                                    <% } else { %>
-                                        <select id="classSelector" onchange="onClassChange(this.value)" class="w-full h-9 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-white outline-none focus:border-primary">
-                                            <% safeClasses.forEach(c => { %>
-                                                <option value="<%= c.name %>" <%= c.name.toLowerCase() === selClass.toLowerCase() ? 'selected' : '' %>>
-                                                    <%= c.name %> <%= c.hasGroups ? '(Grouped)' : '' %>
-                                                </option>
-                                            <% }) %>
-                                        </select>
-                                    <% } %>
-                                </div>
-
-                                <!-- Stream / Group Filter if class has groups -->
-                                <% if (safeCurrentClass && safeCurrentClass.hasGroups) { %>
-                                    <div>
-                                        <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 block mb-1">
-                                            Stream / Group
-                                        </label>
-                                        <div class="grid grid-cols-2 gap-1.5">
-                                            <button type="button" onclick="onGroupChange('all')"
-                                                    class="px-2.5 py-1.5 rounded text-[11px] font-medium transition-all border <%= selGroup === 'all' ? 'bg-primary/10 text-primary border-primary/30 font-semibold' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800' %>">
-                                                All Groups
-                                            </button>
-                                            <button type="button" onclick="onGroupChange('Science')"
-                                                    class="px-2.5 py-1.5 rounded text-[11px] font-medium transition-all border <%= selGroup === 'Science' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-semibold' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800' %>">
-                                                Science
-                                            </button>
-                                            <button type="button" onclick="onGroupChange('Commerce')"
-                                                    class="px-2.5 py-1.5 rounded text-[11px] font-medium transition-all border <%= selGroup === 'Commerce' ? 'bg-amber-500/10 text-amber-600 border-amber-500/30 font-semibold' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800' %>">
-                                                Commerce
-                                            </button>
-                                            <button type="button" onclick="onGroupChange('Humanities')"
-                                                    class="px-2.5 py-1.5 rounded text-[11px] font-medium transition-all border <%= selGroup === 'Humanities' ? 'bg-purple-500/10 text-purple-600 border-purple-500/30 font-semibold' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800' %>">
-                                                Humanities
-                                            </button>
-                                        </div>
-                                    </div>
-                                <% } %>
-
-                                <!-- Subject Rail -->
-                                <div>
-                                    <label class="text-[11px] font-medium text-slate-500 dark:text-slate-400 block mb-1">
-                                        Assigned Subjects (<%= availSubjects.length %>)
-                                    </label>
-                                    <div class="space-y-1 max-h-[380px] overflow-y-auto pr-1">
-                                        <% if (availSubjects.length === 0) { %>
-                                            <p class="text-xs text-slate-400 py-2 italic">No subjects configured for this class.</p>
-                                        <% } else { %>
-                                            <% availSubjects.forEach(sub => { 
-                                                const isCurrent = sub.toLowerCase() === selSubject.toLowerCase();
-                                            %>
-                                                <button type="button" onclick="onSubjectChange('<%= sub %>')"
-                                                        class="w-full text-left px-3 py-2 rounded-md text-xs transition-all flex items-center justify-between border <%= isCurrent ? 'bg-primary text-white border-primary shadow-xs font-semibold' : 'bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200/80 dark:border-slate-800 font-medium' %>">
-                                                    <span class="truncate"><%= sub %></span>
-                                                    <span class="material-symbols-rounded text-sm <%= isCurrent ? 'text-white' : 'text-slate-400' %>">chevron_right</span>
-                                                </button>
-                                            <% }) %>
-                                        <% } %>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Info Card -->
-                            <div class="bg-blue-50/50 dark:bg-blue-950/20 rounded-md border border-blue-200/50 dark:border-blue-900/40 p-3 space-y-1 text-xs text-blue-900 dark:text-blue-300">
-                                <div class="font-medium flex items-center gap-1 text-primary">
-                                    <span class="material-symbols-rounded text-base">info</span>
-                                    <span>Teacher Submission Notice</span>
-                                </div>
-                                <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed font-normal">
-                                    আপনার যুক্ত করা নতুন টপিকসমূহ অ্যাডমিনের রিভিউ ও অ্যাপ্রুভালের পর সরাসরি লাইভ সিলেবাসে অন্তর্ভুক্ত হবে।
-                                </p>
-                            </div>
-                        </div>
-
-                        <!-- Right Column: Chapters & Topics Canvas -->
-                        <div class="lg:col-span-8 xl:col-span-9 space-y-3">
-                            
-                            <!-- Context Banner -->
-                            <div class="bg-white dark:bg-[#0f172a] rounded-md border border-slate-200 dark:border-slate-800/80 px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-xs">
-                                <div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="px-2 py-0.5 rounded bg-primary/10 text-primary text-[11px] font-semibold"><%= selClass || 'All Classes' %></span>
-                                        <% if (selGroup && selGroup !== 'all') { %>
-                                            <span class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 text-[11px] font-medium"><%= selGroup %></span>
-                                        <% } %>
-                                        <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                                            <%= selSubject || 'Select Subject' %>
-                                        </h3>
-                                    </div>
-                                    <p class="text-[11px] text-slate-500 mt-0.5 font-normal">
-                                        মোট <%= safeChapters.length %> টি অধ্যায় এবং <%= safeActiveTopics.length %> টি সক্রিয় টপিক রয়েছে।
-                                    </p>
-                                </div>
-
-                                <!-- Quick Search Inside Subject -->
-                                <div class="relative min-w-[220px]">
-                                    <span class="material-symbols-rounded absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
-                                    <input type="text" id="topicSearchInput" onkeyup="filterTopicsClientSide(this.value)" placeholder="Search topics in subject..." class="w-full h-8 pl-8 pr-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
-                                </div>
-                            </div>
-
-                            <!-- Chapters Accordion List -->
-                            <div id="chaptersContainer" class="space-y-3">
+                <!-- 2. LIVE SYLLABUS LIST VIEW -->
+                <div id="liveTopicsView" class="p-3 sm:p-4 flex-1 max-w-7xl mx-auto w-full space-y-3">
+                    <div id="chaptersContainer" class="space-y-3">
                                 <% if (safeClasses.length === 0) { %>
                                     <div class="p-8 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0f172a] rounded-md">
                                         <span class="material-symbols-rounded text-3xl text-amber-500 mb-1">school</span>
@@ -257,14 +199,13 @@
                                                     </div>
                                                 </div>
 
-                                                <div class="flex items-center gap-1.5" onclick="event.stopPropagation()">
-                                                    <!-- Request Delete Chapter Button -->
+                                                <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
+                                                    <!-- Request Delete Chapter Icon -->
                                                     <button type="button" 
                                                             onclick="openRequestDeleteModal(<%= JSON.stringify(ch.name) %>, <%= JSON.stringify(ch.topics.map(t => t._id)) %>, 'chapter')" 
-                                                            class="h-7 px-2 sm:px-2.5 rounded bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/30 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 text-xs font-medium flex items-center gap-1 transition-colors border border-rose-200/60 dark:border-rose-800/40" 
-                                                            title="Request Admin to delete this approved chapter">
-                                                        <span class="material-symbols-rounded text-xs">delete_sweep</span>
-                                                        <span class="hidden sm:inline">Request Delete Chapter</span>
+                                                            class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors shrink-0" 
+                                                            title="Request to Delete Chapter">
+                                                        <span class="material-symbols-rounded text-base">delete_sweep</span>
                                                     </button>
                                                     <!-- Accordion Chevron -->
                                                     <button type="button" onclick="toggleChapterAccordion('ch_<%= chIdx %>')" class="size-7 rounded hover:bg-slate-200/50 dark:hover:bg-slate-800 flex items-center justify-center text-slate-400" title="Expand / Collapse Chapter">
@@ -313,23 +254,27 @@
                                                                 <% } %>
                                                             </div>
                                                         </div>
-                                                        <div class="flex items-center gap-1.5 shrink-0">
-                                                            <span class="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded font-medium">Live</span>
+                                                        <div class="flex items-center shrink-0">
                                                             <% if (t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending') { %>
-                                                                <span class="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded font-medium flex items-center gap-1" title="Deletion requested: <%= t.deletionRequest.reason || '' %>">
-                                                                    <span class="material-symbols-rounded text-xs">pending</span>
-                                                                    <span>Deletion Pending</span>
-                                                                </span>
-                                                                <button type="button" onclick="cancelDeletionRequest('<%= t._id %>', <%= JSON.stringify(t.name) %>)" class="text-[11px] text-slate-400 hover:text-rose-600 underline ml-0.5" title="Cancel this deletion request">Cancel</button>
+                                                                <button type="button" 
+                                                                        onclick="cancelDeletionRequest('<%= t._id %>', <%= JSON.stringify(t.name) %>)" 
+                                                                        class="size-7 rounded hover:bg-amber-100 dark:hover:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center transition-colors" 
+                                                                        title="Deletion Requested: <%= t.deletionRequest.reason || '' %> (Click to cancel)">
+                                                                    <span class="material-symbols-rounded text-base">hourglass_top</span>
+                                                                </button>
                                                             <% } else if (t.deletionRequest && t.deletionRequest.status === 'declined') { %>
-                                                                <span class="text-[10px] text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded font-medium" title="Declined by admin: <%= t.deletionRequest.declinedReason || '' %>">
-                                                                    Declined
-                                                                </span>
-                                                                <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="text-xs text-rose-600 hover:text-rose-700 font-medium">Re-request</button>
+                                                                <button type="button" 
+                                                                        onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" 
+                                                                        class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center transition-colors" 
+                                                                        title="Declined: <%= t.deletionRequest?.declinedReason || '' %> (Click to re-request deletion)">
+                                                                    <span class="material-symbols-rounded text-base">error_outline</span>
+                                                                </button>
                                                             <% } else { %>
-                                                                <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="h-6 px-2 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 text-xs font-medium transition-colors flex items-center gap-1 border border-slate-200/80 dark:border-slate-800" title="Request Admin to delete this approved topic">
-                                                                    <span class="material-symbols-rounded text-xs">delete</span>
-                                                                    <span class="hidden sm:inline">Request Delete</span>
+                                                                <button type="button" 
+                                                                        onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" 
+                                                                        class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors" 
+                                                                        title="Request to Delete">
+                                                                    <span class="material-symbols-rounded text-base">delete</span>
                                                                 </button>
                                                             <% } %>
                                                         </div>
@@ -340,9 +285,6 @@
                                     <% }) %>
                                 <% } %>
                             </div>
-
-                        </div>
-                    </div>
                 </div>
 
                 <!-- 3. MY SUBMISSIONS VIEW (PENDING & FEEDBACK) -->
@@ -473,17 +415,15 @@
                                             <% const chPendingDeletion = chApproved.filter(t => t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending'); %>
                                             <% if (chApproved.length > 0) { %>
                                                 <% if (chPendingDeletion.length === chApproved.length && chApproved.length > 0) { %>
-                                                    <span class="px-2 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-600 border border-amber-500/20 font-medium flex items-center gap-1 shrink-0" title="Deletion requested for this chapter">
-                                                        <span class="material-symbols-rounded text-xs">pending</span>
-                                                        <span class="hidden sm:inline">Deletion Pending</span>
+                                                    <span class="size-7 rounded bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0" title="Deletion requested for this chapter">
+                                                        <span class="material-symbols-rounded text-base">hourglass_top</span>
                                                     </span>
                                                 <% } else { %>
                                                     <button type="button" 
                                                             onclick="openRequestDeleteModal(<%= JSON.stringify(ch.name) %>, <%= JSON.stringify(chApprovedTopicIds) %>, 'chapter')" 
-                                                            class="h-7 px-2 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 text-xs font-medium transition-colors flex items-center gap-1 shrink-0" 
-                                                            title="Request Admin to delete this approved chapter">
-                                                        <span class="material-symbols-rounded text-xs">delete_sweep</span>
-                                                        <span class="hidden sm:inline">Request Delete Chapter</span>
+                                                            class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors shrink-0" 
+                                                            title="Request to Delete Chapter">
+                                                        <span class="material-symbols-rounded text-base">delete_sweep</span>
                                                     </button>
                                                 <% } %>
                                             <% } else if (chSelectable.length > 0) { %>
@@ -626,24 +566,18 @@
                                                                 </button>
                                                             </div>
                                                         <% } else { %>
-                                                            <div class="inline-flex items-center gap-1.5 flex-wrap">
+                                                            <div class="inline-flex items-center shrink-0">
                                                                 <% if (t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending') { %>
-                                                                    <span class="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded text-[10px] font-medium" title="<%= t.deletionRequest.reason || '' %>">
-                                                                        <span class="material-symbols-rounded text-xs">pending</span> Deletion Pending
-                                                                    </span>
-                                                                    <button type="button" onclick="cancelDeletionRequest('<%= t._id %>', <%= JSON.stringify(t.name) %>)" class="text-[11px] text-slate-400 hover:text-rose-600 underline">Cancel</button>
+                                                                    <button type="button" onclick="cancelDeletionRequest('<%= t._id %>', <%= JSON.stringify(t.name) %>)" class="size-7 rounded hover:bg-amber-100 dark:hover:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center transition-colors" title="Deletion Requested (Click to cancel)">
+                                                                        <span class="material-symbols-rounded text-base">hourglass_top</span>
+                                                                    </button>
                                                                 <% } else if (t.deletionRequest && t.deletionRequest.status === 'declined') { %>
-                                                                    <span class="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded text-[10px] font-medium" title="Declined: <%= t.deletionRequest.declinedReason || '' %>">
-                                                                        Declined
-                                                                    </span>
-                                                                    <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="text-xs text-rose-600 hover:text-rose-700 font-medium">Re-request</button>
+                                                                    <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center transition-colors" title="Declined: <%= t.deletionRequest?.declinedReason || '' %> (Click to re-request)">
+                                                                        <span class="material-symbols-rounded text-base">error_outline</span>
+                                                                    </button>
                                                                 <% } else { %>
-                                                                    <span class="inline-flex items-center gap-1 text-slate-400 text-[11px] font-medium">
-                                                                        <span class="material-symbols-rounded text-xs text-slate-400">lock</span> Published
-                                                                    </span>
-                                                                    <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="h-6 px-2 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 text-xs font-medium transition-colors flex items-center gap-1 border border-slate-200 dark:border-slate-700" title="Request Admin to delete this approved topic">
-                                                                        <span class="material-symbols-rounded text-xs">delete</span>
-                                                                        <span>Request Delete</span>
+                                                                    <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors" title="Request to Delete">
+                                                                        <span class="material-symbols-rounded text-base">delete</span>
                                                                     </button>
                                                                 <% } %>
                                                             </div>
@@ -762,24 +696,18 @@
                                                                         </button>
                                                                     </div>
                                                                 <% } else { %>
-                                                                    <div class="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                                                                    <div class="inline-flex items-center justify-end shrink-0">
                                                                         <% if (t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending') { %>
-                                                                            <span class="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded text-[10px] font-medium" title="<%= t.deletionRequest.reason || '' %>">
-                                                                                <span class="material-symbols-rounded text-xs">pending</span> Deletion Pending
-                                                                            </span>
-                                                                            <button type="button" onclick="cancelDeletionRequest('<%= t._id %>', <%= JSON.stringify(t.name) %>)" class="text-[11px] text-slate-400 hover:text-rose-600 underline">Cancel</button>
+                                                                            <button type="button" onclick="cancelDeletionRequest('<%= t._id %>', <%= JSON.stringify(t.name) %>)" class="size-7 rounded hover:bg-amber-100 dark:hover:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center transition-colors" title="Deletion Requested (Click to cancel)">
+                                                                                <span class="material-symbols-rounded text-base">hourglass_top</span>
+                                                                            </button>
                                                                         <% } else if (t.deletionRequest && t.deletionRequest.status === 'declined') { %>
-                                                                            <span class="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 px-2 py-0.5 rounded text-[10px] font-medium" title="Declined: <%= t.deletionRequest.declinedReason || '' %>">
-                                                                                Declined
-                                                                            </span>
-                                                                            <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="text-xs text-rose-600 hover:text-rose-700 font-medium">Re-request</button>
+                                                                            <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center transition-colors" title="Declined: <%= t.deletionRequest?.declinedReason || '' %> (Click to re-request)">
+                                                                                <span class="material-symbols-rounded text-base">error_outline</span>
+                                                                            </button>
                                                                         <% } else { %>
-                                                                            <span class="inline-flex items-center gap-1 text-slate-400 text-[11px] font-medium mr-1">
-                                                                                <span class="material-symbols-rounded text-xs text-slate-400">lock</span> Published
-                                                                            </span>
-                                                                            <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="h-6 px-2 rounded hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-600 text-[11px] font-medium transition-colors inline-flex items-center gap-1 border border-slate-200 dark:border-slate-700" title="Request Admin to delete this approved topic">
-                                                                                <span class="material-symbols-rounded text-xs">delete</span>
-                                                                                <span>Request Delete</span>
+                                                                            <button type="button" onclick="openRequestDeleteModal(<%= JSON.stringify(t.name) %>, ['<%= t._id %>'], 'topic')" class="size-7 rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-600 flex items-center justify-center transition-colors" title="Request to Delete">
+                                                                                <span class="material-symbols-rounded text-base">delete</span>
                                                                             </button>
                                                                         <% } %>
                                                                     </div>
