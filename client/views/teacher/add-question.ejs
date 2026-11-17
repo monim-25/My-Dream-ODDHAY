@@ -847,10 +847,11 @@
             const urlParams = new URLSearchParams(window.location.search);
             const mode = urlParams.get('mode') || 'standalone';
             const bankId = urlParams.get('bankId') || urlParams.get('paperId') || '';
-            const board = urlParams.get('board') || document.getElementById('globalBoard')?.value || '';
-            const year = urlParams.get('year') || document.getElementById('globalYear')?.value || '';
-            const subject = urlParams.get('subject') || document.getElementById('globalSubject')?.value || document.getElementById('hiddenSubject')?.value || '';
-            const classLevel = urlParams.get('class') || document.getElementById('globalClass')?.value || document.getElementById('hiddenClass')?.value || '';
+            const board = (urlParams.get('board') || document.getElementById('globalBoard')?.value || document.getElementById('hiddenBoard')?.value || '').trim();
+            const year = (urlParams.get('year') || document.getElementById('globalYear')?.value || document.getElementById('hiddenYear')?.value || '').trim();
+            const subject = (urlParams.get('subject') || document.getElementById('globalSubject')?.value || document.getElementById('hiddenSubject')?.value || '').trim();
+            let rawClass = (urlParams.get('class') || document.getElementById('globalClass')?.value || document.getElementById('hiddenClass')?.value || '').trim();
+            const classLevel = rawClass.split(',').map(c => c.trim().toLowerCase().replace(/^class\s+/i, '')).filter(Boolean).sort().join('_');
 
             if (bankId) {
                 return `${DRAFT_KEY_BASE}_${bankId}`;
@@ -1432,6 +1433,19 @@
             try {
                 const key = getDraftStorageKey();
                 localStorage.removeItem(key);
+                const urlParams = new URLSearchParams(window.location.search);
+                const bankId = urlParams.get('bankId') || urlParams.get('paperId') || '';
+                if (bankId) {
+                    localStorage.removeItem(`${DRAFT_KEY_BASE}_${bankId}`);
+                }
+                for (let i = localStorage.length - 1; i >= 0; i--) {
+                    const k = localStorage.key(i);
+                    if (k && k.startsWith(DRAFT_KEY_BASE)) {
+                        if (bankId && k.includes(bankId)) {
+                            localStorage.removeItem(k);
+                        }
+                    }
+                }
             } catch (e) { }
         }
 
@@ -1519,6 +1533,15 @@
                 if (typeof t.chapter === 'string' && t.chapter.trim()) chapterSet.add(t.chapter.trim());
                 else if (t.chapter && typeof t.chapter.name === 'string' && t.chapter.name.trim()) chapterSet.add(t.chapter.name.trim());
             });
+
+            if (selectedChapter && selectedChapter.trim()) {
+                const s = selectedChapter.trim();
+                let found = false;
+                chapterSet.forEach(ch => {
+                    if (ch.toLowerCase() === s.toLowerCase()) found = true;
+                });
+                if (!found) chapterSet.add(s);
+            }
 
             const chapters = Array.from(chapterSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
             chapters.forEach(chap => {
@@ -2065,29 +2088,55 @@
                 }
             }
 
-            // If URL explicitly requests fresh start (e.g. initial navigation from wizard modal)
-            if (urlParams.get('fresh') === 'true') {
+            // 1. Language Setup first so newly added question rows immediately adopt the chosen language
+            const urlLang = urlParams.get('lang');
+            const urlIsBangla = urlParams.get('isBangla');
+            if (urlLang === 'en' || urlIsBangla === 'false') {
+                isGlobalBangla = false;
+                if (typeof updateGlobalBanglaUI === 'function') updateGlobalBanglaUI();
+            } else {
+                isGlobalBangla = true;
+                if (typeof updateGlobalBanglaUI === 'function') updateGlobalBanglaUI();
+            }
+
+            // 2. Fresh start handling (e.g. from Paper Composition modal or Question Wizard)
+            const isFreshStart = urlParams.get('fresh') === 'true' || urlParams.has('slots');
+            if (isFreshStart) {
                 clearStudioDraft();
-                // Strip fresh=true from URL via history.replaceState so that future page reloads or errors never wipe typed data!
+                // Strip fresh=true from URL via history.replaceState so future page reloads preserve typed data
                 urlParams.delete('fresh');
                 const newQuery = urlParams.toString();
                 const cleanUrl = window.location.pathname + (newQuery ? '?' + newQuery : '');
                 window.history.replaceState({}, '', cleanUrl);
             }
 
-            // Always attempt to restore saved draft first so any refresh or network reconnect never loses data
-            let restored = restoreStudioDraft();
+            // 3. Draft Restoration (only if not a fresh start from form/modal)
+            let restored = false;
+            if (!isFreshStart) {
+                restored = restoreStudioDraft();
+            }
 
+            // 4. If draft not restored, generate requested question slots from URL
             if (!restored) {
+                const container = document.getElementById('questionsContainer');
+                if (container) container.innerHTML = '';
+
                 const slotsParam = urlParams.get('slots');
                 if (slotsParam) {
                     const pairs = slotsParam.split(',');
                     let totalSlotsAdded = 0;
                     pairs.forEach(pair => {
-                        const [t, cStr] = pair.split(':');
+                        const [tRaw, cStr] = pair.split(':');
                         const c = parseInt(cStr) || 0;
-                        if (c > 0 && t) {
-                            addQuestionRows(c, t);
+                        const t = (tRaw || '').trim();
+                        let normalizedType = 'MCQ';
+                        if (/^mcq/i.test(t)) normalizedType = 'MCQ';
+                        else if (/^short/i.test(t)) normalizedType = 'Short';
+                        else if (/^med/i.test(t)) normalizedType = 'Medium';
+                        else if (/^comp/i.test(t)) normalizedType = 'Comprehension';
+
+                        if (c > 0) {
+                            addQuestionRows(c, normalizedType);
                             totalSlotsAdded += c;
                         }
                     });
@@ -2096,19 +2145,16 @@
                     }
                 } else {
                     const initialCount = parseInt(urlParams.get('count')) || 1;
-                    const initialType = urlParams.get('type') || 'MCQ';
-                    addQuestionRows(initialCount, initialType);
+                    const rawType = (urlParams.get('type') || 'MCQ').trim();
+                    let normalizedType = 'MCQ';
+                    if (/^short/i.test(rawType)) normalizedType = 'Short';
+                    else if (/^med/i.test(rawType)) normalizedType = 'Medium';
+                    else if (/^comp/i.test(rawType)) normalizedType = 'Comprehension';
+
+                    addQuestionRows(initialCount, normalizedType);
                 }
                 // Save initial layout immediately
                 saveStudioDraft();
-            }
-
-            const urlLang = urlParams.get('lang');
-            const urlIsBangla = urlParams.get('isBangla');
-            if (urlLang === 'en' || urlIsBangla === 'false') {
-                setGlobalBangla(false);
-            } else {
-                setGlobalBangla(true);
             }
 
             let isSubmittingPaper = false;
@@ -2243,7 +2289,7 @@
             if (a4) a4.required = isRequired;
         }
 
-        function toggleTypeUI(row, type, preserveCustomMarks = false) {
+        function toggleTypeUI(row, type, preserveCustomMarks = false, skipDraftSave = false) {
             const mcq = row.querySelector('.mcq-area');
             const answer = row.querySelector('.answer-area');
             const comp = row.querySelector('.comprehension-area');
@@ -2282,7 +2328,9 @@
                 if (textInput) textInput.required = true;
                 setComprehensionRequired(row, false);
             }
-            saveStudioDraft();
+            if (!skipDraftSave) {
+                saveStudioDraft();
+            }
         }
 
         function addQuestionRows(count = null, type = null) {
@@ -2305,7 +2353,7 @@
                 const clone = template.content.cloneNode(true);
                 const row = clone.querySelector('.question-row');
 
-                toggleTypeUI(row, qType);
+                toggleTypeUI(row, qType, false, true);
                 syncRowHierarchy(row);
 
                 if (mode !== 'archive') {
