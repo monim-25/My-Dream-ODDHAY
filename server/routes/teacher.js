@@ -200,7 +200,7 @@ router.post('/onboarding-profile', teacherProtect, async (req, res) => {
     try {
         await connectDB();
         const { schoolName, sscGpa, collegeName, hscGpa, universityName, cgpa, presentAddress, permanentAddress } = req.body;
-        
+
         if (!schoolName || !collegeName || !universityName || !presentAddress || !permanentAddress) {
             const user = await User.findById(req.session.user._id).lean();
             return res.render('teacher/onboarding-profile', {
@@ -253,18 +253,18 @@ router.get('/', teacherProtect, async (req, res) => {
         const teacherId = user._id;
 
         // Find courses where the teacher is primary or permitted
-        const courses = await Course.find({ 
-            $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }] 
+        const courses = await Course.find({
+            $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }]
         });
-        
+
         const teacherObjectId = new mongoose.Types.ObjectId(String(teacherId));
 
         const totalCourses = courses.length;
-        
+
         let totalRecorded = 0;
         let totalLive = 0;
         let totalNotes = 0;
-        
+
         courses.forEach(c => {
             if (c.curriculumNodes && c.curriculumNodes.length > 0) {
                 c.curriculumNodes.forEach(n => {
@@ -280,7 +280,7 @@ router.get('/', teacherProtect, async (req, res) => {
                 });
             }
         });
-        
+
         const totalClasses = totalRecorded + totalLive;
 
         const [answeredQas, totalAddedQuestions, pendingQas] = await Promise.all([
@@ -503,7 +503,7 @@ router.get('/courses', teacherProtect, async (req, res) => {
         await connectDB();
         const teacherId = req.session.user._id;
         const teacherObjectId = new mongoose.Types.ObjectId(String(teacherId));
-        
+
         let courses = await Course.aggregate([
             { $match: { $or: [{ instructor: teacherObjectId }, { permittedTeachers: teacherObjectId }] } },
             { $lookup: { from: 'users', localField: '_id', foreignField: 'enrolledCourses.course', as: 'enrolledStudents' } },
@@ -620,7 +620,7 @@ router.get('/course/:id', teacherProtect, async (req, res) => {
     try {
         await connectDB();
         const teacherId = req.session.user._id;
-        
+
         const course = await Course.findOne({
             _id: req.params.id,
             $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }]
@@ -673,7 +673,7 @@ router.get('/course/:id', teacherProtect, async (req, res) => {
             const unpermittedFolderIds = course.curriculumNodes
                 .filter(n => n.type === 'folder' && !n.parentId && unpermittedChapterTitles.includes(n.name))
                 .map(n => String(n._id));
-            
+
             if (unpermittedFolderIds.length > 0) {
                 function isDescendant(node) {
                     if (!node.parentId) return false;
@@ -681,7 +681,7 @@ router.get('/course/:id', teacherProtect, async (req, res) => {
                     const parent = course.curriculumNodes.find(n => String(n._id) === String(node.parentId));
                     return parent ? isDescendant(parent) : false;
                 }
-                
+
                 course.curriculumNodes = course.curriculumNodes.map(n => {
                     const nodeObj = n.toObject ? n.toObject() : n;
                     if (unpermittedFolderIds.includes(String(nodeObj._id)) || isDescendant(nodeObj)) {
@@ -725,16 +725,16 @@ router.get('/course/:id/curriculum', teacherProtect, async (req, res) => {
             _id: req.params.id,
             $or: [{ instructor: req.session.user._id }, { permittedTeachers: req.session.user._id }]
         })
-        .populate('curriculumNodes.quizId', 'title duration totalMarks')
-        .populate('curriculumNodes.addedBy', 'name profilePicture profileImage role')
-        .lean();
+            .populate('curriculumNodes.quizId', 'title duration totalMarks')
+            .populate('curriculumNodes.addedBy', 'name profilePicture profileImage role')
+            .lean();
         if (!course) return res.status(403).json({ error: 'Access denied' });
-        
+
         await migrateCourseCurriculumIfRequired(course);
-        
+
         let nodesToReturn = course.curriculumNodes || [];
         const teacherId = req.session.user._id;
-        
+
         let unpermittedChapterTitles = [];
         if (course.chapters && course.chapters.length > 0) {
             unpermittedChapterTitles = course.chapters.filter(chapter => {
@@ -742,12 +742,12 @@ router.get('/course/:id/curriculum', teacherProtect, async (req, res) => {
                 return !chapter.permittedTeachers.some(tId => String(tId._id || tId) === String(teacherId));
             }).map(ch => ch.title);
         }
-        
+
         if (unpermittedChapterTitles.length > 0 && nodesToReturn.length > 0) {
             const unpermittedFolderIds = nodesToReturn
                 .filter(n => n.type === 'folder' && !n.parentId && unpermittedChapterTitles.includes(n.name))
                 .map(n => String(n._id));
-            
+
             if (unpermittedFolderIds.length > 0) {
                 function isDescendant(node) {
                     if (!node.parentId) return false;
@@ -755,7 +755,7 @@ router.get('/course/:id/curriculum', teacherProtect, async (req, res) => {
                     const parent = nodesToReturn.find(n => String(n._id) === String(node.parentId));
                     return parent ? isDescendant(parent) : false;
                 }
-                
+
                 nodesToReturn = nodesToReturn.map(n => {
                     const nodeObj = n.toObject ? n.toObject() : n;
                     if (unpermittedFolderIds.includes(String(nodeObj._id)) || isDescendant(nodeObj)) {
@@ -765,7 +765,7 @@ router.get('/course/:id/curriculum', teacherProtect, async (req, res) => {
                 });
             }
         }
-        
+
         res.json({ nodes: nodesToReturn });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -794,11 +794,11 @@ router.post('/course/:id/curriculum/node', teacherProtect, lazyUploadMiddleware,
         if (!course) return res.status(403).json({ error: 'Access denied' });
 
         let { name, type, parentId, meetingUrl, date, quizId, duration, description } = req.body;
-        
+
         // Fix for multiple fields with same name in frontend form causing array
         if (Array.isArray(description)) description = description.find(d => d.trim() !== '') || '';
         if (Array.isArray(duration)) duration = duration.find(d => d.trim() !== '') || '';
-        
+
         if (!name || !type) {
             return res.status(400).json({ error: 'Name and type are required' });
         }
@@ -850,19 +850,19 @@ router.post('/course/:id/curriculum/node', teacherProtect, lazyUploadMiddleware,
             }
         } else if (type === 'quiz') {
             const { quizId, bankId, quizName, quizDate, quizMode } = req.body;
-            
+
             // Override the node name with the specific quiz name if provided
             if (quizName) newNode.name = quizName;
-            
+
             newNode.date = quizDate ? new Date(quizDate) : new Date();
-            
+
             if (bankId) {
                 const bank = await QuestionBank.findById(bankId);
                 if (!bank) return res.status(404).json({ error: 'Question Bank not found' });
-                
+
                 const questions = await Question.find({ bankId: bank._id });
                 if (!questions.length) return res.status(400).json({ error: 'This bank has no questions to create a quiz' });
-                
+
                 // Create new Quiz
                 const newQuiz = new Quiz({
                     title: newNode.name || `${bank.subject} Quiz`,
@@ -876,7 +876,7 @@ router.post('/course/:id/curriculum/node', teacherProtect, lazyUploadMiddleware,
                     addedBy: req.session.user._id,
                     course: course._id
                 });
-                
+
                 if (quizMode === 'schedule' && quizDate) {
                     newQuiz.scheduledAt = new Date(quizDate);
                     newQuiz.expiresAt = new Date(new Date(quizDate).getTime() + 12 * 60 * 60 * 1000); // 12h window
@@ -884,14 +884,14 @@ router.post('/course/:id/curriculum/node', teacherProtect, lazyUploadMiddleware,
                     newQuiz.scheduledAt = new Date();
                     newQuiz.expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000); // 12h window
                 }
-                
+
                 await newQuiz.save();
                 newNode.quizId = newQuiz._id;
             } else if (quizId) {
                 const quiz = await Quiz.findById(quizId);
                 if (quiz) {
                     if (newNode.name) quiz.title = newNode.name;
-                    
+
                     if (quizMode === 'schedule' && quizDate) {
                         quiz.scheduledAt = new Date(quizDate);
                         quiz.expiresAt = new Date(new Date(quizDate).getTime() + 12 * 60 * 60 * 1000); // 12h window
@@ -935,14 +935,14 @@ router.post('/course/:id/announcement', teacherProtect, async (req, res) => {
         const Course = require('../models/Course');
         const course = await Course.findById(req.params.id);
         if (!course) return res.status(404).json({ success: false });
-        
+
         const teacherId = req.session.user._id;
         const isOwner = String(course.instructor) === String(teacherId);
         const isPermitted = course.permittedTeachers && course.permittedTeachers.some(t => String(t) === String(teacherId));
         if (!isOwner && !isPermitted && req.session.user.role !== 'admin') return res.status(403).json({ success: false });
 
         const { title, content, priority } = req.body;
-        
+
         const ann = new Announcement({
             courseId: course._id,
             authorId: teacherId,
@@ -991,7 +991,7 @@ router.delete('/course/:id/announcement/:annId', teacherProtect, async (req, res
         const Announcement = require('../models/Announcement');
         const Course = require('../models/Course');
         const course = await Course.findById(req.params.id);
-        
+
         const teacherId = req.session.user._id;
         const isOwner = String(course.instructor) === String(teacherId);
         const isPermitted = course.permittedTeachers && course.permittedTeachers.some(t => String(t) === String(teacherId));
@@ -1021,9 +1021,9 @@ router.put('/course/:id/curriculum/reorder', teacherProtect, async (req, res) =>
     try {
         await connectDB();
         const course = await Course.findById(req.params.id);
-        
+
         if (!course) return res.status(404).json({ success: false, message: 'Course not found' });
-        
+
         const teacherId = req.session.user._id;
         const isOwner = String(course.instructor) === String(teacherId);
         const isPermitted = course.permittedTeachers && course.permittedTeachers.some(t => String(t) === String(teacherId));
@@ -1068,7 +1068,7 @@ router.put('/course/:id/curriculum/node/:nodeId', teacherProtect, lazyUploadMidd
         if (!node) return res.status(404).json({ error: 'Node not found' });
 
         let { name, duration, description, meetingUrl, date, quizId, quizMode, quizDate, videoPath, thumbnailPath } = req.body;
-        
+
         // Fix for multiple fields with same name in frontend form causing array
         if (Array.isArray(description)) description = description.find(d => d.trim() !== '') || '';
         if (Array.isArray(duration)) duration = duration.find(d => d.trim() !== '') || '';
@@ -1102,10 +1102,10 @@ router.put('/course/:id/curriculum/node/:nodeId', teacherProtect, lazyUploadMidd
                 const quiz = await Quiz.findById(finalQuizId);
                 if (quiz) {
                     if (name) quiz.title = name;
-                    
+
                     const finalMode = quizMode !== undefined ? quizMode : (quiz.scheduledAt ? 'schedule' : 'instant');
                     const finalDate = quizDate !== undefined ? quizDate : date;
-                    
+
                     if (finalMode === 'schedule' && finalDate) {
                         quiz.scheduledAt = new Date(finalDate);
                         quiz.expiresAt = new Date(new Date(finalDate).getTime() + 12 * 60 * 60 * 1000); // 12h window
@@ -1154,7 +1154,7 @@ router.delete('/course/:id/curriculum/node/:nodeId', teacherProtect, async (req,
 
         // Filter out nodes to delete
         course.curriculumNodes = course.curriculumNodes.filter(n => !idsToDelete.some(id => String(id) === String(n._id)));
-        
+
         await course.save();
         res.json({ success: true, deletedCount: idsToDelete.length });
     } catch (err) {
@@ -1205,16 +1205,16 @@ router.get('/course/:id/edit', teacherProtect, async (req, res) => {
         const teacherId = req.session.user._id;
 
         const course = await Course.findOne({ _id: req.params.id })
-        .populate('instructor', 'name email profileImage profilePicture bio role')
-        .populate('permittedTeachers', 'name email profileImage profilePicture');
-        
+            .populate('instructor', 'name email profileImage profilePicture bio role')
+            .populate('permittedTeachers', 'name email profileImage profilePicture');
+
         if (!course) return res.status(404).send('Course not found');
-        
+
         const CourseProgress = require('../models/CourseProgress');
         const Announcement = require('../models/Announcement');
         const progresses = await CourseProgress.find({ courseId: course._id }).populate('userId', 'name email profileImage profilePicture').lean();
         const announcements = await Announcement.find({ courseId: course._id }).populate('authorId', 'name').sort({ createdAt: -1 }).lean();
-        
+
         const User = require('../models/User');
         const enrolledStudents = await User.find({ 'enrolledCourses.course': course._id }).select('name email profileImage profilePicture enrolledCourses quizResults').lean();
         const courseQuizIds = (course.curriculumNodes || []).filter(n => n.type === 'quiz' && n.quizId).map(n => String(n.quizId));
@@ -1230,7 +1230,7 @@ router.get('/course/:id/edit', teacherProtect, async (req, res) => {
                 examAttended
             };
         });
-        
+
         students.forEach(s => {
             const cp = progresses.find(p => p.userId && p.userId.email === s.email);
             if (cp) {
@@ -1246,9 +1246,9 @@ router.get('/course/:id/edit', teacherProtect, async (req, res) => {
             examCount: course.curriculumNodes.filter(n => n.type === 'quiz').length
         };
 
-        const hasEditAccess = course.instructor.equals(teacherId) || 
-                              course.permittedTeachers.some(t => t._id.equals(teacherId)) || 
-                              req.session.user.role === 'admin';
+        const hasEditAccess = course.instructor.equals(teacherId) ||
+            course.permittedTeachers.some(t => t._id.equals(teacherId)) ||
+            req.session.user.role === 'admin';
 
         res.render('teacher/edit-course', {
             progresses,
@@ -1274,13 +1274,13 @@ router.post('/course/:id/edit', teacherProtect, (req, res, next) => {
     try {
         await connectDB();
         const { routine, chapters } = req.body;
-        
+
         const teacherId = req.session.user._id;
         const course = await Course.findOne({
             _id: req.params.id,
             $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }]
         });
-        
+
         if (!course) return res.status(403).send('এই কোর্সে আপনার অ্যাক্সেস নেই।');
 
         // Handle images
@@ -1288,10 +1288,10 @@ router.post('/course/:id/edit', teacherProtect, (req, res, next) => {
             const { processUploadedFile } = require('../services/cloudinaryService');
             course.routineImage = await processUploadedFile(req.files.routineImage[0], 'routines');
         }
-        
+
         // Update allowed fields
         course.routine = Array.isArray(routine) ? routine.filter(r => r.day) : [];
-        
+
         // Update chapters
         if (chapters) {
             const chapterList = Array.isArray(chapters) ? chapters : Object.values(chapters);
@@ -1309,7 +1309,7 @@ router.post('/course/:id/edit', teacherProtect, (req, res, next) => {
         }
 
         await course.save();
-        
+
         // Log Activity
         await logActivity(req, 'UPDATE', `Updated course: ${course.title}`, 'course', course._id);
 
@@ -1329,20 +1329,20 @@ router.post('/course/:id/course-routine', teacherProtect, (req, res, next) => {
     try {
         await connectDB();
         const { routine } = req.body;
-        
+
         const teacherId = req.session.user._id;
         const course = await Course.findOne({
             _id: req.params.id,
             $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }]
         });
-        
+
         if (!course) return res.status(403).send('এই কোর্সে আপনার অ্যাক্সেস নেই।');
 
         // Handle images
         if (req.files && req.files.routineImage) {
             course.routineImage = await processUploadedFile(req.files.routineImage[0], 'routines');
         }
-        
+
         // Update allowed fields
         let parsedRoutine = [];
         if (Array.isArray(routine)) {
@@ -1351,9 +1351,9 @@ router.post('/course/:id/course-routine', teacherProtect, (req, res, next) => {
             parsedRoutine = Object.values(routine);
         }
         course.routine = parsedRoutine.filter(r => r.day);
-        
+
         await course.save();
-        
+
         // Log Activity
         await logActivity(req, 'UPDATE', `Updated routine for course: ${course.title}`, 'course', course._id);
 
@@ -1402,7 +1402,7 @@ router.get('/qa', teacherProtect, async (req, res) => {
         }
         const courseIds = filteredCourses.map(c => c._id);
         const allMyCourseIds = myCourses.map(c => c._id);
-        
+
         // 2. Build query for Q&A matching student questions (Aligned with Home Dashboard)
         const qaQuery = {};
         if (selectedCourse !== 'all') {
@@ -1436,13 +1436,13 @@ router.get('/qa', teacherProtect, async (req, res) => {
         const totalPages = Math.ceil(totalQAs / limit) || 1;
 
         const qas = await QA.find(qaQuery)
-        .populate('askedBy', 'name email profilePicture profileImage classLevel role')
-        .populate('course', 'title classLevel subject thumbnail')
-        .populate('answeredBy', 'name email profilePicture role')
-        .populate('replies.user', 'name profilePicture role')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(limit);
+            .populate('askedBy', 'name email profilePicture profileImage classLevel role')
+            .populate('course', 'title classLevel subject thumbnail')
+            .populate('answeredBy', 'name email profilePicture role')
+            .populate('replies.user', 'name profilePicture role')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
 
         res.render('teacher/qa-hub', {
             qas,
@@ -1537,15 +1537,15 @@ router.post('/qa/:id/answer', teacherProtect, (req, res, next) => {
                     body: `${teacherName} আপনার প্রশ্নের উত্তর দিয়েছেন: "${(qa.question || '').substring(0, 60)}..."`,
                     url: `/qa#qa-${qa._id}`,
                     type: 'message'
-                }).catch(() => {});
+                }).catch(() => { });
             } catch (notifErr) {
                 console.error('QA answer notification error:', notifErr);
             }
         }
-        
+
         if (req.xhr || req.headers.accept?.includes('application/json')) {
-            return res.json({ 
-                success: true, 
+            return res.json({
+                success: true,
                 message: 'Response submitted successfully!',
                 answer: qa.answer,
                 answerImage: qa.answerImage,
@@ -1569,7 +1569,7 @@ router.get('/profile', teacherProtect, async (req, res) => {
         await connectDB();
         const user = await User.findById(req.session.user._id);
         if (!user) {
-            req.session.destroy(() => {});
+            req.session.destroy(() => { });
             return res.render('account-status', {
                 type: 'deleted',
                 message: 'আপনার অ্যাকাউন্টটি এডমিন প্যানেল থেকে মুছে ফেলা হয়েছে।'
@@ -1583,12 +1583,12 @@ router.get('/profile', teacherProtect, async (req, res) => {
                 expires: user.restrictionExpires
             });
         }
-        
+
         // Find assigned courses and group by class
         const assignedCourses = await Course.find({
             $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
         }).select('classLevel subject').lean();
-        
+
         const expertiseMap = {};
         (assignedCourses || []).forEach(c => {
             if (!c.classLevel || !c.subject) return;
@@ -1714,13 +1714,13 @@ router.post('/profile/update', teacherProtect, (req, res, next) => {
 }, async (req, res) => {
     try {
         await connectDB();
-        const { 
-            name, designation, experience, education, bio, 
-            achievements, presentAddress, permanentAddress, 
-            schoolName, collegeName, universityName, 
+        const {
+            name, designation, experience, education, bio,
+            achievements, presentAddress, permanentAddress,
+            schoolName, collegeName, universityName,
             sscGpa, hscGpa, cgpa
         } = req.body;
-        
+
         const user = await User.findById(req.session.user._id);
 
         if (req.file) {
@@ -1753,7 +1753,7 @@ router.post('/profile/update', teacherProtect, (req, res, next) => {
         const facebook = (req.body.socialLinks && typeof req.body.socialLinks === 'object' && req.body.socialLinks.facebook !== undefined)
             ? req.body.socialLinks.facebook
             : (req.body['socialLinks[facebook]'] || req.body.facebook || '');
-            
+
         const linkedin = (req.body.socialLinks && typeof req.body.socialLinks === 'object' && req.body.socialLinks.linkedin !== undefined)
             ? req.body.socialLinks.linkedin
             : (req.body['socialLinks[linkedin]'] || req.body.linkedin || '');
@@ -1801,7 +1801,7 @@ router.post('/profile/change-password', teacherProtect, async (req, res) => {
     try {
         await connectDB();
         const { oldPassword, newPassword, confirmPassword } = req.body;
-        
+
         const user = await User.findById(req.session.user._id);
 
         const isMatch = await user.comparePassword(oldPassword);
@@ -1871,21 +1871,21 @@ router.post('/course/:id/chapter/:chid/video/add', teacherProtect, (req, res, ne
         const videoPath = req.file ? await processUploadedFile(req.file, 'videos') : '';
 
         const course = await Course.findOneAndUpdate(
-            { 
-                _id: req.params.id, 
+            {
+                _id: req.params.id,
                 $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }],
-                'chapters._id': req.params.chid 
+                'chapters._id': req.params.chid
             },
-            { 
-                $push: { 
-                    'chapters.$.recordedClasses': { 
-                        title, 
-                        description, 
-                        videoPath, 
+            {
+                $push: {
+                    'chapters.$.recordedClasses': {
+                        title,
+                        description,
+                        videoPath,
                         accessType: accessType || 'paid',
-                        instructor: req.session.user.name 
-                    } 
-                } 
+                        instructor: req.session.user.name
+                    }
+                }
             },
             { new: true }
         );
@@ -1908,15 +1908,15 @@ router.post('/course/:id/chapter/:chid/note/add', teacherProtect, (req, res, nex
         const filePath = req.file ? await processUploadedFile(req.file, 'notes') : '';
 
         const course = await Course.findOneAndUpdate(
-            { 
-                _id: req.params.id, 
+            {
+                _id: req.params.id,
                 $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }],
-                'chapters._id': req.params.chid 
+                'chapters._id': req.params.chid
             },
-            { 
-                $push: { 
-                    'chapters.$.notes': { title, filePath } 
-                } 
+            {
+                $push: {
+                    'chapters.$.notes': { title, filePath }
+                }
             },
             { new: true }
         );
@@ -1935,15 +1935,15 @@ router.post('/course/:id/chapter/:chid/video/:vid/delete', teacherProtect, async
         const teacherId = req.session.user._id;
 
         const course = await Course.findOneAndUpdate(
-            { 
-                _id: req.params.id, 
+            {
+                _id: req.params.id,
                 $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }],
-                'chapters._id': req.params.chid 
+                'chapters._id': req.params.chid
             },
-            { 
-                $pull: { 
-                    'chapters.$.recordedClasses': { _id: req.params.vid } 
-                } 
+            {
+                $pull: {
+                    'chapters.$.recordedClasses': { _id: req.params.vid }
+                }
             },
             { new: true }
         );
@@ -1962,15 +1962,15 @@ router.post('/course/:id/chapter/:chid/note/:nid/delete', teacherProtect, async 
         const teacherId = req.session.user._id;
 
         const course = await Course.findOneAndUpdate(
-            { 
-                _id: req.params.id, 
+            {
+                _id: req.params.id,
                 $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }],
-                'chapters._id': req.params.chid 
+                'chapters._id': req.params.chid
             },
-            { 
-                $pull: { 
-                    'chapters.$.notes': { _id: req.params.nid } 
-                } 
+            {
+                $pull: {
+                    'chapters.$.notes': { _id: req.params.nid }
+                }
             },
             { new: true }
         );
@@ -1988,19 +1988,19 @@ router.post('/course/:id/chapter/:chid/live/add', teacherProtect, async (req, re
         await connectDB();
         const { title, date } = req.body;
         const teacherId = req.session.user._id;
-        
+
         const meetingUrl = `oddhay-live-${req.params.id}-${Date.now()}`;
 
         const course = await Course.findOneAndUpdate(
-            { 
-                _id: req.params.id, 
+            {
+                _id: req.params.id,
                 $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }],
-                'chapters._id': req.params.chid 
+                'chapters._id': req.params.chid
             },
-            { 
-                $push: { 
-                    'chapters.$.liveClasses': { title, meetingUrl, date: new Date(date) } 
-                } 
+            {
+                $push: {
+                    'chapters.$.liveClasses': { title, meetingUrl, date: new Date(date) }
+                }
             },
             { new: true }
         );
@@ -2020,15 +2020,15 @@ router.post('/course/:id/chapter/:chid/live/:lid/delete', teacherProtect, async 
         const teacherId = req.session.user._id;
 
         const course = await Course.findOneAndUpdate(
-            { 
-                _id: req.params.id, 
+            {
+                _id: req.params.id,
                 $or: [{ instructor: teacherId }, { permittedTeachers: teacherId }],
-                'chapters._id': req.params.chid 
+                'chapters._id': req.params.chid
             },
-            { 
-                $pull: { 
-                    'chapters.$.liveClasses': { _id: req.params.lid } 
-                } 
+            {
+                $pull: {
+                    'chapters.$.liveClasses': { _id: req.params.lid }
+                }
             },
             { new: true }
         );
@@ -2057,7 +2057,7 @@ router.get('/notes', teacherProtect, async (req, res) => {
 
         // Sync approved syllabus topics into Subject folders and Chapter subfolders in Notes
         const { syncAllSyllabusFolders } = require('../controllers/topicController');
-        await syncAllSyllabusFolders().catch(() => {});
+        await syncAllSyllabusFolders().catch(() => { });
 
         // 1. Get user courses where teacher is instructor or permitted, or matching subjects/classes or specified courseLink
         // 1. Get teacher's strictly assigned subjects & classes
@@ -2203,7 +2203,7 @@ router.get('/notes', teacherProtect, async (req, res) => {
                 nodes.forEach((n, idx) => {
                     const isFolderType = n.type === 'folder' || n.type === 'chapter' || n.type === 'section' || n.type === 'unit';
                     const isPayloadNode = n.type === 'note' || n.type === 'video' || n.type === 'quiz' || n.type === 'liveClass' || n.filePath || n.fileUrl || n.videoPath || n.meetingUrl || n.quizId;
-                    
+
                     if (isFolderType || (!isPayloadNode && n.name)) {
                         const fId = n._id ? n._id.toString() : ('f-' + idx);
                         folderIdSet.add(fId);
@@ -2340,7 +2340,7 @@ router.post('/add-folder', teacherProtect, async (req, res) => {
         });
 
         await newFolder.save();
-        
+
         await logActivity(req, 'CREATE', `Created folder: ${newFolder.name} in subject ${newFolder.subject}`, 'folder', newFolder._id);
 
         return res.json({ success: true, folder: newFolder });
@@ -2404,7 +2404,7 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
         const { title, subject, classLevel, chapter, topic, topics, subTopic, subTopics, parentFolderId, description, accessType, course, fileUrl: bodyFileUrl, filePath: bodyFilePath } = req.body;
         const { processUploadedFile } = require('../services/cloudinaryService');
         const fileUrl = (req.file ? await processUploadedFile(req.file, 'notes') : null) || bodyFileUrl || bodyFilePath || null;
-        
+
         const noteCourseId = course && mongoose.Types.ObjectId.isValid(course) ? course : undefined;
 
         const extractList = (val) => {
@@ -2459,7 +2459,7 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
         if (chapter && parsedSubjects.length > 0 && parsedClasses.length > 0) {
             const { ensureSyllabusFoldersForChapter } = require('../controllers/topicController');
             for (const sub of parsedSubjects) {
-                await ensureSyllabusFoldersForChapter(parsedClasses, sub, chapter, req.session?.user?._id).catch(() => {});
+                await ensureSyllabusFoldersForChapter(parsedClasses, sub, chapter, req.session?.user?._id).catch(() => { });
             }
         }
 
@@ -2487,7 +2487,7 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
             if (courseDoc) {
                 let parentFolderId = null;
                 const trimmedChapter = (chapter || '').trim();
-                
+
                 if (trimmedChapter) {
                     let folderNode = (courseDoc.curriculumNodes || []).find(n => n.type === 'folder' && n.name.trim().toLowerCase() === trimmedChapter.toLowerCase());
                     if (!folderNode) {
@@ -2530,7 +2530,7 @@ router.post('/add-note', teacherProtect, (req, res, next) => {
                 type: 'course'
             };
             for (const cls of targetClasses) {
-                pushNotificationService.sendToClassLevel(cls, noteNotif).catch(() => {});
+                pushNotificationService.sendToClassLevel(cls, noteNotif).catch(() => { });
             }
         } catch (notifErr) {
             console.error('Note upload notification error:', notifErr);
@@ -2578,9 +2578,9 @@ router.get('/note-details/:id', teacherProtect, async (req, res) => {
             .populate('addedBy', 'name profilePicture profileImage email')
             .populate('course', 'title _id');
         if (!note) return res.status(404).send('Note not found');
-        
+
         const userCourses = await Course.find({ $or: [{ instructor: user._id }, { permittedTeachers: user._id }] }).select('title _id accessType subject classLevel');
-        
+
         res.render('teacher/note-details', { note, user, userCourses, assignedCourses: userCourses, active: 'notes' });
     } catch (err) { res.status(500).send('Error: ' + err.message); }
 });
@@ -2610,8 +2610,8 @@ router.post('/notes/bulk-action', teacherProtect, async (req, res) => {
                 await Note.deleteMany({ _id: { $in: itemIds }, addedBy: req.session.user._id });
             }
             if (folderIds && folderIds.length > 0) {
-                await Folder.deleteMany({ 
-                    _id: { $in: folderIds }, 
+                await Folder.deleteMany({
+                    _id: { $in: folderIds },
                     addedBy: req.session.user._id,
                     isSyllabusFolder: { $ne: true },
                     isSystem: { $ne: true }
@@ -2657,13 +2657,13 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
         } else if (statusFilter === 'rejected') {
             query.status = 'rejected';
         }
-        
+
         if (courseLinkFilter === 'global') {
             query.course = { $exists: false };
         } else if (courseLinkFilter !== 'all') {
             query.course = courseLinkFilter;
         }
-        
+
         if (search) query.$or = [
             { board: { $regex: search, $options: 'i' } },
             { subject: { $regex: search, $options: 'i' } }
@@ -2859,32 +2859,32 @@ router.get('/quizzes', teacherProtect, async (req, res) => {
         const page = parseInt(req.query.page) || 1;
         const limit = 20;
         const skip = (page - 1) * limit;
-        
+
         let query = { addedBy: user._id };
-        
-        const userCourses = await Course.find({ 
-            $or: [{ instructor: user._id }, { permittedTeachers: user._id }] 
+
+        const userCourses = await Course.find({
+            $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
         }).select('title _id accessType subject classLevel');
-        
+
         const teacherContext = await getTeacherAssignedContext(user._id);
         const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
         const assignedSubjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].sort();
         const assignedClasses = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].sort();
-        
+
         const { subject, classLevel, type, q } = req.query;
-        
+
         let courseQuery = { $or: [{ instructor: user._id }, { permittedTeachers: user._id }] };
         if (subject && subject !== 'all') courseQuery.subject = subject;
         if (classLevel && classLevel !== 'all') courseQuery.classLevel = classLevel;
-        
+
         const courses = await Course.find(courseQuery).select('_id');
         const courseIds = courses.map(c => c._id);
-        
+
         if ((subject && subject !== 'all') || (classLevel && classLevel !== 'all')) {
             query.course = { $in: courseIds };
         }
-        
+
         if (type === 'model') {
             query.course = null;
         } else if (type === 'course') {
@@ -2895,32 +2895,32 @@ router.get('/quizzes', teacherProtect, async (req, res) => {
             query.status = 'published';
             query.isDraft = { $ne: true };
         }
-        
+
         if (q) {
             query.title = { $regex: q, $options: 'i' };
         }
-        
+
         const [quizzes, totalCount] = await Promise.all([
             Quiz.find(query).populate('course').sort({ createdAt: -1 }).skip(skip).limit(limit),
             Quiz.countDocuments(query)
         ]);
-        
+
         const modelTestCount = await Quiz.countDocuments({ ...query, course: null });
         const courseExamCount = await Quiz.countDocuments({ ...query, course: { $ne: null } });
-        
+
         const questionStats = await Quiz.aggregate([
             { $match: query },
             { $unwind: '$questions' },
             { $count: 'total' }
         ]);
         const totalQuestions = questionStats.length > 0 ? questionStats[0].total : 0;
-        
+
         const stats = {
             modelTestCount,
             courseExamCount,
             totalQuestions
         };
-        
+
         res.render('teacher/quizzes', {
             quizzes,
             user,
@@ -2948,11 +2948,11 @@ router.get('/make-quiz', teacherProtect, async (req, res) => {
     try {
         await connectDB();
         const user = req.session.user;
-        
-        const userCourses = await Course.find({ 
-            $or: [{ instructor: user._id }, { permittedTeachers: user._id }] 
+
+        const userCourses = await Course.find({
+            $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
         }).select('title _id subject classLevel accessType');
-        
+
         const teacherContext = await getTeacherAssignedContext(user._id);
         const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
@@ -2969,7 +2969,7 @@ router.get('/make-quiz', teacherProtect, async (req, res) => {
         const classSubjectMap = {};
         userCourses.forEach(c => {
             const classArr = Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel];
-            const subArr   = Array.isArray(c.subject)    ? c.subject    : [c.subject];
+            const subArr = Array.isArray(c.subject) ? c.subject : [c.subject];
             classArr.filter(Boolean).forEach(cls => {
                 if (!classSubjectMap[cls]) classSubjectMap[cls] = new Set();
                 subArr.filter(Boolean).forEach(sub => classSubjectMap[cls].add(sub));
@@ -2984,11 +2984,11 @@ router.get('/make-quiz', teacherProtect, async (req, res) => {
         Object.keys(classSubjectMap).forEach(cls => {
             classSubjectMapJSON[cls] = [...classSubjectMap[cls]].sort();
         });
-        
+
         const questionBanks = await QuestionBank.find({ addedBy: user._id }).select('subject classLevel board year _id');
-        
+
         const { courseId, subject, classLevel } = req.query;
-        
+
         res.render('teacher/make-quiz', {
             courses: userCourses,
             subjects: subjects,
@@ -3013,18 +3013,18 @@ router.get('/course/:id/edit/make-quiz', teacherProtect, async (req, res) => {
         await connectDB();
         const user = req.session.user;
         const courseId = req.params.id;
-        
+
         const currentCourse = await Course.findOne({
             _id: courseId,
             $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
         });
-        
+
         if (!currentCourse) return res.status(403).send('Access Denied');
-        
-        const userCourses = await Course.find({ 
-            $or: [{ instructor: user._id }, { permittedTeachers: user._id }] 
+
+        const userCourses = await Course.find({
+            $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
         }).select('title _id subject classLevel accessType');
-        
+
         const teacherContext = await getTeacherAssignedContext(user._id);
         const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
@@ -3041,7 +3041,7 @@ router.get('/course/:id/edit/make-quiz', teacherProtect, async (req, res) => {
         const classSubjectMap = {};
         userCourses.forEach(c => {
             const classArr = Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel];
-            const subArr   = Array.isArray(c.subject)    ? c.subject    : [c.subject];
+            const subArr = Array.isArray(c.subject) ? c.subject : [c.subject];
             classArr.filter(Boolean).forEach(cls => {
                 if (!classSubjectMap[cls]) classSubjectMap[cls] = new Set();
                 subArr.filter(Boolean).forEach(sub => classSubjectMap[cls].add(sub));
@@ -3055,12 +3055,12 @@ router.get('/course/:id/edit/make-quiz', teacherProtect, async (req, res) => {
         Object.keys(classSubjectMap).forEach(cls => {
             classSubjectMapJSON[cls] = [...classSubjectMap[cls]].sort();
         });
-        
+
         const questionBanks = await QuestionBank.find({ addedBy: user._id }).select('subject classLevel board year _id');
-        
+
         const subject = Array.isArray(currentCourse.subject) ? currentCourse.subject[0] : currentCourse.subject;
         const classLevel = Array.isArray(currentCourse.classLevel) ? currentCourse.classLevel[0] : currentCourse.classLevel;
-        
+
         res.render('teacher/make-quiz', {
             courses: userCourses,
             subjects: subjects,
@@ -3084,7 +3084,7 @@ router.get('/api/bank-metadata', teacherProtect, async (req, res) => {
     try {
         await connectDB();
         const { classLevel, subject, topic, board, year } = req.query;
-        
+
         // Base query filters by class/subject (and teacher if present)
         let baseQuery = {};
         if (classLevel) baseQuery.classLevel = classLevel;
@@ -3101,7 +3101,7 @@ router.get('/api/bank-metadata', teacherProtect, async (req, res) => {
             const escChaps = chapsList.map(c => new RegExp(`^${c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'));
             baseQuery.chapter = { $in: escChaps };
         }
-        
+
         // Get all banks for base query to compute available topics
         const allBanks = await QuestionBank.find(baseQuery).lean();
 
@@ -3123,7 +3123,7 @@ router.get('/api/bank-metadata', teacherProtect, async (req, res) => {
             ...allBanks.map(b => b.topic).filter(Boolean),
             ...syllabusTopics.map(t => t.name).filter(Boolean)
         ])].sort();
-        
+
         // Apply topic filter for board/year computation (cascading)
         let filteredQuery = { ...baseQuery };
         if (topic) filteredQuery.topic = topic;
@@ -3135,7 +3135,7 @@ router.get('/api/bank-metadata', teacherProtect, async (req, res) => {
         if (board) boardQuery.board = board;
         const boardBanks = await QuestionBank.find(boardQuery);
         const years = [...new Set(boardBanks.map(b => b.year).filter(Boolean))].sort((a, b) => b - a);
-        
+
         res.json({ success: true, topics, boards, years });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
@@ -3159,12 +3159,12 @@ function parseList(bodyOrQuery, arrayKey, singleKey) {
 
 async function getMatchingBankQuestionsQuery(params) {
     let { classLevel, subject, chapters = [], topics = [], subTopics = [], board, year } = params;
-    
+
     const chapsList = Array.isArray(chapters) ? chapters.map(s => String(s || '').trim()).filter(Boolean) : (chapters ? [String(chapters).trim()].filter(Boolean) : []);
     const topicsList = Array.isArray(topics) ? topics.map(s => String(s || '').trim()).filter(Boolean) : (topics ? [String(topics).trim()].filter(Boolean) : []);
     const subTopicsList = Array.isArray(subTopics) ? subTopics.map(s => String(s || '').trim()).filter(Boolean) : (subTopics ? [String(subTopics).trim()].filter(Boolean) : []);
     const escapeRegex = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    
+
     // 1. QuestionBank query (to find matching banks)
     let bankQuery = {};
     if (classLevel) bankQuery.classLevel = classLevel;
@@ -3189,10 +3189,10 @@ async function getMatchingBankQuestionsQuery(params) {
     }
     if (board) bankQuery.board = new RegExp(`^${escapeRegex(board)}$`, 'i');
     if (year) bankQuery.year = String(year).trim();
-    
+
     const banks = await QuestionBank.find(bankQuery).select('_id').lean();
     const bankIds = banks.map(b => b._id);
-    
+
     // 2. Direct Question criteria
     let directCriteria = {};
     if (classLevel) directCriteria.classLevel = classLevel;
@@ -3217,7 +3217,7 @@ async function getMatchingBankQuestionsQuery(params) {
     }
     if (board) directCriteria.board = new RegExp(`^${escapeRegex(board)}$`, 'i');
     if (year) directCriteria.year = String(year).trim();
-    
+
     const orClauses = [];
     if (bankIds.length > 0) {
         let bankMatch = { bankId: { $in: bankIds } };
@@ -3228,7 +3228,7 @@ async function getMatchingBankQuestionsQuery(params) {
     if (Object.keys(directCriteria).length > 0) {
         orClauses.push(directCriteria);
     }
-    
+
     const queryForType = (type) => {
         let q = { questionType: type };
         if (orClauses.length === 1) {
@@ -3240,7 +3240,7 @@ async function getMatchingBankQuestionsQuery(params) {
         }
         return q;
     };
-    
+
     return { queryForType, bankIds, chapsList, topicsList, subTopicsList };
 }
 
@@ -3250,7 +3250,7 @@ const handleBankQuestionCounts = async (req, res) => {
         await connectDB();
         const payload = req.method === 'POST' ? req.body : req.query;
         let { classLevel, subject, courseId, board, year, bankBoard, bankYear } = payload;
-        
+
         if (courseId) {
             const course = await Course.findById(courseId).lean();
             if (course) {
@@ -3262,13 +3262,13 @@ const handleBankQuestionCounts = async (req, res) => {
                 }
             }
         }
-        
+
         const finalBoard = board || bankBoard || '';
         const finalYear = year || bankYear || '';
         const chapters = parseList(payload, 'chapters', 'chapter');
         const topics = parseList(payload, 'topics', 'topic');
         const subTopics = parseList(payload, 'subTopics', 'subTopic');
-        
+
         const { queryForType } = await getMatchingBankQuestionsQuery({
             classLevel,
             subject,
@@ -3278,14 +3278,14 @@ const handleBankQuestionCounts = async (req, res) => {
             board: finalBoard,
             year: finalYear
         });
-        
+
         const [mcqCount, shortCount, mediumCount, compCount] = await Promise.all([
             Question.countDocuments(queryForType('MCQ')),
             Question.countDocuments(queryForType('Short')),
             Question.countDocuments(queryForType('Medium')),
             Question.countDocuments(queryForType('Comprehension'))
         ]);
-        
+
         res.json({
             success: true,
             counts: {
@@ -3310,14 +3310,14 @@ router.get('/api/quizzes', teacherProtect, async (req, res) => {
     try {
         await connectDB();
         const { classLevel, subject } = req.query;
-        
+
         let query = { addedBy: req.session.user._id };
-        
+
         const classes = classLevel ? classLevel.split(',').filter(Boolean) : [];
         const subjects = subject ? subject.split(',').filter(Boolean) : [];
-        
+
         let andConditions = [];
-        
+
         if (classes.length > 0 && subjects.length > 0) {
             const matchingCourseIds = await Course.find({ classLevel: { $in: classes }, subject: { $in: subjects } }).distinct('_id');
             andConditions.push({
@@ -3343,11 +3343,11 @@ router.get('/api/quizzes', teacherProtect, async (req, res) => {
                 ]
             });
         }
-        
+
         if (andConditions.length > 0) {
             query.$and = andConditions;
         }
-        
+
         const quizzes = await Quiz.find(query).select('title _id subject classLevel course').populate('course', 'subject classLevel');
         res.json({ success: true, quizzes });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
@@ -3356,7 +3356,7 @@ router.get('/api/quizzes', teacherProtect, async (req, res) => {
 router.post('/add-quiz', teacherProtect, async (req, res) => {
     try {
         await connectDB();
-        
+
         const examCategory = req.body.examCategory || (req.body.isMockTest === 'true' ? 'mock' : (req.body.isModelTest === 'true' ? 'model' : 'course'));
         const isModelTest = examCategory === 'model' || examCategory === 'mock' || req.body.isModelTest === 'true';
         const isMockTest = examCategory === 'mock' || req.body.isMockTest === 'true';
@@ -3372,7 +3372,7 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         }
 
         const chapter = chaptersList.join(', ') || req.body.chapter || '';
-        const topic   = req.body.topic   || '';
+        const topic = req.body.topic || '';
         const subTopic = req.body.subTopic || '';
         const rawTopics = req.body['topics[]'] || req.body.topics;
         let topics = [];
@@ -3403,35 +3403,35 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
 
         // Resolve subject & classLevel for ALL exam types
         let resolvedSubject = req.body.subject || '';
-        let resolvedClass   = req.body.classLevel || '';
+        let resolvedClass = req.body.classLevel || '';
         if (!isModelTest && linkedCourse) {
             resolvedSubject = resolvedSubject || (Array.isArray(linkedCourse.subject) ? linkedCourse.subject[0] : linkedCourse.subject) || '';
-            resolvedClass   = resolvedClass   || (Array.isArray(linkedCourse.classLevel) ? linkedCourse.classLevel[0] : linkedCourse.classLevel) || '';
+            resolvedClass = resolvedClass || (Array.isArray(linkedCourse.classLevel) ? linkedCourse.classLevel[0] : linkedCourse.classLevel) || '';
         }
-        
+
         const segment = (req.body.segment && req.body.segment !== 'all') ? req.body.segment.trim() : '';
 
         const quizData = {
-            title:      req.body.title,
-            course:     courseId,
-            subject:    resolvedSubject,
-            segment:    segment,
+            title: req.body.title,
+            course: courseId,
+            subject: resolvedSubject,
+            segment: segment,
             classLevel: resolvedClass,
-            duration:   parseInt(req.body.duration) || 10,
+            duration: parseInt(req.body.duration) || 10,
             accessType: accessType,
-            status:     'draft',
-            isDraft:    true,
+            status: 'draft',
+            isDraft: true,
             isModelTest: isModelTest,
             isMockTest: isMockTest,
-            chapter:    chapter,
-            chapters:   chaptersList,
-            questions:  [],
-            addedBy:    req.session.user._id
+            chapter: chapter,
+            chapters: chaptersList,
+            questions: [],
+            addedBy: req.session.user._id
         };
 
         // Always store chapter / topic / topics / subTopic / subTopics regardless of exam type
         if (chapter) quizData.chapter = chapter;
-        if (topic)   quizData.topic   = topic;
+        if (topic) quizData.topic = topic;
         if (topics.length > 0) quizData.topics = topics;
         if (subTopic) quizData.subTopic = subTopic;
         if (subTopics.length > 0) quizData.subTopics = subTopics;
@@ -3444,7 +3444,7 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         const totalConfigured = mcqCount + shortCount + mediumCount + comprehensionCount;
 
         if (totalConfigured <= 0) {
-            const redirectUrl = (req.body.activeFlow === 'courses' && courseId) 
+            const redirectUrl = (req.body.activeFlow === 'courses' && courseId)
                 ? `/teacher/course/${courseId}/make-quiz?error=` + encodeURIComponent('Question Configuration required: Please specify at least one question count.')
                 : '/teacher/make-quiz?error=' + encodeURIComponent('Question Configuration required: Please specify at least one question count.');
             return res.redirect(redirectUrl);
@@ -3452,14 +3452,14 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
 
         const strategy = req.body.strategy || 'manual';
         quizData.strategy = strategy;
-        
+
         if (strategy === 'automated') {
             const { bankBoard, bankYear } = req.body;
-            
+
             const selectedChaps = parseList(req.body, 'chapters', 'chapter');
             const selectedTops = parseList(req.body, 'topics', 'topic');
             const selectedSubTops = parseList(req.body, 'subTopics', 'subTopic');
-            
+
             const { queryForType } = await getMatchingBankQuestionsQuery({
                 classLevel: resolvedClass,
                 subject: resolvedSubject,
@@ -3469,20 +3469,20 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                 board: bankBoard,
                 year: bankYear
             });
-            
+
             const pullQuestions = async (type, count) => {
                 if (!count || count <= 0) return [];
                 const qQuery = queryForType(type);
                 return await Question.find(qQuery).limit(count).lean();
             };
-            
+
             const mcqs = await pullQuestions('MCQ', parseInt(mcqCount) || 0);
             const shorts = await pullQuestions('Short', parseInt(shortCount) || 0);
             const mediums = await pullQuestions('Medium', parseInt(mediumCount) || 0);
             const comps = await pullQuestions('Comprehension', parseInt(comprehensionCount) || 0);
-            
+
             const allQuestions = [...mcqs, ...shorts, ...mediums, ...comps];
-            
+
             if (allQuestions.length > 0) {
                 quizData.questions = allQuestions.map(bq => {
                     let corrAns = (bq.correctAnswer !== undefined && bq.correctAnswer !== null && bq.correctAnswer !== '') ? bq.correctAnswer : bq.correctAnswerIndex;
@@ -3537,12 +3537,12 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             const comprehensionCount = parseInt(req.body.comprehensionCount) || 0;
             const isBangla = req.body.isBangla === 'true' || req.body.language === 'bn' || !req.body.language;
             const lang = isBangla ? 'bn' : (req.body.language || 'en');
-            
+
             for (let i = 0; i < mcqCount; i++) {
-                quizData.questions.push({ 
-                    questionText: '', 
-                    options: ['', '', '', ''], 
-                    correctAnswer: 0, 
+                quizData.questions.push({
+                    questionText: '',
+                    options: ['', '', '', ''],
+                    correctAnswer: 0,
                     explanation: '',
                     questionType: 'MCQ',
                     isBangla: isBangla,
@@ -3554,10 +3554,10 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                 });
             }
             for (let i = 0; i < shortCount; i++) {
-                quizData.questions.push({ 
-                    questionText: '', 
-                    options: [], 
-                    correctAnswer: 0, 
+                quizData.questions.push({
+                    questionText: '',
+                    options: [],
+                    correctAnswer: 0,
                     explanation: '',
                     questionType: 'Short',
                     isBangla: isBangla,
@@ -3569,10 +3569,10 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                 });
             }
             for (let i = 0; i < mediumCount; i++) {
-                quizData.questions.push({ 
-                    questionText: '', 
-                    options: [], 
-                    correctAnswer: 0, 
+                quizData.questions.push({
+                    questionText: '',
+                    options: [],
+                    correctAnswer: 0,
                     explanation: '',
                     questionType: 'Medium',
                     isBangla: isBangla,
@@ -3584,10 +3584,10 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                 });
             }
             for (let i = 0; i < comprehensionCount; i++) {
-                quizData.questions.push({ 
-                    questionText: '', 
-                    options: [], 
-                    correctAnswer: 0, 
+                quizData.questions.push({
+                    questionText: '',
+                    options: [],
+                    correctAnswer: 0,
                     explanation: '',
                     questionType: 'Comprehension',
                     isBangla: isBangla,
@@ -3632,12 +3632,12 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                 type: 'exam'
             };
             for (const cls of targetClasses) {
-                pushNotificationService.sendToClassLevel(cls, quizNotif).catch(() => {});
+                pushNotificationService.sendToClassLevel(cls, quizNotif).catch(() => { });
             }
         } catch (notifErr) {
             console.error('Quiz publish notification error:', notifErr);
         }
-        
+
         if (req.body.mode === 'bulk') {
             return res.redirect(`/teacher/quiz/${quiz._id}?openBulk=true`);
         } else if (req.body.activeFlow === 'courses' && courseId) {
@@ -3674,7 +3674,7 @@ router.post('/quizzes/bulk-action', teacherProtect, async (req, res) => {
         await connectDB();
         const { action, itemIds } = req.body;
         if (!itemIds || !itemIds.length) return res.status(400).json({ success: false, error: 'No items selected' });
-        
+
         if (action === 'delete') {
             await Quiz.deleteMany({ _id: { $in: itemIds }, addedBy: req.session.user._id });
         }
@@ -3728,15 +3728,15 @@ router.get('/quiz/:id', teacherProtect, async (req, res) => {
         await connectDB();
         const quiz = await Quiz.findById(req.params.id).populate('course').populate('addedBy');
         if (!quiz) return res.status(404).send('Quiz not found');
-        
+
         if (quiz.addedBy._id.toString() !== req.session.user._id.toString()) {
             return res.status(403).send('Access denied');
         }
-        
-        const courses = await Course.find({ 
-            $or: [{ instructor: req.session.user._id }, { permittedTeachers: req.session.user._id }] 
+
+        const courses = await Course.find({
+            $or: [{ instructor: req.session.user._id }, { permittedTeachers: req.session.user._id }]
         });
-        
+
         res.render('teacher/quiz-editor', { quiz, courses, user: req.session.user, active: 'quizzes' });
     } catch (err) { res.status(500).send('Error: ' + err.message); }
 });
@@ -3746,19 +3746,19 @@ router.get('/course/:courseId/quiz/:id', teacherProtect, async (req, res) => {
         await connectDB();
         const quiz = await Quiz.findById(req.params.id).populate('course').populate('addedBy');
         if (!quiz) return res.status(404).send('Quiz not found');
-        
+
         if (quiz.addedBy._id.toString() !== req.session.user._id.toString()) {
             return res.status(403).send('Access denied');
         }
-        
-        const courses = await Course.find({ 
-            $or: [{ instructor: req.session.user._id }, { permittedTeachers: req.session.user._id }] 
+
+        const courses = await Course.find({
+            $or: [{ instructor: req.session.user._id }, { permittedTeachers: req.session.user._id }]
         });
-        
-        res.render('teacher/quiz-editor', { 
-            quiz, 
-            courses, 
-            user: req.session.user, 
+
+        res.render('teacher/quiz-editor', {
+            quiz,
+            courses,
+            user: req.session.user,
             active: 'courses',
             courseId: req.params.courseId
         });
@@ -3776,11 +3776,11 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
         }
 
         let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation } = req.body;
-        
+
         if (!options || !Array.isArray(options)) {
             options = [optionA, optionB, optionC, optionD].filter(o => o && o.trim());
         }
-        
+
         const finalCorrectIndex = (correctAnswer !== undefined) ? parseInt(correctAnswer) : (parseInt(correctAnswerIndex) || 0);
 
         const type = req.body.questionType || 'MCQ';
@@ -3799,10 +3799,10 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
         const defaultQuizSubTop = (req.body.subTopic && req.body.subTopic.trim()) || (quiz.subTopic && quiz.subTopic.trim()) || (quiz.subTopics && quiz.subTopics.length === 1 && quiz.subTopics[0] ? quiz.subTopics[0].trim() : '') || '';
 
         for (let c = 0; c < count; c++) {
-            quiz.questions.push({ 
-                questionText: (questionText || '').trim(), 
-                options: (type === 'MCQ' && (!options || !options.length)) ? ['', '', '', ''] : (options || []), 
-                correctAnswer: finalCorrectIndex, 
+            quiz.questions.push({
+                questionText: (questionText || '').trim(),
+                options: (type === 'MCQ' && (!options || !options.length)) ? ['', '', '', ''] : (options || []),
+                correctAnswer: finalCorrectIndex,
                 explanation: explanation?.trim() || '',
                 questionType: type,
                 isBangla: isBanglaVal,
@@ -3834,7 +3834,7 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
             });
         }
         await quiz.save();
-        
+
         const newQuestions = quiz.questions.slice(-count);
         const newQ = newQuestions[newQuestions.length - 1];
         res.json({ success: true, question: newQ, questions: newQuestions, totalQuestions: quiz.questions.length });
@@ -3852,7 +3852,7 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
         }
 
         let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation, answer, context, q1, q2, q3, q4, a1, a2, a3, a4, s1, s2, s3, s4, marks, board, year, questionType, topic, chapter, subTopic } = req.body;
-        
+
         if (!options || !Array.isArray(options)) {
             options = [optionA, optionB, optionC, optionD].filter(o => o !== undefined && o !== null);
         }
@@ -3861,7 +3861,7 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
         // so real-time auto-save preserves all keystrokes even if fields are partially filled.
         let parsedMarks = parseInt(marks);
         if (isNaN(parsedMarks)) parsedMarks = 1;
-        
+
         let updateData = {
             'questions.$.questionText': questionText !== undefined ? questionText.trim() : '',
             'questions.$.options': Array.isArray(options) ? options : [],
@@ -3892,7 +3892,7 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
         if (subTopic !== undefined) {
             updateData['questions.$.subTopic'] = String(subTopic).trim();
         }
-        
+
         if (questionType === 'MCQ' || !questionType) {
             const finalCorrectIndex = (correctAnswer !== undefined) ? parseInt(correctAnswer) : (parseInt(correctAnswerIndex) || 0);
             updateData['questions.$.correctAnswer'] = finalCorrectIndex;
@@ -3927,10 +3927,10 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
         if (quiz.syncGroup) {
             const questionIndex = quiz.questions.findIndex(q => q._id.toString() === req.params.qid);
             if (questionIndex >= 0) {
-                const syncedQuizzes = await Quiz.find({ 
-                    syncGroup: quiz.syncGroup, 
+                const syncedQuizzes = await Quiz.find({
+                    syncGroup: quiz.syncGroup,
                     _id: { $ne: quiz._id },
-                    addedBy: req.session.user._id 
+                    addedBy: req.session.user._id
                 });
                 for (const syncQuiz of syncedQuizzes) {
                     if (syncQuiz.questions[questionIndex]) {
@@ -4017,7 +4017,7 @@ router.post('/add-question-bank', teacherProtect, (req, res, next) => {
         await connectDB();
         const { title, topic, board, year, subject, classLevel, accessType, price, course } = req.body;
         const fileUrl = req.file ? await processUploadedFile(req.file, 'questions') : null;
-        
+
         let classLevelArray = classLevel;
         if (typeof classLevel === 'string') {
             if (classLevel.includes(',')) {
@@ -4056,9 +4056,9 @@ router.post('/add-question-bank', teacherProtect, (req, res, next) => {
                 url: '/admin/question-bank-approvals',
                 type: 'system'
             };
-            pushNotificationService.sendToRole('superadmin', bankNotif).catch(() => {});
-            pushNotificationService.sendToRole('admin', bankNotif).catch(() => {});
-        } catch(notifErr) {
+            pushNotificationService.sendToRole('superadmin', bankNotif).catch(() => { });
+            pushNotificationService.sendToRole('admin', bankNotif).catch(() => { });
+        } catch (notifErr) {
             console.error('Question bank submit notification error:', notifErr);
         }
 
@@ -4110,13 +4110,13 @@ router.get('/edit-question-bank/:id', teacherProtect, async (req, res) => {
         const assignedSubjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].sort();
         const assignedClasses = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].sort();
 
-        res.render('teacher/edit-question-bank', { 
-            bank, 
-            questions, 
+        res.render('teacher/edit-question-bank', {
+            bank,
+            questions,
             assignedSubjects,
             assignedClasses,
-            user: req.session.user, 
-            active: 'questions' 
+            user: req.session.user,
+            active: 'questions'
         });
     } catch (err) {
         console.error('Edit Question Bank Error:', err);
@@ -4140,7 +4140,7 @@ router.post('/edit-question-bank/:id', teacherProtect, (req, res, next) => {
         }
 
         const { title, topic, board, year, subject, classLevel, accessType, price, duration } = req.body;
-        
+
         let classLevelArray = classLevel;
         if (typeof classLevel === 'string') {
             classLevelArray = [classLevel];
@@ -4262,8 +4262,8 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
             await QuestionBank.findByIdAndUpdate(req.params.id, { status: 'pending' });
         }
 
-        const msg = bank.status === 'approved' 
-            ? 'Questions updated successfully' 
+        const msg = bank.status === 'approved'
+            ? 'Questions updated successfully'
             : 'Questions updated and submitted for admin approval';
 
         res.redirect(`/teacher/edit-question-bank/${req.params.id}?success=${encodeURIComponent(msg)}`);
@@ -4411,7 +4411,7 @@ router.get('/add-question', teacherProtect, async (req, res) => {
         const [banks, userCourses] = await Promise.all([
             QuestionBank.find({ addedBy: user._id }),
             Course.find({ $or: [{ instructor: user._id }, { permittedTeachers: user._id }] })
-                  .select('title _id accessType subject classLevel')
+                .select('title _id accessType subject classLevel')
         ]);
 
         // Build deduplicated subject and class lists from assigned profile & courses
@@ -4462,40 +4462,40 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const body = req.body;
 
         // Build questions from flat arrays submitted by the form
-        const qTexts     = [].concat(body['qText[]']     || body.qText     || []);
-        const qTypes     = [].concat(body['qType[]']     || body.qType     || []);
-        const qAnswers   = [].concat(body['qAnswer[]']   || body.qAnswer   || []);
-        const qExplains  = [].concat(body['qExplanation[]'] || body.qExplanation || []);
-        const qCorrects  = [].concat(body['qCorrectIndex[]'] || body.qCorrectIndex || []);
-        const qBoards    = [].concat(body['qBoard[]']    || body.qBoard    || []);
-        const qYears     = [].concat(body['qYear[]']     || body.qYear     || []);
-        const qMarks     = [].concat(body['qMarks[]']    || body.qMarks    || []);
-        const qChapters  = [].concat(body['qChapter[]']  || body.qChapter  || []);
-        const qTopics    = [].concat(body['qTopic[]']    || body.qTopic    || []);
+        const qTexts = [].concat(body['qText[]'] || body.qText || []);
+        const qTypes = [].concat(body['qType[]'] || body.qType || []);
+        const qAnswers = [].concat(body['qAnswer[]'] || body.qAnswer || []);
+        const qExplains = [].concat(body['qExplanation[]'] || body.qExplanation || []);
+        const qCorrects = [].concat(body['qCorrectIndex[]'] || body.qCorrectIndex || []);
+        const qBoards = [].concat(body['qBoard[]'] || body.qBoard || []);
+        const qYears = [].concat(body['qYear[]'] || body.qYear || []);
+        const qMarks = [].concat(body['qMarks[]'] || body.qMarks || []);
+        const qChapters = [].concat(body['qChapter[]'] || body.qChapter || []);
+        const qTopics = [].concat(body['qTopic[]'] || body.qTopic || []);
         const qSubTopics = [].concat(body['qSubTopic[]'] || body.qSubTopic || []);
 
         // Comprehension specific fields
-        const qContexts  = [].concat(body['qContext[]']  || body.qContext  || []);
-        const qSubQ1s    = [].concat(body['qSubQ1[]']    || body.qSubQ1    || body['q1[]'] || body.q1 || []);
-        const qSubA1s    = [].concat(body['qSubA1[]']    || body.qSubA1    || body['a1[]'] || body.a1 || []);
-        const qSubS1s    = [].concat(body['qSubS1[]']    || body.qSubS1    || body['s1[]'] || body.s1 || []);
-        const qSubQ2s    = [].concat(body['qSubQ2[]']    || body.qSubQ2    || body['q2[]'] || body.q2 || []);
-        const qSubA2s    = [].concat(body['qSubA2[]']    || body.qSubA2    || body['a2[]'] || body.a2 || []);
-        const qSubS2s    = [].concat(body['qSubS2[]']    || body.qSubS2    || body['s2[]'] || body.s2 || []);
-        const qSubQ3s    = [].concat(body['qSubQ3[]']    || body.qSubQ3    || body['q3[]'] || body.q3 || []);
-        const qSubA3s    = [].concat(body['qSubA3[]']    || body.qSubA3    || body['a3[]'] || body.a3 || []);
-        const qSubS3s    = [].concat(body['qSubS3[]']    || body.qSubS3    || body['s3[]'] || body.s3 || []);
-        const qSubQ4s    = [].concat(body['qSubQ4[]']    || body.qSubQ4    || body['q4[]'] || body.q4 || []);
-        const qSubA4s    = [].concat(body['qSubA4[]']    || body.qSubA4    || body['a4[]'] || body.a4 || []);
-        const qSubS4s    = [].concat(body['qSubS4[]']    || body.qSubS4    || body['s4[]'] || body.s4 || []);
+        const qContexts = [].concat(body['qContext[]'] || body.qContext || []);
+        const qSubQ1s = [].concat(body['qSubQ1[]'] || body.qSubQ1 || body['q1[]'] || body.q1 || []);
+        const qSubA1s = [].concat(body['qSubA1[]'] || body.qSubA1 || body['a1[]'] || body.a1 || []);
+        const qSubS1s = [].concat(body['qSubS1[]'] || body.qSubS1 || body['s1[]'] || body.s1 || []);
+        const qSubQ2s = [].concat(body['qSubQ2[]'] || body.qSubQ2 || body['q2[]'] || body.q2 || []);
+        const qSubA2s = [].concat(body['qSubA2[]'] || body.qSubA2 || body['a2[]'] || body.a2 || []);
+        const qSubS2s = [].concat(body['qSubS2[]'] || body.qSubS2 || body['s2[]'] || body.s2 || []);
+        const qSubQ3s = [].concat(body['qSubQ3[]'] || body.qSubQ3 || body['q3[]'] || body.q3 || []);
+        const qSubA3s = [].concat(body['qSubA3[]'] || body.qSubA3 || body['a3[]'] || body.a3 || []);
+        const qSubS3s = [].concat(body['qSubS3[]'] || body.qSubS3 || body['s3[]'] || body.s3 || []);
+        const qSubQ4s = [].concat(body['qSubQ4[]'] || body.qSubQ4 || body['q4[]'] || body.q4 || []);
+        const qSubA4s = [].concat(body['qSubA4[]'] || body.qSubA4 || body['a4[]'] || body.a4 || []);
+        const qSubS4s = [].concat(body['qSubS4[]'] || body.qSubS4 || body['s4[]'] || body.s4 || []);
         const qIsBanglas = [].concat(body['qIsBangla[]'] || body.qIsBangla || body['isBangla[]'] || body.isBangla || []);
         const qLanguages = [].concat(body['qLanguage[]'] || body.qLanguage || []);
 
         // qOptions[] comes as groups of 4 per question
         const allOptions = [].concat(body['qOptions[]'] || body.qOptions || []);
 
-        const mode      = body.mode || 'standalone';
-        let bankId    = body.bankId || null;
+        const mode = body.mode || 'standalone';
+        let bankId = body.bankId || null;
 
         const extractList = (val) => {
             if (!val) return [];
@@ -4504,8 +4504,8 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         };
 
         // Global archive metadata (archive mode)
-        const globalBoard    = (body.board || '').trim();
-        const globalYear     = (body.year || '').trim();
+        const globalBoard = (body.board || '').trim();
+        const globalYear = (body.year || '').trim();
         const rawSubjects = [
             ...extractList(body.subjects),
             ...extractList(body['subjects[]']),
@@ -4513,8 +4513,8 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             ...extractList(body['subject[]'])
         ];
         const parsedSubjects = rawSubjects.length > 0 ? [...new Set(rawSubjects)] : [(body.subject || 'General').trim()];
-        let globalSubject  = parsedSubjects[0] || 'General';
-        
+        let globalSubject = parsedSubjects[0] || 'General';
+
         // Ensure teacher can only create questions for their assigned subjects
         const teacherContext = await getTeacherAssignedContext(req.session.user._id);
         const teacherAssignedSubs = teacherContext.rawAssignedSubjects || [];
@@ -4524,7 +4524,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 globalSubject = teacherAssignedSubs[0];
             }
         }
-        
+
         const rawClasses = [
             ...extractList(body.classLevel),
             ...extractList(body['classLevel[]']),
@@ -4542,10 +4542,10 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         }
         const questionClassLevel = parsedClassLevels.length === 1 ? parsedClassLevels[0] : parsedClassLevels;
         let globalClass = Array.isArray(questionClassLevel) ? questionClassLevel[0] : questionClassLevel;
-        const globalChapter  = (body.chapter || '').trim();
-        const globalTopic    = (body.topic || '').trim();
+        const globalChapter = (body.chapter || '').trim();
+        const globalTopic = (body.topic || '').trim();
         const globalSubTopic = (body.subTopic || '').trim();
-        const globalAccess   = 'Free';
+        const globalAccess = 'Free';
 
         if (!qTexts.length) {
             return res.status(400).send('No questions provided in matrix');
@@ -4607,7 +4607,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const topicSegmentMap = new Map();
         if (allAssignedTopicNames.length > 0) {
             try {
-                const foundTopics = await Topic.find({ 
+                const foundTopics = await Topic.find({
                     name: { $in: allAssignedTopicNames },
                     isArchived: { $nin: [true, 'true', 1] }
                 }).select('name segment').lean();
@@ -4642,7 +4642,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             const s4Val = (qSubS4s[i] || '').trim();
 
             const questionTextFinal = isComprehension ? (contextVal || text) : text;
-            const explanationFinal = isComprehension 
+            const explanationFinal = isComprehension
                 ? ([s1Val && `1. ${s1Val}`, s2Val && `2. ${s2Val}`, s3Val && `3. ${s3Val}`, s4Val && `4. ${s4Val}`].filter(Boolean).join('\n') || qExplains[i] || '')
                 : (qExplains[i] || '');
             const answerFinal = isComprehension
@@ -4689,17 +4689,17 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 topic: assignedTopic,
                 subTopic: assignedSubTopic,
                 subTopics: assignedSubTopic ? [assignedSubTopic] : [],
-                board:    mode === 'archive' ? globalBoard  : (qBoards[i] || globalBoard || 'General Board'),
-                year:     mode === 'archive' ? globalYear   : (qYears[i]  || globalYear  || ''),
-                subject:  mode === 'archive' ? globalSubject : (body.qSubject?.[i] || globalSubject || 'General'),
+                board: mode === 'archive' ? globalBoard : (qBoards[i] || globalBoard || 'General Board'),
+                year: mode === 'archive' ? globalYear : (qYears[i] || globalYear || ''),
+                subject: mode === 'archive' ? globalSubject : (body.qSubject?.[i] || globalSubject || 'General'),
                 subjects: mode === 'archive' ? parsedSubjects : (body.qSubject?.[i] ? [body.qSubject[i]] : parsedSubjects),
                 classLevel: mode === 'archive' ? questionClassLevel : (body.qClass?.[i] ? (Array.isArray(body.qClass[i]) ? body.qClass[i] : (body.qClass[i].includes(',') ? body.qClass[i].split(',').map(c => normalizeClass(c)).filter(Boolean) : normalizeClass(body.qClass[i]))) : questionClassLevel),
                 accessType: 'Free',
                 isBangla: (qIsBanglas[i] === true || qIsBanglas[i] === 'true' || qLanguages[i] === 'bn') ? true : (/[\u0980-\u09FF]/.test((text || '') + (contextVal || '') + (q1Val || ''))),
                 language: (qIsBanglas[i] === true || qIsBanglas[i] === 'true' || qLanguages[i] === 'bn' || /[\u0980-\u09FF]/.test((text || '') + (contextVal || '') + (q1Val || ''))) ? 'bn' : 'en',
                 isBoardQuestion: true,
-                addedBy:  req.session.user._id,
-                bankId:   targetBankId && mongoose.Types.ObjectId.isValid(targetBankId) ? targetBankId : undefined
+                addedBy: req.session.user._id,
+                bankId: targetBankId && mongoose.Types.ObjectId.isValid(targetBankId) ? targetBankId : undefined
             };
         });
 
@@ -4796,11 +4796,11 @@ router.get('/question/:id/delete', teacherProtect, async (req, res) => {
         const q = await Question.findById(req.params.id);
         if (!q) return res.status(404).send('Not found');
         if (q.addedBy.toString() !== req.session.user._id.toString()) return res.status(403).send('Unauthorized');
-        
+
         if (q.bankId) {
             await QuestionBank.findByIdAndUpdate(q.bankId, { $inc: { questionCount: -1 } });
         }
-        
+
         await Question.findByIdAndDelete(req.params.id);
         res.redirect('/teacher/question-details?success=Deleted');
     } catch (err) { res.status(500).send('Error'); }
@@ -4828,7 +4828,7 @@ async function getTeacherAssignedContext(teacherId) {
     const Course = require('../models/Course');
 
     const teacherProfile = await User.findById(teacherId).select('teachingSubject teachingSubjects classLevel assignedClasses classes subject subjects department role').lean();
-    
+
     const splitTokens = (val) => {
         if (!val) return [];
         if (Array.isArray(val)) return val.flatMap(v => splitTokens(v));
@@ -4964,7 +4964,7 @@ router.get('/ai-knowledge', teacherProtect, async (req, res) => {
         const { assignedSubjects, assignedClasses } = await getTeacherAssignedContext(user._id);
 
         const { subject, classLevel, search } = req.query;
-        
+
         // Scope filter to ONLY teacher's assigned subjects (or created by them)
         const filter = {
             $or: [
@@ -5085,7 +5085,7 @@ router.post('/ai-knowledge/create', teacherProtect, (req, res, next) => {
         const { assignedSubjects } = await getTeacherAssignedContext(user._id);
 
         // Security check: teacher can only add knowledge for assigned subjects
-        const isSubjectPermitted = subjectList.some(s => 
+        const isSubjectPermitted = subjectList.some(s =>
             s.toLowerCase() === 'general' || assignedSubjects.some(as => as.toLowerCase() === s.toLowerCase())
         );
         if (!isSubjectPermitted && assignedSubjects.length > 0) {
@@ -5216,7 +5216,7 @@ router.post('/ai-knowledge/:id/edit', teacherProtect, (req, res, next) => {
 
         // Verify permission
         const isOwner = entry.createdBy && entry.createdBy.toString() === user._id.toString();
-        const isTargetSubjectPermitted = subjectList.some(s => 
+        const isTargetSubjectPermitted = subjectList.some(s =>
             s.toLowerCase() === 'general' || assignedSubjects.some(as => as.toLowerCase() === s.toLowerCase())
         );
 
@@ -5354,8 +5354,8 @@ router.get('/ai-knowledge/:id/view-file', teacherProtect, async (req, res) => {
         const fileUrl = entry.fileUrl;
         const fileName = entry.fileName || 'attachment';
         const isPdf = Boolean(
-            (entry.fileType && entry.fileType.includes('pdf')) || 
-            fileName.toLowerCase().endsWith('.pdf') || 
+            (entry.fileType && entry.fileType.includes('pdf')) ||
+            fileName.toLowerCase().endsWith('.pdf') ||
             fileUrl.toLowerCase().endsWith('.pdf') ||
             fileUrl.toLowerCase().includes('.pdf')
         );
@@ -5693,8 +5693,8 @@ router.get('/written-evaluations/:attemptId', teacherProtect, async (req, res) =
             if (!ua) {
                 // Robust fallbacks: try matching questionId or index among non-MCQ answers
                 ua = (attempt.userAnswers || []).find(u => u.questionId && u.questionId.toString() === q._id.toString()) ||
-                     nonMcqUserAnswers[qIdx] ||
-                     (attempt.userAnswers || [])[qIdx] || {};
+                    nonMcqUserAnswers[qIdx] ||
+                    (attempt.userAnswers || [])[qIdx] || {};
             }
             const defaultMark = (q.questionType === 'Medium') ? 2 : ((q.questionType === 'Comprehension') ? 7 : 1);
             const qMaxMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : (ua.maxMarks || defaultMark);
@@ -5785,7 +5785,7 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
                     const { uploadToCloudinary } = require('../services/cloudinaryService');
                     const cldRes = await uploadToCloudinary(tmpFile, 'evaluations');
                     if (cldRes && cldRes.url) {
-                        try { fs.unlinkSync(tmpFile); } catch (e) {}
+                        try { fs.unlinkSync(tmpFile); } catch (e) { }
                         return cldRes.url;
                     }
                 } catch (cldErr) {
@@ -5796,7 +5796,7 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
                 fs.mkdirSync(localDir, { recursive: true });
                 const localFile = path.join(localDir, filename);
                 fs.copyFileSync(tmpFile, localFile);
-                try { fs.unlinkSync(tmpFile); } catch (e) {}
+                try { fs.unlinkSync(tmpFile); } catch (e) { }
                 return `/uploads/evaluations/${filename}`;
             } catch (err) {
                 console.warn('saveBase64EvaluationImage error:', err.message);
