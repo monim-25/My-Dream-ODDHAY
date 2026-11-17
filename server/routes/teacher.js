@@ -2956,8 +2956,14 @@ router.get('/make-quiz', teacherProtect, async (req, res) => {
         const teacherContext = await getTeacherAssignedContext(user._id);
         const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
-        const subjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].filter(Boolean).sort();
-        const classes = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].filter(Boolean).sort();
+        const teacherAssignedClasses = teacherContext.rawAssignedClasses || [];
+        const teacherAssignedSubs = teacherContext.rawAssignedSubjects || [];
+        const subjects = (teacherAssignedSubs.length > 0)
+            ? teacherAssignedSubs.sort()
+            : [...new Set(courseSubjects)].filter(Boolean).sort();
+        const classes = (teacherAssignedClasses.length > 0)
+            ? teacherAssignedClasses.sort()
+            : [...new Set(courseClasses)].filter(Boolean).sort();
 
         // Build class -> subjects map so frontend can filter subjects by selected class
         const classSubjectMap = {};
@@ -3022,8 +3028,14 @@ router.get('/course/:id/edit/make-quiz', teacherProtect, async (req, res) => {
         const teacherContext = await getTeacherAssignedContext(user._id);
         const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
-        const subjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].filter(Boolean).sort();
-        const classes = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].filter(Boolean).sort();
+        const teacherAssignedClasses = teacherContext.rawAssignedClasses || [];
+        const teacherAssignedSubs = teacherContext.rawAssignedSubjects || [];
+        const subjects = (teacherAssignedSubs.length > 0)
+            ? teacherAssignedSubs.sort()
+            : [...new Set(courseSubjects)].filter(Boolean).sort();
+        const classes = (teacherAssignedClasses.length > 0)
+            ? teacherAssignedClasses.sort()
+            : [...new Set(courseClasses)].filter(Boolean).sort();
 
         // Build class -> subjects map
         const classSubjectMap = {};
