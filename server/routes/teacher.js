@@ -3232,10 +3232,13 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             resolvedClass   = resolvedClass   || (Array.isArray(linkedCourse.classLevel) ? linkedCourse.classLevel[0] : linkedCourse.classLevel) || '';
         }
         
+        const segment = (req.body.segment && req.body.segment !== 'all') ? req.body.segment.trim() : '';
+
         const quizData = {
             title:      req.body.title,
             course:     courseId,
             subject:    resolvedSubject,
+            segment:    segment,
             classLevel: resolvedClass,
             duration:   parseInt(req.body.duration) || 10,
             accessType: accessType,
@@ -4319,6 +4322,24 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             targetBankId = newBank._id;
         }
 
+        const allAssignedTopicNames = qTopics.map(t => String(t || '').trim()).filter(Boolean);
+        const topicSegmentMap = new Map();
+        if (allAssignedTopicNames.length > 0) {
+            try {
+                const foundTopics = await Topic.find({ 
+                    name: { $in: allAssignedTopicNames },
+                    isArchived: { $nin: [true, 'true', 1] }
+                }).select('name segment').lean();
+                foundTopics.forEach(ft => {
+                    if (ft.name && ft.segment) {
+                        topicSegmentMap.set(ft.name.toLowerCase().trim(), ft.segment);
+                    }
+                });
+            } catch (e) {
+                console.warn('Error resolving topic segments for questions:', e);
+            }
+        }
+
         const questions = qTexts.map((text, i) => {
             const type = qTypes[i] || 'MCQ';
             const isMCQ = type === 'MCQ';
@@ -4368,6 +4389,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 s2: isComprehension ? s2Val : '',
                 solution2: isComprehension ? s2Val : '',
                 marks: parseInt(qMarks[i] || (isComprehension ? 10 : 1)) || (isComprehension ? 10 : 1),
+                segment: (body['qSegment[]']?.[i] || body.segment || topicSegmentMap.get(assignedTopic.toLowerCase()) || ''),
                 chapter: assignedChapter,
                 topic: assignedTopic,
                 subTopic: assignedSubTopic,

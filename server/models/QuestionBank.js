@@ -5,6 +5,7 @@ const questionBankSchema = new mongoose.Schema({
     year: { type: String, default: '' },
     board: { type: String, default: '' }, // e.g., Dhaka Board, Comilla Board
     chapter: { type: String, default: '' },
+    segment: { type: String, default: '', trim: true },
     topic: { type: String, default: '' }, // e.g., Mechanics, Electromagnetism
     subTopic: { type: String, default: '' },
     subTopics: [{ type: String }],

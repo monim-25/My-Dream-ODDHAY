@@ -197,6 +197,22 @@
                                         <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
                                     </div>
                                 </div>
+                                <!-- Segment (Visible when Subject has segmentation rules) -->
+                                <div id="segmentContainer" class="col-span-1 hidden">
+                                    <label class="form-label flex items-center justify-between">
+                                        <span class="flex items-center gap-1.5">
+                                            <span class="material-symbols-rounded text-sm text-indigo-500">segment</span>
+                                            <span>Subject Segment</span>
+                                        </span>
+                                        <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-full">Ruled Subject</span>
+                                    </label>
+                                    <div class="relative">
+                                        <select name="segment" id="quizSegmentSelect" onchange="onQuizSegmentChanged()" class="form-input cursor-pointer pr-8 appearance-none">
+                                            <option value="all">All Segments (সকল বিভাগ)</option>
+                                        </select>
+                                        <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- Chapter Selection (Optional - Multi Select) -->
@@ -411,9 +427,11 @@
         }
 
         // ─── Syllabus fetch (same multi-endpoint approach as notes.ejs) ───────────
-        async function fetchTopicsSafely(subject, classList) {
+        async function fetchTopicsSafely(subject, classList, segment = '') {
             const endpoints = ['/teacher/api/topics', '/api/topics'];
-            const query = new URLSearchParams({ subject, classLevels: classList.join(',') }).toString();
+            const params = { subject, classLevels: classList.join(',') };
+            if (segment && segment !== 'all') params.segment = segment;
+            const query = new URLSearchParams(params).toString();
             for (const ep of endpoints) {
                 try {
                     const res = await fetch(ep + '?' + query, { headers: { 'Accept': 'application/json' } });
@@ -425,6 +443,43 @@
                 } catch (e) { console.warn('Topic endpoint error:', ep, e); }
             }
             return { success: true, count: 0, topics: [], chapters: [] };
+        }
+
+        async function checkQuizSubjectSegments() {
+            const classLevel = document.getElementById('classLevel')?.value;
+            const subjSelect = document.getElementById('quizSubject');
+            const subject = subjSelect ? subjSelect.value : '';
+            const segmentContainer = document.getElementById('segmentContainer');
+            const segmentSelect = document.getElementById('quizSegmentSelect');
+            if (!segmentContainer || !segmentSelect) return;
+
+            if (!classLevel || !subject) {
+                segmentContainer.classList.add('hidden');
+                segmentSelect.innerHTML = '<option value="all">All Segments (সকল বিভাগ)</option>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/subjects/segments?subject=${encodeURIComponent(subject)}&classLevel=${encodeURIComponent(classLevel)}`);
+                const data = await res.json();
+                if (data && data.hasSegments && Array.isArray(data.segments) && data.segments.length > 0) {
+                    segmentContainer.classList.remove('hidden');
+                    let opts = '<option value="all">All Segments (সকল বিভাগ)</option>';
+                    data.segments.forEach(seg => {
+                        opts += `<option value="${seg}">${seg}</option>`;
+                    });
+                    segmentSelect.innerHTML = opts;
+                } else {
+                    segmentContainer.classList.add('hidden');
+                    segmentSelect.innerHTML = '<option value="all">All Segments (সকল বিভাগ)</option>';
+                }
+            } catch (e) {
+                console.warn('Error checking quiz subject segments:', e);
+            }
+        }
+
+        function onQuizSegmentChanged() {
+            onQuizSubjectOrClassChange(false);
         }
 
         // ─── Filter subject dropdown by selected class (Model Test mode) ─────────
@@ -501,7 +556,7 @@
         };
 
         // ─── Subject / Class change → load chapters ───────────────────────────────
-        window.onQuizSubjectOrClassChange = async function() {
+        window.onQuizSubjectOrClassChange = async function(checkSegments = true) {
             const isModelTest = document.getElementById('isModelTest').value === 'true';
             const classLevelEl = document.getElementById('classLevel');
             const courseSelect = document.getElementById('courseId');
@@ -549,6 +604,10 @@
                 return;
             }
 
+            if (checkSegments) {
+                await checkQuizSubjectSegments();
+            }
+
             selectedTeacherChapters.clear();
             updateTeacherChapterSummary();
             if (syllabusWrapper) syllabusWrapper.classList.add('hidden');
@@ -560,7 +619,8 @@
             if (badge) { badge.textContent = ''; badge.classList.add('hidden'); }
 
             try {
-                const data = await fetchTopicsSafely(subject, [classLevel]);
+                const activeSegment = document.getElementById('quizSegmentSelect')?.value || 'all';
+                const data = await fetchTopicsSafely(subject, [classLevel], activeSegment);
                 window._quizCachedTopics = Array.isArray(data.topics) ? data.topics : [];
 
                 // Populate chapters

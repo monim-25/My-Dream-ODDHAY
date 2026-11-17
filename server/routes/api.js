@@ -12,6 +12,32 @@ const topicController = require('../controllers/topicController');
 router.get('/topics', async (req, res) => topicController.getTopicsApi(req, res));
 router.get('/topics/cross-class-check', async (req, res) => topicController.checkCrossClassTopic(req, res));
 
+// GET /api/subjects/segments — Resolve segmentation rules for a given subject and class
+router.get('/subjects/segments', async (req, res) => {
+    try {
+        const { resolveSubjectSegments } = require('../utils/subjectRuleHelper');
+        const subject = req.query.subject || req.query.subjectName || '';
+        const classLevel = req.query.classLevel || req.query.classLevels || '';
+        const result = await resolveSubjectSegments(subject, classLevel);
+        res.json({ success: true, ...result });
+    } catch (err) {
+        console.error('API /subjects/segments error:', err);
+        res.status(500).json({ success: false, error: err.message, hasSegments: false, segments: [] });
+    }
+});
+
+// GET /api/subject-rules — Universal active rules endpoint
+router.get('/subject-rules', async (req, res) => {
+    try {
+        const { getAllActiveSubjectRules } = require('../utils/subjectRuleHelper');
+        const rules = await getAllActiveSubjectRules();
+        res.json({ success: true, rules });
+    } catch (err) {
+        console.error('API /subject-rules error:', err);
+        res.status(500).json({ success: false, error: err.message, rules: [] });
+    }
+});
+
 // GET /api/cloudinary-signature — Direct browser upload signature (bypasses Vercel 4.5MB payload limit)
 router.get('/cloudinary-signature', (req, res) => {
     try {

@@ -4,6 +4,7 @@ const questionSchema = new mongoose.Schema({
     subject: { type: String, required: true },
     subjects: [{ type: String, trim: true }],
     chapter: { type: String, default: '' },
+    segment: { type: String, default: '', trim: true },
     topic: { type: String, default: '' },
     subTopic: { type: String, default: '' },
     subTopics: [{ type: String }],

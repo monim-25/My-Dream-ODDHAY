@@ -26,6 +26,11 @@ const topicSchema = new mongoose.Schema({
         required: [true, 'Subject is required'], 
         trim: true 
     },
+    segment: {
+        type: String,
+        trim: true,
+        default: ''
+    }, // e.g. 'গদ্য', 'পদ্য', 'উপন্যাস', 'নাটক', 'বীজগণিত', 'ক-বিভাগ'
     chapter: {
         number: { type: Number, default: 1 },
         name: { type: String, required: [true, 'Chapter name is required'], trim: true }
@@ -98,7 +103,7 @@ const topicSchema = new mongoose.Schema({
 });
 
 // Fast query indexes for cascaded lookups and filters
-topicSchema.index({ classLevel: 1, subject: 1, 'chapter.name': 1, status: 1, isArchived: 1, order: 1 });
+topicSchema.index({ classLevel: 1, subject: 1, segment: 1, 'chapter.name': 1, status: 1, isArchived: 1, order: 1 });
 topicSchema.index({ 'deletionRequest.isRequested': 1, 'deletionRequest.status': 1 });
 topicSchema.index({ name: 'text', keywords: 'text', description: 'text', subTopics: 'text' });
 

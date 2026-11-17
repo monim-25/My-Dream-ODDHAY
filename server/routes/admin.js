@@ -297,10 +297,13 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
             }
         }
 
+        const segment = (req.body.segment && req.body.segment !== 'all') ? req.body.segment.trim() : '';
+
         const quizData = {
             title: req.body.title,
             course: courseId,
             subject: resolvedSubject,
+            segment: segment,
             classLevel: resolvedClass,
             chapter: chaptersList.join(', '),
             chapters: chaptersList,
@@ -5882,12 +5885,15 @@ router.get('/academic-setup', adminProtect, async (req, res) => {
     try {
         await connectDB();
         const AcademicClass = require('../models/AcademicClass');
+        const SubjectRule = require('../models/SubjectRule');
         const activeClasses = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
         const archivedClasses = await AcademicClass.find({ isArchived: { $in: [true, 'true', 1] } }).sort({ updatedAt: -1, order: 1 }).lean();
+        const subjectRules = await SubjectRule.find().sort({ order: 1, createdAt: -1 }).populate('createdBy', 'name email').lean();
         res.render('superadmin/academic-setup', {
             active: 'academic-setup',
             classes: activeClasses || [],
             archivedClasses: archivedClasses || [],
+            subjectRules: subjectRules || [],
             user: req.session.user || { name: 'Admin', role: 'admin' }
         });
     } catch (error) {
@@ -6026,6 +6032,13 @@ router.post('/academic-setup/:id/restore', adminProtect, handleAdminAcademicRest
 router.post('/academic-setup/permanent', adminProtect, handleAdminAcademicPermanent);
 router.post('/academic-setup/:id/permanent', adminProtect, handleAdminAcademicPermanent);
 router.delete('/academic-setup/:id/permanent', adminProtect, handleAdminAcademicPermanent);
+
+// Subject Segmentation Rules
+const subjectRuleController = require('../controllers/subjectRuleController');
+router.get('/academic-setup/subject-rules', adminProtect, subjectRuleController.getSubjectRules);
+router.post('/academic-setup/subject-rules', adminProtect, subjectRuleController.saveSubjectRule);
+router.post('/academic-setup/subject-rules/delete', adminProtect, subjectRuleController.deleteSubjectRule);
+router.delete('/academic-setup/subject-rules/:id', adminProtect, subjectRuleController.deleteSubjectRule);
 
 // ==========================================
 // SYLLABUS & TOPIC SYSTEM - ADMIN ROUTES

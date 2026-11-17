@@ -7,6 +7,7 @@ const quizSchema = new mongoose.Schema({
     classLevel: { type: String }, // Class level (all exam types)
     chapter: { type: String },    // Syllabus chapter
     chapters: [{ type: String }], // Multiple syllabus chapters (Optional)
+    segment: { type: String, default: '', trim: true }, // Syllabus segment (if subject is ruled)
     topic: { type: String },      // Primary topic
     topics: [{ type: String }],   // All selected topics
     subTopic: { type: String, default: '' },
@@ -29,6 +30,7 @@ const quizSchema = new mongoose.Schema({
         a2: { type: String },
         marks: { type: Number },
         chapter: { type: String, default: '' },
+        segment: { type: String, default: '', trim: true },
         topic: { type: String, default: '' },
         subTopic: { type: String, default: '' },
         board: { type: String },

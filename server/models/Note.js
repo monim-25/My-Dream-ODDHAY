@@ -7,6 +7,7 @@ const noteSchema = new mongoose.Schema({
     classLevel: [{ type: String }],
     description: { type: String },
     chapter: { type: String },
+    segment: { type: String, default: '', trim: true },
     topic: { type: String, trim: true },
     topics: [{ type: String, trim: true }],
     subTopic: { type: String, trim: true, default: '' },

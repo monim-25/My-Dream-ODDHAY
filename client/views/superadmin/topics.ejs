@@ -17,6 +17,9 @@
     const safePendingCount = (typeof pendingTopicCount !== 'undefined') ? pendingTopicCount : safePending.length;
     const safeDeletionRequests = (typeof deletionRequests !== 'undefined' && Array.isArray(deletionRequests)) ? deletionRequests : [];
     const safeDeletionRequestCount = (typeof deletionRequestCount !== 'undefined') ? deletionRequestCount : safeDeletionRequests.length;
+    const subHasSegs = (typeof subjectHasSegments !== 'undefined') ? Boolean(subjectHasSegments) : false;
+    const subSegs = (typeof subjectSegments !== 'undefined' && Array.isArray(subjectSegments)) ? subjectSegments : [];
+    const selSegment = (typeof selectedSegment !== 'undefined') ? selectedSegment : 'all';
 %>
 <!DOCTYPE html>
 <html lang="en" class="<%= (safeUser.theme === 'dark') ? 'dark' : '' %>">
@@ -100,7 +103,7 @@
                             </div>
 
                             <!-- Add Topics Button -->
-                            <button type="button" id="unifiedModalOpenBtn" onclick="openUnifiedModal()"
+                            <button type="button" id="unifiedModalOpenBtn" onclick="openUnifiedModal('', 1, 'single', '<%= (selSegment !== 'all') ? selSegment : '' %>')"
                                     class="h-8 px-3 sm:px-3.5 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 shadow-xs transition-all shrink-0 whitespace-nowrap cursor-pointer">
                                 <span class="material-symbols-rounded text-[17px]">add</span>
                                 <span>Add Topics</span>
@@ -158,6 +161,20 @@
                                     <span class="material-symbols-rounded text-sm">add_circle</span>
                                     <span class="hidden sm:inline">Add Subject</span>
                                 </button>
+                            </div>
+
+                            <!-- Segment Dropdown (Visible if subject has segmentation rules) -->
+                            <div id="segmentFilterWrap" class="flex items-center gap-1.5 <%= (subHasSegs && subSegs.length > 0) ? '' : 'hidden' %>">
+                                <span class="text-xs font-medium text-slate-500 dark:text-slate-400">Segment:</span>
+                                <select id="segmentSelector" onchange="onSegmentChange(this.value)" 
+                                        class="h-8 px-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-primary shadow-2xs min-w-[130px] cursor-pointer">
+                                    <option value="all" <%= selSegment === 'all' ? 'selected' : '' %>>All Segments (সকল বিভাগ)</option>
+                                    <% subSegs.forEach(seg => { %>
+                                        <option value="<%= seg %>" <%= selSegment === seg ? 'selected' : '' %>>
+                                            <%= seg %>
+                                        </option>
+                                    <% }) %>
+                                </select>
                             </div>
                         </div>
 
@@ -263,6 +280,11 @@
                                                 <h4 class="text-xs font-semibold text-slate-800 dark:text-slate-100 leading-tight truncate">
                                                     <%= ch.name %>
                                                 </h4>
+                                                <% if (ch.segment) { %>
+                                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/60 dark:border-indigo-900/40 shrink-0">
+                                                        <%= ch.segment %>
+                                                    </span>
+                                                <% } %>
                                                 <span class="text-[10px] text-slate-500 dark:text-slate-400 font-normal leading-tight shrink-0">
                                                     (<%= ch.topics.length %> Topics)
                                                 </span>
@@ -271,7 +293,7 @@
 
                                         <div class="flex items-center gap-1 sm:gap-1.5 shrink-0" onclick="event.stopPropagation()">
                                             <!-- Add Topic to Chapter -->
-                                            <button type="button" onclick="openUnifiedModal('<%= ch.name %>', <%= ch.number %>)"
+                                            <button type="button" onclick="openUnifiedModal('<%= ch.name %>', <%= ch.number %>, 'single', '<%= ch.segment || '' %>')"
                                                     class="h-7 px-2 rounded bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-primary text-[11px] font-medium border border-slate-200 dark:border-slate-700 flex items-center gap-1 transition-all" title="Add topic to this chapter">
                                                 <span class="material-symbols-rounded text-sm">add</span>
                                                 <span class="hidden sm:inline">Add Topic</span>
@@ -874,6 +896,20 @@
                         </div>
                     </div>
 
+                    <!-- Segment Selection (Shows when Subject has segmentation rules) -->
+                    <div id="unifiedModalSegmentWrap" class="space-y-1 hidden">
+                        <label class="text-[11px] font-semibold text-slate-700 dark:text-slate-200 flex items-center justify-between">
+                            <span class="flex items-center gap-1">
+                                <span class="material-symbols-rounded text-sm text-indigo-500">segment</span>
+                                <span>Subject Segment / বিভাগ <span class="text-rose-500">*</span></span>
+                            </span>
+                            <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold">Ruled Subject</span>
+                        </label>
+                        <select id="unifiedSegmentSelect" name="segment" class="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium outline-none focus:border-indigo-500 cursor-pointer">
+                            <option value="">Select Segment...</option>
+                        </select>
+                    </div>
+
                     <!-- Chapter Details (Shared for both Single & Bulk) -->
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                         <div class="sm:col-span-2">
@@ -1395,6 +1431,17 @@
         function onSubjectChange(newSub) {
             const u = new URL(window.location.href);
             u.searchParams.set('subject', newSub);
+            u.searchParams.delete('segment');
+            window.location.href = u.toString();
+        }
+
+        function onSegmentChange(newSeg) {
+            const u = new URL(window.location.href);
+            if (newSeg && newSeg !== 'all') {
+                u.searchParams.set('segment', newSeg);
+            } else {
+                u.searchParams.delete('segment');
+            }
             window.location.href = u.toString();
         }
 
@@ -1780,7 +1827,7 @@
                 .replace(/'/g, '&#039;');
         }
 
-        function openUnifiedModal(chapterName = '', chapterNum = 1, defaultMode = 'single') {
+        function openUnifiedModal(chapterName = '', chapterNum = 1, defaultMode = 'single', prefillSegment = '') {
             const form = document.getElementById('unifiedTopicForm');
             if (form) form.reset();
             superStagedTopics = [];
@@ -1795,6 +1842,51 @@
             }
             setTopicMode(defaultMode);
             document.getElementById('unifiedTopicModal').classList.remove('hidden');
+
+            const targetSeg = prefillSegment || ('<%= (selSegment !== "all") ? selSegment : "" %>');
+            checkUnifiedModalSegments(targetSeg);
+        }
+
+        async function checkUnifiedModalSegments(prefillVal = '') {
+            const wrap = document.getElementById('unifiedModalSegmentWrap');
+            const select = document.getElementById('unifiedSegmentSelect');
+            if (!wrap || !select) return;
+
+            const subject = document.getElementById('unifiedSubject')?.value.trim();
+            const checkedClasses = Array.from(document.querySelectorAll('#unifiedModalClassGrid input[name="targetClass"]:checked')).map(cb => cb.value);
+            const classLevel = checkedClasses[0] || '<%= selClass %>';
+
+            if (!subject) {
+                wrap.classList.add('hidden');
+                select.innerHTML = '<option value="">Select Segment...</option>';
+                select.required = false;
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/subjects/segments?subject=${encodeURIComponent(subject)}&classLevel=${encodeURIComponent(classLevel)}`);
+                const data = await res.json();
+                if (data && data.hasSegments && Array.isArray(data.segments) && data.segments.length > 0) {
+                    wrap.classList.remove('hidden');
+                    select.required = true;
+                    let opts = '<option value="">Select Segment...</option>';
+                    data.segments.forEach(seg => {
+                        const isSel = (prefillVal && prefillVal === seg) ? 'selected' : '';
+                        opts += `<option value="${seg}" ${isSel}>${seg}</option>`;
+                    });
+                    select.innerHTML = opts;
+                    if (prefillVal) {
+                        select.value = prefillVal;
+                    }
+                } else {
+                    wrap.classList.add('hidden');
+                    select.required = false;
+                    select.innerHTML = '<option value="">Select Segment...</option>';
+                    select.value = '';
+                }
+            } catch (err) {
+                console.error('Error fetching segments:', err);
+            }
         }
 
         function collectSuperadminStep1Topics() {
@@ -1808,6 +1900,16 @@
                 Swal.fire('Select Subject', 'Please enter or select a subject.', 'warning');
                 return false;
             }
+
+            const segmentWrap = document.getElementById('unifiedModalSegmentWrap');
+            const segmentSelect = document.getElementById('unifiedSegmentSelect');
+            if (segmentWrap && !segmentWrap.classList.contains('hidden')) {
+                if (!segmentSelect || !segmentSelect.value) {
+                    Swal.fire('Segment Required', 'Please select a Segment / বিভাগ for this subject.', 'warning');
+                    return false;
+                }
+            }
+
             const chapterName = document.getElementById('unifiedChapterName')?.value.trim();
             if (!chapterName) {
                 Swal.fire('Chapter Required', 'Please enter a Chapter Name.', 'warning');
@@ -2129,6 +2231,7 @@
             const classLevel = checkedClasses[0];
             const group = form.group ? form.group.value : 'None';
             const subject = form.subject ? form.subject.value.trim() : '';
+            const segment = document.getElementById('unifiedSegmentSelect')?.value.trim() || '';
             const chapterName = form.chapterName.value.trim();
             const chapterNumber = form.chapterNumber.value;
 
@@ -2137,6 +2240,7 @@
                 classLevel,
                 group,
                 subject,
+                segment,
                 chapterName,
                 chapterNumber,
                 topics: superStagedTopics
@@ -2862,6 +2966,16 @@
             } else {
                 switchTopicTab('active');
             }
+
+            const modalSubInput = document.getElementById('unifiedSubject');
+            if (modalSubInput) {
+                modalSubInput.addEventListener('change', () => checkUnifiedModalSegments());
+                modalSubInput.addEventListener('input', () => checkUnifiedModalSegments());
+            }
+            const modalClassGrid = document.getElementById('unifiedModalClassGrid');
+            if (modalClassGrid) {
+                modalClassGrid.addEventListener('change', () => checkUnifiedModalSegments());
+            }
         });
 
         // Multi-Class Quick Selectors for Unified Modal
@@ -2882,6 +2996,7 @@
                     cb.checked = v.includes('11') || v.includes('12');
                 });
             }
+            checkUnifiedModalSegments();
         }
 
         // Multi-Class Filter Dropdown Toggle & Apply

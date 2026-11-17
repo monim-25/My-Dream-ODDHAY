@@ -118,6 +118,18 @@
                                         <% }) %>
                                     </select>
                                 </div>
+                                <div id="segmentContainer" class="md:col-span-2 hidden">
+                                    <label class="form-label flex items-center justify-between">
+                                        <span class="flex items-center gap-1.5">
+                                            <span class="material-symbols-rounded text-sm text-indigo-500">segment</span>
+                                            <span>Subject Segment / বিভাগ</span>
+                                        </span>
+                                        <span class="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-full">Ruled Subject</span>
+                                    </label>
+                                    <select name="segment" id="quizSegmentSelect" onchange="onQuizSegmentChanged()" class="form-input cursor-pointer">
+                                        <option value="all">All Segments (সকল বিভাগ)</option>
+                                    </select>
+                                </div>
                             </div>
 
                             <!-- Chapter Selection (Optional - Multi Select) -->
@@ -313,10 +325,17 @@
             container.innerHTML = '<span class="text-[11px] text-slate-400 italic flex items-center gap-1.5"><span class="material-symbols-rounded animate-spin text-sm">sync</span> Loading chapters...</span>';
 
             try {
-                // Fetch chapters & topics concurrently
+                // Fetch chapters & topics concurrently with optional segment
+                const selectedSegment = document.getElementById('quizSegmentSelect')?.value || 'all';
+                let chapUrl = `/admin/api/chapters?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}`;
+                let topUrl = `/admin/api/topics?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}`;
+                if (selectedSegment && selectedSegment !== 'all') {
+                    chapUrl += `&segment=${encodeURIComponent(selectedSegment)}`;
+                    topUrl += `&segment=${encodeURIComponent(selectedSegment)}`;
+                }
                 const [chapRes, topicRes] = await Promise.all([
-                    fetch(`/admin/api/chapters?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}`),
-                    fetch(`/admin/api/topics?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}`)
+                    fetch(chapUrl),
+                    fetch(topUrl)
                 ]);
                 const data = await chapRes.json();
                 const topicData = await topicRes.json();
@@ -465,7 +484,43 @@
             }
         }
 
-        function onCourseSelected() {
+        async function checkQuizSubjectSegments() {
+            const classLevel = document.getElementById('classLevel')?.value;
+            const subject = getActiveSubject();
+            const segmentContainer = document.getElementById('segmentContainer');
+            const segmentSelect = document.getElementById('quizSegmentSelect');
+            if (!segmentContainer || !segmentSelect) return;
+
+            if (!classLevel || !subject) {
+                segmentContainer.classList.add('hidden');
+                segmentSelect.innerHTML = '<option value="all">All Segments (সকল বিভাগ)</option>';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/subjects/segments?subject=${encodeURIComponent(subject)}&classLevel=${encodeURIComponent(classLevel)}`);
+                const data = await res.json();
+                if (data && data.hasSegments && Array.isArray(data.segments) && data.segments.length > 0) {
+                    segmentContainer.classList.remove('hidden');
+                    let opts = '<option value="all">All Segments (সকল বিভাগ)</option>';
+                    data.segments.forEach(seg => {
+                        opts += `<option value="${seg}">${seg}</option>`;
+                    });
+                    segmentSelect.innerHTML = opts;
+                } else {
+                    segmentContainer.classList.add('hidden');
+                    segmentSelect.innerHTML = '<option value="all">All Segments (সকল বিভাগ)</option>';
+                }
+            } catch (e) {
+                console.warn('Error checking quiz subject segments:', e);
+            }
+        }
+
+        function onQuizSegmentChanged() {
+            fetchChapters();
+        }
+
+        async function onCourseSelected() {
             const courseSelect = document.getElementById('courseId');
             const selectedOpt = courseSelect.options[courseSelect.selectedIndex];
             if (selectedOpt && selectedOpt.value) {
@@ -481,11 +536,13 @@
                 }
             }
             syncBankMetadata();
+            await checkQuizSubjectSegments();
             fetchChapters();
         }
 
-        function onSubjectOrClassChanged() {
+        async function onSubjectOrClassChanged() {
             syncBankMetadata();
+            await checkQuizSubjectSegments();
             fetchChapters();
         }
 

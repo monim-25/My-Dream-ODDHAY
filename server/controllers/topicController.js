@@ -618,6 +618,11 @@ const getTopicsPage = async (req, res) => {
             selectedSubject = availableSubjects[0];
         }
 
+        // Check Subject Segmentation Rules
+        const { resolveSubjectSegments } = require('../utils/subjectRuleHelper');
+        const { hasSegments: subjectHasSegments, segments: subjectSegments } = await resolveSubjectSegments(selectedSubject, selectedClasses);
+        let selectedSegment = (req.query.segment || 'all').trim();
+
         // Active Topics Query (Only Approved topics go to Live Syllabus)
         const activeFilter = { isArchived: { $nin: [true, 'true', 1] }, status: { $nin: ['pending', 'rejected'] } };
         if (selectedClasses.length === 1) {
@@ -631,6 +636,9 @@ const getTopicsPage = async (req, res) => {
         if (selectedGroup && selectedGroup !== 'all') {
             activeFilter.group = { $in: [selectedGroup, 'all', 'None', null] };
         }
+        if (selectedSegment && selectedSegment !== 'all') {
+            activeFilter.segment = new RegExp(`^${escapeRegex(selectedSegment)}$`, 'i');
+        }
 
         const activeTopics = await Topic.find(activeFilter).sort({ 'chapter.number': 1, order: 1, createdAt: 1 }).lean();
 
@@ -643,8 +651,11 @@ const getTopicsPage = async (req, res) => {
                 chaptersMap.set(chName, {
                     name: chName,
                     number: chNum,
+                    segment: top.segment || '',
                     topics: []
                 });
+            } else if (!chaptersMap.get(chName).segment && top.segment) {
+                chaptersMap.get(chName).segment = top.segment;
             }
             chaptersMap.get(chName).topics.push(top);
         });
@@ -684,6 +695,9 @@ const getTopicsPage = async (req, res) => {
             selectedGroup,
             selectedSubject,
             availableSubjects,
+            subjectHasSegments,
+            subjectSegments: subjectSegments || [],
+            selectedSegment,
             chapters,
             activeTopics,
             archivedTopics,
@@ -778,6 +792,10 @@ const getTopicsApi = async (req, res) => {
         if (group && group !== 'all') {
             filter.group = { $in: [group, 'all', 'None', null] };
         }
+        const rawSegment = req.query.segment || req.query.segments;
+        if (rawSegment && rawSegment !== 'all') {
+            filter.segment = new RegExp('^' + escapeRegex(String(rawSegment).trim()) + '$', 'i');
+        }
 
         const topics = await Topic.find(filter).sort({ 'chapter.number': 1, order: 1, name: 1 }).lean();
         const chapterList = Array.from(new Set(topics.map(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '').filter(Boolean)));
@@ -804,7 +822,7 @@ const getTopicsApi = async (req, res) => {
 const getChaptersApi = async (req, res) => {
     try {
         await connectDB();
-        const { classLevel, subject } = req.query;
+        const { classLevel, subject, segment } = req.query;
         if (!classLevel || !subject) {
             return res.json({ success: true, chapters: [] });
         }
@@ -819,7 +837,12 @@ const getChaptersApi = async (req, res) => {
             subject: new RegExp(`^${escSub}$`, 'i')
         };
 
-        const topics = await Topic.find(filter).select('chapter status').lean();
+        if (segment && segment !== 'all') {
+            const escSeg = segment.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            filter.segment = new RegExp(`^${escSeg}$`, 'i');
+        }
+
+        const topics = await Topic.find(filter).select('chapter status segment').lean();
         const chaptersMap = new Map();
 
         topics.forEach(t => {
@@ -831,8 +854,11 @@ const getChaptersApi = async (req, res) => {
                     chaptersMap.set(key, {
                         number: num,
                         name: name,
+                        segment: t.segment || '',
                         status: t.status || 'approved'
                     });
+                } else if (!chaptersMap.get(key).segment && t.segment) {
+                    chaptersMap.get(key).segment = t.segment;
                 }
             }
         });
@@ -849,7 +875,8 @@ const getChaptersApi = async (req, res) => {
 const createTopic = async (req, res) => {
     try {
         await connectDB();
-        const { name, code, classLevel, classLevels, group, subject, chapterName, chapterNumber, difficulty, keywords, description, order } = req.body;
+        const { name, code, classLevel, classLevels, group, subject, chapterName, chapterNumber, difficulty, keywords, description, order, segment } = req.body;
+        const topicSegment = (segment || '').trim();
 
         if (!name || !name.trim()) return res.status(400).json({ success: false, error: 'Topic name is required' });
         if (!subject || !subject.trim()) return res.status(400).json({ success: false, error: 'Subject is required' });
@@ -906,6 +933,7 @@ const createTopic = async (req, res) => {
                 existingTopic.classLevel = targetClasses[0];
                 existingTopic.group = group || 'None';
                 existingTopic.subject = subject.trim();
+                if (segment !== undefined) existingTopic.segment = topicSegment;
                 existingTopic.chapter = {
                     number: parseInt(chapterNumber, 10) || 1,
                     name: chapterName.trim()
@@ -942,6 +970,7 @@ const createTopic = async (req, res) => {
                                 classLevel: extraCls,
                                 group: await resolveGroupByClassAndSubject(extraCls, subject.trim(), group),
                                 subject: subject.trim(),
+                                segment: topicSegment || existingTopic.segment || '',
                                 chapter: { number: parseInt(chapterNumber, 10) || 1, name: chapterName.trim() },
                                 difficulty: ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : 'Medium',
                                 keywords: keywordsArray,
@@ -997,6 +1026,7 @@ const createTopic = async (req, res) => {
                     classLevel: cls,
                     group: await resolveGroupByClassAndSubject(cls, subject.trim(), group),
                     subject: subject.trim(),
+                    segment: topicSegment,
                     chapter: {
                         number: parseInt(chapterNumber, 10) || 1,
                         name: chapterName.trim()
@@ -1056,7 +1086,8 @@ const createTopic = async (req, res) => {
 const bulkCreateTopics = async (req, res) => {
     try {
         await connectDB();
-        const { classLevel, classLevels, group, subject, chapterName, chapterNumber, topicList, difficulty } = req.body;
+        const { classLevel, classLevels, group, subject, chapterName, chapterNumber, topicList, difficulty, segment } = req.body;
+        const topicSegment = (segment || '').trim();
 
         if (!subject || !chapterName) {
             return res.status(400).json({ success: false, error: 'Subject and Chapter are required' });
@@ -1153,6 +1184,7 @@ const bulkCreateTopics = async (req, res) => {
                         classLevel: cls,
                         group: await resolveGroupByClassAndSubject(cls, subject.trim(), group),
                         subject: subject.trim(),
+                        segment: topicSegment,
                         chapter: {
                             number: chNum,
                             name: chapterName.trim()
@@ -1227,7 +1259,7 @@ const updateTopic = async (req, res) => {
     try {
         await connectDB();
         const { id } = req.params;
-        const { name, code, classLevel, group, subject, chapterName, chapterNumber, difficulty, keywords, description, order } = req.body;
+        const { name, code, classLevel, group, subject, chapterName, chapterNumber, difficulty, keywords, description, order, segment } = req.body;
 
         const updatePayload = {};
         if (name) updatePayload.name = name.trim();
@@ -1235,6 +1267,7 @@ const updateTopic = async (req, res) => {
         if (classLevel) updatePayload.classLevel = classLevel.trim();
         if (group) updatePayload.group = group;
         if (subject) updatePayload.subject = subject.trim();
+        if (segment !== undefined) updatePayload.segment = String(segment).trim();
         if (chapterName) {
             updatePayload['chapter.name'] = chapterName.trim();
         }
@@ -1783,6 +1816,11 @@ const getTeacherTopicsPage = async (req, res) => {
         }
         let selectedGroup = autoGroup;
 
+        // Check Subject Segmentation Rules
+        const { resolveSubjectSegments: resolveTeacherSegments } = require('../utils/subjectRuleHelper');
+        const { hasSegments: subjectHasSegments, segments: subjectSegments } = await resolveTeacherSegments(selectedSubject, selectedClass);
+        let selectedSegment = (req.query.segment || 'all').trim();
+
         // 2. Query Live Approved Topics (Only for assigned class & subject)
         let activeTopics = [];
         let chapters = [];
@@ -1797,6 +1835,10 @@ const getTeacherTopicsPage = async (req, res) => {
                 subject: new RegExp('^' + escSub + '$', 'i')
             };
 
+            if (selectedSegment && selectedSegment !== 'all') {
+                activeFilter.segment = new RegExp('^' + selectedSegment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
+            }
+
             activeTopics = await Topic.find(activeFilter).sort({ 'chapter.number': 1, order: 1, createdAt: 1 }).lean();
 
             const chaptersMap = new Map();
@@ -1807,8 +1849,11 @@ const getTeacherTopicsPage = async (req, res) => {
                     chaptersMap.set(chName, {
                         name: chName,
                         number: chNum,
+                        segment: top.segment || '',
                         topics: []
                     });
+                } else if (!chaptersMap.get(chName).segment && top.segment) {
+                    chaptersMap.get(chName).segment = top.segment;
                 }
                 chaptersMap.get(chName).topics.push(top);
             });
@@ -1864,6 +1909,9 @@ const getTeacherTopicsPage = async (req, res) => {
             selectedGroup,
             selectedSubject,
             availableSubjects,
+            subjectHasSegments,
+            subjectSegments: subjectSegments || [],
+            selectedSegment,
             assignedClasses,
             assignedSubjects,
             chapters,
