@@ -1441,9 +1441,7 @@
                 for (let i = localStorage.length - 1; i >= 0; i--) {
                     const k = localStorage.key(i);
                     if (k && k.startsWith(DRAFT_KEY_BASE)) {
-                        if (bankId && k.includes(bankId)) {
-                            localStorage.removeItem(k);
-                        }
+                        localStorage.removeItem(k);
                     }
                 }
             } catch (e) { }
@@ -1963,7 +1961,9 @@
             document.querySelectorAll('.question-row').forEach(row => syncRowHierarchy(row));
          
 
-        window.onload = () => {
+        function initQuestionStudio() {
+            if (window._studioHasInitialized) return;
+            window._studioHasInitialized = true;
             const urlParams = new URLSearchParams(window.location.search);
             const mode = urlParams.get('mode') || 'standalone';
 
@@ -2100,7 +2100,7 @@
             }
 
             // 2. Fresh start handling (e.g. from Paper Composition modal or Question Wizard)
-            const isFreshStart = urlParams.get('fresh') === 'true' || urlParams.has('slots');
+            const isFreshStart = urlParams.get('fresh') === 'true' || urlParams.has('slots') || urlParams.has('count');
             if (isFreshStart) {
                 clearStudioDraft();
                 // Strip fresh=true from URL via history.replaceState so future page reloads preserve typed data
@@ -2256,7 +2256,15 @@
             setInterval(saveStudioDraft, 10000);
 
             loadTopicsForQuestionStudio();
-        };
+        }
+
+        // Run instantly on DOM ready without waiting for heavy external assets
+        if (document.readyState === 'interactive' || document.readyState === 'complete') {
+            initQuestionStudio();
+        } else {
+            document.addEventListener('DOMContentLoaded', initQuestionStudio);
+        }
+        window.addEventListener('load', initQuestionStudio);
 
         function changeRowType(itemEl, type) {
             const row = itemEl.closest('.question-row');

@@ -3400,7 +3400,11 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                     explanation: '',
                     questionType: 'MCQ',
                     isBangla: isBangla,
-                    language: lang
+                    language: lang,
+                    chapter: chapter || '',
+                    topic: topic || '',
+                    subTopic: subTopic || '',
+                    marks: 1
                 });
             }
             for (let i = 0; i < shortCount; i++) {
@@ -3411,7 +3415,11 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                     explanation: '',
                     questionType: 'Short',
                     isBangla: isBangla,
-                    language: lang
+                    language: lang,
+                    chapter: chapter || '',
+                    topic: topic || '',
+                    subTopic: subTopic || '',
+                    marks: 2
                 });
             }
             for (let i = 0; i < mediumCount; i++) {
@@ -3422,7 +3430,11 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                     explanation: '',
                     questionType: 'Medium',
                     isBangla: isBangla,
-                    language: lang
+                    language: lang,
+                    chapter: chapter || '',
+                    topic: topic || '',
+                    subTopic: subTopic || '',
+                    marks: 4
                 });
             }
             for (let i = 0; i < comprehensionCount; i++) {
@@ -3433,7 +3445,11 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                     explanation: '',
                     questionType: 'Comprehension',
                     isBangla: isBangla,
-                    language: lang
+                    language: lang,
+                    chapter: chapter || '',
+                    topic: topic || '',
+                    subTopic: subTopic || '',
+                    marks: 10
                 });
             }
         }
