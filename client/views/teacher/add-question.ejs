@@ -2322,6 +2322,11 @@ Exp: Measured in Ohms."
                     saveStudioDraft();
                 });
                 form.addEventListener('submit', (e) => {
+                    if (typeof validateBulkRequiredMetadata === 'function' && !validateBulkRequiredMetadata()) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return false;
+                    }
                     const rows = document.querySelectorAll('.question-row');
 
                     // Validate each question row
@@ -3210,7 +3215,71 @@ Correct Answer: B`;
         }
         window.loadBulkDemo = loadBulkDemo;
 
+        function validateBulkRequiredMetadata() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const isArchive = '<%= mode %>' === 'archive' || urlParams.get('mode') === 'archive';
+
+            const board = (document.getElementById('globalBoard')?.value || document.getElementById('hiddenBoard')?.value || urlParams.get('board') || '').trim();
+            const year = (document.getElementById('globalYear')?.value || document.getElementById('hiddenYear')?.value || urlParams.get('year') || '').trim();
+            const subject = (document.getElementById('globalSubject')?.value || document.getElementById('hiddenSubject')?.value || urlParams.get('subject') || '').trim();
+            const classLevel = (document.getElementById('globalClass')?.value || document.getElementById('hiddenClass')?.value || urlParams.get('class') || '').trim();
+
+            if (isArchive) {
+                const missing = [];
+                if (!board) missing.push('বোর্ড (Board)');
+                if (!year) missing.push('সাল (Year)');
+                if (!classLevel) missing.push('শ্রেণি (Class)');
+                if (!subject) missing.push('বিষয় (Subject)');
+
+                if (missing.length > 0) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'প্রয়োজনীয় তথ্য বাকি রয়েছে',
+                            html: `প্রশ্ন সেভ করার আগে অনুগ্রহ করে নিচের তথ্যগুলো পূরণ করুন:<br><b>${missing.join(', ')}</b>`,
+                            confirmButtonColor: '#4f46e5'
+                        });
+                    } else {
+                        alert('অনুগ্রহ করে পূরণ করুন: ' + missing.join(', '));
+                    }
+                    const header = document.getElementById('archiveGlobalHeader') || document.getElementById('globalBoard');
+                    if (header) header.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return false;
+                }
+            } else {
+                const missing = [];
+                if (!classLevel) missing.push('শ্রেণি (Class)');
+                if (!subject) missing.push('বিষয় (Subject)');
+
+                if (missing.length > 0) {
+                    if (typeof Swal !== 'undefined') {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'শ্রেণি ও বিষয় নির্বাচন আবশ্যক',
+                            text: 'প্রশ্ন সেভ করার জন্য শ্রেণি ও বিষয় আবশ্যক। প্রশ্ন ব্যাংক পেজ থেকে শ্রেণি ও বিষয় নির্ধারণ করে আসুন।',
+                            showCancelButton: true,
+                            confirmButtonText: 'প্রশ্ন পেজে যান',
+                            cancelButtonText: 'এখানেই থাকুন',
+                            confirmButtonColor: '#4f46e5'
+                        }).then((res) => {
+                            if (res.isConfirmed) {
+                                window.location.href = '/teacher/questions';
+                            }
+                        });
+                    } else {
+                        alert('অনুগ্রহ করে শ্রেণি ও বিষয় নির্বাচন করুন।');
+                    }
+                    return false;
+                }
+            }
+            return true;
+        }
+        window.validateBulkRequiredMetadata = validateBulkRequiredMetadata;
+
         function transferBulkToStudio(isSilent = false) {
+            if (!isSilent && !validateBulkRequiredMetadata()) {
+                return false;
+            }
             if (_parsedBulkQuestions.length === 0) {
                 if (!isSilent) {
                     if (typeof Swal !== 'undefined') {
@@ -3334,6 +3403,9 @@ Correct Answer: B`;
         }
 
         function submitBulkDirectly() {
+            if (!validateBulkRequiredMetadata()) {
+                return;
+            }
             if (_parsedBulkQuestions.length === 0) {
                 if (typeof Swal !== 'undefined') {
                     Swal.fire({
