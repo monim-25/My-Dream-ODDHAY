@@ -396,21 +396,25 @@
                     <% }) %>
                 </div>
 
-                <!-- Add Slot Buttons (Responsive Grid on Mobile) -->
-                <div class="mt-8">
-                    <p class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-center mb-3">Add Additional Questions</p>
-                    <div class="grid grid-cols-2 sm:flex sm:flex-wrap sm:justify-center gap-2 sm:gap-3">
-                        <button onclick="addSlot('MCQ')" class="h-10 px-3.5 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer">
-                            <span class="material-symbols-rounded text-base text-blue-500">add_circle</span> + MCQ Slot
-                        </button>
-                        <button onclick="addSlot('Short')" class="h-10 px-3.5 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer">
-                            <span class="material-symbols-rounded text-base text-emerald-500">add_circle</span> + Short Slot
-                        </button>
-                        <button onclick="addSlot('Medium')" class="h-10 px-3.5 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer">
-                            <span class="material-symbols-rounded text-base text-amber-500">add_circle</span> + Medium Slot
-                        </button>
-                        <button onclick="addSlot('Comprehension')" class="h-10 px-3.5 bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer">
-                            <span class="material-symbols-rounded text-base text-violet-500">add_circle</span> + Comprehension
+                <!-- Add Additional Questions Control (Question Archive Style) -->
+                <div class="mt-8 flex flex-col items-center justify-center gap-2.5">
+                    <p class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-center">Add Additional Questions</p>
+                    <div class="flex items-center gap-2">
+                        <div class="flex items-center h-10 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-2xs">
+                            <input type="number" id="bulkAddCount" value="1" min="1" max="50"
+                                class="w-14 h-full bg-transparent text-xs font-semibold text-slate-700 dark:text-slate-200 outline-none text-center" title="Number of slots">
+                            <div class="w-px h-5 bg-slate-300 dark:bg-slate-600 flex-shrink-0"></div>
+                            <select id="bulkAddType" class="h-full px-3 bg-transparent text-xs font-medium text-slate-700 dark:text-slate-200 outline-none cursor-pointer">
+                                <option value="MCQ" class="dark:bg-slate-900">MCQ</option>
+                                <option value="Short" class="dark:bg-slate-900">Short</option>
+                                <option value="Medium" class="dark:bg-slate-900">Medium</option>
+                                <option value="Comprehension" class="dark:bg-slate-900">Comprehension</option>
+                            </select>
+                        </div>
+                        <button type="button" onclick="handleAddSlots()" id="btnAddSlots"
+                            class="h-10 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shrink-0 border border-slate-200 dark:border-slate-700 active:scale-95 cursor-pointer shadow-2xs">
+                            <span class="material-symbols-rounded text-base">add</span>
+                            <span>Add slot</span>
                         </button>
                     </div>
                 </div>
@@ -535,8 +539,19 @@
             } catch (err) { Swal.fire('Error', 'Network error', 'error'); }
         }
 
-        async function addSlot(type) {
-            let data = { questionType: type, isSlot: true };
+        async function handleAddSlots() {
+            const countInput = document.getElementById('bulkAddCount');
+            const typeSelect = document.getElementById('bulkAddType');
+            const count = Math.min(Math.max(parseInt(countInput ? countInput.value : 1) || 1, 1), 50);
+            const type = typeSelect ? typeSelect.value : 'MCQ';
+
+            const btn = document.getElementById('btnAddSlots');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="material-symbols-rounded text-base animate-spin">sync</span><span>Adding...</span>';
+            }
+
+            let data = { questionType: type, isSlot: true, count: count };
             if (type === 'MCQ') {
                 data.questionText = '';
                 data.options = ['', '', '', ''];
@@ -571,10 +586,32 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-                if((await response.json()).success) location.reload();
-                else Swal.fire('Error', 'Failed to add slot', 'error');
-            } catch (err) { Swal.fire('Error', 'Network error', 'error'); }
+                const res = await response.json();
+                if (res.success) {
+                    location.reload();
+                } else {
+                    Swal.fire('Error', res.error || 'Failed to add slot', 'error');
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = '<span class="material-symbols-rounded text-base">add</span><span>Add slot</span>';
+                    }
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Network error', 'error');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<span class="material-symbols-rounded text-base">add</span><span>Add slot</span>';
+                }
+            }
         }
+        window.handleAddSlots = handleAddSlots;
+
+        async function addSlot(type) {
+            const typeSelect = document.getElementById('bulkAddType');
+            if (typeSelect && type) typeSelect.value = type;
+            await handleAddSlots();
+        }
+        window.addSlot = addSlot;
 
         async function editQuestion(qid) {
             const q = questionsData.find(x => x._id === qid);

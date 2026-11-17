@@ -3629,33 +3629,36 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
         }
 
         const isBanglaVal = (req.body.isBangla === true || req.body.isBangla === 'true' || req.body.language === 'bn');
-        quiz.questions.push({ 
-            questionText: (questionText || '').trim(), 
-            options: (type === 'MCQ' && (!options || !options.length)) ? ['', '', '', ''] : (options || []), 
-            correctAnswer: finalCorrectIndex, 
-            explanation: explanation?.trim() || '',
-            questionType: type,
-            isBangla: isBanglaVal,
-            language: isBanglaVal ? 'bn' : 'en',
-            context: req.body.context || '',
-            q1: req.body.q1 || '',
-            q2: req.body.q2 || '',
-            q3: req.body.q3 || '',
-            q4: req.body.q4 || '',
-            a1: req.body.a1 || '',
-            a2: req.body.a2 || '',
-            a3: req.body.a3 || '',
-            a4: req.body.a4 || '',
-            s1: req.body.s1 || '',
-            s2: req.body.s2 || '',
-            s3: req.body.s3 || '',
-            s4: req.body.s4 || '',
-            solution1: req.body.solution1 || req.body.s1 || '',
-            solution2: req.body.solution2 || req.body.s2 || '',
-            solution3: req.body.solution3 || req.body.s3 || '',
-            solution4: req.body.solution4 || req.body.s4 || '',
-            marks: req.body.marks || (type === 'Comprehension' ? 10 : (type === 'Medium' ? 4 : (type === 'Short' ? 2 : 1)))
-        });
+        const count = Math.min(Math.max(parseInt(req.body.count) || 1, 1), 50);
+        for (let c = 0; c < count; c++) {
+            quiz.questions.push({ 
+                questionText: (questionText || '').trim(), 
+                options: (type === 'MCQ' && (!options || !options.length)) ? ['', '', '', ''] : (options || []), 
+                correctAnswer: finalCorrectIndex, 
+                explanation: explanation?.trim() || '',
+                questionType: type,
+                isBangla: isBanglaVal,
+                language: isBanglaVal ? 'bn' : 'en',
+                context: req.body.context || '',
+                q1: req.body.q1 || '',
+                q2: req.body.q2 || '',
+                q3: req.body.q3 || '',
+                q4: req.body.q4 || '',
+                a1: req.body.a1 || '',
+                a2: req.body.a2 || '',
+                a3: req.body.a3 || '',
+                a4: req.body.a4 || '',
+                s1: req.body.s1 || '',
+                s2: req.body.s2 || '',
+                s3: req.body.s3 || '',
+                s4: req.body.s4 || '',
+                solution1: req.body.solution1 || req.body.s1 || '',
+                solution2: req.body.solution2 || req.body.s2 || '',
+                solution3: req.body.solution3 || req.body.s3 || '',
+                solution4: req.body.solution4 || req.body.s4 || '',
+                marks: req.body.marks || (type === 'Comprehension' ? 10 : (type === 'Medium' ? 4 : (type === 'Short' ? 2 : 1)))
+            });
+        }
         await quiz.save();
         
         const newQ = quiz.questions[quiz.questions.length - 1];

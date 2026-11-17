@@ -440,16 +440,22 @@ router.post('/quiz/:id/add-question', contentAdminProtect, async (req, res) => {
             return res.status(400).json({ success: false, error: 'প্রশ্ন এবং কমপক্ষে ২টি অপশন দিন।' });
         }
 
+        const count = Math.min(Math.max(parseInt(req.body.count) || 1, 1), 50);
+        const newQuestions = [];
+        for (let c = 0; c < count; c++) {
+            newQuestions.push({
+                questionText: (questionText || '').trim(),
+                options: (!options || !options.length) ? ['', '', '', ''] : options,
+                correctAnswerIndex: finalCorrectIndex,
+                explanation: explanation?.trim() || ''
+            });
+        }
+
         const quiz = await Quiz.findByIdAndUpdate(
             req.params.id,
             { 
                 $push: { 
-                    questions: { 
-                        questionText: (questionText || '').trim(), 
-                        options: (!options || !options.length) ? ['', '', '', ''] : options, 
-                        correctAnswerIndex: finalCorrectIndex, 
-                        explanation: explanation?.trim() || '' 
-                    } 
+                    questions: { $each: newQuestions }
                 } 
             },
             { new: true }
