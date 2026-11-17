@@ -200,27 +200,33 @@
                                 </div>
 
                                 <% 
-                                    const isComprehension = (qType === 'Comprehension') && (q.q1 || q.q2);
+                                    const isComprehension = (qType === 'Comprehension') && (q.q1 || q.q2 || q.q3 || q.q4);
 
                                     let ans1 = ua.q1Answer || '';
                                     let ans2 = ua.q2Answer || '';
-                                    if (!ans1 && !ans2 && ua.writtenAnswer) {
-                                        if (ua.writtenAnswer.includes('[Question 2 / প্রশ্ন ২]:')) {
-                                            const parts = ua.writtenAnswer.split('[Question 2 / প্রশ্ন ২]:');
-                                            ans1 = parts[0].replace(/\[Question 1 \/ প্রশ্ন ১\]:?\s*/i, '').trim();
-                                            ans2 = (parts[1] || '').trim();
-                                        } else if (ua.writtenAnswer.includes('[Question 1 / প্রশ্ন ১]:')) {
-                                            ans1 = ua.writtenAnswer.replace(/\[Question 1 \/ প্রশ্ন ১\]:?\s*/i, '').trim();
-                                        } else {
-                                            ans1 = ua.writtenAnswer.trim();
-                                        }
+                                    let ans3 = ua.q3Answer || '';
+                                    let ans4 = ua.q4Answer || '';
+                                    if (!ans1 && !ans2 && !ans3 && !ans4 && ua.writtenAnswer) {
+                                        const m1 = ua.writtenAnswer.match(/\[Question 1 [^\]]*\]:\s*([\s\S]*?)(?=\[Question \d+ [^\]]*\]:|$)/i);
+                                        const m2 = ua.writtenAnswer.match(/\[Question 2 [^\]]*\]:\s*([\s\S]*?)(?=\[Question \d+ [^\]]*\]:|$)/i);
+                                        const m3 = ua.writtenAnswer.match(/\[Question 3 [^\]]*\]:\s*([\s\S]*?)(?=\[Question \d+ [^\]]*\]:|$)/i);
+                                        const m4 = ua.writtenAnswer.match(/\[Question 4 [^\]]*\]:\s*([\s\S]*?)(?=\[Question \d+ [^\]]*\]:|$)/i);
+                                        if (m1) ans1 = m1[1].trim();
+                                        if (m2) ans2 = m2[1].trim();
+                                        if (m3) ans3 = m3[1].trim();
+                                        if (m4) ans4 = m4[1].trim();
+                                        if (!m1 && !m2 && !m3 && !m4) ans1 = ua.writtenAnswer.trim();
                                     }
 
                                     let img1 = ua.q1Image || '';
                                     let img2 = ua.q2Image || '';
-                                    if (!img1 && !img2 && Array.isArray(ua.writtenImages) && ua.writtenImages.length > 0) {
+                                    let img3 = ua.q3Image || '';
+                                    let img4 = ua.q4Image || '';
+                                    if (!img1 && !img2 && !img3 && !img4 && Array.isArray(ua.writtenImages) && ua.writtenImages.length > 0) {
                                         img1 = ua.writtenImages[0] || '';
                                         img2 = ua.writtenImages[1] || '';
+                                        img3 = ua.writtenImages[2] || '';
+                                        img4 = ua.writtenImages[3] || '';
                                     }
                                     if (!img1 && ua.writtenImage) {
                                         img1 = ua.writtenImage;
@@ -237,9 +243,12 @@
                                     <!-- SEPARATE QUESTIONS WITH INDIVIDUAL MODEL SOLUTIONS & STUDENT SOLUTIONS -->
                                     <div class="space-y-4 pt-1">
                                         <% 
+                                            const has4 = q.q3 || q.q4;
                                             const subQuestions = [
-                                                { num: 1, title: q.q1, modelSol: q.a1, studentAns: ans1, studentImg: resolveImg(img1), maxMark: 3, awardedMark: (ua.q1Marks !== undefined && ua.q1Marks !== null ? ua.q1Marks : null), teacherImg: resolveImg(ua.q1TeacherImage || '') },
-                                                { num: 2, title: q.q2, modelSol: q.a2, studentAns: ans2, studentImg: resolveImg(img2), maxMark: 4, awardedMark: (ua.q2Marks !== undefined && ua.q2Marks !== null ? ua.q2Marks : null), teacherImg: resolveImg(ua.q2TeacherImage || '') }
+                                                { num: 1, title: q.q1, modelSol: q.a1, studentAns: ans1, studentImg: resolveImg(img1), maxMark: has4 ? 1 : 3, awardedMark: (ua.q1Marks !== undefined && ua.q1Marks !== null ? ua.q1Marks : null), teacherImg: resolveImg(ua.q1TeacherImage || '') },
+                                                { num: 2, title: q.q2, modelSol: q.a2, studentAns: ans2, studentImg: resolveImg(img2), maxMark: has4 ? 2 : 4, awardedMark: (ua.q2Marks !== undefined && ua.q2Marks !== null ? ua.q2Marks : null), teacherImg: resolveImg(ua.q2TeacherImage || '') },
+                                                { num: 3, title: q.q3, modelSol: q.a3, studentAns: ans3, studentImg: resolveImg(img3), maxMark: 3, awardedMark: (ua.q3Marks !== undefined && ua.q3Marks !== null ? ua.q3Marks : null), teacherImg: resolveImg(ua.q3TeacherImage || '') },
+                                                { num: 4, title: q.q4, modelSol: q.a4, studentAns: ans4, studentImg: resolveImg(img4), maxMark: 4, awardedMark: (ua.q4Marks !== undefined && ua.q4Marks !== null ? ua.q4Marks : null), teacherImg: resolveImg(ua.q4TeacherImage || '') }
                                             ].filter(sq => sq.title && sq.title.trim() !== '');
                                         %>
                                         <% subQuestions.forEach(function(sq) { %>
@@ -406,6 +415,8 @@
                                    if (ua.teacherImage) teacherAttachedImgs.push(resolveImg(ua.teacherImage));
                                    if (ua.q1TeacherImage && !teacherAttachedImgs.includes(resolveImg(ua.q1TeacherImage))) teacherAttachedImgs.push(resolveImg(ua.q1TeacherImage));
                                    if (ua.q2TeacherImage && !teacherAttachedImgs.includes(resolveImg(ua.q2TeacherImage))) teacherAttachedImgs.push(resolveImg(ua.q2TeacherImage));
+                                   if (ua.q3TeacherImage && !teacherAttachedImgs.includes(resolveImg(ua.q3TeacherImage))) teacherAttachedImgs.push(resolveImg(ua.q3TeacherImage));
+                                   if (ua.q4TeacherImage && !teacherAttachedImgs.includes(resolveImg(ua.q4TeacherImage))) teacherAttachedImgs.push(resolveImg(ua.q4TeacherImage));
                                    const cleanTeacherAttachedImgs = teacherAttachedImgs.filter(Boolean);
                                 %>
                                 <% if (isQuestionEvaluated && (teacherQuestionComment || cleanTeacherAttachedImgs.length > 0)) { %>

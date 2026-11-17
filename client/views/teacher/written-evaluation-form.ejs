@@ -180,40 +180,66 @@
                                 const existingImage = ua.teacherImage || '';
                                 const modelSolution = q.correctAnswer || q.answer || '';
                                 const qIdKey = q._id ? q._id.toString() : String(index);
-                                const isComprehension = (q.questionType === 'Comprehension') && (q.q1 || q.q2);
+                                const isComprehension = (q.questionType === 'Comprehension') && (q.q1 || q.q2 || q.q3 || q.q4);
                         %>
 
                             <% if (isComprehension) { %>
-                                <!-- COMPREHENSION: QUESTION 1 (MAX 3 MARKS) -->
-                                <% 
-                                    displayQuestionIndex++;
+                                <%
+                                    const has4 = q.q3 || q.q4;
+                                    const maxQ1 = has4 ? 1 : 3;
+                                    const maxQ2 = has4 ? 2 : 4;
+                                    const maxQ3 = 3;
+                                    const maxQ4 = 4;
+
                                     let ans1 = ua.q1Answer || '';
-                                    let img1 = ua.q1Image || '';
-                                    if (!ans1 && ua.writtenAnswer) {
-                                        if (ua.writtenAnswer.includes('[Question 2 / প্রশ্ন ২]:')) {
-                                            const parts = ua.writtenAnswer.split('[Question 2 / প্রশ্ন ২]:');
-                                            ans1 = parts[0].replace(/\[Question 1 \/ প্রশ্ন ১\]:?\s*/i, '').trim();
-                                        } else if (ua.writtenAnswer.includes('[Question 1 / প্রশ্ন ১]:')) {
-                                            ans1 = ua.writtenAnswer.replace(/\[Question 1 \/ প্রশ্ন ১\]:?\s*/i, '').trim();
-                                        } else {
-                                            ans1 = ua.writtenAnswer.trim();
-                                        }
+                                    let ans2 = ua.q2Answer || '';
+                                    let ans3 = ua.q3Answer || '';
+                                    let ans4 = ua.q4Answer || '';
+                                    if (!ans1 && !ans2 && !ans3 && !ans4 && ua.writtenAnswer) {
+                                        const m1 = ua.writtenAnswer.match(/\[Question 1 [^\]]*\]:\s*([\s\S]*?)(?=\[Question \d+ [^\]]*\]:|$)/i);
+                                        const m2 = ua.writtenAnswer.match(/\[Question 2 [^\]]*\]:\s*([\s\S]*?)(?=\[Question \d+ [^\]]*\]:|$)/i);
+                                        const m3 = ua.writtenAnswer.match(/\[Question 3 [^\]]*\]:\s*([\s\S]*?)(?=\[Question \d+ [^\]]*\]:|$)/i);
+                                        const m4 = ua.writtenAnswer.match(/\[Question 4 [^\]]*\]:\s*([\s\S]*?)(?=\[Question \d+ [^\]]*\]:|$)/i);
+                                        if (m1) ans1 = m1[1].trim();
+                                        if (m2) ans2 = m2[1].trim();
+                                        if (m3) ans3 = m3[1].trim();
+                                        if (m4) ans4 = m4[1].trim();
+                                        if (!m1 && !m2 && !m3 && !m4) ans1 = ua.writtenAnswer.trim();
                                     }
-                                    if (!img1 && Array.isArray(ua.writtenImages) && ua.writtenImages.length > 0) {
+
+                                    let img1 = ua.q1Image || '';
+                                    let img2 = ua.q2Image || '';
+                                    let img3 = ua.q3Image || '';
+                                    let img4 = ua.q4Image || '';
+                                    if (!img1 && !img2 && !img3 && !img4 && Array.isArray(ua.writtenImages) && ua.writtenImages.length > 0) {
                                         img1 = ua.writtenImages[0] || '';
+                                        img2 = ua.writtenImages[1] || '';
+                                        img3 = ua.writtenImages[2] || '';
+                                        img4 = ua.writtenImages[3] || '';
                                     }
                                     if (!img1 && ua.writtenImage) {
                                         img1 = ua.writtenImage;
                                     }
 
-                                    let markValQ1 = (ua.q1Marks !== undefined && ua.q1Marks !== null) ? ua.q1Marks : '';
-                                    let commValQ1 = '';
-                                    if (existingComment.includes('[Question 2]:')) {
-                                        const cParts = existingComment.split('[Question 2]:');
-                                        commValQ1 = cParts[0].replace('[Question 1]:', '').trim();
+                                    let commValQ1 = '', commValQ2 = '', commValQ3 = '', commValQ4 = '';
+                                    if (existingComment.includes('[Question 1]:') || existingComment.includes('[Question 2]:') || existingComment.includes('[Question 3]:') || existingComment.includes('[Question 4]:')) {
+                                        const mc1 = existingComment.match(/\[Question 1\]:\s*([\s\S]*?)(?=\[Question \d+\]:|$)/);
+                                        const mc2 = existingComment.match(/\[Question 2\]:\s*([\s\S]*?)(?=\[Question \d+\]:|$)/);
+                                        const mc3 = existingComment.match(/\[Question 3\]:\s*([\s\S]*?)(?=\[Question \d+\]:|$)/);
+                                        const mc4 = existingComment.match(/\[Question 4\]:\s*([\s\S]*?)(?=\[Question \d+\]:|$)/);
+                                        commValQ1 = mc1 ? mc1[1].trim() : '';
+                                        commValQ2 = mc2 ? mc2[1].trim() : '';
+                                        commValQ3 = mc3 ? mc3[1].trim() : '';
+                                        commValQ4 = mc4 ? mc4[1].trim() : '';
                                     } else {
                                         commValQ1 = existingComment;
                                     }
+                                %>
+
+                                <!-- COMPREHENSION: QUESTION 1 -->
+                                <% 
+                                    displayQuestionIndex++;
+                                    let markValQ1 = (ua.q1Marks !== undefined && ua.q1Marks !== null) ? ua.q1Marks : '';
                                     let imgValQ1 = ua.q1TeacherImage || existingImage || '';
 
                                     const mAns1 = (q.a1 || '').trim();
@@ -227,11 +253,11 @@
                                                 Question <%= displayQuestionIndex %>
                                             </span>
                                             <span class="px-2 py-0.5 rounded text-[10px] font-normal bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                                                Comprehension
+                                                Comprehension (১)
                                             </span>
                                         </div>
                                         <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                                            Max Marks: 3
+                                            Max Marks: <%= maxQ1 %>
                                         </span>
                                     </div>
 
@@ -321,23 +347,23 @@
                                                        id="marks_<%= qIdKey %>_q1"
                                                        value="<%= markValQ1 %>" 
                                                        min="0" 
-                                                       max="3" 
+                                                       max="<%= maxQ1 %>" 
                                                        step="0.5" 
                                                        placeholder="0"
-                                                       data-max="3"
+                                                       data-max="<%= maxQ1 %>"
                                                        class="score-input w-16 sm:w-20 px-2 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 focus:outline-hidden focus:border-indigo-500 text-center"
                                                        required>
-                                                <span class="text-xs font-semibold text-slate-400">/ 3</span>
+                                                <span class="text-xs font-semibold text-slate-400">/ <%= maxQ1 %></span>
                                             </div>
                                             <div class="flex items-center gap-1">
                                                 <button type="button" onclick="setQuickScore('<%= qIdKey %>_q1', 0)" class="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 shadow-2xs">
                                                     0
                                                 </button>
-                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q1', 1.5)" class="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 shadow-2xs">
-                                                    Half (1.5)
+                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q1', <%= maxQ1 / 2 %>)" class="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 shadow-2xs">
+                                                    Half (<%= maxQ1 / 2 %>)
                                                 </button>
-                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q1', 3)" class="px-2 py-1 rounded-lg text-[10.5px] font-bold bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer active:scale-95 shadow-2xs">
-                                                    Full (3)
+                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q1', <%= maxQ1 %>)" class="px-2 py-1 rounded-lg text-[10.5px] font-bold bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer active:scale-95 shadow-2xs">
+                                                    Full (<%= maxQ1 %>)
                                                 </button>
                                             </div>
                                         </div>
@@ -397,25 +423,10 @@
                                     </div>
                                 </div>
 
-                                <!-- COMPREHENSION: QUESTION 2 (MAX 4 MARKS) -->
+                                <!-- COMPREHENSION: QUESTION 2 -->
                                 <% 
                                     displayQuestionIndex++;
-                                    let ans2 = ua.q2Answer || '';
-                                    let img2 = ua.q2Image || '';
-                                    if (!ans2 && ua.writtenAnswer && ua.writtenAnswer.includes('[Question 2 / প্রশ্ন ২]:')) {
-                                        const parts = ua.writtenAnswer.split('[Question 2 / প্রশ্ন ২]:');
-                                        ans2 = (parts[1] || '').trim();
-                                    }
-                                    if (!img2 && Array.isArray(ua.writtenImages) && ua.writtenImages.length > 1) {
-                                        img2 = ua.writtenImages[1] || '';
-                                    }
-
                                     let markValQ2 = (ua.q2Marks !== undefined && ua.q2Marks !== null) ? ua.q2Marks : '';
-                                    let commValQ2 = '';
-                                    if (existingComment.includes('[Question 2]:')) {
-                                        const cParts = existingComment.split('[Question 2]:');
-                                        commValQ2 = (cParts[1] || '').trim();
-                                    }
                                     let imgValQ2 = ua.q2TeacherImage || '';
 
                                     const mAns2 = (q.a2 || '').trim();
@@ -429,11 +440,11 @@
                                                 Question <%= displayQuestionIndex %>
                                             </span>
                                             <span class="px-2 py-0.5 rounded text-[10px] font-normal bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                                                Comprehension
+                                                Comprehension (২)
                                             </span>
                                         </div>
                                         <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                                            Max Marks: 4
+                                            Max Marks: <%= maxQ2 %>
                                         </span>
                                     </div>
 
@@ -517,23 +528,23 @@
                                                        id="marks_<%= qIdKey %>_q2"
                                                        value="<%= markValQ2 %>" 
                                                        min="0" 
-                                                       max="4" 
+                                                       max="<%= maxQ2 %>" 
                                                        step="0.5" 
                                                        placeholder="0"
-                                                       data-max="4"
+                                                       data-max="<%= maxQ2 %>"
                                                        class="score-input w-16 sm:w-20 px-2 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 focus:outline-hidden focus:border-indigo-500 text-center"
                                                        required>
-                                                <span class="text-xs font-semibold text-slate-400">/ 4</span>
+                                                <span class="text-xs font-semibold text-slate-400">/ <%= maxQ2 %></span>
                                             </div>
                                             <div class="flex items-center gap-1">
                                                 <button type="button" onclick="setQuickScore('<%= qIdKey %>_q2', 0)" class="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 shadow-2xs">
                                                     0
                                                 </button>
-                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q2', 2)" class="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 shadow-2xs">
-                                                    Half (2)
+                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q2', <%= maxQ2 / 2 %>)" class="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 shadow-2xs">
+                                                    Half (<%= maxQ2 / 2 %>)
                                                 </button>
-                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q2', 4)" class="px-2 py-1 rounded-lg text-[10.5px] font-bold bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer active:scale-95 shadow-2xs">
-                                                    Full (4)
+                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q2', <%= maxQ2 %>)" class="px-2 py-1 rounded-lg text-[10.5px] font-bold bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer active:scale-95 shadow-2xs">
+                                                    Full (<%= maxQ2 %>)
                                                 </button>
                                             </div>
                                         </div>
@@ -592,6 +603,372 @@
                                         </div>
                                     </div>
                                 </div>
+
+                                <!-- COMPREHENSION: QUESTION 3 (SHORT) -->
+                                <% if (q.q3) { %>
+                                <% 
+                                    displayQuestionIndex++;
+                                    let markValQ3 = (ua.q3Marks !== undefined && ua.q3Marks !== null) ? ua.q3Marks : '';
+                                    let imgValQ3 = ua.q3TeacherImage || '';
+
+                                    const mAns3 = (q.a3 || '').trim();
+                                    const hasMAns3 = mAns3 && mAns3 !== '0' && mAns3 !== 'undefined' && mAns3 !== 'null';
+                                %>
+                                <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
+                                    <!-- QUESTION HEADER -->
+                                    <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200/60 dark:border-slate-800">
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                                                Question <%= displayQuestionIndex %>
+                                            </span>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-normal bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                Comprehension (৩ - সংক্ষিপ্ত)
+                                            </span>
+                                        </div>
+                                        <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                            Max Marks: <%= maxQ3 %>
+                                        </span>
+                                    </div>
+
+                                    <!-- QUESTION STATEMENT -->
+                                    <div class="text-sm sm:text-base font-normal text-slate-800 dark:text-slate-100 leading-relaxed">
+                                        <%- q.q3 %>
+                                    </div>
+
+                                    <!-- OFFICIAL MODEL SOLUTION -->
+                                    <% if (hasMAns3) { %>
+                                        <div class="rounded-xl overflow-hidden border border-emerald-500/25 bg-emerald-50/20 dark:bg-emerald-950/15">
+                                            <div class="px-3.5 py-1.5 bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center gap-1.5 border-b border-emerald-500/20">
+                                                <span class="material-symbols-rounded text-emerald-600 dark:text-emerald-400 text-sm leading-none">verified</span>
+                                                <span class="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Model Solution (Reference Answer)</span>
+                                            </div>
+                                            <div class="p-3.5 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed">
+                                                <%- mAns3 %>
+                                            </div>
+                                        </div>
+                                    <% } %>
+
+                                    <!-- STUDENT'S SUBMITTED ANSWER -->
+                                    <div class="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 space-y-2">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                <span class="material-symbols-rounded text-sm text-cyan-600 dark:text-cyan-400 leading-none">edit_note</span>
+                                                <span>Student's Submitted Answer:</span>
+                                            </span>
+                                            <% if ((!ans3 || ans3.trim() === '') && !img3) { %>
+                                                <span class="text-[10px] font-medium px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                                                    Not Answered / Left Blank
+                                                </span>
+                                            <% } %>
+                                        </div>
+                                        <% if (ans3 && ans3.trim() !== '') { %>
+                                            <div class="p-3 rounded-lg bg-white dark:bg-[#0b1120] border border-slate-200/60 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap min-h-[44px]">
+                                                <%= ans3 %>
+                                            </div>
+                                        <% } %>
+                                        <% if (img3) { 
+                                            const cleanImg3 = resolveImg(img3);
+                                        %>
+                                            <div class="pt-2 space-y-1.5">
+                                                <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                                                    <span class="material-symbols-rounded text-sm">photo_library</span>
+                                                    <span>Student's Submitted Picture:</span>
+                                                </span>
+                                                <div class="inline-flex flex-col gap-1.5 p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs">
+                                                    <div class="relative group rounded-lg overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shadow-2xs cursor-pointer select-none" onclick="openFullscreenEvaluationImage('<%= cleanImg3 %>')">
+                                                        <img src="<%= cleanImg3 %>" alt="Student Submission" class="max-h-56 sm:max-h-72 w-auto rounded-lg object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
+                                                        <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                                            <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
+                                                                <span class="material-symbols-rounded text-xl">fullscreen</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center justify-between gap-2 px-1 pt-0.5">
+                                                        <button type="button" onclick="openFullscreenEvaluationImage('<%= cleanImg3 %>')" class="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                                                            <span class="material-symbols-rounded text-sm">zoom_in</span>
+                                                            <span>Zoom</span>
+                                                        </button>
+                                                        <a href="<%= cleanImg3 %>" target="_blank" rel="noopener noreferrer" class="text-[11px] font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:underline inline-flex items-center gap-0.5">
+                                                            <span class="material-symbols-rounded text-xs">open_in_new</span>
+                                                            <span>New Tab</span>
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <% } %>
+                                    </div>
+
+                                    <!-- TEACHER EVALUATION INPUTS (MARKS & FEEDBACK) -->
+                                    <div class="p-3.5 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 space-y-3">
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <div class="flex items-center gap-1.5">
+                                                <label class="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                    Award Marks:
+                                                </label>
+                                                <input type="number" 
+                                                       name="marks_<%= qIdKey %>_q3" 
+                                                       id="marks_<%= qIdKey %>_q3"
+                                                       value="<%= markValQ3 %>" 
+                                                       min="0" 
+                                                       max="<%= maxQ3 %>" 
+                                                       step="0.5" 
+                                                       placeholder="0"
+                                                       data-max="<%= maxQ3 %>"
+                                                       class="score-input w-16 sm:w-20 px-2 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 focus:outline-hidden focus:border-indigo-500 text-center"
+                                                       required>
+                                                <span class="text-xs font-semibold text-slate-400">/ <%= maxQ3 %></span>
+                                            </div>
+                                            <div class="flex items-center gap-1">
+                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q3', 0)" class="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 shadow-2xs">
+                                                    0
+                                                </button>
+                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q3', <%= maxQ3 / 2 %>)" class="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 shadow-2xs">
+                                                    Half (<%= maxQ3 / 2 %>)
+                                                </button>
+                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q3', <%= maxQ3 %>)" class="px-2 py-1 rounded-lg text-[10.5px] font-bold bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer active:scale-95 shadow-2xs">
+                                                    Full (<%= maxQ3 %>)
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <div class="flex items-start gap-2">
+                                                <div class="flex-1 min-w-0">
+                                                    <textarea 
+                                                        name="comment_<%= qIdKey %>_q3" 
+                                                        rows="2" 
+                                                        placeholder="Teacher's comment / feedback note for Question <%= displayQuestionIndex %>..."
+                                                        class="w-full p-2.5 rounded-xl text-xs sm:text-sm bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 placeholder:text-slate-400 transition-colors resize-y leading-relaxed min-h-[56px]"><%= commValQ3 %></textarea>
+                                                </div>
+                                                <div class="flex flex-col items-center shrink-0 pt-0.5">
+                                                    <input type="file" 
+                                                           id="file_input_<%= qIdKey %>_q3" 
+                                                           accept="image/*" 
+                                                           class="hidden" 
+                                                           onchange="handleTeacherImageUpload(this, '<%= qIdKey %>_q3')">
+                                                    <input type="hidden" 
+                                                           id="hidden_image_<%= qIdKey %>_q3" 
+                                                           name="image_<%= qIdKey %>_q3" 
+                                                           value="<%= imgValQ3 %>">
+                                                    
+                                                    <button type="button" 
+                                                            onclick="document.getElementById('file_input_<%= qIdKey %>_q3').click()" 
+                                                            class="size-10 rounded-xl flex items-center justify-center border border-indigo-200/90 dark:border-indigo-800/80 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-400 transition-all shadow-2xs group cursor-pointer" 
+                                                            title="Attach picture / solution note for this question">
+                                                        <span class="material-symbols-rounded text-xl group-hover:scale-110 transition-transform">add_photo_alternate</span>
+                                                    </button>
+                                                    <span class="text-[9.5px] text-slate-400 font-medium mt-0.5">Photo</span>
+                                                </div>
+                                            </div>
+
+                                            <% const cleanImgValQ3 = resolveImg(imgValQ3); %>
+                                            <div id="image_preview_wrap_<%= qIdKey %>_q3" class="<%= cleanImgValQ3 ? '' : 'hidden' %>">
+                                                <div class="relative inline-flex items-center gap-2.5 p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs">
+                                                    <a id="image_link_<%= qIdKey %>_q3" href="<%= cleanImgValQ3 || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
+                                                        <img id="image_preview_<%= qIdKey %>_q3" src="<%= cleanImgValQ3 || '' %>" alt="Attached preview" class="size-full object-cover">
+                                                    </a>
+                                                    <div class="space-y-0.5 pr-2">
+                                                        <p class="text-[11px] font-medium text-slate-700 dark:text-slate-300">Attached Picture</p>
+                                                        <div class="flex items-center gap-2">
+                                                            <button type="button" onclick="openFullscreenEvaluationImage(document.getElementById('image_preview_<%= qIdKey %>_q3').src)" class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 cursor-pointer">
+                                                                <span class="material-symbols-rounded text-xs">zoom_in</span>
+                                                                <span>View</span>
+                                                            </button>
+                                                            <button type="button" onclick="removeTeacherImage('<%= qIdKey %>_q3')" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
+                                                                <span class="material-symbols-rounded text-xs">delete</span>
+                                                                <span>Remove</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <% } %>
+
+                                <!-- COMPREHENSION: QUESTION 4 (MEDIUM) -->
+                                <% if (q.q4) { %>
+                                <% 
+                                    displayQuestionIndex++;
+                                    let markValQ4 = (ua.q4Marks !== undefined && ua.q4Marks !== null) ? ua.q4Marks : '';
+                                    let imgValQ4 = ua.q4TeacherImage || '';
+
+                                    const mAns4 = (q.a4 || '').trim();
+                                    const hasMAns4 = mAns4 && mAns4 !== '0' && mAns4 !== 'undefined' && mAns4 !== 'null';
+                                %>
+                                <div class="bg-white dark:bg-[#0f172a] border border-slate-200/80 dark:border-slate-800 rounded-2xl p-4 sm:p-5 shadow-2xs space-y-4">
+                                    <!-- QUESTION HEADER -->
+                                    <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200/60 dark:border-slate-800">
+                                        <div class="flex items-center gap-2">
+                                            <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                                                Question <%= displayQuestionIndex %>
+                                            </span>
+                                            <span class="px-2 py-0.5 rounded text-[10px] font-normal bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                                Comprehension (৪ - মাঝারি/উচ্চতর)
+                                            </span>
+                                        </div>
+                                        <span class="px-2.5 py-0.5 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                            Max Marks: <%= maxQ4 %>
+                                        </span>
+                                    </div>
+
+                                    <!-- QUESTION STATEMENT -->
+                                    <div class="text-sm sm:text-base font-normal text-slate-800 dark:text-slate-100 leading-relaxed">
+                                        <%- q.q4 %>
+                                    </div>
+
+                                    <!-- OFFICIAL MODEL SOLUTION -->
+                                    <% if (hasMAns4) { %>
+                                        <div class="rounded-xl overflow-hidden border border-emerald-500/25 bg-emerald-50/20 dark:bg-emerald-950/15">
+                                            <div class="px-3.5 py-1.5 bg-emerald-500/10 dark:bg-emerald-500/15 flex items-center gap-1.5 border-b border-emerald-500/20">
+                                                <span class="material-symbols-rounded text-emerald-600 dark:text-emerald-400 text-sm leading-none">verified</span>
+                                                <span class="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Model Solution (Reference Answer)</span>
+                                            </div>
+                                            <div class="p-3.5 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed">
+                                                <%- mAns4 %>
+                                            </div>
+                                        </div>
+                                    <% } %>
+
+                                    <!-- STUDENT'S SUBMITTED ANSWER -->
+                                    <div class="p-4 rounded-xl bg-slate-50/80 dark:bg-slate-900/80 border border-slate-200/90 dark:border-slate-800 space-y-2">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                                                <span class="material-symbols-rounded text-sm text-cyan-600 dark:text-cyan-400 leading-none">edit_note</span>
+                                                <span>Student's Submitted Answer:</span>
+                                            </span>
+                                            <% if ((!ans4 || ans4.trim() === '') && !img4) { %>
+                                                <span class="text-[10px] font-medium px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">
+                                                    Not Answered / Left Blank
+                                                </span>
+                                            <% } %>
+                                        </div>
+                                        <% if (ans4 && ans4.trim() !== '') { %>
+                                            <div class="p-3 rounded-lg bg-white dark:bg-[#0b1120] border border-slate-200/60 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap min-h-[44px]">
+                                                <%= ans4 %>
+                                            </div>
+                                        <% } %>
+                                        <% if (img4) { 
+                                            const cleanImg4 = resolveImg(img4);
+                                        %>
+                                            <div class="pt-2 space-y-1.5">
+                                                <span class="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1.5">
+                                                    <span class="material-symbols-rounded text-sm">photo_library</span>
+                                                    <span>Student's Submitted Picture:</span>
+                                                </span>
+                                                <div class="inline-flex flex-col gap-1.5 p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs">
+                                                    <div class="relative group rounded-lg overflow-hidden border border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 shadow-2xs cursor-pointer select-none" onclick="openFullscreenEvaluationImage('<%= cleanImg4 %>')">
+                                                        <img src="<%= cleanImg4 %>" alt="Student Submission" class="max-h-56 sm:max-h-72 w-auto rounded-lg object-contain block transition-transform duration-200 group-hover:scale-[1.02]">
+                                                        <div class="absolute inset-0 bg-slate-950/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
+                                                            <div class="size-9 rounded-xl bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow border border-white/20">
+                                                                <span class="material-symbols-rounded text-xl">fullscreen</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center justify-between gap-2 px-1 pt-0.5">
+                                                        <button type="button" onclick="openFullscreenEvaluationImage('<%= cleanImg4 %>')" class="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-1 cursor-pointer">
+                                                            <span class="material-symbols-rounded text-sm">zoom_in</span>
+                                                            <span>Zoom</span>
+                                                        </button>
+                                                        <a href="<%= cleanImg4 %>" target="_blank" rel="noopener noreferrer" class="text-[11px] font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:underline inline-flex items-center gap-0.5">
+                                                            <span class="material-symbols-rounded text-xs">open_in_new</span>
+                                                            <span>New Tab</span>
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <% } %>
+                                    </div>
+
+                                    <!-- TEACHER EVALUATION INPUTS (MARKS & FEEDBACK) -->
+                                    <div class="p-3.5 rounded-xl bg-indigo-50/40 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 space-y-3">
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <div class="flex items-center gap-1.5">
+                                                <label class="text-[11px] sm:text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                    Award Marks:
+                                                </label>
+                                                <input type="number" 
+                                                       name="marks_<%= qIdKey %>_q4" 
+                                                       id="marks_<%= qIdKey %>_q4"
+                                                       value="<%= markValQ4 %>" 
+                                                       min="0" 
+                                                       max="<%= maxQ4 %>" 
+                                                       step="0.5" 
+                                                       placeholder="0"
+                                                       data-max="<%= maxQ4 %>"
+                                                       class="score-input w-16 sm:w-20 px-2 sm:px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-800/80 text-indigo-700 dark:text-indigo-300 focus:outline-hidden focus:border-indigo-500 text-center"
+                                                       required>
+                                                <span class="text-xs font-semibold text-slate-400">/ <%= maxQ4 %></span>
+                                            </div>
+                                            <div class="flex items-center gap-1">
+                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q4', 0)" class="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 shadow-2xs">
+                                                    0
+                                                </button>
+                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q4', <%= maxQ4 / 2 %>)" class="px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-all cursor-pointer active:scale-95 shadow-2xs">
+                                                    Half (<%= maxQ4 / 2 %>)
+                                                </button>
+                                                <button type="button" onclick="setQuickScore('<%= qIdKey %>_q4', <%= maxQ4 %>)" class="px-2 py-1 rounded-lg text-[10.5px] font-bold bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-all cursor-pointer active:scale-95 shadow-2xs">
+                                                    Full (<%= maxQ4 %>)
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div class="space-y-2">
+                                            <div class="flex items-start gap-2">
+                                                <div class="flex-1 min-w-0">
+                                                    <textarea 
+                                                        name="comment_<%= qIdKey %>_q4" 
+                                                        rows="2" 
+                                                        placeholder="Teacher's comment / feedback note for Question <%= displayQuestionIndex %>..."
+                                                        class="w-full p-2.5 rounded-xl text-xs sm:text-sm bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:border-indigo-500 placeholder:text-slate-400 transition-colors resize-y leading-relaxed min-h-[56px]"><%= commValQ4 %></textarea>
+                                                </div>
+                                                <div class="flex flex-col items-center shrink-0 pt-0.5">
+                                                    <input type="file" 
+                                                           id="file_input_<%= qIdKey %>_q4" 
+                                                           accept="image/*" 
+                                                           class="hidden" 
+                                                           onchange="handleTeacherImageUpload(this, '<%= qIdKey %>_q4')">
+                                                    <input type="hidden" 
+                                                           id="hidden_image_<%= qIdKey %>_q4" 
+                                                           name="image_<%= qIdKey %>_q4" 
+                                                           value="<%= imgValQ4 %>">
+                                                    
+                                                    <button type="button" 
+                                                            onclick="document.getElementById('file_input_<%= qIdKey %>_q4').click()" 
+                                                            class="size-10 rounded-xl flex items-center justify-center border border-indigo-200/90 dark:border-indigo-800/80 bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:border-indigo-400 transition-all shadow-2xs group cursor-pointer" 
+                                                            title="Attach picture / solution note for this question">
+                                                        <span class="material-symbols-rounded text-xl group-hover:scale-110 transition-transform">add_photo_alternate</span>
+                                                    </button>
+                                                    <span class="text-[9.5px] text-slate-400 font-medium mt-0.5">Photo</span>
+                                                </div>
+                                            </div>
+
+                                            <% const cleanImgValQ4 = resolveImg(imgValQ4); %>
+                                            <div id="image_preview_wrap_<%= qIdKey %>_q4" class="<%= cleanImgValQ4 ? '' : 'hidden' %>">
+                                                <div class="relative inline-flex items-center gap-2.5 p-1.5 rounded-xl bg-white dark:bg-slate-900 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs">
+                                                    <a id="image_link_<%= qIdKey %>_q4" href="<%= cleanImgValQ4 || '#' %>" target="_blank" class="block size-12 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0">
+                                                        <img id="image_preview_<%= qIdKey %>_q4" src="<%= cleanImgValQ4 || '' %>" alt="Attached preview" class="size-full object-cover">
+                                                    </a>
+                                                    <div class="space-y-0.5 pr-2">
+                                                        <p class="text-[11px] font-medium text-slate-700 dark:text-slate-300">Attached Picture</p>
+                                                        <div class="flex items-center gap-2">
+                                                            <button type="button" onclick="openFullscreenEvaluationImage(document.getElementById('image_preview_<%= qIdKey %>_q4').src)" class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline inline-flex items-center gap-0.5 cursor-pointer">
+                                                                <span class="material-symbols-rounded text-xs">zoom_in</span>
+                                                                <span>View</span>
+                                                            </button>
+                                                            <button type="button" onclick="removeTeacherImage('<%= qIdKey %>_q4')" class="text-[11px] font-medium text-rose-600 hover:text-rose-500 inline-flex items-center gap-0.5 cursor-pointer">
+                                                                <span class="material-symbols-rounded text-xs">delete</span>
+                                                                <span>Remove</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <% } %>
                             <% } else { %>
                                 <!-- STANDARD NON-MCQ QUESTION -->
                                 <% displayQuestionIndex++; %>
@@ -645,6 +1022,8 @@
                                                 }
                                                 if (ua.q1Image && !studentImgs.includes(ua.q1Image)) studentImgs.push(ua.q1Image);
                                                 if (ua.q2Image && !studentImgs.includes(ua.q2Image)) studentImgs.push(ua.q2Image);
+                                                if (ua.q3Image && !studentImgs.includes(ua.q3Image)) studentImgs.push(ua.q3Image);
+                                                if (ua.q4Image && !studentImgs.includes(ua.q4Image)) studentImgs.push(ua.q4Image);
                                             %>
                                             <% if ((!ua.writtenAnswer || ua.writtenAnswer.trim() === '') && studentImgs.length === 0) { %>
                                                 <span class="text-[10px] font-medium px-2 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40">

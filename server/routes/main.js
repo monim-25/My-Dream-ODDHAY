@@ -3389,12 +3389,16 @@ router.post('/question-bank/solve/:id', protect, async (req, res) => {
                 nonMcqCount++;
                 const q1Ans = body[`written_q1_${qIdStr}`] ? String(body[`written_q1_${qIdStr}`]).trim() : '';
                 const q2Ans = body[`written_q2_${qIdStr}`] ? String(body[`written_q2_${qIdStr}`]).trim() : '';
+                const q3Ans = body[`written_q3_${qIdStr}`] ? String(body[`written_q3_${qIdStr}`]).trim() : '';
+                const q4Ans = body[`written_q4_${qIdStr}`] ? String(body[`written_q4_${qIdStr}`]).trim() : '';
                 const directAns = body[`written_${qIdStr}`] ? String(body[`written_${qIdStr}`]).trim() : '';
 
                 let written = '';
-                if (q1Ans || q2Ans) {
+                if (q1Ans || q2Ans || q3Ans || q4Ans) {
                     if (q1Ans) written += `[Question 1 / প্রশ্ন ১]:\n${q1Ans}`;
                     if (q2Ans) written += (written ? '\n\n' : '') + `[Question 2 / প্রশ্ন ২]:\n${q2Ans}`;
+                    if (q3Ans) written += (written ? '\n\n' : '') + `[Question 3 (Short) / প্রশ্ন ৩]:\n${q3Ans}`;
+                    if (q4Ans) written += (written ? '\n\n' : '') + `[Question 4 (Medium) / প্রশ্ন ৪]:\n${q4Ans}`;
                     if (directAns && !written.includes(directAns)) {
                         written += (written ? '\n\n' : '') + directAns;
                     }
@@ -3404,8 +3408,10 @@ router.post('/question-bank/solve/:id', protect, async (req, res) => {
 
                 const img1 = body[`image_q1_${qIdStr}`] ? String(body[`image_q1_${qIdStr}`]).trim() : '';
                 const img2 = body[`image_q2_${qIdStr}`] ? String(body[`image_q2_${qIdStr}`]).trim() : '';
+                const img3 = body[`image_q3_${qIdStr}`] ? String(body[`image_q3_${qIdStr}`]).trim() : '';
+                const img4 = body[`image_q4_${qIdStr}`] ? String(body[`image_q4_${qIdStr}`]).trim() : '';
                 const directImg = body[`image_${qIdStr}`] ? String(body[`image_${qIdStr}`]).trim() : '';
-                const allImgs = [directImg, img1, img2].filter(Boolean);
+                const allImgs = [directImg, img1, img2, img3, img4].filter(Boolean);
 
                 userAnswers.push({
                     questionId: q._id,
@@ -3415,8 +3421,12 @@ router.post('/question-bank/solve/:id', protect, async (req, res) => {
                     writtenImages: allImgs,
                     q1Answer: q1Ans,
                     q2Answer: q2Ans,
+                    q3Answer: q3Ans,
+                    q4Answer: q4Ans,
                     q1Image: img1,
                     q2Image: img2,
+                    q3Image: img3,
+                    q4Image: img4,
                     isCorrect: false,
                     marksObtained: 0,
                     maxMarks: qMaxMark

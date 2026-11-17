@@ -3610,7 +3610,25 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
             options, 
             correctAnswer: finalCorrectIndex, 
             explanation: explanation?.trim() || '',
-            questionType: req.body.questionType || 'MCQ'
+            questionType: req.body.questionType || 'MCQ',
+            context: req.body.context || '',
+            q1: req.body.q1 || '',
+            q2: req.body.q2 || '',
+            q3: req.body.q3 || '',
+            q4: req.body.q4 || '',
+            a1: req.body.a1 || '',
+            a2: req.body.a2 || '',
+            a3: req.body.a3 || '',
+            a4: req.body.a4 || '',
+            s1: req.body.s1 || '',
+            s2: req.body.s2 || '',
+            s3: req.body.s3 || '',
+            s4: req.body.s4 || '',
+            solution1: req.body.solution1 || req.body.s1 || '',
+            solution2: req.body.solution2 || req.body.s2 || '',
+            solution3: req.body.solution3 || req.body.s3 || '',
+            solution4: req.body.solution4 || req.body.s4 || '',
+            marks: req.body.marks || (type === 'Comprehension' ? 10 : (type === 'Medium' ? 4 : (type === 'Short' ? 2 : 1)))
         });
         await quiz.save();
         
@@ -3629,7 +3647,7 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
             return res.status(403).json({ success: false, error: 'Access denied' });
         }
 
-        let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation, answer, context, q1, q2, a1, a2, marks, board, year, questionType, topic, chapter, subTopic } = req.body;
+        let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation, answer, context, q1, q2, q3, q4, a1, a2, a3, a4, s1, s2, s3, s4, marks, board, year, questionType, topic, chapter, subTopic } = req.body;
         
         if (!options || !Array.isArray(options)) {
             options = [optionA, optionB, optionC, optionD].filter(o => o !== undefined && o !== null);
@@ -3676,8 +3694,16 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
         if (context !== undefined) updateData['questions.$.context'] = context;
         if (q1 !== undefined) updateData['questions.$.q1'] = q1;
         if (q2 !== undefined) updateData['questions.$.q2'] = q2;
+        if (q3 !== undefined) updateData['questions.$.q3'] = q3;
+        if (q4 !== undefined) updateData['questions.$.q4'] = q4;
         if (a1 !== undefined) updateData['questions.$.a1'] = a1;
         if (a2 !== undefined) updateData['questions.$.a2'] = a2;
+        if (a3 !== undefined) updateData['questions.$.a3'] = a3;
+        if (a4 !== undefined) updateData['questions.$.a4'] = a4;
+        if (s1 !== undefined) updateData['questions.$.s1'] = s1;
+        if (s2 !== undefined) updateData['questions.$.s2'] = s2;
+        if (s3 !== undefined) updateData['questions.$.s3'] = s3;
+        if (s4 !== undefined) updateData['questions.$.s4'] = s4;
 
         await Quiz.updateOne(
             { _id: req.params.id, 'questions._id': req.params.qid },
@@ -3950,7 +3976,7 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
             return res.status(403).send('Unauthorized');
         }
 
-        const { questionIds, texts, correctAnswers, correctIndices, answers, explanations, marks, contexts, q1s, a1s, s1s, q2s, a2s, s2s } = req.body;
+        const { questionIds, texts, correctAnswers, correctIndices, answers, explanations, marks, contexts, q1s, a1s, s1s, q2s, a2s, s2s, q3s, a3s, s3s, q4s, a4s, s4s } = req.body;
         if (!questionIds || !Array.isArray(questionIds)) {
             return res.redirect(`/teacher/edit-question-bank/${req.params.id}?error=No questions to update`);
         }
@@ -3977,6 +4003,18 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
             if (s2s && s2s[i] !== undefined) {
                 updateObj.s2 = s2s[i];
                 updateObj.solution2 = s2s[i];
+            }
+            if (q3s && q3s[i] !== undefined) updateObj.q3 = q3s[i];
+            if (a3s && a3s[i] !== undefined) updateObj.a3 = a3s[i];
+            if (s3s && s3s[i] !== undefined) {
+                updateObj.s3 = s3s[i];
+                updateObj.solution3 = s3s[i];
+            }
+            if (q4s && q4s[i] !== undefined) updateObj.q4 = q4s[i];
+            if (a4s && a4s[i] !== undefined) updateObj.a4 = a4s[i];
+            if (s4s && s4s[i] !== undefined) {
+                updateObj.s4 = s4s[i];
+                updateObj.solution4 = s4s[i];
             }
 
             if (explanations && explanations[i] !== undefined) {
@@ -4231,6 +4269,12 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const qSubQ2s    = [].concat(body['qSubQ2[]']    || body.qSubQ2    || body['q2[]'] || body.q2 || []);
         const qSubA2s    = [].concat(body['qSubA2[]']    || body.qSubA2    || body['a2[]'] || body.a2 || []);
         const qSubS2s    = [].concat(body['qSubS2[]']    || body.qSubS2    || body['s2[]'] || body.s2 || []);
+        const qSubQ3s    = [].concat(body['qSubQ3[]']    || body.qSubQ3    || body['q3[]'] || body.q3 || []);
+        const qSubA3s    = [].concat(body['qSubA3[]']    || body.qSubA3    || body['a3[]'] || body.a3 || []);
+        const qSubS3s    = [].concat(body['qSubS3[]']    || body.qSubS3    || body['s3[]'] || body.s3 || []);
+        const qSubQ4s    = [].concat(body['qSubQ4[]']    || body.qSubQ4    || body['q4[]'] || body.q4 || []);
+        const qSubA4s    = [].concat(body['qSubA4[]']    || body.qSubA4    || body['a4[]'] || body.a4 || []);
+        const qSubS4s    = [].concat(body['qSubS4[]']    || body.qSubS4    || body['s4[]'] || body.s4 || []);
 
         // qOptions[] comes as groups of 4 per question
         const allOptions = [].concat(body['qOptions[]'] || body.qOptions || []);
@@ -4353,13 +4397,19 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             const q2Val = (qSubQ2s[i] || '').trim();
             const a2Val = (qSubA2s[i] || '').trim();
             const s2Val = (qSubS2s[i] || '').trim();
+            const q3Val = (qSubQ3s[i] || '').trim();
+            const a3Val = (qSubA3s[i] || '').trim();
+            const s3Val = (qSubS3s[i] || '').trim();
+            const q4Val = (qSubQ4s[i] || '').trim();
+            const a4Val = (qSubA4s[i] || '').trim();
+            const s4Val = (qSubS4s[i] || '').trim();
 
             const questionTextFinal = isComprehension ? (contextVal || text) : text;
             const explanationFinal = isComprehension 
-                ? ([s1Val && `1. ${s1Val}`, s2Val && `2. ${s2Val}`].filter(Boolean).join('\n') || qExplains[i] || '')
+                ? ([s1Val && `1. ${s1Val}`, s2Val && `2. ${s2Val}`, s3Val && `3. ${s3Val}`, s4Val && `4. ${s4Val}`].filter(Boolean).join('\n') || qExplains[i] || '')
                 : (qExplains[i] || '');
             const answerFinal = isComprehension
-                ? ([a1Val && `1. ${a1Val}`, a2Val && `2. ${a2Val}`].filter(Boolean).join('\n') || '')
+                ? ([a1Val && `1. ${a1Val}`, a2Val && `2. ${a2Val}`, a3Val && `3. ${a3Val}`, a4Val && `4. ${a4Val}`].filter(Boolean).join('\n') || '')
                 : (qAnswers[i] || '');
 
             const assignedChapter = (qChapters[i] !== undefined && qChapters[i] !== null)
@@ -4388,6 +4438,14 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 a2: isComprehension ? a2Val : '',
                 s2: isComprehension ? s2Val : '',
                 solution2: isComprehension ? s2Val : '',
+                q3: isComprehension ? q3Val : '',
+                a3: isComprehension ? a3Val : '',
+                s3: isComprehension ? s3Val : '',
+                solution3: isComprehension ? s3Val : '',
+                q4: isComprehension ? q4Val : '',
+                a4: isComprehension ? a4Val : '',
+                s4: isComprehension ? s4Val : '',
+                solution4: isComprehension ? s4Val : '',
                 marks: parseInt(qMarks[i] || (isComprehension ? 10 : 1)) || (isComprehension ? 10 : 1),
                 segment: (body['qSegment[]']?.[i] || body.segment || topicSegmentMap.get(assignedTopic.toLowerCase()) || ''),
                 chapter: assignedChapter,
@@ -4430,7 +4488,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
 router.post('/edit-question/:id', teacherProtect, async (req, res) => {
     try {
         await connectDB();
-        const { questionText, questionType, options, correctAnswerIndex, correctAnswer, explanation, board, year, subject, classLevel, accessType, context, q1, q2, a1, a2, s1, s2, solution1, solution2, chapter, topic, subTopic } = req.body;
+        const { questionText, questionType, options, correctAnswerIndex, correctAnswer, explanation, board, year, subject, classLevel, accessType, context, q1, q2, q3, q4, a1, a2, a3, a4, s1, s2, s3, s4, solution1, solution2, solution3, solution4, chapter, topic, subTopic } = req.body;
         const q = await Question.findById(req.params.id);
         if (!q) return res.status(404).send('Not found');
         if (q.addedBy.toString() !== req.session.user._id.toString()) return res.status(403).send('Unauthorized');
@@ -4459,14 +4517,24 @@ router.post('/edit-question/:id', teacherProtect, async (req, res) => {
             if (context !== undefined) updateData.context = context;
             if (q1 !== undefined) updateData.q1 = q1;
             if (q2 !== undefined) updateData.q2 = q2;
+            if (q3 !== undefined) updateData.q3 = q3;
+            if (q4 !== undefined) updateData.q4 = q4;
             if (a1 !== undefined) updateData.a1 = a1;
             if (a2 !== undefined) updateData.a2 = a2;
+            if (a3 !== undefined) updateData.a3 = a3;
+            if (a4 !== undefined) updateData.a4 = a4;
             const sol1 = s1 || solution1 || '';
             const sol2 = s2 || solution2 || '';
+            const sol3 = s3 || solution3 || '';
+            const sol4 = s4 || solution4 || '';
             updateData.s1 = sol1;
             updateData.solution1 = sol1;
             updateData.s2 = sol2;
             updateData.solution2 = sol2;
+            updateData.s3 = sol3;
+            updateData.solution3 = sol3;
+            updateData.s4 = sol4;
+            updateData.solution4 = sol4;
         }
 
         const updated = await Question.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('addedBy', 'name profileImage');
@@ -5495,14 +5563,14 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
                 const qIdStr = ua.questionId ? ua.questionId.toString() : String(idx);
                 const qObj = qMap.get(qIdStr);
                 const isComprehension = (ua.questionType === 'Comprehension') || (qObj && qObj.questionType === 'Comprehension');
-                const defaultMark = (ua.questionType === 'Medium') ? 2 : (isComprehension ? 7 : 1);
+                const defaultMark = (ua.questionType === 'Medium') ? 2 : (isComprehension ? 10 : 1);
                 const maxM = (qObj && typeof qObj.marks === 'number' && qObj.marks > 0) ? qObj.marks : (ua.maxMarks || defaultMark);
 
                 ua.maxMarks = maxM;
 
                 let markObtained = 0;
                 if (isComprehension) {
-                    // Check for individual sub-question marks (Question 1 out of 3, Question 2 out of 4)
+                    // Check for individual sub-question marks
                     let q1Input = req.body[`marks_${qIdStr}_q1`];
                     if (q1Input === undefined && qObj) q1Input = req.body[`marks_${qObj._id.toString()}_q1`];
                     if (q1Input === undefined) q1Input = req.body[`marks_${idx}_q1`];
@@ -5511,14 +5579,31 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
                     if (q2Input === undefined && qObj) q2Input = req.body[`marks_${qObj._id.toString()}_q2`];
                     if (q2Input === undefined) q2Input = req.body[`marks_${idx}_q2`];
 
-                    if (q1Input !== undefined || q2Input !== undefined) {
+                    let q3Input = req.body[`marks_${qIdStr}_q3`];
+                    if (q3Input === undefined && qObj) q3Input = req.body[`marks_${qObj._id.toString()}_q3`];
+                    if (q3Input === undefined) q3Input = req.body[`marks_${idx}_q3`];
+
+                    let q4Input = req.body[`marks_${qIdStr}_q4`];
+                    if (q4Input === undefined && qObj) q4Input = req.body[`marks_${qObj._id.toString()}_q4`];
+                    if (q4Input === undefined) q4Input = req.body[`marks_${idx}_q4`];
+
+                    if (q1Input !== undefined || q2Input !== undefined || q3Input !== undefined || q4Input !== undefined) {
                         const q1Val = parseFloat(q1Input);
                         const q2Val = parseFloat(q2Input);
-                        const q1Mark = isNaN(q1Val) ? 0 : Math.max(0, Math.min(3, q1Val));
-                        const q2Mark = isNaN(q2Val) ? 0 : Math.max(0, Math.min(4, q2Val));
+                        const q3Val = parseFloat(q3Input);
+                        const q4Val = parseFloat(q4Input);
+                        const has4 = (qObj && (qObj.q3 || qObj.q4)) || (ua.q3Answer || ua.q4Answer) || q3Input !== undefined || q4Input !== undefined;
+                        const maxQ1 = has4 ? 1 : 3;
+                        const maxQ2 = has4 ? 2 : 4;
+                        const q1Mark = isNaN(q1Val) ? 0 : Math.max(0, Math.min(maxQ1, q1Val));
+                        const q2Mark = isNaN(q2Val) ? 0 : Math.max(0, Math.min(maxQ2, q2Val));
+                        const q3Mark = isNaN(q3Val) ? 0 : Math.max(0, Math.min(3, q3Val));
+                        const q4Mark = isNaN(q4Val) ? 0 : Math.max(0, Math.min(4, q4Val));
                         ua.q1Marks = q1Mark;
                         ua.q2Marks = q2Mark;
-                        markObtained = q1Mark + q2Mark;
+                        ua.q3Marks = q3Mark;
+                        ua.q4Marks = q4Mark;
+                        markObtained = q1Mark + q2Mark + q3Mark + q4Mark;
                     } else {
                         let inputMark = req.body[`marks_${qIdStr}`];
                         if (inputMark === undefined && qObj) inputMark = req.body[`marks_${qObj._id.toString()}`];
@@ -5542,10 +5627,14 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
 
                 const commQ1 = req.body[`comment_${qIdStr}_q1`] !== undefined ? req.body[`comment_${qIdStr}_q1`] : (qObj && req.body[`comment_${qObj._id.toString()}_q1`] !== undefined ? req.body[`comment_${qObj._id.toString()}_q1`] : req.body[`comment_${idx}_q1`]);
                 const commQ2 = req.body[`comment_${qIdStr}_q2`] !== undefined ? req.body[`comment_${qIdStr}_q2`] : (qObj && req.body[`comment_${qObj._id.toString()}_q2`] !== undefined ? req.body[`comment_${qObj._id.toString()}_q2`] : req.body[`comment_${idx}_q2`]);
-                if (commQ1 || commQ2) {
+                const commQ3 = req.body[`comment_${qIdStr}_q3`] !== undefined ? req.body[`comment_${qIdStr}_q3`] : (qObj && req.body[`comment_${qObj._id.toString()}_q3`] !== undefined ? req.body[`comment_${qObj._id.toString()}_q3`] : req.body[`comment_${idx}_q3`]);
+                const commQ4 = req.body[`comment_${qIdStr}_q4`] !== undefined ? req.body[`comment_${qIdStr}_q4`] : (qObj && req.body[`comment_${qObj._id.toString()}_q4`] !== undefined ? req.body[`comment_${qObj._id.toString()}_q4`] : req.body[`comment_${idx}_q4`]);
+                if (commQ1 || commQ2 || commQ3 || commQ4) {
                     const cParts = [];
                     if (commQ1 && commQ1.trim()) cParts.push(`[Question 1]: ${commQ1.trim()}`);
                     if (commQ2 && commQ2.trim()) cParts.push(`[Question 2]: ${commQ2.trim()}`);
+                    if (commQ3 && commQ3.trim()) cParts.push(`[Question 3]: ${commQ3.trim()}`);
+                    if (commQ4 && commQ4.trim()) cParts.push(`[Question 4]: ${commQ4.trim()}`);
                     inputComment = cParts.join('\n\n');
                 }
 
@@ -5559,11 +5648,23 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
                     if (imgQ2 === undefined && qObj) imgQ2 = req.body[`image_${qObj._id.toString()}_q2`];
                     if (imgQ2 === undefined) imgQ2 = req.body[`image_${idx}_q2`];
 
+                    let imgQ3 = req.body[`image_${qIdStr}_q3`];
+                    if (imgQ3 === undefined && qObj) imgQ3 = req.body[`image_${qObj._id.toString()}_q3`];
+                    if (imgQ3 === undefined) imgQ3 = req.body[`image_${idx}_q3`];
+
+                    let imgQ4 = req.body[`image_${qIdStr}_q4`];
+                    if (imgQ4 === undefined && qObj) imgQ4 = req.body[`image_${qObj._id.toString()}_q4`];
+                    if (imgQ4 === undefined) imgQ4 = req.body[`image_${idx}_q4`];
+
                     const savedQ1 = await saveBase64EvaluationImage(imgQ1, `eval-${idx}-q1`);
                     const savedQ2 = await saveBase64EvaluationImage(imgQ2, `eval-${idx}-q2`);
+                    const savedQ3 = await saveBase64EvaluationImage(imgQ3, `eval-${idx}-q3`);
+                    const savedQ4 = await saveBase64EvaluationImage(imgQ4, `eval-${idx}-q4`);
                     ua.q1TeacherImage = savedQ1 || '';
                     ua.q2TeacherImage = savedQ2 || '';
-                    ua.teacherImage = savedQ1 || savedQ2 || '';
+                    ua.q3TeacherImage = savedQ3 || '';
+                    ua.q4TeacherImage = savedQ4 || '';
+                    ua.teacherImage = savedQ1 || savedQ2 || savedQ3 || savedQ4 || '';
                 } else {
                     let inputImage = req.body[`image_${qIdStr}`];
                     if (inputImage === undefined && qObj) inputImage = req.body[`image_${qObj._id.toString()}`];

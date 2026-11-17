@@ -13,10 +13,16 @@ const questionBankAttemptSchema = new mongoose.Schema({
         writtenImages: [{ type: String }], // Multiple student submitted pictures
         q1Answer: { type: String, default: '' },
         q2Answer: { type: String, default: '' },
+        q3Answer: { type: String, default: '' },
+        q4Answer: { type: String, default: '' },
         q1Image: { type: String, default: '' },
         q2Image: { type: String, default: '' },
+        q3Image: { type: String, default: '' },
+        q4Image: { type: String, default: '' },
         q1Marks: { type: Number, default: 0 },
         q2Marks: { type: Number, default: 0 },
+        q3Marks: { type: Number, default: 0 },
+        q4Marks: { type: Number, default: 0 },
         isCorrect: { type: Boolean, default: false }, // Calculated for MCQ
         marksObtained: { type: Number, default: 0 },
         maxMarks: { type: Number, default: 1 },
@@ -24,6 +30,8 @@ const questionBankAttemptSchema = new mongoose.Schema({
         teacherImage: { type: String, default: '' },
         q1TeacherImage: { type: String, default: '' },
         q2TeacherImage: { type: String, default: '' },
+        q3TeacherImage: { type: String, default: '' },
+        q4TeacherImage: { type: String, default: '' },
         isReviewed: { type: Boolean, default: false }
     }],
     mcqScore: { type: Number, default: 0 },
