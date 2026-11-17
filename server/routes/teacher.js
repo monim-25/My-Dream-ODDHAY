@@ -3140,6 +3140,171 @@ router.get('/api/bank-metadata', teacherProtect, async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
+function parseList(bodyOrQuery, arrayKey, singleKey) {
+    let list = [];
+    if (!bodyOrQuery) return list;
+    if (bodyOrQuery[arrayKey]) {
+        list = Array.isArray(bodyOrQuery[arrayKey]) ? bodyOrQuery[arrayKey] : [bodyOrQuery[arrayKey]];
+    } else if (bodyOrQuery[singleKey + '[]']) {
+        list = Array.isArray(bodyOrQuery[singleKey + '[]']) ? bodyOrQuery[singleKey + '[]'] : [bodyOrQuery[singleKey + '[]']];
+    } else if (bodyOrQuery[singleKey]) {
+        if (Array.isArray(bodyOrQuery[singleKey])) {
+            list = bodyOrQuery[singleKey];
+        } else {
+            list = String(bodyOrQuery[singleKey]).split(',').map(s => s.trim()).filter(Boolean);
+        }
+    }
+    return Array.from(new Set(list.map(s => String(s || '').trim()).filter(Boolean)));
+}
+
+async function getMatchingBankQuestionsQuery(params) {
+    let { classLevel, subject, chapters = [], topics = [], subTopics = [], board, year } = params;
+    
+    const chapsList = Array.isArray(chapters) ? chapters.map(s => String(s || '').trim()).filter(Boolean) : (chapters ? [String(chapters).trim()].filter(Boolean) : []);
+    const topicsList = Array.isArray(topics) ? topics.map(s => String(s || '').trim()).filter(Boolean) : (topics ? [String(topics).trim()].filter(Boolean) : []);
+    const subTopicsList = Array.isArray(subTopics) ? subTopics.map(s => String(s || '').trim()).filter(Boolean) : (subTopics ? [String(subTopics).trim()].filter(Boolean) : []);
+    const escapeRegex = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // 1. QuestionBank query (to find matching banks)
+    let bankQuery = {};
+    if (classLevel) bankQuery.classLevel = classLevel;
+    if (subject) {
+        bankQuery.$or = [
+            { subject: subject },
+            { subjects: subject }
+        ];
+    }
+    if (chapsList.length > 0) {
+        bankQuery.chapter = { $in: chapsList.map(c => new RegExp(`^${escapeRegex(c)}$`, 'i')) };
+    }
+    if (topicsList.length > 0) {
+        bankQuery.topic = { $in: topicsList.map(t => new RegExp(`^${escapeRegex(t)}$`, 'i')) };
+    }
+    if (subTopicsList.length > 0) {
+        const subRegexes = subTopicsList.map(s => new RegExp(`^${escapeRegex(s)}$`, 'i'));
+        bankQuery.$or = [
+            { subTopic: { $in: subRegexes } },
+            { subTopics: { $in: subRegexes } }
+        ];
+    }
+    if (board) bankQuery.board = new RegExp(`^${escapeRegex(board)}$`, 'i');
+    if (year) bankQuery.year = String(year).trim();
+    
+    const banks = await QuestionBank.find(bankQuery).select('_id').lean();
+    const bankIds = banks.map(b => b._id);
+    
+    // 2. Direct Question criteria
+    let directCriteria = {};
+    if (classLevel) directCriteria.classLevel = classLevel;
+    if (subject) {
+        directCriteria.$or = [
+            { subject: subject },
+            { subjects: subject }
+        ];
+    }
+    if (chapsList.length > 0) {
+        directCriteria.chapter = { $in: chapsList.map(c => new RegExp(`^${escapeRegex(c)}$`, 'i')) };
+    }
+    if (topicsList.length > 0) {
+        directCriteria.topic = { $in: topicsList.map(t => new RegExp(`^${escapeRegex(t)}$`, 'i')) };
+    }
+    if (subTopicsList.length > 0) {
+        const subRegexes = subTopicsList.map(s => new RegExp(`^${escapeRegex(s)}$`, 'i'));
+        directCriteria.$or = [
+            { subTopic: { $in: subRegexes } },
+            { subTopics: { $in: subRegexes } }
+        ];
+    }
+    if (board) directCriteria.board = new RegExp(`^${escapeRegex(board)}$`, 'i');
+    if (year) directCriteria.year = String(year).trim();
+    
+    const orClauses = [];
+    if (bankIds.length > 0) {
+        let bankMatch = { bankId: { $in: bankIds } };
+        if (board) bankMatch.board = new RegExp(`^${escapeRegex(board)}$`, 'i');
+        if (year) bankMatch.year = String(year).trim();
+        orClauses.push(bankMatch);
+    }
+    if (Object.keys(directCriteria).length > 0) {
+        orClauses.push(directCriteria);
+    }
+    
+    const queryForType = (type) => {
+        let q = { questionType: type };
+        if (orClauses.length === 1) {
+            Object.assign(q, orClauses[0]);
+        } else if (orClauses.length > 1) {
+            q.$or = orClauses;
+        } else {
+            q._id = null; // No match
+        }
+        return q;
+    };
+    
+    return { queryForType, bankIds, chapsList, topicsList, subTopicsList };
+}
+
+// Real-time Bank Question Counts API for Make-Quiz Smart Generation
+const handleBankQuestionCounts = async (req, res) => {
+    try {
+        await connectDB();
+        const payload = req.method === 'POST' ? req.body : req.query;
+        let { classLevel, subject, courseId, board, year, bankBoard, bankYear } = payload;
+        
+        if (courseId) {
+            const course = await Course.findById(courseId).lean();
+            if (course) {
+                if (!classLevel && course.classLevel) {
+                    classLevel = Array.isArray(course.classLevel) ? course.classLevel[0] : course.classLevel;
+                }
+                if (!subject && course.subject) {
+                    subject = Array.isArray(course.subject) ? course.subject[0] : course.subject;
+                }
+            }
+        }
+        
+        const finalBoard = board || bankBoard || '';
+        const finalYear = year || bankYear || '';
+        const chapters = parseList(payload, 'chapters', 'chapter');
+        const topics = parseList(payload, 'topics', 'topic');
+        const subTopics = parseList(payload, 'subTopics', 'subTopic');
+        
+        const { queryForType } = await getMatchingBankQuestionsQuery({
+            classLevel,
+            subject,
+            chapters,
+            topics,
+            subTopics,
+            board: finalBoard,
+            year: finalYear
+        });
+        
+        const [mcqCount, shortCount, mediumCount, compCount] = await Promise.all([
+            Question.countDocuments(queryForType('MCQ')),
+            Question.countDocuments(queryForType('Short')),
+            Question.countDocuments(queryForType('Medium')),
+            Question.countDocuments(queryForType('Comprehension'))
+        ]);
+        
+        res.json({
+            success: true,
+            counts: {
+                MCQ: mcqCount,
+                Short: shortCount,
+                Medium: mediumCount,
+                Comprehension: compCount,
+                total: mcqCount + shortCount + mediumCount + compCount
+            }
+        });
+    } catch (err) {
+        console.error('Bank Question Counts Error:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
+};
+
+router.get('/api/bank-question-counts', teacherProtect, handleBankQuestionCounts);
+router.post('/api/bank-question-counts', teacherProtect, handleBankQuestionCounts);
+
 // Fetch quizzes for selection
 router.get('/api/quizzes', teacherProtect, async (req, res) => {
     try {
@@ -3289,45 +3454,32 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         quizData.strategy = strategy;
         
         if (strategy === 'automated') {
-            const { bankTopic, bankBoard, bankYear } = req.body;
+            const { bankBoard, bankYear } = req.body;
             
-            let bankQuery = {};
-            if (resolvedClass) bankQuery.classLevel = resolvedClass;
-            if (resolvedSubject) {
-                bankQuery.$or = [
-                    { subject: resolvedSubject },
-                    { subjects: resolvedSubject }
-                ];
-            }
-            if (bankTopic) bankQuery.topic = bankTopic;
-            if (bankBoard) bankQuery.board = bankBoard;
-            if (bankYear) bankQuery.year = bankYear;
+            const selectedChaps = parseList(req.body, 'chapters', 'chapter');
+            const selectedTops = parseList(req.body, 'topics', 'topic');
+            const selectedSubTops = parseList(req.body, 'subTopics', 'subTopic');
             
-            const banks = await QuestionBank.find(bankQuery).select('_id').lean();
-            const bankIds = banks.map(b => b._id);
+            const { queryForType } = await getMatchingBankQuestionsQuery({
+                classLevel: resolvedClass,
+                subject: resolvedSubject,
+                chapters: selectedChaps,
+                topics: selectedTops,
+                subTopics: selectedSubTops,
+                board: bankBoard,
+                year: bankYear
+            });
             
             const pullQuestions = async (type, count) => {
                 if (!count || count <= 0) return [];
-                let qQuery = { questionType: type };
-                const orClauses = [];
-                if (bankIds.length > 0) orClauses.push({ bankId: { $in: bankIds } });
-                if (resolvedSubject && resolvedClass) {
-                    orClauses.push({
-                        classLevel: resolvedClass,
-                        $or: [{ subject: resolvedSubject }, { subjects: resolvedSubject }],
-                        ...(bankTopic ? { topic: bankTopic } : {})
-                    });
-                }
-                if (orClauses.length > 0) qQuery.$or = orClauses;
-                if (bankBoard) qQuery.board = bankBoard;
-                if (bankYear) qQuery.year = bankYear;
+                const qQuery = queryForType(type);
                 return await Question.find(qQuery).limit(count).lean();
             };
             
-            const mcqs = await pullQuestions('MCQ', parseInt(mcqCount));
-            const shorts = await pullQuestions('Short', parseInt(shortCount));
-            const mediums = await pullQuestions('Medium', parseInt(mediumCount));
-            const comps = await pullQuestions('Comprehension', parseInt(comprehensionCount));
+            const mcqs = await pullQuestions('MCQ', parseInt(mcqCount) || 0);
+            const shorts = await pullQuestions('Short', parseInt(shortCount) || 0);
+            const mediums = await pullQuestions('Medium', parseInt(mediumCount) || 0);
+            const comps = await pullQuestions('Comprehension', parseInt(comprehensionCount) || 0);
             
             const allQuestions = [...mcqs, ...shorts, ...mediums, ...comps];
             
@@ -3373,48 +3525,7 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                     };
                 });
             }
-
-            // Fill remaining empty slots if fewer questions found
-            for (let i = mcqs.length; i < mcqCount; i++) {
-                quizData.questions.push({ 
-                    questionText: '', 
-                    options: ['', '', '', ''], 
-                    correctAnswer: 0, 
-                    explanation: '',
-                    questionType: 'MCQ',
-                    isAutoGenerated: false
-                });
-            }
-            for (let i = shorts.length; i < shortCount; i++) {
-                quizData.questions.push({ 
-                    questionText: '', 
-                    options: [], 
-                    correctAnswer: 0, 
-                    explanation: '',
-                    questionType: 'Short',
-                    isAutoGenerated: false
-                });
-            }
-            for (let i = mediums.length; i < mediumCount; i++) {
-                quizData.questions.push({ 
-                    questionText: '', 
-                    options: [], 
-                    correctAnswer: 0, 
-                    explanation: '',
-                    questionType: 'Medium',
-                    isAutoGenerated: false
-                });
-            }
-            for (let i = comps.length; i < comprehensionCount; i++) {
-                quizData.questions.push({ 
-                    questionText: '', 
-                    options: [], 
-                    correctAnswer: 0, 
-                    explanation: '',
-                    questionType: 'Comprehension',
-                    isAutoGenerated: false
-                });
-            }
+            // Only generate from existing questions matching selected items - no empty filler slots!
         } else {
             // Manual Strategy: Create empty questions based on counts
             const mcqCount = parseInt(req.body.mcqCount) || 0;
