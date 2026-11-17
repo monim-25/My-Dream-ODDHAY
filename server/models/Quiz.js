@@ -14,9 +14,13 @@ const quizSchema = new mongoose.Schema({
     subTopics: [{ type: String }],
     isModelTest: { type: Boolean, default: false },
     isMockTest: { type: Boolean, default: false },
+    isBangla: { type: Boolean, default: false },
+    language: { type: String, enum: ['en', 'bn'], default: 'en' },
     duration: { type: Number, default: 10 }, // Duration in minutes
     questions: [{
         questionType: { type: String, enum: ['MCQ', 'Short', 'Medium', 'Comprehension'], default: 'MCQ' },
+        isBangla: { type: Boolean, default: false },
+        language: { type: String, enum: ['en', 'bn'], default: 'en' },
         questionText: { type: String },
         options: [String], // Used for MCQ
         correctAnswerIndex: { type: Number }, // Used for MCQ

@@ -39,6 +39,8 @@ const questionSchema = new mongoose.Schema({
     solution3: { type: String, default: '' },
     solution4: { type: String, default: '' },
     marks: { type: Number, default: 1 },
+    isBangla: { type: Boolean, default: false },
+    language: { type: String, enum: ['en', 'bn'], default: 'en' },
     bankId: { type: mongoose.Schema.Types.ObjectId, ref: 'QuestionBank' }
 });
 

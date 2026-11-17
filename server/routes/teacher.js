@@ -3605,12 +3605,15 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
             return res.status(400).json({ success: false, error: 'MCQ requires at least 2 options.' });
         }
 
+        const isBanglaVal = (req.body.isBangla === true || req.body.isBangla === 'true' || req.body.language === 'bn');
         quiz.questions.push({ 
             questionText: questionText.trim(), 
             options, 
             correctAnswer: finalCorrectIndex, 
             explanation: explanation?.trim() || '',
             questionType: req.body.questionType || 'MCQ',
+            isBangla: isBanglaVal,
+            language: isBanglaVal ? 'bn' : 'en',
             context: req.body.context || '',
             q1: req.body.q1 || '',
             q2: req.body.q2 || '',
@@ -3667,6 +3670,15 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
             'questions.$.year': year ? year.trim() : '',
             'questions.$.questionType': questionType || 'MCQ'
         };
+
+        if (req.body.isBangla !== undefined) {
+            const isB = req.body.isBangla === true || req.body.isBangla === 'true';
+            updateData['questions.$.isBangla'] = isB;
+            updateData['questions.$.language'] = isB ? 'bn' : 'en';
+        } else if (req.body.language !== undefined) {
+            updateData['questions.$.language'] = req.body.language;
+            updateData['questions.$.isBangla'] = req.body.language === 'bn';
+        }
 
         if (chapter !== undefined) {
             updateData['questions.$.chapter'] = String(chapter).trim();
@@ -3976,7 +3988,7 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
             return res.status(403).send('Unauthorized');
         }
 
-        const { questionIds, texts, correctAnswers, correctIndices, answers, explanations, marks, contexts, q1s, a1s, s1s, q2s, a2s, s2s, q3s, a3s, s3s, q4s, a4s, s4s } = req.body;
+        const { questionIds, texts, correctAnswers, correctIndices, answers, explanations, marks, contexts, q1s, a1s, s1s, q2s, a2s, s2s, q3s, a3s, s3s, q4s, a4s, s4s, isBanglas, languages } = req.body;
         if (!questionIds || !Array.isArray(questionIds)) {
             return res.redirect(`/teacher/edit-question-bank/${req.params.id}?error=No questions to update`);
         }
@@ -4275,6 +4287,8 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const qSubQ4s    = [].concat(body['qSubQ4[]']    || body.qSubQ4    || body['q4[]'] || body.q4 || []);
         const qSubA4s    = [].concat(body['qSubA4[]']    || body.qSubA4    || body['a4[]'] || body.a4 || []);
         const qSubS4s    = [].concat(body['qSubS4[]']    || body.qSubS4    || body['s4[]'] || body.s4 || []);
+        const qIsBanglas = [].concat(body['qIsBangla[]'] || body.qIsBangla || body['isBangla[]'] || body.isBangla || []);
+        const qLanguages = [].concat(body['qLanguage[]'] || body.qLanguage || []);
 
         // qOptions[] comes as groups of 4 per question
         const allOptions = [].concat(body['qOptions[]'] || body.qOptions || []);
@@ -4458,6 +4472,8 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 subjects: mode === 'archive' ? parsedSubjects : (body.qSubject?.[i] ? [body.qSubject[i]] : parsedSubjects),
                 classLevel: mode === 'archive' ? questionClassLevel : (body.qClass?.[i] ? (Array.isArray(body.qClass[i]) ? body.qClass[i] : (body.qClass[i].includes(',') ? body.qClass[i].split(',').map(c => normalizeClass(c)).filter(Boolean) : normalizeClass(body.qClass[i]))) : questionClassLevel),
                 accessType: 'Free',
+                isBangla: (qIsBanglas[i] === true || qIsBanglas[i] === 'true' || qLanguages[i] === 'bn') ? true : (/[\u0980-\u09FF]/.test((text || '') + (contextVal || '') + (q1Val || ''))),
+                language: (qIsBanglas[i] === true || qIsBanglas[i] === 'true' || qLanguages[i] === 'bn' || /[\u0980-\u09FF]/.test((text || '') + (contextVal || '') + (q1Val || ''))) ? 'bn' : 'en',
                 isBoardQuestion: true,
                 addedBy:  req.session.user._id,
                 bankId:   targetBankId && mongoose.Types.ObjectId.isValid(targetBankId) ? targetBankId : undefined
@@ -4498,6 +4514,15 @@ router.post('/edit-question/:id', teacherProtect, async (req, res) => {
             correctAnswer: correctAnswer || '',
             updatedAt: new Date()
         };
+
+        if (req.body.isBangla !== undefined) {
+            const isB = req.body.isBangla === true || req.body.isBangla === 'true';
+            updateData.isBangla = isB;
+            updateData.language = isB ? 'bn' : 'en';
+        } else if (req.body.language !== undefined) {
+            updateData.language = req.body.language;
+            updateData.isBangla = req.body.language === 'bn';
+        }
 
         if (chapter !== undefined) updateData.chapter = chapter;
         if (topic !== undefined) updateData.topic = topic;

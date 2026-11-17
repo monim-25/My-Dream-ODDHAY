@@ -103,6 +103,7 @@
                                const defaultMark = (qType === 'Medium') ? 2 : ((qType === 'Comprehension') ? 10 : 1);
                                const qMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : defaultMark;
                                const qIdStr = q._id.toString();
+                               const isQBangla = (q.isBangla === true || q.language === 'bn' || /[\u0980-\u09FF]/.test((q.questionText || '') + (q.context || '') + (q.q1 || '') + (opts.join(''))));
                             %>
                             <div class="question-card bg-slate-50 dark:bg-[#0f172a] border border-slate-200/90 dark:border-slate-800 rounded-2xl p-4 sm:p-6 shadow-xs space-y-4" data-qid="<%= qIdStr %>" data-type="<%= qType %>">
                                 
@@ -142,7 +143,7 @@
                                 <% const isMcqQuestion = (qType === 'MCQ') && opts.length > 0; %>
                                 <% if (isMcqQuestion) { %>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2">
-                                        <% const letters = ['A', 'B', 'C', 'D', 'E', 'F']; %>
+                                        <% const letters = isQBangla ? ['ক', 'খ', 'গ', 'ঘ', 'ঙ', 'চ'] : ['A', 'B', 'C', 'D', 'E', 'F']; %>
                                         <% opts.forEach(function(optText, oIdx) { %>
                                             <label onclick="onOptionSelect(this)" class="opt-label cursor-pointer p-3 sm:p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:border-indigo-500/60 transition-all flex items-center justify-between gap-2.5 text-xs font-semibold select-none group">
                                                 <div class="flex items-center gap-2.5 min-w-0">
@@ -161,21 +162,22 @@
                                 <% } else if (qType === 'Comprehension' && (q.q1 || q.q2 || q.q3 || q.q4)) { %>
                                     <!-- COMPREHENSION: SUB-QUESTIONS WITH ANSWER BOXES & PICTURE BUTTONS -->
                                     <div class="space-y-5 pt-2">
-                                        <!-- Question 1 -->
+                                        <!-- Question 1 (Short) -->
                                         <% if (q.q1) { %>
                                             <div class="space-y-2">
                                                 <div class="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200 leading-relaxed select-text">
-                                                    <span class="text-indigo-600 dark:text-indigo-400 font-bold mr-1">১.</span><%- q.q1 %>
+                                                    <span class="text-indigo-600 dark:text-indigo-400 font-bold mr-1"><%= isQBangla ? '১. ক' : '1.' %></span><%- q.q1 %>
+                                                    <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 ml-1.5">(<%= isQBangla ? 'সংক্ষিপ্ত' : 'Short' %>)</span>
                                                 </div>
                                                 <div class="space-y-1.5">
                                                     <div class="flex items-center justify-between gap-2">
-                                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5">Answer here...</label>
+                                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5"><%= isQBangla ? 'এখানে উত্তর লিখুন (সংক্ষিপ্ত)...' : 'Answer here (Short)...' %></label>
                                                         <button type="button" onclick="triggerImageUpload('<%= qIdStr %>_q1')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all shadow-2xs cursor-pointer active:scale-95" title="Upload photo of handwritten solution">
                                                             <span class="material-symbols-rounded text-base leading-none text-indigo-600 dark:text-indigo-400">add_photo_alternate</span>
-                                                            <span>Submit Picture</span>
+                                                            <span><%= isQBangla ? 'ছবি যুক্ত করুন' : 'Submit Picture' %></span>
                                                         </button>
                                                     </div>
-                                                    <textarea name="written_q1_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="Type your answer here..." class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
+                                                    <textarea name="written_q1_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="<%= isQBangla ? 'এখানে সংক্ষিপ্ত উত্তর লিখুন...' : 'Type your answer here...' %>" class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
                                                     
                                                     <input type="file" id="file_<%= qIdStr %>_q1" accept="image/*" class="hidden" onchange="handleImageSelected(this, '<%= qIdStr %>_q1')">
                                                     <input type="hidden" name="image_q1_<%= qIdStr %>" id="imgval_<%= qIdStr %>_q1" value="">
@@ -184,21 +186,22 @@
                                             </div>
                                         <% } %>
 
-                                        <!-- Question 2 -->
+                                        <!-- Question 2 (Medium) -->
                                         <% if (q.q2) { %>
                                             <div class="space-y-2 pt-2">
                                                 <div class="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200 leading-relaxed select-text">
-                                                    <span class="text-indigo-600 dark:text-indigo-400 font-bold mr-1">২.</span><%- q.q2 %>
+                                                    <span class="text-indigo-600 dark:text-indigo-400 font-bold mr-1"><%= isQBangla ? '২. খ' : '2.' %></span><%- q.q2 %>
+                                                    <span class="text-xs font-semibold text-amber-600 dark:text-amber-400 ml-1.5">(<%= isQBangla ? 'মাঝারি' : 'Medium' %>)</span>
                                                 </div>
                                                 <div class="space-y-1.5">
                                                     <div class="flex items-center justify-between gap-2">
-                                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5">Answer here...</label>
+                                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5"><%= isQBangla ? 'এখানে উত্তর লিখুন (মাঝারি)...' : 'Answer here (Medium)...' %></label>
                                                         <button type="button" onclick="triggerImageUpload('<%= qIdStr %>_q2')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all shadow-2xs cursor-pointer active:scale-95" title="Upload photo of handwritten solution">
                                                             <span class="material-symbols-rounded text-base leading-none text-indigo-600 dark:text-indigo-400">add_photo_alternate</span>
-                                                            <span>Submit Picture</span>
+                                                            <span><%= isQBangla ? 'ছবি যুক্ত করুন' : 'Submit Picture' %></span>
                                                         </button>
                                                     </div>
-                                                    <textarea name="written_q2_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="Type your answer here..." class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
+                                                    <textarea name="written_q2_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="<%= isQBangla ? 'এখানে মাঝারি উত্তর লিখুন...' : 'Type your answer here...' %>" class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
 
                                                     <input type="file" id="file_<%= qIdStr %>_q2" accept="image/*" class="hidden" onchange="handleImageSelected(this, '<%= qIdStr %>_q2')">
                                                     <input type="hidden" name="image_q2_<%= qIdStr %>" id="imgval_<%= qIdStr %>_q2" value="">
@@ -207,21 +210,21 @@
                                             </div>
                                         <% } %>
 
-                                        <!-- Question 3 (Short) -->
+                                        <!-- Question 3 -->
                                         <% if (q.q3) { %>
                                             <div class="space-y-2 pt-2">
                                                 <div class="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200 leading-relaxed select-text">
-                                                    <span class="text-indigo-600 dark:text-indigo-400 font-bold mr-1">৩.</span><%- q.q3 %>
+                                                    <span class="text-indigo-600 dark:text-indigo-400 font-bold mr-1"><%= isQBangla ? '৩. গ' : '3.' %></span><%- q.q3 %>
                                                 </div>
                                                 <div class="space-y-1.5">
                                                     <div class="flex items-center justify-between gap-2">
-                                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5">Answer here (Short)...</label>
+                                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5"><%= isQBangla ? 'এখানে উত্তর লিখুন...' : 'Answer here...' %></label>
                                                         <button type="button" onclick="triggerImageUpload('<%= qIdStr %>_q3')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all shadow-2xs cursor-pointer active:scale-95" title="Upload photo of handwritten solution">
                                                             <span class="material-symbols-rounded text-base leading-none text-indigo-600 dark:text-indigo-400">add_photo_alternate</span>
-                                                            <span>Submit Picture</span>
+                                                            <span><%= isQBangla ? 'ছবি যুক্ত করুন' : 'Submit Picture' %></span>
                                                         </button>
                                                     </div>
-                                                    <textarea name="written_q3_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="Type your answer here..." class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
+                                                    <textarea name="written_q3_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="<%= isQBangla ? 'এখানে উত্তর লিখুন...' : 'Type your answer here...' %>" class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
 
                                                     <input type="file" id="file_<%= qIdStr %>_q3" accept="image/*" class="hidden" onchange="handleImageSelected(this, '<%= qIdStr %>_q3')">
                                                     <input type="hidden" name="image_q3_<%= qIdStr %>" id="imgval_<%= qIdStr %>_q3" value="">
@@ -230,21 +233,21 @@
                                             </div>
                                         <% } %>
 
-                                        <!-- Question 4 (Medium) -->
+                                        <!-- Question 4 -->
                                         <% if (q.q4) { %>
                                             <div class="space-y-2 pt-2">
                                                 <div class="text-base sm:text-lg font-bold text-slate-700 dark:text-slate-200 leading-relaxed select-text">
-                                                    <span class="text-indigo-600 dark:text-indigo-400 font-bold mr-1">৪.</span><%- q.q4 %>
+                                                    <span class="text-indigo-600 dark:text-indigo-400 font-bold mr-1"><%= isQBangla ? '৪. ঘ' : '4.' %></span><%- q.q4 %>
                                                 </div>
                                                 <div class="space-y-1.5">
                                                     <div class="flex items-center justify-between gap-2">
-                                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5">Answer here (Medium)...</label>
+                                                        <label class="text-[11px] font-bold text-slate-500 dark:text-slate-400 ml-0.5"><%= isQBangla ? 'এখানে উত্তর লিখুন...' : 'Answer here...' %></label>
                                                         <button type="button" onclick="triggerImageUpload('<%= qIdStr %>_q4')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-all shadow-2xs cursor-pointer active:scale-95" title="Upload photo of handwritten solution">
                                                             <span class="material-symbols-rounded text-base leading-none text-indigo-600 dark:text-indigo-400">add_photo_alternate</span>
-                                                            <span>Submit Picture</span>
+                                                            <span><%= isQBangla ? 'ছবি যুক্ত করুন' : 'Submit Picture' %></span>
                                                         </button>
                                                     </div>
-                                                    <textarea name="written_q4_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="Type your answer here..." class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
+                                                    <textarea name="written_q4_<%= qIdStr %>" rows="3" oninput="this.style.height='auto'; this.style.height=this.scrollHeight+'px'; updateProgressCount(); saveAnswersToStorage();" placeholder="<%= isQBangla ? 'এখানে উত্তর লিখুন...' : 'Type your answer here...' %>" class="w-full p-3.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[13px] font-medium text-slate-800 dark:text-slate-200 outline-none focus:border-indigo-500 transition-all leading-relaxed min-h-[90px] resize-y"></textarea>
 
                                                     <input type="file" id="file_<%= qIdStr %>_q4" accept="image/*" class="hidden" onchange="handleImageSelected(this, '<%= qIdStr %>_q4')">
                                                     <input type="hidden" name="image_q4_<%= qIdStr %>" id="imgval_<%= qIdStr %>_q4" value="">

@@ -23,6 +23,8 @@ const questionBankSchema = new mongoose.Schema({
     // Negative marking configuration
     negativeMarking: { type: Boolean, default: false },
     negativeMarkValue: { type: Number, default: 0.25 },
+    isBangla: { type: Boolean, default: false },
+    language: { type: String, enum: ['en', 'bn'], default: 'en' },
     // Flag for private custom student exams
     isCustom: { type: Boolean, default: false },
     // Real engagement tracking
