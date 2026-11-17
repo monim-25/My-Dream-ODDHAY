@@ -146,9 +146,17 @@
                             <div class="size-8 sm:size-11 rounded-lg sm:rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 shrink-0">
                                 <span class="material-symbols-rounded text-lg sm:text-2xl">layers</span>
                             </div>
-                            <div class="min-w-0">
-                                <p class="text-[9px] sm:text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">Questions</p>
-                                <h3 class="text-sm sm:text-xl font-bold leading-none text-slate-800 dark:text-white" id="total-count"><%= quiz.questions.length %></h3>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center justify-between gap-1.5">
+                                    <p class="text-[9px] sm:text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">Questions</p>
+                                    <% 
+                                        const isQuizBanglaInitial = (quiz.language === 'bn' || quiz.isBangla === true || quiz.questions.some(q => q.isBangla === true || q.language === 'bn'));
+                                    %>
+                                    <button type="button" onclick="toggleGlobalQuizLanguage()" id="globalLangBtn" class="px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold border transition-all cursor-pointer <%= isQuizBanglaInitial ? 'border-emerald-300 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300' %> shrink-0" title="Toggle Language (বাংলা / English)">
+                                        <span id="globalLangLbl"><%= isQuizBanglaInitial ? 'বাংলা' : 'English' %></span>
+                                    </button>
+                                </div>
+                                <h3 class="text-sm sm:text-xl font-bold leading-none text-slate-800 dark:text-white mt-1" id="total-count"><%= quiz.questions.length %></h3>
                             </div>
                         </div>
                     </div>
@@ -180,105 +188,93 @@
                 <div class="space-y-4 sm:space-y-6" id="questions-feed">
                     <% quiz.questions.forEach((q, index) => { %>
                         <div class="q-card group animate-in fade-in slide-in-from-bottom-4 duration-500" id="q-<%= q._id %>" style="animation-delay: <%= index * 50 %>ms">
-                            <!-- Card Header (Responsive for Mobile & Desktop) -->
-                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6 pb-3 border-b border-slate-100 dark:border-white/5">
-                                <!-- Top row on mobile: Badge + Type + Actions -->
-                                <div class="flex items-center justify-between sm:justify-start gap-2.5 sm:gap-3 w-full sm:w-auto">
-                                    <% 
-                                        const isQBangla = (q.isBangla === true || q.language === 'bn' || /[\u0980-\u09FF]/.test((q.questionText || '') + (q.context || '') + (q.q1 || ''))); 
-                                        const isDummyQText = !q.questionText || 
-                                            /^New\s+/i.test(q.questionText) || 
-                                            /^MCQ\s*প্রশ্ন/i.test(q.questionText) || 
-                                            /^প্রশ্ন\s*\d+/i.test(q.questionText) || 
-                                            /^উদ্দীপক/i.test(q.questionText);
-                                        const cleanQText = isDummyQText ? '' : q.questionText;
+                            <% 
+                                const isQBangla = (q.isBangla === true || q.language === 'bn' || /[\u0980-\u09FF]/.test((q.questionText || '') + (q.context || '') + (q.q1 || ''))); 
+                                const isDummyQText = !q.questionText || 
+                                    /^New\s+/i.test(q.questionText) || 
+                                    /^MCQ\s*প্রশ্ন/i.test(q.questionText) || 
+                                    /^প্রশ্ন\s*\d+/i.test(q.questionText) || 
+                                    /^উদ্দীপক/i.test(q.questionText);
+                                const cleanQText = isDummyQText ? '' : q.questionText;
 
-                                        const isDummyOpt = (val) => {
-                                            if (!val) return true;
-                                            const v = String(val).trim();
-                                            return /^Option\s+[A-D]$/i.test(v) || /^অপশন\s+[ক-ঘ]$/i.test(v) || v.startsWith('Option ') || v.startsWith('অপশন ');
-                                        };
-                                    %>
-                                    <div class="flex items-center gap-2">
-                                        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 text-xs font-medium border border-slate-200/80 dark:border-slate-700 select-none">
-                                            <span class="font-bold text-slate-700 dark:text-slate-300">#<%= index + 1 %></span>
+                                const isDummyOpt = (val) => {
+                                    if (!val) return true;
+                                    const v = String(val).trim();
+                                    return /^Option\s+[A-D]$/i.test(v) || /^অপশন\s+[ক-ঘ]$/i.test(v) || v.startsWith('Option ') || v.startsWith('অপশন ');
+                                };
+
+                                let defaultMarks = 1;
+                                if (q.questionType === 'Medium') defaultMarks = 2;
+                                if (q.questionType === 'Comprehension') defaultMarks = 10;
+                            %>
+                            <input type="hidden" id="isBangla-<%= q._id %>" value="<%= isQBangla ? 'true' : 'false' %>">
+
+                            <!-- Card Header: 2-Line Layout -->
+                            <div class="mb-4 sm:mb-5 pb-3 border-b border-slate-100 dark:border-white/5 space-y-2.5">
+                                <!-- First Line: Number of question, Board, Year, Mark, Delete -->
+                                <div class="flex items-center justify-between gap-2 flex-wrap">
+                                    <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                                        <!-- Number of question -->
+                                        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold border border-slate-200/80 dark:border-slate-700 select-none shrink-0">
+                                            <span class="font-bold text-slate-800 dark:text-slate-200">#<%= index + 1 %></span>
                                             <span class="text-slate-300 dark:text-slate-600">•</span>
                                             <span class="font-medium text-slate-500 dark:text-slate-400"><%= q.questionType || 'MCQ' %></span>
                                         </div>
-                                        <input type="hidden" id="isBangla-<%= q._id %>" value="<%= isQBangla ? 'true' : 'false' %>">
-                                        <button type="button" onclick="toggleQuizQuestionBangla('<%= q._id %>')" id="langbtn-<%= q._id %>" class="px-2 py-0.5 rounded-md text-[11px] font-normal border transition-all cursor-pointer border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
-                                            <span id="langlbl-<%= q._id %>"><%= isQBangla ? 'বাংলা' : 'English' %></span>
-                                        </button>
+
+                                        <!-- Board -->
+                                        <div class="flex items-center gap-1 shrink-0">
+                                            <span class="text-[11px] text-slate-400 shrink-0 font-medium">Board:</span>
+                                            <input type="text" id="board-<%= q._id %>" value="<%= q.board || '' %>" class="form-input w-20 sm:w-24" style="height: 30px !important; padding: 0 8px; font-size: 11.5px;" placeholder="Board">
+                                        </div>
+
+                                        <!-- Year -->
+                                        <div class="flex items-center gap-1 shrink-0">
+                                            <span class="text-[11px] text-slate-400 shrink-0 font-medium">Year:</span>
+                                            <input type="text" id="year-<%= q._id %>" value="<%= q.year || '' %>" class="form-input w-16 sm:w-20" style="height: 30px !important; padding: 0 8px; font-size: 11.5px;" placeholder="Year">
+                                        </div>
                                     </div>
-                                </div>
-                                    <!-- Action Buttons on Mobile -->
-                                    <div class="flex items-center gap-1.5 sm:hidden">
-                                        <button onclick="editQuestion('<%= q._id %>')" class="h-8 px-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold flex items-center gap-1 active:scale-95" title="Quick Edit">
-                                            <span class="material-symbols-rounded text-base">edit</span>
-                                            <span>Edit</span>
-                                        </button>
-                                        <button onclick="deleteQuestion('<%= q._id %>')" class="h-8 px-2.5 rounded-lg bg-rose-50 dark:bg-rose-500/10 text-rose-500 text-xs font-semibold flex items-center gap-1 active:scale-95" title="Delete">
-                                            <span class="material-symbols-rounded text-base">delete</span>
+
+                                    <!-- Right side: Mark placed beside delete icon -->
+                                    <div class="flex items-center gap-2 shrink-0">
+                                        <div class="flex items-center gap-1 shrink-0">
+                                            <span class="text-[11px] text-slate-400 shrink-0 font-medium">Mark:</span>
+                                            <input type="number" id="marks-<%= q._id %>" value="<%= (q.marks !== undefined && q.marks !== null) ? q.marks : defaultMarks %>" class="form-input text-center w-12 sm:w-14" style="height: 30px !important; padding: 0 4px; font-size: 11.5px;">
+                                        </div>
+                                        <button type="button" onclick="deleteQuestion('<%= q._id %>')" class="size-7.5 sm:size-8 rounded-lg bg-rose-50 hover:bg-rose-500 hover:text-white dark:bg-rose-500/10 dark:hover:bg-rose-600 text-rose-500 transition-all flex items-center justify-center shrink-0 cursor-pointer active:scale-95 border border-rose-100 dark:border-rose-500/20" title="Delete">
+                                            <span class="material-symbols-rounded text-base sm:text-lg">delete</span>
                                         </button>
                                     </div>
                                 </div>
 
-                                <!-- Metadata: Mark, Chapter, Topic, Board, Year inputs -->
-                                <div class="flex flex-wrap items-center gap-2 sm:gap-2.5 text-xs font-medium text-slate-600 dark:text-slate-300">
-                                    <div class="flex items-center gap-1 shrink-0">
-                                        <span class="text-[11px] text-slate-400 shrink-0">Mark:</span>
-                                        <% 
-                                            let defaultMarks = 1;
-                                            if (q.questionType === 'Medium') defaultMarks = 2;
-                                            if (q.questionType === 'Comprehension') defaultMarks = 10;
-                                        %>
-                                        <input type="number" id="marks-<%= q._id %>" value="<%= (q.marks !== undefined && q.marks !== null) ? q.marks : defaultMarks %>" class="form-input text-center w-12 sm:w-14" style="height: 32px !important; padding: 0 4px;">
-                                    </div>
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[11px] text-slate-400 shrink-0">Chapter:</span>
-                                        <select id="chapter-<%= q._id %>" class="form-input text-xs w-36 sm:w-44 cursor-pointer q-editor-chapter" style="height: 32px !important; padding: 0 6px; line-height: normal !important;" data-prefill="<%= q.chapter || '' %>" onchange="onQuizEditorChapterChange(this, '<%= q._id %>')">
+                                <!-- Second Line: Chapter, Topic, Sub-topic -->
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-xs font-medium text-slate-600 dark:text-slate-300">
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <span class="text-[11px] text-slate-400 shrink-0 font-medium">Chapter:</span>
+                                        <select id="chapter-<%= q._id %>" class="form-input text-xs w-full cursor-pointer q-editor-chapter" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="<%= q.chapter || '' %>" onchange="onQuizEditorChapterChange(this, '<%= q._id %>')">
                                             <option value="">(Optional)</option>
                                             <% if (q.chapter) { %>
                                                 <option value="<%= q.chapter %>" selected><%= q.chapter %></option>
                                             <% } %>
                                         </select>
                                     </div>
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[11px] text-slate-400 shrink-0">Topic:</span>
-                                        <select id="topic-<%= q._id %>" onchange="onQuizEditorTopicChange(this, '<%= q._id %>')" <%= !q.chapter ? 'disabled' : '' %> class="form-input text-xs w-36 sm:w-44 cursor-pointer q-editor-topic <%= !q.chapter ? 'opacity-50 cursor-not-allowed' : '' %>" style="height: 32px !important; padding: 0 6px; line-height: normal !important;" data-prefill="<%= q.topic || '' %>">
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <span class="text-[11px] text-slate-400 shrink-0 font-medium">Topic:</span>
+                                        <select id="topic-<%= q._id %>" onchange="onQuizEditorTopicChange(this, '<%= q._id %>')" <%= !q.chapter ? 'disabled' : '' %> class="form-input text-xs w-full cursor-pointer q-editor-topic <%= !q.chapter ? 'opacity-50 cursor-not-allowed' : '' %>" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="<%= q.topic || '' %>">
                                             <option value=""><%= q.chapter ? '(Optional)' : 'Select Chapter First' %></option>
                                             <% if (q.chapter && q.topic) { %>
                                                 <option value="<%= q.topic %>" selected><%= q.topic %></option>
                                             <% } %>
                                         </select>
                                     </div>
-                                    <div class="flex items-center gap-1">
-                                        <span class="text-[11px] text-slate-400 shrink-0">Sub-topic:</span>
-                                        <select id="subtopic-<%= q._id %>" onchange="onQuizEditorSubTopicChange(this, '<%= q._id %>')" <%= (!q.chapter || !q.topic) ? 'disabled' : '' %> class="form-input text-xs w-36 sm:w-44 cursor-pointer q-editor-subtopic <%= (!q.chapter || !q.topic) ? 'opacity-50 cursor-not-allowed' : '' %>" style="height: 32px !important; padding: 0 6px; line-height: normal !important;" data-prefill="<%= q.subTopic || '' %>">
+                                    <div class="flex items-center gap-1.5 min-w-0">
+                                        <span class="text-[11px] text-slate-400 shrink-0 font-medium">Sub-topic:</span>
+                                        <select id="subtopic-<%= q._id %>" onchange="onQuizEditorSubTopicChange(this, '<%= q._id %>')" <%= (!q.chapter || !q.topic) ? 'disabled' : '' %> class="form-input text-xs w-full cursor-pointer q-editor-subtopic <%= (!q.chapter || !q.topic) ? 'opacity-50 cursor-not-allowed' : '' %>" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="<%= q.subTopic || '' %>">
                                             <option value=""><%= q.topic ? '(Optional)' : 'Select Topic First' %></option>
                                             <% if (q.subTopic) { %>
                                                 <option value="<%= q.subTopic %>" selected><%= q.subTopic %></option>
                                             <% } %>
                                         </select>
                                     </div>
-                                    <div class="flex items-center gap-1 shrink-0">
-                                        <span class="text-[11px] text-slate-400 shrink-0">Board:</span>
-                                        <input type="text" id="board-<%= q._id %>" value="<%= q.board || '' %>" class="form-input w-16 sm:w-20" style="height: 32px !important; padding: 0 6px;" placeholder="Board">
-                                    </div>
-                                    <div class="flex items-center gap-1 shrink-0">
-                                        <span class="text-[11px] text-slate-400 shrink-0">Year:</span>
-                                        <input type="text" id="year-<%= q._id %>" value="<%= q.year || '' %>" class="form-input w-14 sm:w-16" style="height: 32px !important; padding: 0 6px;" placeholder="Year">
-                                    </div>
-                                </div>
-
-                                <!-- Action Buttons on Desktop -->
-                                <div class="hidden sm:flex items-center gap-2 shrink-0">
-                                    <button onclick="editQuestion('<%= q._id %>')" class="btn-action bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-black hover:text-white dark:hover:bg-white dark:hover:text-black cursor-pointer">
-                                        <span class="material-symbols-rounded text-[18px]">edit_note</span> Edit
-                                    </button>
-                                    <button onclick="deleteQuestion('<%= q._id %>')" class="btn-action bg-rose-50 dark:bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-100 dark:border-rose-500/20 cursor-pointer">
-                                        <span class="material-symbols-rounded text-[18px]">delete_sweep</span> Delete
-                                    </button>
                                 </div>
                             </div>
 
@@ -781,32 +777,17 @@
             return data;
         }
 
-        function toggleQuizQuestionBangla(qid) {
+        function applyQuestionLanguage(qid, isBangla, autoSave = true) {
             const hidden = document.getElementById(`isBangla-${qid}`);
-            if (!hidden) return;
-            const current = hidden.value === 'true';
-            const next = !current;
-            hidden.value = next ? 'true' : 'false';
-
-            const btn = document.getElementById(`langbtn-${qid}`);
-            const lbl = document.getElementById(`langlbl-${qid}`);
-            if (btn && lbl) {
-                if (next) {
-                    btn.className = 'px-2 py-0.5 rounded-md text-[11px] font-normal border transition-all cursor-pointer border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300';
-                    lbl.innerText = 'বাংলা';
-                } else {
-                    btn.className = 'px-2 py-0.5 rounded-md text-[11px] font-normal border transition-all cursor-pointer border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400';
-                    lbl.innerText = 'English';
-                }
-            }
+            if (hidden) hidden.value = isBangla ? 'true' : 'false';
 
             const qtextEl = document.getElementById(`qtext-${qid}`);
             if (qtextEl) {
-                qtextEl.placeholder = next ? 'প্রশ্ন লিখুন...' : 'Enter question text...';
+                qtextEl.placeholder = isBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...';
             }
             const contextEl = document.getElementById(`context-${qid}`);
             if (contextEl) {
-                contextEl.placeholder = next ? 'উদ্দীপক / অনুচ্ছেদ লিখুন...' : 'Enter context / passage...';
+                contextEl.placeholder = isBangla ? 'উদ্দীপক / অনুচ্ছেদ লিখুন...' : 'Enter context / passage...';
             }
 
             // MCQ Option labels & placeholders
@@ -814,27 +795,27 @@
             const optBLbl = document.getElementById(`optB-lbl-${qid}`);
             const optCLbl = document.getElementById(`optC-lbl-${qid}`);
             const optDLbl = document.getElementById(`optD-lbl-${qid}`);
-            if (optALbl) optALbl.innerText = next ? 'অপশন ক *' : 'Option A *';
-            if (optBLbl) optBLbl.innerText = next ? 'অপশন খ *' : 'Option B *';
-            if (optCLbl) optCLbl.innerText = next ? 'অপশন গ *' : 'Option C *';
-            if (optDLbl) optDLbl.innerText = next ? 'অপশন ঘ' : 'Option D';
+            if (optALbl) optALbl.innerText = isBangla ? 'অপশন ক *' : 'Option A *';
+            if (optBLbl) optBLbl.innerText = isBangla ? 'অপশন খ *' : 'Option B *';
+            if (optCLbl) optCLbl.innerText = isBangla ? 'অপশন গ *' : 'Option C *';
+            if (optDLbl) optDLbl.innerText = isBangla ? 'অপশন ঘ' : 'Option D';
 
             const optAInp = document.getElementById(`optA-${qid}`);
             const optBInp = document.getElementById(`optB-${qid}`);
             const optCInp = document.getElementById(`optC-${qid}`);
             const optDInp = document.getElementById(`optD-${qid}`);
-            if (optAInp) optAInp.placeholder = next ? 'অপশন ক *' : 'Option A *';
-            if (optBInp) optBInp.placeholder = next ? 'অপশন খ *' : 'Option B *';
-            if (optCInp) optCInp.placeholder = next ? 'অপশন গ *' : 'Option C *';
-            if (optDInp) optDInp.placeholder = next ? 'অপশন ঘ' : 'Option D';
+            if (optAInp) optAInp.placeholder = isBangla ? 'অপশন ক *' : 'Option A *';
+            if (optBInp) optBInp.placeholder = isBangla ? 'অপশন খ *' : 'Option B *';
+            if (optCInp) optCInp.placeholder = isBangla ? 'অপশন গ *' : 'Option C *';
+            if (optDInp) optDInp.placeholder = isBangla ? 'অপশন ঘ' : 'Option D';
 
             // Correct answer select options
             const correctSelect = document.getElementById(`correct-${qid}`);
             if (correctSelect && correctSelect.options.length >= 4) {
-                correctSelect.options[0].text = next ? 'অপশন ক' : 'Option A';
-                correctSelect.options[1].text = next ? 'অপশন খ' : 'Option B';
-                correctSelect.options[2].text = next ? 'অপশন গ' : 'Option C';
-                correctSelect.options[3].text = next ? 'অপশন ঘ' : 'Option D';
+                correctSelect.options[0].text = isBangla ? 'অপশন ক' : 'Option A';
+                correctSelect.options[1].text = isBangla ? 'অপশন খ' : 'Option B';
+                correctSelect.options[2].text = isBangla ? 'অপশন গ' : 'Option C';
+                correctSelect.options[3].text = isBangla ? 'অপশন ঘ' : 'Option D';
             }
 
             // Comprehension headers & labels
@@ -842,37 +823,37 @@
             const c1QLbl = document.getElementById(`comp1-qlbl-${qid}`);
             const c1ALbl = document.getElementById(`comp1-albl-${qid}`);
             const c1SLbl = document.getElementById(`comp1-slbl-${qid}`);
-            if (c1Title) c1Title.innerText = next ? '১. ক' : '1. Question 1';
-            if (c1QLbl) c1QLbl.innerText = next ? 'প্রশ্ন ক' : 'Question 1';
-            if (c1ALbl) c1ALbl.innerText = next ? 'ক এর উত্তর' : 'Answer 1';
-            if (c1SLbl) c1SLbl.innerText = next ? 'ক এর ব্যাখ্যা' : 'Explanation 1';
+            if (c1Title) c1Title.innerText = isBangla ? '১. ক' : '1. Question 1';
+            if (c1QLbl) c1QLbl.innerText = isBangla ? 'প্রশ্ন ক' : 'Question 1';
+            if (c1ALbl) c1ALbl.innerText = isBangla ? 'ক এর উত্তর' : 'Answer 1';
+            if (c1SLbl) c1SLbl.innerText = isBangla ? 'ক এর ব্যাখ্যা' : 'Explanation 1';
 
             const c2Title = document.getElementById(`comp2-title-${qid}`);
             const c2QLbl = document.getElementById(`comp2-qlbl-${qid}`);
             const c2ALbl = document.getElementById(`comp2-albl-${qid}`);
             const c2SLbl = document.getElementById(`comp2-slbl-${qid}`);
-            if (c2Title) c2Title.innerText = next ? '২. খ' : '2. Question 2';
-            if (c2QLbl) c2QLbl.innerText = next ? 'প্রশ্ন খ' : 'Question 2';
-            if (c2ALbl) c2ALbl.innerText = next ? 'খ এর উত্তর' : 'Answer 2';
-            if (c2SLbl) c2SLbl.innerText = next ? 'খ এর ব্যাখ্যা' : 'Explanation 2';
+            if (c2Title) c2Title.innerText = isBangla ? '২. খ' : '2. Question 2';
+            if (c2QLbl) c2QLbl.innerText = isBangla ? 'প্রশ্ন খ' : 'Question 2';
+            if (c2ALbl) c2ALbl.innerText = isBangla ? 'খ এর উত্তর' : 'Answer 2';
+            if (c2SLbl) c2SLbl.innerText = isBangla ? 'খ এর ব্যাখ্যা' : 'Explanation 2';
 
             const c3Title = document.getElementById(`comp3-title-${qid}`);
             const c3QLbl = document.getElementById(`comp3-qlbl-${qid}`);
             const c3ALbl = document.getElementById(`comp3-albl-${qid}`);
             const c3SLbl = document.getElementById(`comp3-slbl-${qid}`);
-            if (c3Title) c3Title.innerText = next ? '৩. গ' : '3. Question 3';
-            if (c3QLbl) c3QLbl.innerText = next ? 'প্রশ্ন গ' : 'Question 3';
-            if (c3ALbl) c3ALbl.innerText = next ? 'গ এর উত্তর' : 'Answer 3';
-            if (c3SLbl) c3SLbl.innerText = next ? 'গ এর ব্যাখ্যা' : 'Explanation 3';
+            if (c3Title) c3Title.innerText = isBangla ? '৩. গ' : '3. Question 3';
+            if (c3QLbl) c3QLbl.innerText = isBangla ? 'প্রশ্ন গ' : 'Question 3';
+            if (c3ALbl) c3ALbl.innerText = isBangla ? 'গ এর উত্তর' : 'Answer 3';
+            if (c3SLbl) c3SLbl.innerText = isBangla ? 'গ এর ব্যাখ্যা' : 'Explanation 3';
 
             const c4Title = document.getElementById(`comp4-title-${qid}`);
             const c4QLbl = document.getElementById(`comp4-qlbl-${qid}`);
             const c4ALbl = document.getElementById(`comp4-albl-${qid}`);
             const c4SLbl = document.getElementById(`comp4-slbl-${qid}`);
-            if (c4Title) c4Title.innerText = next ? '৪. ঘ' : '4. Question 4';
-            if (c4QLbl) c4QLbl.innerText = next ? 'প্রশ্ন ঘ' : 'Question 4';
-            if (c4ALbl) c4ALbl.innerText = next ? 'ঘ এর উত্তর' : 'Answer 4';
-            if (c4SLbl) c4SLbl.innerText = next ? 'ঘ এর ব্যাখ্যা' : 'Explanation 4';
+            if (c4Title) c4Title.innerText = isBangla ? '৪. ঘ' : '4. Question 4';
+            if (c4QLbl) c4QLbl.innerText = isBangla ? 'প্রশ্ন ঘ' : 'Question 4';
+            if (c4ALbl) c4ALbl.innerText = isBangla ? 'ঘ এর উত্তর' : 'Answer 4';
+            if (c4SLbl) c4SLbl.innerText = isBangla ? 'ঘ এর ব্যাখ্যা' : 'Explanation 4';
 
             const a1Inp = document.getElementById(`a1-${qid}`);
             const s1Inp = document.getElementById(`s1-${qid}`);
@@ -882,17 +863,46 @@
             const s3Inp = document.getElementById(`s3-${qid}`);
             const a4Inp = document.getElementById(`a4-${qid}`);
             const s4Inp = document.getElementById(`s4-${qid}`);
-            if (a1Inp) a1Inp.placeholder = next ? 'ক এর উত্তর...' : 'Enter answer 1...';
-            if (s1Inp) s1Inp.placeholder = next ? 'ক এর ব্যাখ্যা...' : 'Explanation 1...';
-            if (a2Inp) a2Inp.placeholder = next ? 'খ এর উত্তর...' : 'Enter answer 2...';
-            if (s2Inp) s2Inp.placeholder = next ? 'খ এর ব্যাখ্যা...' : 'Explanation 2...';
-            if (a3Inp) a3Inp.placeholder = next ? 'গ এর উত্তর...' : 'Enter answer 3...';
-            if (s3Inp) s3Inp.placeholder = next ? 'গ এর ব্যাখ্যা...' : 'Explanation 3...';
-            if (a4Inp) a4Inp.placeholder = next ? 'ঘ এর উত্তর...' : 'Enter answer 4...';
-            if (s4Inp) s4Inp.placeholder = next ? 'ঘ এর ব্যাখ্যা...' : 'Explanation 4...';
+            if (a1Inp) a1Inp.placeholder = isBangla ? 'ক এর উত্তর...' : 'Enter answer 1...';
+            if (s1Inp) s1Inp.placeholder = isBangla ? 'ক এর ব্যাখ্যা...' : 'Explanation 1...';
+            if (a2Inp) a2Inp.placeholder = isBangla ? 'খ এর উত্তর...' : 'Enter answer 2...';
+            if (s2Inp) s2Inp.placeholder = isBangla ? 'খ এর ব্যাখ্যা...' : 'Explanation 2...';
+            if (a3Inp) a3Inp.placeholder = isBangla ? 'গ এর উত্তর...' : 'Enter answer 3...';
+            if (s3Inp) s3Inp.placeholder = isBangla ? 'গ এর ব্যাখ্যা...' : 'Explanation 3...';
+            if (a4Inp) a4Inp.placeholder = isBangla ? 'ঘ এর উত্তর...' : 'Enter answer 4...';
+            if (s4Inp) s4Inp.placeholder = isBangla ? 'ঘ এর ব্যাখ্যা...' : 'Explanation 4...';
 
-            const q = questionsData.find(x => x._id === qid);
-            if (q) saveCard(qid, q.questionType || 'MCQ', false);
+            if (autoSave) {
+                const q = questionsData.find(x => x._id === qid);
+                if (q) saveCard(qid, q.questionType || 'MCQ', false);
+            }
+        }
+
+        let globalQuizIsBangla = <%= (quiz.language === 'bn' || quiz.isBangla === true || quiz.questions.some(q => q.isBangla === true || q.language === 'bn')) ? 'true' : 'false' %>;
+
+        function toggleGlobalQuizLanguage() {
+            globalQuizIsBangla = !globalQuizIsBangla;
+            const btn = document.getElementById('globalLangBtn');
+            const lbl = document.getElementById('globalLangLbl');
+            if (lbl) lbl.innerText = globalQuizIsBangla ? 'বাংলা' : 'English';
+            if (btn) {
+                if (globalQuizIsBangla) {
+                    btn.className = 'px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold border transition-all cursor-pointer border-emerald-300 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0';
+                } else {
+                    btn.className = 'px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-medium border transition-all cursor-pointer border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-primary shrink-0';
+                }
+            }
+
+            questionsData.forEach(q => {
+                applyQuestionLanguage(q._id, globalQuizIsBangla, true);
+            });
+        }
+        window.toggleGlobalQuizLanguage = toggleGlobalQuizLanguage;
+
+        function toggleQuizQuestionBangla(qid) {
+            const hidden = document.getElementById(`isBangla-${qid}`);
+            const next = hidden ? hidden.value !== 'true' : !globalQuizIsBangla;
+            applyQuestionLanguage(qid, next, true);
         }
         window.toggleQuizQuestionBangla = toggleQuizQuestionBangla;
 
