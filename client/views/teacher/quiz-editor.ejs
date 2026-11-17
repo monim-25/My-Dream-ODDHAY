@@ -214,7 +214,13 @@
 
                 <!-- Feed -->
                 <div class="space-y-4 sm:space-y-6" id="questions-feed">
-                    <% quiz.questions.forEach((q, index) => { %>
+                    <% 
+                        const typeCounters = {};
+                        quiz.questions.forEach((q, index) => { 
+                            const qType = q.questionType || 'MCQ';
+                            typeCounters[qType] = (typeCounters[qType] || 0) + 1;
+                            const typeIndex = typeCounters[qType];
+                    %>
                         <div class="q-card group animate-in fade-in slide-in-from-bottom-4 duration-500" id="q-<%= q._id %>" data-type="<%= q.questionType || 'MCQ' %>" style="animation-delay: <%= index * 50 %>ms">
                             <% 
                                 const isQBangla = (q.isBangla === true || q.language === 'bn' || /[\u0980-\u09FF]/.test((q.questionText || '') + (q.context || '') + (q.q1 || ''))); 
@@ -244,7 +250,7 @@
                                     <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
                                         <!-- Number of question -->
                                         <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold border border-slate-200/80 dark:border-slate-700 select-none shrink-0">
-                                            <span class="q-card-num font-bold text-slate-800 dark:text-slate-200">#<%= index + 1 %></span>
+                                            <span class="q-card-num font-bold text-slate-800 dark:text-slate-200">#<%= typeIndex %></span>
                                             <span class="text-slate-300 dark:text-slate-600">•</span>
                                             <span class="font-medium text-slate-500 dark:text-slate-400"><%= q.questionType || 'MCQ' %></span>
                                         </div>
@@ -514,9 +520,12 @@
             const feed = document.getElementById('questions-feed');
             if (!feed) return;
             const cards = feed.querySelectorAll('.q-card');
-            cards.forEach((card, idx) => {
+            const typeCounters = {};
+            cards.forEach(card => {
+                const type = card.getAttribute('data-type') || 'MCQ';
+                typeCounters[type] = (typeCounters[type] || 0) + 1;
                 const numSpan = card.querySelector('.q-card-num');
-                if (numSpan) numSpan.textContent = `#${idx + 1}`;
+                if (numSpan) numSpan.textContent = `#${typeCounters[type]}`;
             });
             const countEl = document.getElementById('total-count');
             if (countEl) countEl.textContent = cards.length;
@@ -562,6 +571,10 @@
             if (type === 'Comprehension') defaultMarks = 10;
             const marksVal = (q.marks !== undefined && q.marks !== null) ? q.marks : defaultMarks;
             const qid = q._id;
+
+            const feed = document.getElementById('questions-feed');
+            const existingOfType = feed ? feed.querySelectorAll(`.q-card[data-type="${type}"]`).length : 0;
+            const typeIndex = (q && typeof q.typeIndex !== 'undefined') ? q.typeIndex : (existingOfType + 1);
 
             const cleanQText = isDummyQText(q.questionText) ? '' : (q.questionText || '');
 
@@ -693,7 +706,7 @@
                             <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
                                 <!-- Number of question -->
                                 <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold border border-slate-200/80 dark:border-slate-700 select-none shrink-0">
-                                    <span class="q-card-num font-bold text-slate-800 dark:text-slate-200">#${index + 1}</span>
+                                    <span class="q-card-num font-bold text-slate-800 dark:text-slate-200">#${typeIndex}</span>
                                     <span class="text-slate-300 dark:text-slate-600">•</span>
                                     <span class="font-medium text-slate-500 dark:text-slate-400">${escapeEditorHtml(type)}</span>
                                 </div>
