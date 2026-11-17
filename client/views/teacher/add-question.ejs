@@ -1501,9 +1501,14 @@
 
         let cachedStudioTopics = [];
         let cachedStudioChapters = [];
+        const _studioTopicsCache = new Map();
 
         async function fetchStudioTopicsSafely(subject, classLevel) {
-            const endpoints = ['/teacher/api/topics', '/api/topics'];
+            const cacheKey = `${subject}__${classLevel}`.toLowerCase();
+            if (_studioTopicsCache.has(cacheKey)) {
+                return _studioTopicsCache.get(cacheKey);
+            }
+            const endpoints = ['/api/topics', '/teacher/api/topics'];
             const query = new URLSearchParams({ subject, classLevel }).toString();
             for (const ep of endpoints) {
                 try {
@@ -1512,7 +1517,10 @@
                     const ct = res.headers.get('content-type') || '';
                     if (!ct.includes('application/json')) continue;
                     const json = await res.json();
-                    if (json && (json.success || Array.isArray(json.topics))) return json;
+                    if (json && (json.success || Array.isArray(json.topics))) {
+                        _studioTopicsCache.set(cacheKey, json);
+                        return json;
+                    }
                 } catch (e) { console.warn('Topic endpoint error:', ep, e); }
             }
             return { success: true, count: 0, topics: [], chapters: [] };
@@ -1878,6 +1886,12 @@
             // Read active form values first, fallback to URL parameters
             const subject = (document.getElementById('globalSubject')?.value || document.getElementById('hiddenSubject')?.value || urlParams.get('subject') || '').trim();
             const classLevel = (document.getElementById('globalClass')?.value || document.getElementById('hiddenClass')?.value || urlParams.get('class') || '').trim();
+            const cacheKey = `${subject}__${classLevel}`.toLowerCase();
+
+            const globalChapEl = document.getElementById('globalChapter');
+            if (globalChapEl && !_studioTopicsCache.has(cacheKey) && cachedStudioChapters.length === 0) {
+                globalChapEl.innerHTML = '<option value="">Loading chapters...</option>';
+            }
 
             if (subject || classLevel) {
                 try {

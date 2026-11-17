@@ -2140,20 +2140,28 @@
             const quizTopic = <%- JSON.stringify(quiz.topic || '') %>;
             if (!subject && !classLevel) return;
 
+            window._quizEditorTopicsCache = window._quizEditorTopicsCache || new Map();
+            const cacheKey = `${subject}__${classLevel}`.toLowerCase();
+
             try {
-                const endpoints = ['/teacher/api/topics', '/api/topics'];
-                const query = new URLSearchParams({ subject, classLevel }).toString();
                 let topicList = [];
-                for (const ep of endpoints) {
-                    try {
-                        const res = await fetch(ep + '?' + query, { headers: { 'Accept': 'application/json' } });
-                        if (!res.ok) continue;
-                        const json = await res.json();
-                        if (json && Array.isArray(json.topics)) {
-                            topicList = json.topics;
-                            break;
-                        }
-                    } catch (e) {}
+                if (window._quizEditorTopicsCache.has(cacheKey)) {
+                    topicList = window._quizEditorTopicsCache.get(cacheKey);
+                } else {
+                    const endpoints = ['/api/topics', '/teacher/api/topics'];
+                    const query = new URLSearchParams({ subject, classLevel }).toString();
+                    for (const ep of endpoints) {
+                        try {
+                            const res = await fetch(ep + '?' + query, { headers: { 'Accept': 'application/json' } });
+                            if (!res.ok) continue;
+                            const json = await res.json();
+                            if (json && Array.isArray(json.topics)) {
+                                topicList = json.topics;
+                                window._quizEditorTopicsCache.set(cacheKey, topicList);
+                                break;
+                            }
+                        } catch (e) {}
+                    }
                 }
                 cachedQuizEditorTopics = topicList;
 

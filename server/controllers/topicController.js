@@ -7,6 +7,23 @@ const Folder = require('../models/Folder');
 const { connectDB } = require('../config');
 const { normalizeClass, getLinkedClasses } = require('../utils/academicHelper');
 
+// In-memory cache for fast syllabus topics & chapters lookup
+const _topicsApiCache = new Map();
+const TOPICS_CACHE_TTL = 3 * 60 * 1000; // 3 minutes
+
+const getTopicsCacheKey = (query) => {
+    const cls = query.classLevels || query.classLevel || query['classLevels[]'] || query['classLevel[]'] || '';
+    const sub = query.subjects || query.subject || query['subjects[]'] || query['subject[]'] || '';
+    const chap = query.chapters || query.chapter || query['chapters[]'] || query['chapter[]'] || '';
+    const seg = query.segment || query.segments || '';
+    const grp = query.group || '';
+    return `${cls}::${sub}::${chap}::${seg}::${grp}`.toLowerCase();
+};
+
+const clearTopicsApiCache = () => {
+    _topicsApiCache.clear();
+};
+
 // Escape regex special characters
 const escapeRegex = (s) => String(s || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -718,6 +735,12 @@ const getTopicsPage = async (req, res) => {
 // API: Filtered Topics lookup for Question Bank / Quizzes / Modals
 const getTopicsApi = async (req, res) => {
     try {
+        const cacheKey = getTopicsCacheKey(req.query);
+        const cached = _topicsApiCache.get(cacheKey);
+        if (cached && (Date.now() - cached.timestamp < TOPICS_CACHE_TTL)) {
+            return res.json(cached.data);
+        }
+
         if (mongoose.connection && mongoose.connection.readyState !== 1) {
             try {
                 await connectDB();
@@ -797,15 +820,20 @@ const getTopicsApi = async (req, res) => {
             filter.segment = new RegExp('^' + escapeRegex(String(rawSegment).trim()) + '$', 'i');
         }
 
-        const topics = await Topic.find(filter).sort({ 'chapter.number': 1, order: 1, name: 1 }).lean();
+        const topics = await Topic.find(filter)
+            .select('_id name subject classLevel chapter segment subTopics order')
+            .sort({ 'chapter.number': 1, order: 1, name: 1 })
+            .lean();
         const chapterList = Array.from(new Set(topics.map(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '').filter(Boolean)));
 
-        res.json({
+        const responsePayload = {
             success: true,
             count: topics.length,
             topics: topics || [],
             chapters: chapterList
-        });
+        };
+        _topicsApiCache.set(cacheKey, { timestamp: Date.now(), data: responsePayload });
+        res.json(responsePayload);
     } catch (error) {
         console.error('getTopicsApi Error:', error);
         res.status(200).json({

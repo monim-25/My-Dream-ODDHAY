@@ -469,9 +469,16 @@
             return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
-        // ─── Syllabus fetch (same multi-endpoint approach as notes.ejs) ───────────
+        // ─── Client Cache for Syllabus ───────────────────────────────────────────
+        const _quizTopicsCache = new Map();
+
+        // ─── Syllabus fetch (fast client-cached lookup) ───────────────────────────
         async function fetchTopicsSafely(subject, classList, segment = '') {
-            const endpoints = ['/teacher/api/topics', '/api/topics'];
+            const cacheKey = `${subject}__${(classList || []).join(',')}__${segment}`.toLowerCase();
+            if (_quizTopicsCache.has(cacheKey)) {
+                return _quizTopicsCache.get(cacheKey);
+            }
+            const endpoints = ['/api/topics', '/teacher/api/topics'];
             const params = { subject, classLevels: classList.join(',') };
             if (segment && segment !== 'all') params.segment = segment;
             const query = new URLSearchParams(params).toString();
@@ -482,7 +489,10 @@
                     const ct = res.headers.get('content-type') || '';
                     if (!ct.includes('application/json')) continue;
                     const json = await res.json();
-                    if (json && (json.success || Array.isArray(json.topics))) return json;
+                    if (json && (json.success || Array.isArray(json.topics))) {
+                        _quizTopicsCache.set(cacheKey, json);
+                        return json;
+                    }
                 } catch (e) { console.warn('Topic endpoint error:', ep, e); }
             }
             return { success: true, count: 0, topics: [], chapters: [] };
@@ -651,10 +661,6 @@
                 return;
             }
 
-            if (checkSegments) {
-                await checkQuizSubjectSegments();
-            }
-
             selectedTeacherChapters.clear();
             updateTeacherChapterSummary();
             if (syllabusWrapper) syllabusWrapper.classList.add('hidden');
@@ -667,7 +673,9 @@
 
             try {
                 const activeSegment = document.getElementById('quizSegmentSelect')?.value || 'all';
-                const data = await fetchTopicsSafely(subject, [classLevel], activeSegment);
+                const segPromise = checkSegments ? checkQuizSubjectSegments() : Promise.resolve();
+                const topicsPromise = fetchTopicsSafely(subject, [classLevel], activeSegment);
+                const [_, data] = await Promise.all([segPromise, topicsPromise]);
                 window._quizCachedTopics = Array.isArray(data.topics) ? data.topics : [];
 
                 // Populate chapters
