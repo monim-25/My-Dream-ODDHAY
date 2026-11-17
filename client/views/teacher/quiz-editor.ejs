@@ -481,6 +481,17 @@
         const quizId = '<%= quiz._id %>';
         const currentCourseId = '<%= typeof courseId !== "undefined" ? courseId : "" %>';
         let cachedQuizEditorTopics = [];
+        let globalQuizIsBangla = <%= (quiz.language === 'bn' || quiz.isBangla === true || quiz.questions.some(q => q.isBangla === true || q.language === 'bn')) ? 'true' : 'false' %>;
+
+        function isQuizBanglaSet() {
+            const lbl = document.getElementById('globalLangLbl');
+            if (lbl) {
+                const text = lbl.innerText.trim();
+                return text === 'বাংলা' || text.includes('বাংলা');
+            }
+            return globalQuizIsBangla;
+        }
+        window.isQuizBanglaSet = isQuizBanglaSet;
 
         function escapeEditorHtml(str) {
             return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -544,7 +555,7 @@
         window.populateCardTopicDropdowns = populateCardTopicDropdowns;
 
         function renderQuestionCardHTML(q, index) {
-            const isQBangla = (q.isBangla === true || q.language === 'bn' || (typeof globalQuizIsBangla !== 'undefined' && globalQuizIsBangla) || /[\u0980-\u09FF]/.test((q.questionText || '') + (q.context || '') + (q.q1 || '')));
+            const isQBangla = (q && typeof q.isBangla === 'boolean') ? q.isBangla : isQuizBanglaSet();
             const type = q.questionType || 'MCQ';
             let defaultMarks = 1;
             if (type === 'Medium') defaultMarks = 2;
@@ -840,8 +851,11 @@
                     const emptyState = document.getElementById('no-questions-placeholder');
                     if (emptyState) emptyState.remove();
 
+                    const isBanglaNow = isQuizBanglaSet();
                     let firstNewCard = null;
                     newQuestions.forEach(newQ => {
+                        newQ.isBangla = isBanglaNow;
+                        newQ.language = isBanglaNow ? 'bn' : 'en';
                         questionsData.push(newQ);
                         const currentIndex = questionsData.length - 1;
                         const cardHTML = renderQuestionCardHTML(newQ, currentIndex);
@@ -853,6 +867,7 @@
                             feed.appendChild(newCard);
                             attachCardAutoSave(newCard, newQ._id, newQ.questionType || 'MCQ');
                             populateCardTopicDropdowns(newQ._id);
+                            applyQuestionLanguage(newQ._id, isBanglaNow, false);
                             if (!firstNewCard) firstNewCard = newCard;
                         }
                     });
@@ -879,12 +894,13 @@
                 btn.innerHTML = '<span class="material-symbols-rounded text-base animate-spin">sync</span><span>Adding...</span>';
             }
 
+            const isBanglaNow = isQuizBanglaSet();
             let data = { 
                 questionType: type, 
                 isSlot: true, 
                 count: count,
-                isBangla: typeof globalQuizIsBangla !== 'undefined' ? globalQuizIsBangla : false,
-                language: (typeof globalQuizIsBangla !== 'undefined' && globalQuizIsBangla) ? 'bn' : 'en'
+                isBangla: isBanglaNow,
+                language: isBanglaNow ? 'bn' : 'en'
             };
             if (type === 'MCQ') {
                 data.questionText = '';
@@ -929,6 +945,8 @@
 
                     let firstNewCard = null;
                     newQuestions.forEach(newQ => {
+                        newQ.isBangla = isBanglaNow;
+                        newQ.language = isBanglaNow ? 'bn' : 'en';
                         questionsData.push(newQ);
                         const currentIndex = questionsData.length - 1;
                         const cardHTML = renderQuestionCardHTML(newQ, currentIndex);
@@ -940,6 +958,7 @@
                             feed.appendChild(newCard);
                             attachCardAutoSave(newCard, newQ._id, newQ.questionType || type);
                             populateCardTopicDropdowns(newQ._id);
+                            applyQuestionLanguage(newQ._id, isBanglaNow, false);
                             if (!firstNewCard) firstNewCard = newCard;
                         }
                     });
@@ -1271,8 +1290,6 @@
             }
         }
 
-        let globalQuizIsBangla = <%= (quiz.language === 'bn' || quiz.isBangla === true || quiz.questions.some(q => q.isBangla === true || q.language === 'bn')) ? 'true' : 'false' %>;
-
         function toggleGlobalQuizLanguage() {
             globalQuizIsBangla = !globalQuizIsBangla;
             const btn = document.getElementById('globalLangBtn');
@@ -1588,43 +1605,32 @@
         }
 
         async function deleteQuestion(qid) {
-            const res = await Swal.fire({
-                title: 'Delete Question?',
-                text: 'This question will be permanently removed from this assessment.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#94a3b8',
-                confirmButtonText: 'Yes, Delete'
-            });
-            if (res.isConfirmed) {
-                const card = document.getElementById(`q-${qid}`);
-                if (card) {
-                    card.style.transition = 'all 0.3s ease';
-                    card.style.opacity = '0';
-                    card.style.transform = 'translateY(-10px)';
-                    setTimeout(() => {
-                        card.remove();
-                        reindexQuestions();
-                    }, 300);
-                }
-                if (debounceTimers[qid]) {
-                    clearTimeout(debounceTimers[qid]);
-                    delete debounceTimers[qid];
-                }
-                pendingSaves.delete(qid);
-                const qIdx = questionsData.findIndex(x => x._id === qid);
-                if (qIdx !== -1) questionsData.splice(qIdx, 1);
+            const card = document.getElementById(`q-${qid}`);
+            if (card) {
+                card.style.transition = 'all 0.25s ease';
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(-8px)';
+                setTimeout(() => {
+                    card.remove();
+                    reindexQuestions();
+                }, 250);
+            }
+            if (debounceTimers[qid]) {
+                clearTimeout(debounceTimers[qid]);
+                delete debounceTimers[qid];
+            }
+            pendingSaves.delete(qid);
+            const qIdx = questionsData.findIndex(x => x._id === qid);
+            if (qIdx !== -1) questionsData.splice(qIdx, 1);
 
-                try {
-                    const response = await fetch(`/teacher/quiz/${quizId}/question/${qid}/delete`, { method: 'POST' });
-                    const resJson = await response.json();
-                    if (!resJson.success) {
-                        Swal.fire('Error', resJson.error || 'Failed to delete question', 'error');
-                    }
-                } catch (err) {
-                    Swal.fire('Error', 'Failed to delete question', 'error');
+            try {
+                const response = await fetch(`/teacher/quiz/${quizId}/question/${qid}/delete`, { method: 'POST' });
+                const resJson = await response.json();
+                if (!resJson.success) {
+                    console.error('Failed to delete question:', resJson.error);
                 }
+            } catch (err) {
+                console.error('Failed to delete question:', err);
             }
         }
 
