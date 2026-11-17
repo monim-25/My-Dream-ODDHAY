@@ -3630,6 +3630,10 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
 
         const isBanglaVal = (req.body.isBangla === true || req.body.isBangla === 'true' || req.body.language === 'bn');
         const count = Math.min(Math.max(parseInt(req.body.count) || 1, 1), 50);
+        const defaultQuizChap = (req.body.chapter && req.body.chapter.trim()) || (quiz.chapter && quiz.chapter.trim()) || (quiz.chapters && quiz.chapters.length === 1 && quiz.chapters[0] ? quiz.chapters[0].trim() : '') || '';
+        const defaultQuizTop = (req.body.topic && req.body.topic.trim()) || (quiz.topic && quiz.topic.trim()) || (quiz.topics && quiz.topics.length === 1 && quiz.topics[0] ? quiz.topics[0].trim() : '') || '';
+        const defaultQuizSubTop = (req.body.subTopic && req.body.subTopic.trim()) || (quiz.subTopic && quiz.subTopic.trim()) || (quiz.subTopics && quiz.subTopics.length === 1 && quiz.subTopics[0] ? quiz.subTopics[0].trim() : '') || '';
+
         for (let c = 0; c < count; c++) {
             quiz.questions.push({ 
                 questionText: (questionText || '').trim(), 
@@ -3639,6 +3643,11 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
                 questionType: type,
                 isBangla: isBanglaVal,
                 language: isBanglaVal ? 'bn' : 'en',
+                chapter: defaultQuizChap,
+                topic: defaultQuizTop,
+                subTopic: defaultQuizSubTop,
+                board: (req.body.board || '').trim(),
+                year: (req.body.year || '').trim(),
                 context: req.body.context || '',
                 q1: req.body.q1 || '',
                 q2: req.body.q2 || '',
@@ -4368,7 +4377,9 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         }
         const questionClassLevel = parsedClassLevels.length === 1 ? parsedClassLevels[0] : parsedClassLevels;
         let globalClass = Array.isArray(questionClassLevel) ? questionClassLevel[0] : questionClassLevel;
+        const globalChapter  = (body.chapter || '').trim();
         const globalTopic    = (body.topic || '').trim();
+        const globalSubTopic = (body.subTopic || '').trim();
         const globalAccess   = 'Free';
 
         if (!qTexts.length) {
@@ -4403,8 +4414,8 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             const autoTitle = body.title || `${globalSubject} - ${boardYear || 'Board Exam'}`.trim();
 
             const fileUrl = req.file ? await processUploadedFile(req.file, 'questions') : (body.fileUrl || null);
-            const firstChap = (qChapters[0] !== undefined && qChapters[0] !== null) ? String(qChapters[0]).trim() : '';
-            const firstSubTop = (qSubTopics[0] !== undefined && qSubTopics[0] !== null) ? String(qSubTopics[0]).trim() : '';
+            const firstChap = (qChapters[0] !== undefined && qChapters[0] !== null && String(qChapters[0]).trim() !== '') ? String(qChapters[0]).trim() : globalChapter;
+            const firstSubTop = (qSubTopics[0] !== undefined && qSubTopics[0] !== null && String(qSubTopics[0]).trim() !== '') ? String(qSubTopics[0]).trim() : globalSubTopic;
             const newBank = await new QuestionBank({
                 title: autoTitle,
                 chapter: firstChap || '',
@@ -4473,15 +4484,15 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 ? ([a1Val && `1. ${a1Val}`, a2Val && `2. ${a2Val}`, a3Val && `3. ${a3Val}`, a4Val && `4. ${a4Val}`].filter(Boolean).join('\n') || '')
                 : (qAnswers[i] || '');
 
-            const assignedChapter = (qChapters[i] !== undefined && qChapters[i] !== null)
+            const assignedChapter = (qChapters[i] !== undefined && qChapters[i] !== null && String(qChapters[i]).trim() !== '')
                 ? String(qChapters[i]).trim()
-                : '';
+                : globalChapter;
             const assignedTopic = (qTopics[i] !== undefined && qTopics[i] !== null && String(qTopics[i]).trim() !== '')
                 ? String(qTopics[i]).trim()
                 : (globalTopic || '');
-            const assignedSubTopic = (qSubTopics[i] !== undefined && qSubTopics[i] !== null)
+            const assignedSubTopic = (qSubTopics[i] !== undefined && qSubTopics[i] !== null && String(qSubTopics[i]).trim() !== '')
                 ? String(qSubTopics[i]).trim()
-                : '';
+                : globalSubTopic;
 
             return {
                 questionText: questionTextFinal,

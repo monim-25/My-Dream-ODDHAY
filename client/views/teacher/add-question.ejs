@@ -283,6 +283,31 @@
                                         </div>
                                     </div>
 
+                                    <!-- Global Syllabus Scope: Chapter, Topic, Sub-topic (Archive Mode) -->
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
+                                        <!-- Chapter -->
+                                        <div class="space-y-1">
+                                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5 block">Chapter <span class="text-slate-400 font-normal text-[10px]">(Optional)</span></label>
+                                            <select name="chapter" id="globalChapter" class="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white outline-none focus:border-primary transition-all cursor-pointer" onchange="onGlobalChapterSelect(this.value)">
+                                                <option value="">Chapter (Optional)</option>
+                                            </select>
+                                        </div>
+                                        <!-- Topic -->
+                                        <div class="space-y-1">
+                                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5 block">Topic <span class="text-slate-400 font-normal text-[10px]">(Optional)</span></label>
+                                            <select name="topic" id="globalTopic" disabled class="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white outline-none focus:border-primary transition-all cursor-pointer opacity-50 cursor-not-allowed" onchange="onGlobalTopicSelect(this.value)">
+                                                <option value="">Select Chapter First</option>
+                                            </select>
+                                        </div>
+                                        <!-- Sub-topic -->
+                                        <div class="space-y-1">
+                                            <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5 block">Sub-topic <span class="text-slate-400 font-normal text-[10px]">(Optional)</span></label>
+                                            <select name="subTopic" id="globalSubTopic" disabled class="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white outline-none focus:border-primary transition-all cursor-pointer opacity-50 cursor-not-allowed" onchange="onGlobalSubTopicSelect(this.value)">
+                                                <option value="">Select Topic First</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
                                     <input type="hidden" name="accessType" id="globalAccessType" value="Free">
                                     <input type="hidden" name="fileUrl" id="globalFileUrl" value="">
 
@@ -293,7 +318,7 @@
                                             <span
                                                 class="material-symbols-rounded text-amber-500 text-[15px] shrink-0">info</span>
                                             <p class="text-xs font-normal text-amber-700 dark:text-amber-400">No courses
-                                                assigned — enter subject and class manually.</p>
+                                                 assigned — enter subject and class manually.</p>
                                         </div>
                                         <% } %>
                                 </div>
@@ -307,6 +332,9 @@
                                 <input type="hidden" name="board" value="" id="hiddenBoard">
                                 <input type="hidden" name="year" value="" id="hiddenYear">
                                 <input type="hidden" name="subject" value="" id="hiddenSubject">
+                                <input type="hidden" name="chapter" value="" id="hiddenChapter">
+                                <input type="hidden" name="topic" value="" id="hiddenTopic">
+                                <input type="hidden" name="subTopic" value="" id="hiddenSubTopic">
                                 <input type="hidden" name="accessType" value="Free" id="hiddenAccessType">
                                 <input type="hidden" name="fileUrl" value="" id="hiddenFileUrl">
                             </div>
@@ -1564,30 +1592,215 @@
             return html;
         }
 
+        function getStudioFormMetadata() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const globalChapEl = document.getElementById('globalChapter');
+            const globalTopEl = document.getElementById('globalTopic');
+            const globalSubTopEl = document.getElementById('globalSubTopic');
+            const hiddenChapEl = document.getElementById('hiddenChapter');
+            const hiddenTopEl = document.getElementById('hiddenTopic');
+            const hiddenSubTopEl = document.getElementById('hiddenSubTopic');
+
+            const chapter = (globalChapEl?.value || hiddenChapEl?.value || urlParams.get('chapter') || '').trim();
+            const topic = (globalTopEl?.value || hiddenTopEl?.value || urlParams.get('topic') || '').trim();
+            const subTopic = (globalSubTopEl?.value || hiddenSubTopEl?.value || urlParams.get('subTopic') || '').trim();
+
+            return { chapter, topic, subTopic };
+        }
+        window.getStudioFormMetadata = getStudioFormMetadata;
+
+        function syncRowHierarchy(row) {
+            if (!row) return;
+            const { chapter: formChap, topic: formTopic, subTopic: formSubTopic } = getStudioFormMetadata();
+            const chapSelect = row.querySelector('.q-chapter-select');
+            const topicSelect = row.querySelector('.q-topic-select');
+            const subTopicSelect = row.querySelector('.q-subtopic-select');
+
+            // 1. Chapter
+            if (chapSelect) {
+                if (formChap) {
+                    chapSelect.innerHTML = buildChapterOptionsHTML(formChap);
+                    chapSelect.value = formChap;
+                    chapSelect.disabled = true;
+                    chapSelect.classList.add('opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                    chapSelect.classList.remove('opacity-50');
+                } else {
+                    chapSelect.disabled = false;
+                    chapSelect.classList.remove('opacity-75', 'cursor-not-allowed', 'pointer-events-none', 'opacity-50');
+                    const curChap = chapSelect.value || chapSelect.getAttribute('data-prefill') || '';
+                    chapSelect.innerHTML = buildChapterOptionsHTML(curChap);
+                    if (curChap) chapSelect.value = curChap;
+                }
+            }
+
+            const activeChap = formChap || (chapSelect ? chapSelect.value.trim() : '');
+
+            // 2. Topic
+            if (topicSelect) {
+                if (formTopic) {
+                    topicSelect.innerHTML = buildTopicOptionsHTML(formTopic, activeChap);
+                    topicSelect.value = formTopic;
+                    topicSelect.disabled = true;
+                    topicSelect.classList.add('opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                    topicSelect.classList.remove('opacity-50');
+                } else if (activeChap) {
+                    topicSelect.disabled = false;
+                    topicSelect.classList.remove('opacity-50', 'opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                    const curTopic = topicSelect.value || topicSelect.getAttribute('data-prefill') || '';
+                    topicSelect.innerHTML = buildTopicOptionsHTML(curTopic, activeChap);
+                    if (curTopic) topicSelect.value = curTopic;
+                } else {
+                    topicSelect.disabled = true;
+                    topicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                    topicSelect.classList.remove('opacity-75', 'pointer-events-none');
+                    topicSelect.innerHTML = '<option value="">Select Chapter First</option>';
+                    topicSelect.value = '';
+                }
+            }
+
+            const activeTopic = formTopic || (topicSelect ? topicSelect.value.trim() : '');
+
+            // 3. Sub-topic
+            if (subTopicSelect) {
+                if (formSubTopic) {
+                    subTopicSelect.innerHTML = buildSubTopicOptionsHTML(formSubTopic, activeTopic, activeChap);
+                    subTopicSelect.value = formSubTopic;
+                    subTopicSelect.disabled = true;
+                    subTopicSelect.classList.add('opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                    subTopicSelect.classList.remove('opacity-50');
+                } else if (activeTopic) {
+                    const matchedTopic = (cachedStudioTopics || []).find(t => {
+                        const name = (t.name || (typeof t === 'string' ? t : '')).trim().toLowerCase();
+                        return name === activeTopic.toLowerCase();
+                    });
+                    if (matchedTopic && Array.isArray(matchedTopic.subTopics) && matchedTopic.subTopics.length > 0) {
+                        subTopicSelect.disabled = false;
+                        subTopicSelect.classList.remove('opacity-50', 'opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                        const curSub = subTopicSelect.value || subTopicSelect.getAttribute('data-prefill') || '';
+                        subTopicSelect.innerHTML = buildSubTopicOptionsHTML(curSub, activeTopic, activeChap);
+                        if (curSub) subTopicSelect.value = curSub;
+                    } else {
+                        subTopicSelect.disabled = true;
+                        subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                        subTopicSelect.classList.remove('opacity-75', 'pointer-events-none');
+                        subTopicSelect.innerHTML = '<option value="">No sub-topics available</option>';
+                        subTopicSelect.value = '';
+                    }
+                } else {
+                    subTopicSelect.disabled = true;
+                    subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                    subTopicSelect.classList.remove('opacity-75', 'pointer-events-none');
+                    subTopicSelect.innerHTML = '<option value="">Select Topic First</option>';
+                    subTopicSelect.value = '';
+                }
+            }
+        }
+        window.syncRowHierarchy = syncRowHierarchy;
+
+        function onGlobalChapterSelect(val) {
+            const globalTop = document.getElementById('globalTopic');
+            const globalSub = document.getElementById('globalSubTopic');
+            const hiddenChap = document.getElementById('hiddenChapter');
+            if (hiddenChap) hiddenChap.value = val || '';
+
+            if (globalTop) {
+                if (val) {
+                    globalTop.disabled = false;
+                    globalTop.classList.remove('opacity-50', 'cursor-not-allowed');
+                    globalTop.innerHTML = buildTopicOptionsHTML('', val);
+                    globalTop.value = '';
+                } else {
+                    globalTop.disabled = true;
+                    globalTop.classList.add('opacity-50', 'cursor-not-allowed');
+                    globalTop.innerHTML = '<option value="">Select Chapter First</option>';
+                    globalTop.value = '';
+                }
+                const hiddenTop = document.getElementById('hiddenTopic');
+                if (hiddenTop) hiddenTop.value = '';
+            }
+            if (globalSub) {
+                globalSub.disabled = true;
+                globalSub.classList.add('opacity-50', 'cursor-not-allowed');
+                globalSub.innerHTML = '<option value="">Select Topic First</option>';
+                globalSub.value = '';
+                const hiddenSub = document.getElementById('hiddenSubTopic');
+                if (hiddenSub) hiddenSub.value = '';
+            }
+            document.querySelectorAll('.question-row').forEach(row => syncRowHierarchy(row));
+            saveStudioDraft();
+        }
+        window.onGlobalChapterSelect = onGlobalChapterSelect;
+
+        function onGlobalTopicSelect(val) {
+            const globalChap = document.getElementById('globalChapter');
+            const globalSub = document.getElementById('globalSubTopic');
+            const hiddenTop = document.getElementById('hiddenTopic');
+            if (hiddenTop) hiddenTop.value = val || '';
+            const activeChap = globalChap ? globalChap.value : '';
+
+            if (globalSub) {
+                if (val) {
+                    const matchedTopic = (cachedStudioTopics || []).find(t => {
+                        const name = (t.name || (typeof t === 'string' ? t : '')).trim().toLowerCase();
+                        return name === val.toLowerCase();
+                    });
+                    if (matchedTopic && Array.isArray(matchedTopic.subTopics) && matchedTopic.subTopics.length > 0) {
+                        globalSub.disabled = false;
+                        globalSub.classList.remove('opacity-50', 'cursor-not-allowed');
+                        globalSub.innerHTML = buildSubTopicOptionsHTML('', val, activeChap);
+                        globalSub.value = '';
+                    } else {
+                        globalSub.disabled = true;
+                        globalSub.classList.add('opacity-50', 'cursor-not-allowed');
+                        globalSub.innerHTML = '<option value="">No sub-topics available</option>';
+                        globalSub.value = '';
+                    }
+                } else {
+                    globalSub.disabled = true;
+                    globalSub.classList.add('opacity-50', 'cursor-not-allowed');
+                    globalSub.innerHTML = '<option value="">Select Topic First</option>';
+                    globalSub.value = '';
+                }
+                const hiddenSub = document.getElementById('hiddenSubTopic');
+                if (hiddenSub) hiddenSub.value = '';
+            }
+            document.querySelectorAll('.question-row').forEach(row => syncRowHierarchy(row));
+            saveStudioDraft();
+        }
+        window.onGlobalTopicSelect = onGlobalTopicSelect;
+
+        function onGlobalSubTopicSelect(val) {
+            const hiddenSub = document.getElementById('hiddenSubTopic');
+            if (hiddenSub) hiddenSub.value = val || '';
+            document.querySelectorAll('.question-row').forEach(row => syncRowHierarchy(row));
+            saveStudioDraft();
+        }
+        window.onGlobalSubTopicSelect = onGlobalSubTopicSelect;
+
         function onStudioChapterChange(chapterSelect) {
             const row = chapterSelect.closest('.question-row');
             if (!row) return;
+            const { topic: formTopic } = getStudioFormMetadata();
             const topicSelect = row.querySelector('.q-topic-select');
             const subTopicSelect = row.querySelector('.q-subtopic-select');
 
             const selectedChapter = chapterSelect.value.trim();
 
-            if (selectedChapter) {
-                if (topicSelect) {
+            if (!formTopic && topicSelect) {
+                if (selectedChapter) {
                     topicSelect.disabled = false;
                     topicSelect.classList.remove('opacity-50', 'cursor-not-allowed');
                     topicSelect.innerHTML = buildTopicOptionsHTML('', selectedChapter);
                     topicSelect.value = '';
-                }
-            } else {
-                if (topicSelect) {
+                } else {
                     topicSelect.disabled = true;
                     topicSelect.classList.add('opacity-50', 'cursor-not-allowed');
                     topicSelect.innerHTML = '<option value="">Select Chapter First</option>';
                     topicSelect.value = '';
                 }
             }
-            if (subTopicSelect) {
+            const { subTopic: formSubTopic } = getStudioFormMetadata();
+            if (!formSubTopic && subTopicSelect) {
                 subTopicSelect.disabled = true;
                 subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
                 subTopicSelect.innerHTML = '<option value="">Select Topic First</option>';
@@ -1600,12 +1813,13 @@
         function onStudioTopicChange(topicSelect) {
             const row = topicSelect.closest('.question-row');
             if (!row) return;
+            const { subTopic: formSubTopic } = getStudioFormMetadata();
             const chapSelect = row.querySelector('.q-chapter-select');
             const subTopicSelect = row.querySelector('.q-subtopic-select');
             const selectedTopic = topicSelect.value.trim();
             const selectedChap = chapSelect ? chapSelect.value.trim() : '';
 
-            if (subTopicSelect) {
+            if (!formSubTopic && subTopicSelect) {
                 if (selectedTopic) {
                     const matchedTopic = (cachedStudioTopics || []).find(t => {
                         const name = (t.name || (typeof t === 'string' ? t : '')).trim().toLowerCase();
@@ -1664,78 +1878,67 @@
                 if (chName) availableChapterSet.add(chName.toLowerCase());
             });
 
-            document.querySelectorAll('.question-row').forEach(row => {
-                const chapSelect = row.querySelector('.q-chapter-select');
-                const topSelect = row.querySelector('.q-topic-select');
-                const subTopSelect = row.querySelector('.q-subtopic-select');
-                let currentChap = chapSelect ? (chapSelect.value || chapSelect.getAttribute('data-prefill') || '').trim() : '';
-
-                // If currently selected chapter doesn't belong to the active class syllabus, reset it
-                if (currentChap && !availableChapterSet.has(currentChap.toLowerCase())) {
-                    currentChap = '';
-                    if (chapSelect) {
-                        chapSelect.removeAttribute('data-prefill');
-                        chapSelect.value = '';
-                    }
+            // If archive global header has chapter/topic/subtopic, populate and sync them
+            const globalChapEl = document.getElementById('globalChapter');
+            const globalTopEl = document.getElementById('globalTopic');
+            const globalSubEl = document.getElementById('globalSubTopic');
+            if (globalChapEl) {
+                const currentGlobalChap = globalChapEl.value || urlParams.get('chapter') || '';
+                let gHtml = '<option value="">Chapter (Optional)</option>';
+                Array.from(availableChapterSet).sort().forEach(ch => {
+                    const isSel = currentGlobalChap && currentGlobalChap.toLowerCase() === ch.toLowerCase() ? 'selected' : '';
+                    gHtml += `<option value="${escapeTopicHtml(ch)}" ${isSel}>${escapeTopicHtml(ch)}</option>`;
+                });
+                if (currentGlobalChap && !Array.from(availableChapterSet).some(c => c.toLowerCase() === currentGlobalChap.toLowerCase())) {
+                    gHtml += `<option value="${escapeTopicHtml(currentGlobalChap)}" selected>${escapeTopicHtml(currentGlobalChap)}</option>`;
                 }
+                globalChapEl.innerHTML = gHtml;
+                if (currentGlobalChap) globalChapEl.value = currentGlobalChap;
 
-                if (chapSelect) {
-                    chapSelect.innerHTML = buildChapterOptionsHTML(currentChap);
-                    chapSelect.value = currentChap;
-                }
-
-                if (topSelect) {
-                    if (currentChap) {
-                        let currentTop = (topSelect.value || topSelect.getAttribute('data-prefill') || '').trim();
-                        const validTopic = (cachedStudioTopics || []).some(t => {
-                            const name = (t.name || (typeof t === 'string' ? t : '')).trim().toLowerCase();
-                            const ch = typeof t.chapter === 'string' ? t.chapter.trim().toLowerCase() : (t.chapter && t.chapter.name ? t.chapter.name.trim().toLowerCase() : '');
-                            return name === currentTop.toLowerCase() && (!ch || ch === currentChap.toLowerCase());
-                        });
-                        if (!validTopic) {
-                            currentTop = '';
-                            topSelect.removeAttribute('data-prefill');
-                        }
-                        topSelect.disabled = false;
-                        topSelect.classList.remove('opacity-50', 'cursor-not-allowed');
-                        topSelect.innerHTML = buildTopicOptionsHTML(currentTop, currentChap);
-                        topSelect.value = currentTop;
+                if (globalTopEl) {
+                    const currentGlobalTop = globalTopEl.value || urlParams.get('topic') || '';
+                    if (globalChapEl.value) {
+                        globalTopEl.disabled = false;
+                        globalTopEl.classList.remove('opacity-50', 'cursor-not-allowed');
+                        globalTopEl.innerHTML = buildTopicOptionsHTML(currentGlobalTop, globalChapEl.value);
+                        if (currentGlobalTop) globalTopEl.value = currentGlobalTop;
                     } else {
-                        topSelect.disabled = true;
-                        topSelect.classList.add('opacity-50', 'cursor-not-allowed');
-                        topSelect.innerHTML = '<option value="">Select Chapter First</option>';
-                        topSelect.value = '';
+                        globalTopEl.disabled = true;
+                        globalTopEl.classList.add('opacity-50', 'cursor-not-allowed');
+                        globalTopEl.innerHTML = '<option value="">Select Chapter First</option>';
+                        globalTopEl.value = '';
                     }
                 }
 
-                if (subTopSelect) {
-                    const activeTop = topSelect ? topSelect.value.trim() : '';
-                    if (activeTop && currentChap) {
-                        let currentSubTop = (subTopSelect.value || subTopSelect.getAttribute('data-prefill') || '').trim();
+                if (globalSubEl) {
+                    const currentGlobalSub = globalSubEl.value || urlParams.get('subTopic') || '';
+                    if (globalTopEl && globalTopEl.value && globalChapEl.value) {
                         const matchedTopic = (cachedStudioTopics || []).find(t => {
                             const name = (t.name || (typeof t === 'string' ? t : '')).trim().toLowerCase();
-                            return name === activeTop.toLowerCase();
+                            return name === globalTopEl.value.toLowerCase();
                         });
                         if (matchedTopic && Array.isArray(matchedTopic.subTopics) && matchedTopic.subTopics.length > 0) {
-                            subTopSelect.disabled = false;
-                            subTopSelect.classList.remove('opacity-50', 'cursor-not-allowed');
-                            subTopSelect.innerHTML = buildSubTopicOptionsHTML(currentSubTop, activeTop, currentChap);
-                            subTopSelect.value = currentSubTop;
+                            globalSubEl.disabled = false;
+                            globalSubEl.classList.remove('opacity-50', 'cursor-not-allowed');
+                            globalSubEl.innerHTML = buildSubTopicOptionsHTML(currentGlobalSub, globalTopEl.value, globalChapEl.value);
+                            if (currentGlobalSub) globalSubEl.value = currentGlobalSub;
                         } else {
-                            subTopSelect.disabled = true;
-                            subTopSelect.classList.add('opacity-50', 'cursor-not-allowed');
-                            subTopSelect.innerHTML = '<option value="">No sub-topics available</option>';
-                            subTopSelect.value = '';
+                            globalSubEl.disabled = true;
+                            globalSubEl.classList.add('opacity-50', 'cursor-not-allowed');
+                            globalSubEl.innerHTML = '<option value="">No sub-topics available</option>';
+                            globalSubEl.value = '';
                         }
                     } else {
-                        subTopSelect.disabled = true;
-                        subTopSelect.classList.add('opacity-50', 'cursor-not-allowed');
-                        subTopSelect.innerHTML = '<option value="">Select Topic First</option>';
-                        subTopSelect.value = '';
+                        globalSubEl.disabled = true;
+                        globalSubEl.classList.add('opacity-50', 'cursor-not-allowed');
+                        globalSubEl.innerHTML = '<option value="">Select Topic First</option>';
+                        globalSubEl.value = '';
                     }
                 }
-            });
-        }
+            }
+
+            document.querySelectorAll('.question-row').forEach(row => syncRowHierarchy(row));
+         
 
         window.onload = () => {
             const urlParams = new URLSearchParams(window.location.search);
@@ -1804,6 +2007,15 @@
 
                 const gAccess = document.getElementById('globalAccessType');
                 if (gAccess && urlParams.has('access')) gAccess.value = urlParams.get('access');
+
+                const gChapter = document.getElementById('globalChapter');
+                if (gChapter && urlParams.has('chapter')) gChapter.value = urlParams.get('chapter');
+
+                const gTopic = document.getElementById('globalTopic');
+                if (gTopic && urlParams.has('topic')) gTopic.value = urlParams.get('topic');
+
+                const gSubTopic = document.getElementById('globalSubTopic');
+                if (gSubTopic && urlParams.has('subTopic')) gSubTopic.value = urlParams.get('subTopic');
             } else {
                 const globalHeader = document.getElementById('archiveGlobalHeader');
                 if (globalHeader) globalHeader.remove();
@@ -1819,6 +2031,15 @@
 
                 const hClass = document.getElementById('hiddenClass');
                 if (hClass && urlParams.has('class')) hClass.value = urlParams.get('class');
+
+                const hChapter = document.getElementById('hiddenChapter');
+                if (hChapter && urlParams.has('chapter')) hChapter.value = urlParams.get('chapter');
+
+                const hTopic = document.getElementById('hiddenTopic');
+                if (hTopic && urlParams.has('topic')) hTopic.value = urlParams.get('topic');
+
+                const hSubTopic = document.getElementById('hiddenSubTopic');
+                if (hSubTopic && urlParams.has('subTopic')) hSubTopic.value = urlParams.get('subTopic');
 
                 const hAccess = document.getElementById('hiddenAccessType');
                 if (hAccess && urlParams.has('access')) hAccess.value = urlParams.get('access');
@@ -1958,6 +2179,11 @@
                         }
                     }
 
+                    // Temporarily enable any disabled scope dropdowns so they are included in form POST
+                    form.querySelectorAll('.q-chapter-select, .q-topic-select, .q-subtopic-select, select[name="chapter"], select[name="topic"], select[name="subTopic"]').forEach(s => {
+                        s.disabled = false;
+                    });
+
                     // Save latest draft state right before submission
                     saveStudioDraft();
                     isSubmittingPaper = true;
@@ -2080,54 +2306,7 @@
                 const row = clone.querySelector('.question-row');
 
                 toggleTypeUI(row, qType);
-
-                const chapSelect = row.querySelector('.q-chapter-select');
-                if (chapSelect && typeof buildChapterOptionsHTML === 'function') {
-                    chapSelect.innerHTML = buildChapterOptionsHTML(defaultChapter);
-                    if (defaultChapter) chapSelect.value = defaultChapter;
-                }
-
-                const topicInput = row.querySelector('.q-topic-select');
-                const subTopicInput = row.querySelector('.q-subtopic-select');
-                if (topicInput) {
-                    if (defaultChapter && typeof buildTopicOptionsHTML === 'function') {
-                        topicInput.disabled = false;
-                        topicInput.classList.remove('opacity-50', 'cursor-not-allowed');
-                        topicInput.innerHTML = buildTopicOptionsHTML(defaultTopic, defaultChapter);
-                        if (defaultTopic) topicInput.value = defaultTopic;
-                    } else {
-                        topicInput.disabled = true;
-                        topicInput.classList.add('opacity-50', 'cursor-not-allowed');
-                        topicInput.innerHTML = '<option value="">Select Chapter First</option>';
-                        topicInput.value = '';
-                    }
-                }
-
-                if (subTopicInput) {
-                    const defaultSubTopic = urlParams.get('subTopic') || '';
-                    if (defaultTopic && typeof buildSubTopicOptionsHTML === 'function') {
-                        const matchedTopic = (cachedStudioTopics || []).find(t => {
-                            const name = (t.name || (typeof t === 'string' ? t : '')).trim().toLowerCase();
-                            return name === defaultTopic.toLowerCase();
-                        });
-                        if (matchedTopic && Array.isArray(matchedTopic.subTopics) && matchedTopic.subTopics.length > 0) {
-                            subTopicInput.disabled = false;
-                            subTopicInput.classList.remove('opacity-50', 'cursor-not-allowed');
-                            subTopicInput.innerHTML = buildSubTopicOptionsHTML(defaultSubTopic, defaultTopic, defaultChapter);
-                            if (defaultSubTopic) subTopicInput.value = defaultSubTopic;
-                        } else {
-                            subTopicInput.disabled = true;
-                            subTopicInput.classList.add('opacity-50', 'cursor-not-allowed');
-                            subTopicInput.innerHTML = '<option value="">No sub-topics available</option>';
-                            subTopicInput.value = '';
-                        }
-                    } else {
-                        subTopicInput.disabled = true;
-                        subTopicInput.classList.add('opacity-50', 'cursor-not-allowed');
-                        subTopicInput.innerHTML = '<option value="">Select Topic First</option>';
-                        subTopicInput.value = '';
-                    }
-                }
+                syncRowHierarchy(row);
 
                 if (mode !== 'archive') {
                     const boardInput = row.querySelector('input[name="qBoard[]"]');

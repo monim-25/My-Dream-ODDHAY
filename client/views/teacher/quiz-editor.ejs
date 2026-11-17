@@ -215,6 +215,9 @@
                 <!-- Feed -->
                 <div class="space-y-4 sm:space-y-6" id="questions-feed">
                     <% 
+                        const globalQuizChapter = (quiz.chapter && quiz.chapter.trim()) ? quiz.chapter.trim() : (quiz.chapters && quiz.chapters.length === 1 && quiz.chapters[0] ? quiz.chapters[0].trim() : '') || '';
+                        const globalQuizTopic = (quiz.topic && quiz.topic.trim()) ? quiz.topic.trim() : (quiz.topics && quiz.topics.length === 1 && quiz.topics[0] ? quiz.topics[0].trim() : '') || '';
+                        const globalQuizSubTopic = (quiz.subTopic && quiz.subTopic.trim()) ? quiz.subTopic.trim() : (quiz.subTopics && quiz.subTopics.length === 1 && quiz.subTopics[0] ? quiz.subTopics[0].trim() : '') || '';
                         const typeCounters = {};
                         quiz.questions.forEach((q, index) => { 
                             const qType = q.questionType || 'MCQ';
@@ -240,6 +243,15 @@
                                 let defaultMarks = 1;
                                 if (q.questionType === 'Medium') defaultMarks = 2;
                                 if (q.questionType === 'Comprehension') defaultMarks = 10;
+
+                                const effectiveChap = q.chapter || globalQuizChapter || '';
+                                const isChapLocked = Boolean(globalQuizChapter);
+                                const effectiveTopic = q.topic || globalQuizTopic || '';
+                                const isTopicLocked = Boolean(globalQuizTopic);
+                                const isTopicDisabled = isTopicLocked || !effectiveChap;
+                                const effectiveSubTopic = q.subTopic || globalQuizSubTopic || '';
+                                const isSubTopicLocked = Boolean(globalQuizSubTopic);
+                                const isSubTopicDisabled = isSubTopicLocked || !effectiveChap || !effectiveTopic;
                             %>
                             <input type="hidden" id="isBangla-<%= q._id %>" value="<%= isQBangla ? 'true' : 'false' %>">
 
@@ -284,28 +296,28 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-xs font-medium text-slate-600 dark:text-slate-300">
                                     <div class="flex items-center gap-1.5 min-w-0">
                                         <span class="text-[11px] text-slate-400 shrink-0 font-medium">Chapter:</span>
-                                        <select id="chapter-<%= q._id %>" class="form-input text-xs w-full cursor-pointer q-editor-chapter <%= !q.chapter ? 'is-empty' : '' %>" data-is-empty="<%= !q.chapter ? 'true' : 'false' %>" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="<%= q.chapter || '' %>" onchange="onQuizEditorChapterChange(this, '<%= q._id %>')">
+                                        <select id="chapter-<%= q._id %>" <%= isChapLocked ? 'disabled title="Locked from Quiz settings"' : '' %> class="form-input text-xs w-full cursor-pointer q-editor-chapter <%= !effectiveChap ? 'is-empty' : '' %> <%= isChapLocked ? 'opacity-75 cursor-not-allowed pointer-events-none' : '' %>" data-is-empty="<%= !effectiveChap ? 'true' : 'false' %>" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="<%= effectiveChap %>" onchange="onQuizEditorChapterChange(this, '<%= q._id %>')">
                                             <option value="">Optional</option>
-                                            <% if (q.chapter) { %>
-                                                <option value="<%= q.chapter %>" selected><%= q.chapter %></option>
+                                            <% if (effectiveChap) { %>
+                                                <option value="<%= effectiveChap %>" selected><%= effectiveChap %></option>
                                             <% } %>
                                         </select>
                                     </div>
                                     <div class="flex items-center gap-1.5 min-w-0">
                                         <span class="text-[11px] text-slate-400 shrink-0 font-medium">Topic:</span>
-                                        <select id="topic-<%= q._id %>" onchange="onQuizEditorTopicChange(this, '<%= q._id %>')" <%= !q.chapter ? 'disabled' : '' %> class="form-input text-xs w-full cursor-pointer q-editor-topic <%= !q.chapter ? 'opacity-50 cursor-not-allowed is-empty' : (!q.topic ? 'is-empty' : '') %>" data-is-empty="<%= (!q.chapter || !q.topic) ? 'true' : 'false' %>" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="<%= q.topic || '' %>">
-                                            <option value=""><%= q.chapter ? 'Optional' : 'Select Chapter First' %></option>
-                                            <% if (q.chapter && q.topic) { %>
-                                                <option value="<%= q.topic %>" selected><%= q.topic %></option>
+                                        <select id="topic-<%= q._id %>" onchange="onQuizEditorTopicChange(this, '<%= q._id %>')" <%= isTopicDisabled ? 'disabled' : '' %> class="form-input text-xs w-full cursor-pointer q-editor-topic <%= isTopicLocked ? 'opacity-75 cursor-not-allowed pointer-events-none' : (!effectiveChap ? 'opacity-50 cursor-not-allowed is-empty' : (!effectiveTopic ? 'is-empty' : '')) %>" data-is-empty="<%= (!effectiveChap || !effectiveTopic) ? 'true' : 'false' %>" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="<%= effectiveTopic %>">
+                                            <option value=""><%= effectiveChap ? 'Optional' : 'Select Chapter First' %></option>
+                                            <% if (effectiveChap && effectiveTopic) { %>
+                                                <option value="<%= effectiveTopic %>" selected><%= effectiveTopic %></option>
                                             <% } %>
                                         </select>
                                     </div>
                                     <div class="flex items-center gap-1.5 min-w-0">
                                         <span class="text-[11px] text-slate-400 shrink-0 font-medium">Sub-topic:</span>
-                                        <select id="subtopic-<%= q._id %>" onchange="onQuizEditorSubTopicChange(this, '<%= q._id %>')" <%= (!q.chapter || !q.topic) ? 'disabled' : '' %> class="form-input text-xs w-full cursor-pointer q-editor-subtopic <%= (!q.chapter || !q.topic) ? 'opacity-50 cursor-not-allowed is-empty' : (!q.subTopic ? 'is-empty' : '') %>" data-is-empty="<%= (!q.chapter || !q.topic || !q.subTopic) ? 'true' : 'false' %>" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="<%= q.subTopic || '' %>">
-                                            <option value=""><%= q.topic ? 'Optional' : 'Select Topic First' %></option>
-                                            <% if (q.subTopic) { %>
-                                                <option value="<%= q.subTopic %>" selected><%= q.subTopic %></option>
+                                        <select id="subtopic-<%= q._id %>" onchange="onQuizEditorSubTopicChange(this, '<%= q._id %>')" <%= isSubTopicDisabled ? 'disabled' : '' %> class="form-input text-xs w-full cursor-pointer q-editor-subtopic <%= isSubTopicLocked ? 'opacity-75 cursor-not-allowed pointer-events-none' : ((!effectiveChap || !effectiveTopic) ? 'opacity-50 cursor-not-allowed is-empty' : (!effectiveSubTopic ? 'is-empty' : '')) %>" data-is-empty="<%= (!effectiveChap || !effectiveTopic || !effectiveSubTopic) ? 'true' : 'false' %>" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="<%= effectiveSubTopic %>">
+                                            <option value=""><%= effectiveTopic ? 'Optional' : 'Select Topic First' %></option>
+                                            <% if (effectiveSubTopic) { %>
+                                                <option value="<%= effectiveSubTopic %>" selected><%= effectiveSubTopic %></option>
                                             <% } %>
                                         </select>
                                     </div>
@@ -489,6 +501,10 @@
         let cachedQuizEditorTopics = [];
         let globalQuizIsBangla = <%= (quiz.language === 'bn' || quiz.isBangla === true || quiz.questions.some(q => q.isBangla === true || q.language === 'bn')) ? 'true' : 'false' %>;
 
+        const globalQuizChapter = <%- JSON.stringify((quiz.chapter && quiz.chapter.trim()) ? quiz.chapter.trim() : (quiz.chapters && quiz.chapters.length === 1 && quiz.chapters[0] ? quiz.chapters[0].trim() : '') || '') %>;
+        const globalQuizTopic = <%- JSON.stringify((quiz.topic && quiz.topic.trim()) ? quiz.topic.trim() : (quiz.topics && quiz.topics.length === 1 && quiz.topics[0] ? quiz.topics[0].trim() : '') || '') %>;
+        const globalQuizSubTopic = <%- JSON.stringify((quiz.subTopic && quiz.subTopic.trim()) ? quiz.subTopic.trim() : (quiz.subTopics && quiz.subTopics.length === 1 && quiz.subTopics[0] ? quiz.subTopics[0].trim() : '') || '') %>;
+
         function isQuizBanglaSet() {
             const lbl = document.getElementById('globalLangLbl');
             if (lbl) {
@@ -541,23 +557,81 @@
             const chapters = Array.from(new Set((cachedQuizEditorTopics || []).map(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '').filter(Boolean))).sort();
             let html = '<option value="">Optional</option>';
             chapters.forEach(ch => {
-                html += `<option value="${escapeEditorHtml(ch)}">${escapeEditorHtml(ch)}</option>`;
+                const isSel = (globalQuizChapter && globalQuizChapter.toLowerCase() === ch.toLowerCase()) ? 'selected' : '';
+                html += `<option value="${escapeEditorHtml(ch)}" ${isSel}>${escapeEditorHtml(ch)}</option>`;
             });
+            if (globalQuizChapter && !chapters.some(c => c.toLowerCase() === globalQuizChapter.toLowerCase())) {
+                html += `<option value="${escapeEditorHtml(globalQuizChapter)}" selected>${escapeEditorHtml(globalQuizChapter)}</option>`;
+            }
             chapSelect.innerHTML = html;
+            if (globalQuizChapter) {
+                chapSelect.value = globalQuizChapter;
+                chapSelect.disabled = true;
+                chapSelect.classList.add('opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                chapSelect.classList.remove('opacity-50');
+            } else {
+                chapSelect.disabled = false;
+                chapSelect.classList.remove('opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+            }
             updateSelectPlaceholderStyle(chapSelect);
 
+            const activeChap = chapSelect.value.trim();
             if (topicSelect) {
-                topicSelect.disabled = true;
-                topicSelect.classList.add('opacity-50', 'cursor-not-allowed');
-                topicSelect.innerHTML = '<option value="">Select Chapter First</option>';
-                topicSelect.value = '';
+                if (activeChap) {
+                    topicSelect.innerHTML = buildEditorTopicOptionsHTML(globalQuizTopic, activeChap);
+                    if (globalQuizTopic) {
+                        topicSelect.value = globalQuizTopic;
+                        topicSelect.disabled = true;
+                        topicSelect.classList.add('opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                        topicSelect.classList.remove('opacity-50');
+                    } else {
+                        topicSelect.disabled = false;
+                        topicSelect.classList.remove('opacity-50', 'opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                        topicSelect.value = '';
+                    }
+                } else {
+                    topicSelect.disabled = true;
+                    topicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                    topicSelect.classList.remove('opacity-75', 'pointer-events-none');
+                    topicSelect.innerHTML = '<option value="">Select Chapter First</option>';
+                    topicSelect.value = '';
+                }
                 updateSelectPlaceholderStyle(topicSelect);
             }
+
+            const activeTopic = topicSelect ? topicSelect.value.trim() : '';
             if (subTopicSelect) {
-                subTopicSelect.disabled = true;
-                subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
-                subTopicSelect.innerHTML = '<option value="">Select Topic First</option>';
-                subTopicSelect.value = '';
+                if (activeTopic) {
+                    const matchedTopic = (cachedQuizEditorTopics || []).find(t => {
+                        const name = (t.name || '').trim().toLowerCase();
+                        return name === activeTopic.toLowerCase();
+                    });
+                    if (matchedTopic && Array.isArray(matchedTopic.subTopics) && matchedTopic.subTopics.length > 0) {
+                        subTopicSelect.innerHTML = buildEditorSubTopicOptionsHTML(globalQuizSubTopic, activeTopic, activeChap);
+                        if (globalQuizSubTopic) {
+                            subTopicSelect.value = globalQuizSubTopic;
+                            subTopicSelect.disabled = true;
+                            subTopicSelect.classList.add('opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                            subTopicSelect.classList.remove('opacity-50');
+                        } else {
+                            subTopicSelect.disabled = false;
+                            subTopicSelect.classList.remove('opacity-50', 'opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                            subTopicSelect.value = '';
+                        }
+                    } else {
+                        subTopicSelect.disabled = true;
+                        subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                        subTopicSelect.classList.remove('opacity-75', 'pointer-events-none');
+                        subTopicSelect.innerHTML = '<option value="">No sub-topics</option>';
+                        subTopicSelect.value = '';
+                    }
+                } else {
+                    subTopicSelect.disabled = true;
+                    subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                    subTopicSelect.classList.remove('opacity-75', 'pointer-events-none');
+                    subTopicSelect.innerHTML = '<option value="">Select Topic First</option>';
+                    subTopicSelect.value = '';
+                }
                 updateSelectPlaceholderStyle(subTopicSelect);
             }
         }
@@ -577,6 +651,15 @@
             const typeIndex = (q && typeof q.typeIndex !== 'undefined') ? q.typeIndex : (existingOfType + 1);
 
             const cleanQText = isDummyQText(q.questionText) ? '' : (q.questionText || '');
+
+            const effectiveChap = (q && q.chapter) ? q.chapter : (globalQuizChapter || '');
+            const isChapLocked = Boolean(globalQuizChapter);
+            const effectiveTopic = (q && q.topic) ? q.topic : (globalQuizTopic || '');
+            const isTopicLocked = Boolean(globalQuizTopic);
+            const isTopicDisabled = isTopicLocked || !effectiveChap;
+            const effectiveSubTopic = (q && q.subTopic) ? q.subTopic : (globalQuizSubTopic || '');
+            const isSubTopicLocked = Boolean(globalQuizSubTopic);
+            const isSubTopicDisabled = isSubTopicLocked || !effectiveChap || !effectiveTopic;
 
             let bodyHTML = '';
             if (type === 'MCQ') {
@@ -737,23 +820,23 @@
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-xs font-medium text-slate-600 dark:text-slate-300">
                             <div class="flex items-center gap-1.5 min-w-0">
                                 <span class="text-[11px] text-slate-400 shrink-0 font-medium">Chapter:</span>
-                                <select id="chapter-${qid}" class="form-input text-xs w-full cursor-pointer q-editor-chapter is-empty" data-is-empty="true" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="${escapeEditorHtml(q.chapter || '')}" onchange="onQuizEditorChapterChange(this, '${qid}')">
+                                <select id="chapter-${qid}" ${isChapLocked ? 'disabled title="Locked from Quiz settings"' : ''} class="form-input text-xs w-full cursor-pointer q-editor-chapter ${!effectiveChap ? 'is-empty' : ''} ${isChapLocked ? 'opacity-75 cursor-not-allowed pointer-events-none' : ''}" data-is-empty="${!effectiveChap ? 'true' : 'false'}" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="${escapeEditorHtml(effectiveChap)}" onchange="onQuizEditorChapterChange(this, '${qid}')">
                                     <option value="">Optional</option>
-                                    ${q.chapter ? `<option value="${escapeEditorHtml(q.chapter)}" selected>${escapeEditorHtml(q.chapter)}</option>` : ''}
+                                    ${effectiveChap ? `<option value="${escapeEditorHtml(effectiveChap)}" selected>${escapeEditorHtml(effectiveChap)}</option>` : ''}
                                 </select>
                             </div>
                             <div class="flex items-center gap-1.5 min-w-0">
                                 <span class="text-[11px] text-slate-400 shrink-0 font-medium">Topic:</span>
-                                <select id="topic-${qid}" onchange="onQuizEditorTopicChange(this, '${qid}')" disabled class="form-input text-xs w-full cursor-pointer q-editor-topic opacity-50 cursor-not-allowed is-empty" data-is-empty="true" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="${escapeEditorHtml(q.topic || '')}">
-                                    <option value="">Select Chapter First</option>
-                                    ${q.topic ? `<option value="${escapeEditorHtml(q.topic)}" selected>${escapeEditorHtml(q.topic)}</option>` : ''}
+                                <select id="topic-${qid}" onchange="onQuizEditorTopicChange(this, '${qid}')" ${isTopicDisabled ? 'disabled' : ''} class="form-input text-xs w-full cursor-pointer q-editor-topic ${isTopicLocked ? 'opacity-75 cursor-not-allowed pointer-events-none' : (!effectiveChap ? 'opacity-50 cursor-not-allowed is-empty' : (!effectiveTopic ? 'is-empty' : ''))}" data-is-empty="${(!effectiveChap || !effectiveTopic) ? 'true' : 'false'}" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="${escapeEditorHtml(effectiveTopic)}">
+                                    <option value="">${effectiveChap ? 'Optional' : 'Select Chapter First'}</option>
+                                    ${effectiveTopic ? `<option value="${escapeEditorHtml(effectiveTopic)}" selected>${escapeEditorHtml(effectiveTopic)}</option>` : ''}
                                 </select>
                             </div>
                             <div class="flex items-center gap-1.5 min-w-0">
                                 <span class="text-[11px] text-slate-400 shrink-0 font-medium">Sub-topic:</span>
-                                <select id="subtopic-${qid}" onchange="onQuizEditorSubTopicChange(this, '${qid}')" disabled class="form-input text-xs w-full cursor-pointer q-editor-subtopic opacity-50 cursor-not-allowed is-empty" data-is-empty="true" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="${escapeEditorHtml(q.subTopic || '')}">
-                                    <option value="">Select Topic First</option>
-                                    ${q.subTopic ? `<option value="${escapeEditorHtml(q.subTopic)}" selected>${escapeEditorHtml(q.subTopic)}</option>` : ''}
+                                <select id="subtopic-${qid}" onchange="onQuizEditorSubTopicChange(this, '${qid}')" ${isSubTopicDisabled ? 'disabled' : ''} class="form-input text-xs w-full cursor-pointer q-editor-subtopic ${isSubTopicLocked ? 'opacity-75 cursor-not-allowed pointer-events-none' : ((!effectiveChap || !effectiveTopic) ? 'opacity-50 cursor-not-allowed is-empty' : (!effectiveSubTopic ? 'is-empty' : ''))}" data-is-empty="${(!effectiveChap || !effectiveTopic || !effectiveSubTopic) ? 'true' : 'false'}" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="${escapeEditorHtml(effectiveSubTopic)}">
+                                    <option value="">${effectiveTopic ? 'Optional' : 'Select Topic First'}</option>
+                                    ${effectiveSubTopic ? `<option value="${escapeEditorHtml(effectiveSubTopic)}" selected>${escapeEditorHtml(effectiveSubTopic)}</option>` : ''}
                                 </select>
                             </div>
                         </div>
@@ -1137,9 +1220,9 @@
                 isBangla: isBangla,
                 language: isBangla ? 'bn' : 'en',
                 marks: marksEl && marksEl.value.trim() !== '' ? (parseInt(marksEl.value) || 1) : 1,
-                chapter: chapterEl ? chapterEl.value.trim() : '',
-                topic: topicEl ? topicEl.value.trim() : '',
-                subTopic: subTopicEl ? subTopicEl.value.trim() : '',
+                chapter: (chapterEl ? chapterEl.value.trim() : '') || globalQuizChapter || '',
+                topic: (topicEl ? topicEl.value.trim() : '') || globalQuizTopic || '',
+                subTopic: (subTopicEl ? subTopicEl.value.trim() : '') || globalQuizSubTopic || '',
                 board: boardEl ? boardEl.value.trim() : '',
                 year: yearEl ? yearEl.value.trim() : '',
                 explanation: explainEl ? explainEl.value.trim() : ''
@@ -1441,9 +1524,9 @@
                     isBangla: isB,
                     language: isB ? 'bn' : 'en',
                     marks: parseInt(marksVal),
-                    chapter: document.getElementById(`chapter-${qid}`) ? document.getElementById(`chapter-${qid}`).value.trim() : '',
-                    topic: document.getElementById(`topic-${qid}`) ? document.getElementById(`topic-${qid}`).value.trim() : '',
-                    subTopic: document.getElementById(`subtopic-${qid}`) ? document.getElementById(`subtopic-${qid}`).value.trim() : '',
+                    chapter: (document.getElementById(`chapter-${qid}`) ? document.getElementById(`chapter-${qid}`).value.trim() : '') || globalQuizChapter || '',
+                    topic: (document.getElementById(`topic-${qid}`) ? document.getElementById(`topic-${qid}`).value.trim() : '') || globalQuizTopic || '',
+                    subTopic: (document.getElementById(`subtopic-${qid}`) ? document.getElementById(`subtopic-${qid}`).value.trim() : '') || globalQuizSubTopic || '',
                     board: document.getElementById(`board-${qid}`).value.trim(),
                     year: document.getElementById(`year-${qid}`).value.trim()
                 };
@@ -1726,7 +1809,7 @@
                 const chapters = Array.from(new Set(topicList.map(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '').filter(Boolean))).sort();
 
                 document.querySelectorAll('.q-editor-chapter').forEach(select => {
-                    const currentVal = select.value || select.getAttribute('data-prefill') || '';
+                    const currentVal = globalQuizChapter || select.value || select.getAttribute('data-prefill') || '';
                     let html = '<option value="">Optional</option>';
                     chapters.forEach(ch => {
                         const isSel = currentVal && currentVal.toLowerCase() === ch.toLowerCase() ? 'selected' : '';
@@ -1737,6 +1820,15 @@
                     }
                     select.innerHTML = html;
                     if (currentVal) select.value = currentVal;
+                    if (globalQuizChapter) {
+                        select.value = globalQuizChapter;
+                        select.disabled = true;
+                        select.classList.add('opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                        select.classList.remove('opacity-50');
+                    } else {
+                        select.disabled = false;
+                        select.classList.remove('opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                    }
                     updateSelectPlaceholderStyle(select);
                 });
 
@@ -1744,15 +1836,23 @@
                     const qid = select.id.replace('topic-', '');
                     const chapSelect = document.getElementById(`chapter-${qid}`);
                     const selectedChap = chapSelect ? (chapSelect.value || chapSelect.getAttribute('data-prefill') || '') : '';
-                    const currentVal = select.value || select.getAttribute('data-prefill') || '';
+                    const currentVal = globalQuizTopic || select.value || select.getAttribute('data-prefill') || '';
                     if (selectedChap) {
-                        select.disabled = false;
-                        select.classList.remove('opacity-50', 'cursor-not-allowed');
                         select.innerHTML = buildEditorTopicOptionsHTML(currentVal, selectedChap);
                         if (currentVal) select.value = currentVal;
+                        if (globalQuizTopic) {
+                            select.value = globalQuizTopic;
+                            select.disabled = true;
+                            select.classList.add('opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                            select.classList.remove('opacity-50');
+                        } else {
+                            select.disabled = false;
+                            select.classList.remove('opacity-50', 'opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                        }
                     } else {
                         select.disabled = true;
                         select.classList.add('opacity-50', 'cursor-not-allowed');
+                        select.classList.remove('opacity-75', 'pointer-events-none');
                         select.innerHTML = '<option value="">Select Chapter First</option>';
                         select.value = '';
                     }
@@ -1765,26 +1865,35 @@
                     const topSelect = document.getElementById(`topic-${qid}`);
                     const selectedChap = chapSelect ? (chapSelect.value || chapSelect.getAttribute('data-prefill') || '') : '';
                     const selectedTop = topSelect ? (topSelect.value || topSelect.getAttribute('data-prefill') || '') : '';
-                    const currentVal = select.value || select.getAttribute('data-prefill') || '';
+                    const currentVal = globalQuizSubTopic || select.value || select.getAttribute('data-prefill') || '';
                     if (selectedTop) {
                         const matchedTopic = (cachedQuizEditorTopics || []).find(t => {
                             const name = (t.name || '').trim().toLowerCase();
                             return name === selectedTop.toLowerCase();
                         });
                         if (matchedTopic && Array.isArray(matchedTopic.subTopics) && matchedTopic.subTopics.length > 0) {
-                            select.disabled = false;
-                            select.classList.remove('opacity-50', 'cursor-not-allowed');
                             select.innerHTML = buildEditorSubTopicOptionsHTML(currentVal, selectedTop, selectedChap);
                             if (currentVal) select.value = currentVal;
+                            if (globalQuizSubTopic) {
+                                select.value = globalQuizSubTopic;
+                                select.disabled = true;
+                                select.classList.add('opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                                select.classList.remove('opacity-50');
+                            } else {
+                                select.disabled = false;
+                                select.classList.remove('opacity-50', 'opacity-75', 'cursor-not-allowed', 'pointer-events-none');
+                            }
                         } else {
                             select.disabled = true;
                             select.classList.add('opacity-50', 'cursor-not-allowed');
+                            select.classList.remove('opacity-75', 'pointer-events-none');
                             select.innerHTML = '<option value="">No sub-topics</option>';
                             select.value = '';
                         }
                     } else {
                         select.disabled = true;
                         select.classList.add('opacity-50', 'cursor-not-allowed');
+                        select.classList.remove('opacity-75', 'pointer-events-none');
                         select.innerHTML = '<option value="">Select Topic First</option>';
                         select.value = '';
                     }
