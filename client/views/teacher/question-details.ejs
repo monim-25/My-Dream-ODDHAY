@@ -1023,10 +1023,46 @@
 
                     <div class="space-y-1">
                         <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Topic</label>
-                        <select id="wizTopic" disabled class="w-full h-9 px-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-medium text-slate-800 dark:text-slate-100 outline-none focus:border-primary transition-all cursor-pointer opacity-50 cursor-not-allowed">
+                        <select id="wizTopic" disabled onchange="checkCrossClassFast()" class="w-full h-9 px-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-medium text-slate-800 dark:text-slate-100 outline-none focus:border-primary transition-all cursor-pointer opacity-50 cursor-not-allowed">
                             <option value="">Select Chapter First</option>
                         </select>
                     </div>
+                </div>
+
+                <!-- Fast Cross-Class Suggestion Banner -->
+                <div id="crossClassSuggestionBox" class="hidden p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs transition-all">
+                    <div class="flex items-center justify-between gap-1 mb-1.5">
+                        <div class="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-semibold text-[11px]">
+                            <span class="material-symbols-rounded text-sm animate-pulse">lightbulb</span>
+                            <span>অন্যান্য ক্লাসেও একই সিলেবাস পাওয়া গেছে:</span>
+                        </div>
+                        <span class="text-[9px] text-amber-600/80 dark:text-amber-400/80 font-medium">ক্লিক করে যুক্ত করুন</span>
+                    </div>
+                    <div id="suggestedClassChips" class="flex flex-wrap items-center gap-1.5"></div>
+                </div>
+
+                <!-- Selected Additional Classes Container -->
+                <div id="additionalClassesWrap" class="hidden space-y-1">
+                    <span class="text-[10px] font-medium text-slate-500 dark:text-slate-400">Target Classes:</span>
+                    <div id="selectedClassesBadges" class="flex flex-wrap items-center gap-1.5"></div>
+                </div>
+
+                <!-- Question Language (Form-Level) -->
+                <div class="space-y-1">
+                    <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Question Language</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" onclick="setWizCompLanguage('bn')" id="wizCompLangBnBtn" 
+                                class="h-8.5 rounded-xl border border-primary bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer">
+                            <span class="material-symbols-rounded text-sm">language</span>
+                            <span>বাংলা</span>
+                        </button>
+                        <button type="button" onclick="setWizCompLanguage('en')" id="wizCompLangEnBtn" 
+                                class="h-8.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 text-xs font-medium flex items-center justify-center gap-1.5 transition-all hover:border-primary/40 cursor-pointer">
+                            <span class="material-symbols-rounded text-sm">translate</span>
+                            <span>English</span>
+                        </button>
+                    </div>
+                    <input type="hidden" id="wizLanguage" value="bn">
                 </div>
 
                 <!-- Hidden access type – always Free -->
@@ -1035,19 +1071,25 @@
                 <!-- Type & Quantity -->
                 <div class="grid grid-cols-2 gap-2.5">
                     <div class="space-y-1">
-                        <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Type</label>
+                        <label class="text-[11px] font-normal text-slate-500 dark:text-slate-400">Type / প্রশ্নের ধরণ</label>
                         <input type="hidden" id="wizType" value="MCQ">
                         <div class="relative system-dropdown" id="dropdown-wizType">
                             <button type="button" onclick="toggleSystemDropdown('wizType', event)" 
                                     class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
-                                <span id="wizType-label" class="truncate text-[11px]">MCQ</span>
+                                <span id="wizType-label" class="truncate text-[11px]">MCQ (বহুনির্বাচনী)</span>
                                 <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
                             </button>
                             <div id="dropdown-menu-wizType" class="hidden absolute top-full left-0 right-0 mt-1 w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-48 overflow-y-auto no-scrollbar">
-                                <% ['MCQ', 'Short', 'Medium', 'Comprehension'].forEach((t, idx) => { %>
-                                    <div onclick="selectWizardOption('wizType', '<%= t %>', '<%= t %>')" data-wiz-value="<%= t %>"
+                                <% const qTypes = [
+                                    { val: 'MCQ', label: 'MCQ (বহুনির্বাচনী)' },
+                                    { val: 'Short', label: 'Short (সংক্ষিপ্ত)' },
+                                    { val: 'Medium', label: 'Medium (মাঝারি)' },
+                                    { val: 'Comprehension', label: 'Comprehension (সৃজনশীল)' }
+                                ]; %>
+                                <% qTypes.forEach((t, idx) => { %>
+                                    <div onclick="selectWizardOption('wizType', '<%= t.val %>', '<%= t.label %>')" data-wiz-value="<%= t.val %>"
                                          class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors <%= idx === 0 ? 'bg-primary/10 text-primary font-medium' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
-                                        <span class="truncate"><%= t %></span>
+                                        <span class="truncate"><%= t.label %></span>
                                         <% if (idx === 0) { %><span class="material-symbols-rounded text-sm text-primary wiz-check">check</span><% } %>
                                     </div>
                                 <% }) %>
@@ -1405,12 +1447,18 @@
         }
 
         function onWizClassChange() {
+            additionalClasses.clear();
+            updateSelectedClassesUI();
             loadWizardChaptersAndTopics();
+            checkCrossClassFast();
         }
         window.onWizClassChange = onWizClassChange;
 
         function onWizSubjectChange() {
+            additionalClasses.clear();
+            updateSelectedClassesUI();
             loadWizardChaptersAndTopics();
+            checkCrossClassFast();
         }
         window.onWizSubjectChange = onWizSubjectChange;
 
@@ -1423,6 +1471,7 @@
                 topicSelect.innerHTML = '<option value="">Select Chapter First</option>';
                 topicSelect.disabled = true;
                 topicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                checkCrossClassFast();
                 return;
             }
 
@@ -1451,13 +1500,163 @@
             topicSelect.innerHTML = html;
             topicSelect.disabled = false;
             topicSelect.classList.remove('opacity-50', 'cursor-not-allowed');
+            checkCrossClassFast();
         }
         window.onWizChapterChange = onWizChapterChange;
+
+        function setWizCompLanguage(lang) {
+            const isBn = (lang === 'bn');
+            const hidden = document.getElementById('wizLanguage');
+            if (hidden) hidden.value = isBn ? 'bn' : 'en';
+            const enBtn = document.getElementById('wizCompLangEnBtn');
+            const bnBtn = document.getElementById('wizCompLangBnBtn');
+            if (enBtn && bnBtn) {
+                if (isBn) {
+                    bnBtn.className = "h-8.5 rounded-xl border border-primary bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer";
+                    enBtn.className = "h-8.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 text-xs font-medium flex items-center justify-center gap-1.5 transition-all hover:border-primary/40 cursor-pointer";
+                } else {
+                    enBtn.className = "h-8.5 rounded-xl border border-primary bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer";
+                    bnBtn.className = "h-8.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 text-xs font-medium flex items-center justify-center gap-1.5 transition-all hover:border-primary/40 cursor-pointer";
+                }
+            }
+        }
+        window.setWizCompLanguage = setWizCompLanguage;
+
+        const additionalClasses = new Set();
+        const crossClassCache = new Map();
+        let crossClassCheckTimer = null;
+
+        function checkCrossClassFast() {
+            clearTimeout(crossClassCheckTimer);
+            const subject = (document.getElementById('wizSubject')?.value || '').trim();
+            const primaryClass = (document.getElementById('wizClass')?.value || '').trim();
+            const chapter = (document.getElementById('wizChapter')?.value || '').trim();
+            const topic = (document.getElementById('wizTopic')?.value || '').trim();
+            const box = document.getElementById('crossClassSuggestionBox');
+            const chipsContainer = document.getElementById('suggestedClassChips');
+
+            if (!subject || (!chapter && !topic)) {
+                if (box) box.classList.add('hidden');
+                if (chipsContainer) chipsContainer.innerHTML = '';
+                return;
+            }
+
+            const currentClassList = [primaryClass, ...Array.from(additionalClasses)].filter(Boolean);
+            const cacheKey = `${subject}__${chapter}__${topic}__${currentClassList.sort().join(',')}`;
+
+            if (crossClassCache.has(cacheKey)) {
+                renderClassSuggestions(crossClassCache.get(cacheKey));
+                return;
+            }
+
+            crossClassCheckTimer = setTimeout(async () => {
+                try {
+                    const params = new URLSearchParams({
+                        subject,
+                        chapter,
+                        topic,
+                        currentClasses: currentClassList.join(',')
+                    });
+                    const res = await fetch(`/teacher/api/topics/cross-class-check?${params.toString()}`, {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (data && data.success) {
+                        crossClassCache.set(cacheKey, data.matchingClasses || []);
+                        renderClassSuggestions(data.matchingClasses || []);
+                    }
+                } catch (e) {
+                    console.warn('Cross-class check failed:', e);
+                }
+            }, 80);
+        }
+        window.checkCrossClassFast = checkCrossClassFast;
+
+        function renderClassSuggestions(matchingClasses) {
+            const box = document.getElementById('crossClassSuggestionBox');
+            const chipsContainer = document.getElementById('suggestedClassChips');
+            if (!box || !chipsContainer) return;
+
+            const primaryClass = (document.getElementById('wizClass')?.value || '').trim().toLowerCase();
+            const unaddedClasses = (matchingClasses || []).filter(c => {
+                const cClean = String(c).trim();
+                const cNorm = cClean.toLowerCase().replace(/^class\s+/i, '');
+                const pNorm = primaryClass.replace(/^class\s+/i, '');
+                const isAlready = Array.from(additionalClasses).some(ac => ac.toLowerCase().replace(/^class\s+/i, '') === cNorm);
+                return cNorm !== pNorm && !isAlready;
+            });
+
+            if (unaddedClasses.length === 0) {
+                box.classList.add('hidden');
+                chipsContainer.innerHTML = '';
+                return;
+            }
+
+            chipsContainer.innerHTML = '';
+            unaddedClasses.forEach(c => {
+                const cStr = String(c).trim();
+                const label = cStr.toLowerCase().startsWith('class') ? cStr : `Class ${cStr}`;
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-600/50 hover:bg-amber-50 dark:hover:bg-amber-500/20 shadow-2xs transition-all cursor-pointer active:scale-95';
+                chip.innerHTML = `<span class="material-symbols-rounded text-sm">add_circle</span><span>${label}</span>`;
+                chip.onclick = () => addAdditionalClass(label);
+                chipsContainer.appendChild(chip);
+            });
+
+            box.classList.remove('hidden');
+        }
+
+        function addAdditionalClass(cLabel) {
+            additionalClasses.add(cLabel);
+            updateSelectedClassesUI();
+            checkCrossClassFast();
+        }
+        window.addAdditionalClass = addAdditionalClass;
+
+        function removeAdditionalClass(cLabel) {
+            additionalClasses.delete(cLabel);
+            updateSelectedClassesUI();
+            checkCrossClassFast();
+        }
+        window.removeAdditionalClass = removeAdditionalClass;
+
+        function updateSelectedClassesUI() {
+            const wrap = document.getElementById('additionalClassesWrap');
+            const container = document.getElementById('selectedClassesBadges');
+            const primaryClass = (document.getElementById('wizClass')?.value || '').trim();
+            if (!wrap || !container) return;
+
+            if (additionalClasses.size === 0) {
+                wrap.classList.add('hidden');
+                container.innerHTML = '';
+                return;
+            }
+
+            wrap.classList.remove('hidden');
+            container.innerHTML = '';
+
+            if (primaryClass) {
+                const pSpan = document.createElement('span');
+                pSpan.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
+                pSpan.innerText = primaryClass + ' (Primary)';
+                container.appendChild(pSpan);
+            }
+
+            additionalClasses.forEach(c => {
+                const cSpan = document.createElement('span');
+                cSpan.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20';
+                cSpan.innerHTML = `<span>${c}</span><button type="button" onclick="removeAdditionalClass('${c}')" class="size-3.5 flex items-center justify-center hover:text-rose-500 cursor-pointer text-xs font-bold leading-none">&times;</button>`;
+                container.appendChild(cSpan);
+            });
+        }
 
         function openCompositionWizard() {
             const modal = document.getElementById('compositionWizardModal');
             if (modal) modal.classList.remove('hidden');
             loadWizardChaptersAndTopics();
+            checkCrossClassFast();
         }
         window.openCompositionWizard = openCompositionWizard;
 
@@ -1495,8 +1694,12 @@
                 return;
             }
 
+            const targetClasses = [classVal, ...Array.from(additionalClasses)].filter(Boolean);
+            const finalClassParam = targetClasses.join(', ');
+            const langVal = document.getElementById('wizLanguage')?.value || 'bn';
+
             const params = new URLSearchParams({
-                class: classVal,
+                class: finalClassParam,
                 subject: subjectVal,
                 chapter: (document.getElementById('wizChapter')?.value || '').trim(),
                 topic: (document.getElementById('wizTopic')?.value || '').trim(),
@@ -1504,6 +1707,8 @@
                 count: document.getElementById('wizCount').value,
                 access: document.getElementById('wizAccessType').value || 'Free',
                 fresh: 'true',
+                lang: langVal,
+                isBangla: String(langVal === 'bn'),
                 bankId: '<%= typeof bank !== "undefined" ? bank._id : "" %>'
             });
             window.location.href = `/teacher/add-question?${params.toString()}`;

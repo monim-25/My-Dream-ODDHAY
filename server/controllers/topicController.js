@@ -2075,20 +2075,19 @@ const checkCrossClassTopic = async (req, res) => {
             currentClasses = String(currentClassesRaw).split(",").map(c => c.trim().toLowerCase()).filter(Boolean);
         }
 
-        if (!subject || !topic) {
+        if (!subject || (!topic && !chapter)) {
             return res.json({ success: true, hasCrossClass: false, matchingClasses: [], details: [] });
         }
 
         const cleanSubject = String(subject).trim();
-        const rawTopicList = (Array.isArray(topic) ? topic : String(topic).split(','))
+        const rawTopicList = (Array.isArray(topic) ? topic : String(topic || '').split(','))
             .map(t => String(t || '').trim())
             .filter(Boolean);
+        const cleanChapter = chapter ? String(chapter).trim() : "";
 
-        if (rawTopicList.length === 0) {
+        if (rawTopicList.length === 0 && !cleanChapter) {
             return res.json({ success: true, hasCrossClass: false, matchingClasses: [], details: [] });
         }
-
-        const cleanChapter = chapter ? String(chapter).trim() : "";
 
         // Normalize string helper (removes parentheticals, chapter prefixes, extra spaces)
         const normalizeText = (str) => {
@@ -2144,16 +2143,18 @@ const checkCrossClassTopic = async (req, res) => {
             const isCurrent = currentClasses.some(cc => cc === clsLower);
             if (isCurrent) return;
 
-            // Check if topic matches any of the requested topics
+            // Check if topic matches any of the requested topics (if topic was specified)
             const tName = (t.name || "").trim();
-            const matchedReqTopic = rawTopicList.some(reqT => isTopicMatch(reqT, tName));
-            if (!matchedReqTopic) return;
+            if (rawTopicList.length > 0) {
+                const matchedReqTopic = rawTopicList.some(reqT => isTopicMatch(reqT, tName));
+                if (!matchedReqTopic) return;
+            }
 
             const tChapName = (t.chapter && t.chapter.name) ? t.chapter.name.trim() : "";
 
             // If chapter is provided, enforce architectural match
-            if (cleanChapter && tChapName) {
-                if (!isChapterMatch(cleanChapter, tChapName)) {
+            if (cleanChapter) {
+                if (!tChapName || !isChapterMatch(cleanChapter, tChapName)) {
                     return; // Chapter architecture did not match!
                 }
             }
