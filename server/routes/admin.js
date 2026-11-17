@@ -414,40 +414,51 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
             }
         } else {
             // Manual Strategy
+            const isBangla = req.body.isBangla === 'true' || req.body.language === 'bn' || !req.body.language;
+            const lang = isBangla ? 'bn' : (req.body.language || 'en');
+
             for (let i = 0; i < mcqCount; i++) {
                 quizData.questions.push({
-                    questionText: `New MCQ Question ${i + 1}`,
-                    options: ['Option A', 'Option B', 'Option C', 'Option D'],
+                    questionText: isBangla ? `MCQ প্রশ্ন ${i + 1}` : `New MCQ Question ${i + 1}`,
+                    options: isBangla ? ['অপশন ক', 'অপশন খ', 'অপশন গ', 'অপশন ঘ'] : ['Option A', 'Option B', 'Option C', 'Option D'],
                     correctAnswer: 0,
                     explanation: '',
-                    questionType: 'MCQ'
+                    questionType: 'MCQ',
+                    isBangla: isBangla,
+                    language: lang
                 });
             }
             for (let i = 0; i < shortCount; i++) {
                 quizData.questions.push({
-                    questionText: `New Short Question ${i + 1}`,
+                    questionText: isBangla ? `প্রশ্ন ${i + 1}` : `New Short Question ${i + 1}`,
                     options: [],
                     correctAnswer: 0,
                     explanation: '',
-                    questionType: 'Short'
+                    questionType: 'Short',
+                    isBangla: isBangla,
+                    language: lang
                 });
             }
             for (let i = 0; i < mediumCount; i++) {
                 quizData.questions.push({
-                    questionText: `New Medium Question ${i + 1}`,
+                    questionText: isBangla ? `প্রশ্ন ${i + 1}` : `New Medium Question ${i + 1}`,
                     options: [],
                     correctAnswer: 0,
                     explanation: '',
-                    questionType: 'Medium'
+                    questionType: 'Medium',
+                    isBangla: isBangla,
+                    language: lang
                 });
             }
             for (let i = 0; i < comprehensionCount; i++) {
                 quizData.questions.push({
-                    questionText: `New Comprehension Question ${i + 1}`,
+                    questionText: isBangla ? `উদ্দীপক / অনুচ্ছেদ ${i + 1}` : `New Comprehension Question ${i + 1}`,
                     options: [],
                     correctAnswer: 0,
                     explanation: '',
-                    questionType: 'Comprehension'
+                    questionType: 'Comprehension',
+                    isBangla: isBangla,
+                    language: lang
                 });
             }
         }
