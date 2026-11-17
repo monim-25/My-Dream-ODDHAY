@@ -200,10 +200,15 @@
                                 <div id="studioMetaBadges" class="flex flex-wrap items-center gap-1.5"></div>
                             </div>
                             <div class="flex items-center gap-2">
-                                <button type="button" onclick="toggleAllBangla()" id="globalBanglaToggleBtn" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-primary/50 transition-all shadow-2xs cursor-pointer">
-                                    <span class="material-symbols-rounded text-sm text-primary">translate</span>
-                                    <span id="globalBanglaToggleText">Switch All to Bangla (ক, খ, গ, ঘ)</span>
-                                </button>
+                                <!-- Form-Level Language Toggle (Applies to all questions) -->
+                                <div class="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                    <button type="button" onclick="setGlobalBangla(false)" id="formLangEnBtn" class="px-2.5 py-1 rounded-md text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-xs border border-slate-200/60 dark:border-slate-700 transition-all cursor-pointer">
+                                        English (A, B, C, D)
+                                    </button>
+                                    <button type="button" onclick="setGlobalBangla(true)" id="formLangBnBtn" class="px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer">
+                                        বাংলা (ক, খ, গ, ঘ)
+                                    </button>
+                                </div>
                                 <div id="draftStatusBadge" class="hidden items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 transition-all">
                                     <span class="material-symbols-rounded text-[14px]">cloud_done</span>
                                     <span id="draftStatusText">Draft autosaved</span>
@@ -305,13 +310,8 @@
                             </div>
                         </div>
 
-                        <!-- Language Toggle (Bangla / English) -->
+                        <!-- Row Language State (Controlled globally by Form Language) -->
                         <input type="hidden" name="qIsBangla[]" class="row-is-bangla" value="false">
-                        <button type="button" onclick="toggleRowBangla(this)" title="Toggle Bangla / English appearance"
-                                class="row-lang-btn inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:border-primary/50 cursor-pointer shadow-2xs">
-                            <span class="material-symbols-rounded text-sm">translate</span>
-                            <span class="lang-text">English (A, B, C, D)</span>
-                        </button>
                     </div>
                 </div>
 
@@ -752,6 +752,7 @@
 
                 const draft = {
                     mode,
+                    isGlobalBangla: typeof isGlobalBangla !== 'undefined' ? isGlobalBangla : false,
                     globalMeta: {},
                     questions: []
                 };
@@ -883,6 +884,11 @@
 
                 const draft = JSON.parse(rawData);
                 if (!draft || !draft.questions || draft.questions.length === 0) return false;
+
+                if (typeof draft.isGlobalBangla === 'boolean') {
+                    isGlobalBangla = draft.isGlobalBangla;
+                    if (typeof updateGlobalBanglaUI === 'function') updateGlobalBanglaUI();
+                }
 
                 if (draft.globalMeta) {
                     if (draft.globalMeta.board && document.getElementById('globalBoard')) document.getElementById('globalBoard').value = draft.globalMeta.board;
@@ -1521,6 +1527,16 @@
                 saveStudioDraft();
             }
 
+            const urlLang = urlParams.get('lang');
+            const urlIsBangla = urlParams.get('isBangla');
+            if (urlLang === 'bn' || urlIsBangla === 'true') {
+                setGlobalBangla(true);
+            } else if (urlLang === 'en' || urlIsBangla === 'false') {
+                setGlobalBangla(false);
+            } else {
+                updateGlobalBanglaUI();
+            }
+
             let isSubmittingPaper = false;
             const form = document.querySelector('form');
             if (form) {
@@ -1786,6 +1802,8 @@
 
                 if (typeof isGlobalBangla !== 'undefined' && isGlobalBangla) {
                     applyRowBanglaUI(row, true);
+                } else {
+                    applyRowBanglaUI(row, false);
                 }
 
                 container.appendChild(clone);
@@ -1943,6 +1961,38 @@
         }
         window.applyRowBanglaUI = applyRowBanglaUI;
 
+        let isGlobalBangla = false;
+
+        function updateGlobalBanglaUI() {
+            const enBtn = document.getElementById('formLangEnBtn');
+            const bnBtn = document.getElementById('formLangBnBtn');
+            if (enBtn && bnBtn) {
+                if (isGlobalBangla) {
+                    bnBtn.className = 'px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-500 text-white shadow-xs transition-all cursor-pointer';
+                    enBtn.className = 'px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer';
+                } else {
+                    enBtn.className = 'px-2.5 py-1 rounded-md text-xs font-semibold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 shadow-xs border border-slate-200/60 dark:border-slate-700 transition-all cursor-pointer';
+                    bnBtn.className = 'px-2.5 py-1 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer';
+                }
+            }
+        }
+        window.updateGlobalBanglaUI = updateGlobalBanglaUI;
+
+        function setGlobalBangla(isBn) {
+            isGlobalBangla = !!isBn;
+            updateGlobalBanglaUI();
+            const rows = document.querySelectorAll('.question-row');
+            rows.forEach(r => applyRowBanglaUI(r, isGlobalBangla));
+            updateIndices();
+            saveStudioDraft();
+        }
+        window.setGlobalBangla = setGlobalBangla;
+
+        function toggleAllBangla() {
+            setGlobalBangla(!isGlobalBangla);
+        }
+        window.toggleAllBangla = toggleAllBangla;
+
         function toggleRowBangla(btn) {
             const row = btn.closest('.question-row');
             if (!row) return;
@@ -1954,29 +2004,6 @@
             saveStudioDraft();
         }
         window.toggleRowBangla = toggleRowBangla;
-
-        let isGlobalBangla = false;
-        function toggleAllBangla() {
-            const rows = document.querySelectorAll('.question-row');
-            let anyNonBangla = false;
-            rows.forEach(r => {
-                const isB = r.querySelector('.row-is-bangla')?.value === 'true';
-                if (!isB) anyNonBangla = true;
-            });
-
-            const targetState = anyNonBangla;
-            isGlobalBangla = targetState;
-
-            rows.forEach(r => applyRowBanglaUI(r, targetState));
-            updateIndices();
-
-            const globalBtnText = document.getElementById('globalBanglaToggleText');
-            if (globalBtnText) {
-                globalBtnText.innerText = targetState ? 'Switch All to English (A, B, C, D)' : 'Switch All to Bangla (ক, খ, গ, ঘ)';
-            }
-            saveStudioDraft();
-        }
-        window.toggleAllBangla = toggleAllBangla;
 
         function removeRow(btn) {
             const row = btn.closest('.question-row');

@@ -901,11 +901,60 @@
             closeAllSystemDropdowns();
         }
 
+        function toggleSlotType(type) {
+            const cb = document.getElementById('wizCheck' + type);
+            const input = document.getElementById('wizCount' + type);
+            const card = document.getElementById('wizCard' + type);
+            if (!cb || !input) return;
+
+            if (cb.checked) {
+                input.disabled = false;
+                if (!input.value || parseInt(input.value) <= 0) {
+                    input.value = (type === 'MCQ') ? '10' : (type === 'Comprehension' ? '2' : '5');
+                }
+                if (card) {
+                    card.classList.remove('opacity-60');
+                    card.classList.add('border-primary/50');
+                }
+                input.focus();
+            } else {
+                input.disabled = true;
+                input.value = '';
+                if (card) {
+                    card.classList.add('opacity-60');
+                    card.classList.remove('border-primary/50');
+                }
+            }
+            updateTotalWizSlots();
+        }
+
+        function setWizLanguage(lang) {
+            const isBn = (lang === 'bn');
+            const hidden = document.getElementById('wizLanguage');
+            if (hidden) hidden.value = isBn ? 'bn' : 'en';
+            const enBtn = document.getElementById('wizLangEnBtn');
+            const bnBtn = document.getElementById('wizLangBnBtn');
+            if (enBtn && bnBtn) {
+                if (isBn) {
+                    bnBtn.className = "h-8.5 rounded-xl border border-primary bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-2xs";
+                    enBtn.className = "h-8.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 text-xs font-medium flex items-center justify-center gap-1.5 transition-all hover:border-primary/40";
+                } else {
+                    enBtn.className = "h-8.5 rounded-xl border border-primary bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-2xs";
+                    bnBtn.className = "h-8.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 text-xs font-medium flex items-center justify-center gap-1.5 transition-all hover:border-primary/40";
+                }
+            }
+        }
+
         function updateTotalWizSlots() {
-            const mcq = parseInt(document.getElementById('wizCountMCQ')?.value) || 0;
-            const shortQ = parseInt(document.getElementById('wizCountShort')?.value) || 0;
-            const med = parseInt(document.getElementById('wizCountMedium')?.value) || 0;
-            const comp = parseInt(document.getElementById('wizCountComprehension')?.value) || 0;
+            const mcqCheck = document.getElementById('wizCheckMCQ')?.checked;
+            const shortCheck = document.getElementById('wizCheckShort')?.checked;
+            const medCheck = document.getElementById('wizCheckMedium')?.checked;
+            const compCheck = document.getElementById('wizCheckComprehension')?.checked;
+
+            const mcq = mcqCheck ? (parseInt(document.getElementById('wizCountMCQ')?.value) || 0) : 0;
+            const shortQ = shortCheck ? (parseInt(document.getElementById('wizCountShort')?.value) || 0) : 0;
+            const med = medCheck ? (parseInt(document.getElementById('wizCountMedium')?.value) || 0) : 0;
+            const comp = compCheck ? (parseInt(document.getElementById('wizCountComprehension')?.value) || 0) : 0;
             const total = mcq + shortQ + med + comp;
             const badge = document.getElementById('wizTotalSlotsBadge');
             if (badge) {
@@ -947,11 +996,17 @@
             const topicInput = document.getElementById('wizTopic');
             const topic = topicInput ? topicInput.value.trim() : '';
             const access = document.getElementById('wizAccessType') ? document.getElementById('wizAccessType').value : 'Free';
+            const lang = document.getElementById('wizLanguage') ? document.getElementById('wizLanguage').value : 'en';
 
-            const mcq = parseInt(document.getElementById('wizCountMCQ')?.value) || 0;
-            const shortQ = parseInt(document.getElementById('wizCountShort')?.value) || 0;
-            const med = parseInt(document.getElementById('wizCountMedium')?.value) || 0;
-            const comp = parseInt(document.getElementById('wizCountComprehension')?.value) || 0;
+            const mcqCheck = document.getElementById('wizCheckMCQ')?.checked;
+            const shortCheck = document.getElementById('wizCheckShort')?.checked;
+            const medCheck = document.getElementById('wizCheckMedium')?.checked;
+            const compCheck = document.getElementById('wizCheckComprehension')?.checked;
+
+            const mcq = mcqCheck ? (parseInt(document.getElementById('wizCountMCQ')?.value) || 0) : 0;
+            const shortQ = shortCheck ? (parseInt(document.getElementById('wizCountShort')?.value) || 0) : 0;
+            const med = medCheck ? (parseInt(document.getElementById('wizCountMedium')?.value) || 0) : 0;
+            const comp = compCheck ? (parseInt(document.getElementById('wizCountComprehension')?.value) || 0) : 0;
             const total = mcq + shortQ + med + comp;
 
             const fileInput = document.getElementById('wizFileInput');
@@ -978,22 +1033,13 @@
                 return;
             }
 
-            if (!topic) {
-                if (topicInput) {
-                    topicInput.focus();
-                    topicInput.classList.add('border-rose-500', 'ring-1', 'ring-rose-500');
-                    setTimeout(() => topicInput.classList.remove('border-rose-500', 'ring-1', 'ring-rose-500'), 3000);
-                }
-                Swal.fire({ icon: 'warning', title: 'Paper Title Required', text: 'Please enter the paper title.', timer: 2500, showConfirmButton: false });
-                return;
-            }
+            // Paper title is optional - if omitted, auto-generate default title
+            const finalTopic = topic || `${board} ${year}`.trim() || 'Question Paper';
 
             if (total <= 0) {
-                Swal.fire({ icon: 'warning', title: 'Slots Required', text: 'Please enter at least 1 question slot.', timer: 2500, showConfirmButton: false });
+                Swal.fire({ icon: 'warning', title: 'Slots Required', text: 'Please enable and enter at least 1 question slot.', timer: 2500, showConfirmButton: false });
                 return;
             }
-
-
 
             const slotsList = [];
             if (mcq > 0) slotsList.push(`MCQ:${mcq}`);
@@ -1044,10 +1090,12 @@
                 year: year,
                 class: classLevel,
                 subject: subject,
-                topic: topic,
+                topic: finalTopic,
                 access: access,
                 slots: slotsStr,
                 count: total,
+                lang: lang,
+                isBangla: String(lang === 'bn'),
                 fresh: 'true'
             });
 
@@ -1198,11 +1246,29 @@
                     </div>
                 </div>
 
-                <!-- Paper Title -->
+                <!-- Paper Title (Optional) -->
                 <div class="space-y-1">
-                    <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Paper title <span class="text-rose-500">*</span></label>
-                    <input type="text" id="wizTopic" required placeholder="e.g. Dhaka Board 2024" class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:border-primary transition-all">
+                    <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Paper title <span class="text-slate-400 font-normal text-[10px]">(Optional)</span></label>
+                    <input type="text" id="wizTopic" placeholder="e.g. Dhaka Board 2024 (Optional)" class="w-full h-9 px-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-800 dark:text-slate-100 placeholder:text-slate-400 outline-none focus:border-primary transition-all">
                     <input type="hidden" id="wizAccessType" value="Free">
+                </div>
+
+                <!-- Question Language (Form-Level) -->
+                <div class="space-y-1">
+                    <label class="text-[11px] font-medium text-slate-600 dark:text-slate-300">Question Language / অপশন ও প্রশ্নের ভাষা</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" onclick="setWizLanguage('en')" id="wizLangEnBtn" 
+                                class="h-8.5 rounded-xl border border-primary bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer">
+                            <span class="material-symbols-rounded text-sm">translate</span>
+                            <span>English (A, B, C, D)</span>
+                        </button>
+                        <button type="button" onclick="setWizLanguage('bn')" id="wizLangBnBtn" 
+                                class="h-8.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-400 text-xs font-medium flex items-center justify-center gap-1.5 transition-all hover:border-primary/40 cursor-pointer">
+                            <span class="material-symbols-rounded text-sm">language</span>
+                            <span>বাংলা (ক, খ, গ, ঘ)</span>
+                        </button>
+                    </div>
+                    <input type="hidden" id="wizLanguage" value="en">
                 </div>
 
                 <!-- Question Slots by Type -->
@@ -1213,43 +1279,55 @@
                     </div>
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                         <!-- MCQ -->
-                        <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col justify-between focus-within:border-primary/60 transition-all shadow-2xs">
+                        <div id="wizCardMCQ" class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-primary/50 dark:border-primary/40 flex flex-col justify-between transition-all shadow-2xs">
                             <div class="flex items-center justify-between mb-1.5">
-                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">MCQ</span>
+                                <label for="wizCheckMCQ" class="flex items-center gap-1.5 cursor-pointer select-none">
+                                    <input type="checkbox" id="wizCheckMCQ" checked onchange="toggleSlotType('MCQ')" class="size-3.5 accent-primary rounded cursor-pointer">
+                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">MCQ</span>
+                                </label>
                                 <span class="material-symbols-rounded text-sm text-primary">check_circle</span>
                             </div>
-                            <input type="number" id="wizCountMCQ" value="10" min="0" max="100" oninput="updateTotalWizSlots()" 
+                            <input type="number" id="wizCountMCQ" value="10" min="1" max="100" placeholder="0" oninput="updateTotalWizSlots()" 
                                    class="w-full h-8 px-2 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-xs font-semibold text-center outline-none focus:border-primary text-slate-800 dark:text-slate-100 transition-all">
                         </div>
 
                         <!-- Short -->
-                        <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col justify-between focus-within:border-blue-500/60 transition-all shadow-2xs">
+                        <div id="wizCardShort" class="p-2.5 rounded-xl bg-slate-50/60 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 flex flex-col justify-between transition-all shadow-2xs opacity-60">
                             <div class="flex items-center justify-between mb-1.5">
-                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Short</span>
+                                <label for="wizCheckShort" class="flex items-center gap-1.5 cursor-pointer select-none">
+                                    <input type="checkbox" id="wizCheckShort" onchange="toggleSlotType('Short')" class="size-3.5 accent-blue-500 rounded cursor-pointer">
+                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Short</span>
+                                </label>
                                 <span class="material-symbols-rounded text-sm text-blue-500">short_text</span>
                             </div>
-                            <input type="number" id="wizCountShort" value="0" min="0" max="100" oninput="updateTotalWizSlots()" 
-                                   class="w-full h-8 px-2 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-xs font-semibold text-center outline-none focus:border-primary text-slate-800 dark:text-slate-100 transition-all">
+                            <input type="number" id="wizCountShort" disabled min="1" max="100" placeholder="0" oninput="updateTotalWizSlots()" 
+                                   class="w-full h-8 px-2 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-xs font-semibold text-center outline-none focus:border-primary text-slate-800 dark:text-slate-100 transition-all disabled:bg-slate-100 dark:disabled:bg-slate-800/60 disabled:cursor-not-allowed">
                         </div>
 
                         <!-- Medium -->
-                        <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col justify-between focus-within:border-amber-500/60 transition-all shadow-2xs">
+                        <div id="wizCardMedium" class="p-2.5 rounded-xl bg-slate-50/60 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 flex flex-col justify-between transition-all shadow-2xs opacity-60">
                             <div class="flex items-center justify-between mb-1.5">
-                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Medium</span>
+                                <label for="wizCheckMedium" class="flex items-center gap-1.5 cursor-pointer select-none">
+                                    <input type="checkbox" id="wizCheckMedium" onchange="toggleSlotType('Medium')" class="size-3.5 accent-amber-500 rounded cursor-pointer">
+                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Medium</span>
+                                </label>
                                 <span class="material-symbols-rounded text-sm text-amber-500">subject</span>
                             </div>
-                            <input type="number" id="wizCountMedium" value="0" min="0" max="100" oninput="updateTotalWizSlots()" 
-                                   class="w-full h-8 px-2 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-xs font-semibold text-center outline-none focus:border-primary text-slate-800 dark:text-slate-100 transition-all">
+                            <input type="number" id="wizCountMedium" disabled min="1" max="100" placeholder="0" oninput="updateTotalWizSlots()" 
+                                   class="w-full h-8 px-2 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-xs font-semibold text-center outline-none focus:border-primary text-slate-800 dark:text-slate-100 transition-all disabled:bg-slate-100 dark:disabled:bg-slate-800/60 disabled:cursor-not-allowed">
                         </div>
 
                         <!-- Comprehension -->
-                        <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col justify-between focus-within:border-purple-500/60 transition-all shadow-2xs">
+                        <div id="wizCardComprehension" class="p-2.5 rounded-xl bg-slate-50/60 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 flex flex-col justify-between transition-all shadow-2xs opacity-60">
                             <div class="flex items-center justify-between mb-1.5">
-                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Compr.</span>
+                                <label for="wizCheckComprehension" class="flex items-center gap-1.5 cursor-pointer select-none">
+                                    <input type="checkbox" id="wizCheckComprehension" onchange="toggleSlotType('Comprehension')" class="size-3.5 accent-purple-500 rounded cursor-pointer">
+                                    <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Compr.</span>
+                                </label>
                                 <span class="material-symbols-rounded text-sm text-purple-500">article</span>
                             </div>
-                            <input type="number" id="wizCountComprehension" value="0" min="0" max="100" oninput="updateTotalWizSlots()" 
-                                   class="w-full h-8 px-2 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-xs font-semibold text-center outline-none focus:border-primary text-slate-800 dark:text-slate-100 transition-all">
+                            <input type="number" id="wizCountComprehension" disabled min="1" max="100" placeholder="0" oninput="updateTotalWizSlots()" 
+                                   class="w-full h-8 px-2 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-700 text-xs font-semibold text-center outline-none focus:border-primary text-slate-800 dark:text-slate-100 transition-all disabled:bg-slate-100 dark:disabled:bg-slate-800/60 disabled:cursor-not-allowed">
                         </div>
                     </div>
                 </div>
