@@ -4331,7 +4331,14 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             ...extractList(body['classLevels[]'])
         ];
         let parsedClassLevels = [...new Set(rawClasses.map(c => normalizeClass(c)).filter(Boolean))];
-        if (parsedClassLevels.length === 0) parsedClassLevels = ['Class 10'];
+        const teacherAssignedClasses = teacherContext.rawAssignedClasses || [];
+        if (teacherAssignedClasses.length > 0) {
+            const normAssigned = teacherAssignedClasses.map(c => normalizeClass(c).toLowerCase());
+            const filteredClasses = parsedClassLevels.filter(c => normAssigned.includes(c.toLowerCase()));
+            parsedClassLevels = filteredClasses.length > 0 ? filteredClasses : [normalizeClass(teacherAssignedClasses[0])];
+        } else if (parsedClassLevels.length === 0) {
+            parsedClassLevels = ['Class 10'];
+        }
         const questionClassLevel = parsedClassLevels.length === 1 ? parsedClassLevels[0] : parsedClassLevels;
         let globalClass = Array.isArray(questionClassLevel) ? questionClassLevel[0] : questionClassLevel;
         const globalTopic    = (body.topic || '').trim();
