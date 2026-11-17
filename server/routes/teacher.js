@@ -4296,31 +4296,34 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const mode      = body.mode || 'standalone';
         let bankId    = body.bankId || null;
 
+        const extractList = (val) => {
+            if (!val) return [];
+            if (Array.isArray(val)) return val.flatMap(c => String(c).split(',')).map(c => c.trim()).filter(Boolean);
+            return String(val).split(',').map(c => c.trim()).filter(Boolean);
+        };
+
         // Global archive metadata (archive mode)
         const globalBoard    = (body.board || '').trim();
         const globalYear     = (body.year || '').trim();
-        const rawSubjects    = extractList(body.subjects || body['subjects[]'] || body.subject || body['subject[]']);
+        const rawSubjects = [
+            ...extractList(body.subjects),
+            ...extractList(body['subjects[]']),
+            ...extractList(body.subject),
+            ...extractList(body['subject[]'])
+        ];
         const parsedSubjects = rawSubjects.length > 0 ? [...new Set(rawSubjects)] : [(body.subject || 'General').trim()];
         const globalSubject  = parsedSubjects[0] || 'General';
-        let globalClass = body.classLevel || 'General';
-        let parsedClassLevels = [];
-        if (Array.isArray(globalClass)) {
-            parsedClassLevels = globalClass.map(c => normalizeClass(c)).filter(Boolean);
-        } else if (typeof globalClass === 'string') {
-            const raw = globalClass.trim();
-            if (raw.toLowerCase() === 'ssc' || raw.toLowerCase() === 'class 9-10' || raw.toLowerCase() === '9-10') {
-                parsedClassLevels = ['Class 9', 'Class 10'];
-            } else if (raw.toLowerCase() === 'hsc' || raw.toLowerCase() === 'class 11-12' || raw.toLowerCase() === '11-12') {
-                parsedClassLevels = ['Class 11', 'Class 12'];
-            } else if (raw.includes(',')) {
-                parsedClassLevels = raw.split(',').map(c => normalizeClass(c)).filter(Boolean);
-            } else {
-                parsedClassLevels = [normalizeClass(raw)];
-            }
-        }
+        
+        const rawClasses = [
+            ...extractList(body.classLevel),
+            ...extractList(body['classLevel[]']),
+            ...extractList(body.classLevels),
+            ...extractList(body['classLevels[]'])
+        ];
+        let parsedClassLevels = [...new Set(rawClasses.map(c => normalizeClass(c)).filter(Boolean))];
         if (parsedClassLevels.length === 0) parsedClassLevels = ['Class 10'];
         const questionClassLevel = parsedClassLevels.length === 1 ? parsedClassLevels[0] : parsedClassLevels;
-        globalClass = Array.isArray(questionClassLevel) ? questionClassLevel[0] : questionClassLevel;
+        let globalClass = Array.isArray(questionClassLevel) ? questionClassLevel[0] : questionClassLevel;
         const globalTopic    = (body.topic || '').trim();
         const globalAccess   = 'Free';
 

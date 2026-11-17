@@ -827,13 +827,29 @@ const getChaptersApi = async (req, res) => {
             return res.json({ success: true, chapters: [] });
         }
 
-        const escClass = classLevel.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const rawClass = String(classLevel || '').trim();
+        const classList = rawClass.split(',').map(c => c.trim()).filter(Boolean);
+        const expandedClasses = new Set();
+        classList.forEach(c => {
+            expandedClasses.add(c);
+            try {
+                const norm = normalizeClass(c);
+                if (norm) expandedClasses.add(norm);
+                const linked = getLinkedClasses(c);
+                if (Array.isArray(linked)) linked.forEach(l => expandedClasses.add(l));
+            } catch (e) {}
+        });
+        const finalClassList = Array.from(expandedClasses).filter(Boolean);
+        const classFilter = finalClassList.length === 1 
+            ? new RegExp('^' + escapeRegex(finalClassList[0]) + '$', 'i')
+            : (finalClassList.length > 1 ? new RegExp('^(?:' + finalClassList.map(escapeRegex).join('|') + ')$', 'i') : new RegExp('^' + escapeRegex(rawClass) + '$', 'i'));
+
         const escSub = subject.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
         const filter = {
             isArchived: { $nin: [true, 'true', 1] },
             status: { $nin: ['rejected'] },
-            classLevel: new RegExp(`^${escClass}$`, 'i'),
+            classLevel: classFilter,
             subject: new RegExp(`^${escSub}$`, 'i')
         };
 
