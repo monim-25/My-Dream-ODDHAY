@@ -3526,33 +3526,9 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                 });
             }
             // Only generate from existing questions matching selected items - no empty filler slots!
-        } else if (strategy === 'bulk' && req.body.bulkQuestionsPayload) {
-            try {
-                const bulkQuestions = JSON.parse(req.body.bulkQuestionsPayload);
-                if (Array.isArray(bulkQuestions) && bulkQuestions.length > 0) {
-                    const isBn = req.body.isBangla === 'true' || req.body.language === 'bn' || !req.body.language;
-                    const lang = isBn ? 'bn' : (req.body.language || 'en');
-                    bulkQuestions.forEach(bq => {
-                        const corrIndex = (bq.correctIndex !== undefined && bq.correctIndex >= 0) ? bq.correctIndex : 0;
-                        quizData.questions.push({
-                            questionText: (bq.qText || '').trim(),
-                            options: bq.options || ['', '', '', ''],
-                            correctAnswer: corrIndex,
-                            correctAnswerIndex: corrIndex,
-                            explanation: (bq.explanation || '').trim(),
-                            questionType: 'MCQ',
-                            isBangla: Boolean(bq.isBangla !== undefined ? bq.isBangla : isBn),
-                            language: bq.language || lang,
-                            chapter: chapter || '',
-                            topic: topic || '',
-                            subTopic: subTopic || '',
-                            marks: 1
-                        });
-                    });
-                }
-            } catch (bulkErr) {
-                console.error('Error parsing bulk quiz questions:', bulkErr);
-            }
+        } else if (req.body.mode === 'bulk') {
+            // Bulk Studio mode: creates exam without filler slots, user will paste questions in editor
+            quizData.questions = [];
         } else {
             // Manual Strategy: Create empty questions based on counts
             const mcqCount = parseInt(req.body.mcqCount) || 0;
@@ -3662,7 +3638,9 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             console.error('Quiz publish notification error:', notifErr);
         }
         
-        if (req.body.activeFlow === 'courses' && courseId) {
+        if (req.body.mode === 'bulk') {
+            return res.redirect(`/teacher/quiz/${quiz._id}?openBulk=true`);
+        } else if (req.body.activeFlow === 'courses' && courseId) {
             res.redirect(`/teacher/course/${courseId}/quiz/${quiz._id}`);
         } else if (req.body.bankId) {
             res.redirect('/teacher/quizzes');
