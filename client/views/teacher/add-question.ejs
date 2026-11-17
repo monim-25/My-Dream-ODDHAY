@@ -101,29 +101,33 @@
                                     </div>
                                     <!-- Subject – Multi-Select -->
                                     <div class="space-y-1">
-                                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5 block">Subjects <span class="text-rose-500">*</span></label>
+                                        <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5 block">Subject <span class="text-rose-500">*</span></label>
                                         <% 
-                                            const defaultSubjectList = ['Physics', 'Chemistry', 'Biology', 'Higher Mathematics', 'General Mathematics', 'Bangla', 'English', 'ICT'];
-                                            const mergedSubjects = Array.from(new Set([...(assignedSubjects || []), ...defaultSubjectList])).filter(Boolean);
-                                            const subjectList = mergedSubjects.length > 0 ? mergedSubjects : defaultSubjectList;
-                                            const defaultInitialSub = subjectList[0];
+                                            const subjectList = (assignedSubjects && assignedSubjects.length > 0) ? assignedSubjects : [];
+                                            const defaultInitialSub = subjectList[0] || '';
                                         %>
                                         <input type="hidden" name="subject" id="globalSubject" value="<%= defaultInitialSub %>" required>
                                         <div class="relative system-dropdown" id="dropdown-globalSubject">
                                             <button type="button" onclick="toggleSystemDropdown('globalSubject', event)" 
                                                     class="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between transition-all cursor-pointer shadow-2xs select-none">
-                                                <span id="globalSubject-label" class="truncate font-medium"><%= defaultInitialSub %></span>
+                                                <span id="globalSubject-label" class="truncate font-medium"><%= defaultInitialSub || 'Select Subject' %></span>
                                                 <span class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
                                             </button>
                                             <div id="dropdown-menu-globalSubject" class="hidden absolute top-full left-0 right-0 mt-1 min-w-[190px] w-full rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 max-h-56 overflow-y-auto no-scrollbar">
-                                                <% subjectList.forEach((s, idx) => { %>
-                                                    <div onclick="selectGlobalSubjectDirect('<%= s %>')" class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition-colors select-none">
-                                                        <label class="flex items-center gap-2 cursor-pointer flex-1" onclick="event.stopPropagation()">
-                                                            <input type="checkbox" name="subjects[]" value="<%= s %>" <%= idx === 0 ? 'checked' : '' %> class="accent-primary rounded size-3.5 global-subject-cb" onchange="syncGlobalSubjects()">
+                                                <% if (subjectList.length === 0) { %>
+                                                    <div class="px-3 py-2 text-xs text-slate-400 italic">No assigned subjects</div>
+                                                <% } else { %>
+                                                    <% subjectList.forEach((s, idx) => { %>
+                                                        <div onclick="selectGlobalSubjectDirect('<%= s %>')" 
+                                                             data-val="<%= s %>"
+                                                             class="global-sub-item px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors <%= idx === 0 ? 'font-medium text-primary bg-primary/10' : 'font-normal text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
                                                             <span class="truncate font-medium"><%= s %></span>
-                                                        </label>
-                                                    </div>
-                                                <% }) %>
+                                                            <% if (idx === 0) { %>
+                                                                <span class="material-symbols-rounded text-sm text-primary sub-check-icon">check</span>
+                                                            <% } %>
+                                                        </div>
+                                                    <% }) %>
+                                                <% } %>
                                             </div>
                                         </div>
                                     </div>
@@ -625,6 +629,11 @@
         window.closeAllSystemDropdowns = closeAllSystemDropdowns;
 
         function selectSystemOption(fieldId, value, label) {
+            if (fieldId === 'globalSubject') {
+                selectGlobalSubjectDirect(value);
+                return;
+            }
+
             const input = document.getElementById(fieldId);
             const labelEl = document.getElementById(`${fieldId}-label`);
             if (input) input.value = value;
@@ -635,11 +644,6 @@
                 document.querySelectorAll('.global-class-cb').forEach(cb => {
                     const cbVal = cb.value.trim().toLowerCase().replace(/^class\s+/i, '');
                     cb.checked = (cbVal === targetVal);
-                });
-            } else if (fieldId === 'globalSubject') {
-                const targetVal = String(value).trim().toLowerCase();
-                document.querySelectorAll('.global-subject-cb').forEach(cb => {
-                    cb.checked = (cb.value.trim().toLowerCase() === targetVal);
                 });
             }
 
@@ -667,7 +671,7 @@
                 renderMetadataBadges();
             }
 
-            if (fieldId === 'globalSubject' || fieldId === 'globalClass') {
+            if (fieldId === 'globalClass') {
                 if (typeof loadTopicsForQuestionStudio === 'function') {
                     loadTopicsForQuestionStudio();
                 }
@@ -678,17 +682,10 @@
         window.selectSystemOption = selectSystemOption;
 
         function syncGlobalSubjects() {
-            const checked = Array.from(document.querySelectorAll('.global-subject-cb:checked')).map(cb => cb.value);
-            const label = document.getElementById('globalSubject-label');
             const hidden = document.getElementById('globalSubject');
-            if (checked.length === 0) {
-                const firstCb = document.querySelector('.global-subject-cb');
-                if (firstCb) { firstCb.checked = true; checked.push(firstCb.value); }
-            }
-            if (hidden) hidden.value = checked[0] || '';
-            if (label) {
-                if (checked.length === 1) label.innerText = checked[0];
-                else label.innerText = `${checked[0]} (+${checked.length - 1})`;
+            const label = document.getElementById('globalSubject-label');
+            if (hidden && label) {
+                label.innerText = hidden.value || 'Select Subject';
             }
             if (typeof renderMetadataBadges === 'function') renderMetadataBadges();
             if (typeof loadTopicsForQuestionStudio === 'function') {
@@ -732,11 +729,38 @@
         window.selectGlobalClassDirect = selectGlobalClassDirect;
 
         function selectGlobalSubjectDirect(sName) {
-            document.querySelectorAll('.global-subject-cb').forEach(cb => {
-                cb.checked = (cb.value.trim().toLowerCase() === String(sName).trim().toLowerCase());
-            });
-            syncGlobalSubjects();
+            const input = document.getElementById('globalSubject');
+            const label = document.getElementById('globalSubject-label');
+            if (input) input.value = sName;
+            if (label) label.innerText = sName || 'Select Subject';
+
+            const menu = document.getElementById(`dropdown-menu-globalSubject`);
+            if (menu) {
+                menu.querySelectorAll('.global-sub-item').forEach(el => {
+                    const val = el.getAttribute('data-val');
+                    const isSel = (val && String(val).toLowerCase() === String(sName).toLowerCase());
+                    if (isSel) {
+                        el.className = 'global-sub-item px-2.5 py-1.5 text-xs font-medium text-primary bg-primary/10 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                        if (!el.querySelector('.sub-check-icon')) {
+                            const chk = document.createElement('span');
+                            chk.className = 'material-symbols-rounded text-sm text-primary sub-check-icon';
+                            chk.innerText = 'check';
+                            el.appendChild(chk);
+                        }
+                    } else {
+                        el.className = 'global-sub-item px-2.5 py-1.5 text-xs font-normal text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                        const chk = el.querySelector('.sub-check-icon');
+                        if (chk) chk.remove();
+                    }
+                });
+            }
+
+            if (typeof renderMetadataBadges === 'function') renderMetadataBadges();
+            if (typeof loadTopicsForQuestionStudio === 'function') {
+                loadTopicsForQuestionStudio();
+            }
             closeAllSystemDropdowns();
+            saveStudioDraft();
         }
         window.selectGlobalSubjectDirect = selectGlobalSubjectDirect;
 
@@ -1511,23 +1535,18 @@
                 if (gYear && urlParams.has('year')) gYear.value = urlParams.get('year');
 
                 if (urlParams.has('subject')) {
-                    const rawSubs = urlParams.get('subject').split(',').map(s => s.trim().toLowerCase());
-                    let matchedAny = false;
-                    document.querySelectorAll('.global-subject-cb').forEach(cb => {
-                        if (rawSubs.includes(cb.value.trim().toLowerCase())) {
-                            cb.checked = true;
-                            matchedAny = true;
-                        } else {
-                            cb.checked = false;
-                        }
-                    });
-                    if (!matchedAny) {
-                        const firstCb = document.querySelector('.global-subject-cb');
-                        if (firstCb) firstCb.checked = true;
+                    const rawSub = urlParams.get('subject').split(',')[0].trim();
+                    const subItem = Array.from(document.querySelectorAll('#dropdown-menu-globalSubject .global-sub-item'))
+                        .find(el => (el.getAttribute('data-val') || '').toLowerCase() === rawSub.toLowerCase());
+                    if (subItem) {
+                        selectGlobalSubjectDirect(subItem.getAttribute('data-val'));
+                    } else {
+                        const firstItem = document.querySelector('#dropdown-menu-globalSubject .global-sub-item');
+                        if (firstItem) selectGlobalSubjectDirect(firstItem.getAttribute('data-val'));
                     }
-                    syncGlobalSubjects();
                 } else {
-                    syncGlobalSubjects();
+                    const firstItem = document.querySelector('#dropdown-menu-globalSubject .global-sub-item');
+                    if (firstItem) selectGlobalSubjectDirect(firstItem.getAttribute('data-val'));
                 }
 
                 if (urlParams.has('class')) {

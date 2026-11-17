@@ -4312,7 +4312,17 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             ...extractList(body['subject[]'])
         ];
         const parsedSubjects = rawSubjects.length > 0 ? [...new Set(rawSubjects)] : [(body.subject || 'General').trim()];
-        const globalSubject  = parsedSubjects[0] || 'General';
+        let globalSubject  = parsedSubjects[0] || 'General';
+        
+        // Ensure teacher can only create questions for their assigned subjects
+        const teacherContext = await getTeacherAssignedContext(req.session.user._id);
+        const teacherAssignedSubs = teacherContext.rawAssignedSubjects || [];
+        if (teacherAssignedSubs.length > 0) {
+            const isAssigned = teacherAssignedSubs.some(s => s.trim().toLowerCase() === globalSubject.toLowerCase());
+            if (!isAssigned) {
+                globalSubject = teacherAssignedSubs[0];
+            }
+        }
         
         const rawClasses = [
             ...extractList(body.classLevel),
