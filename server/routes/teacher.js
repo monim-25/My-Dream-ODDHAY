@@ -3437,13 +3437,14 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         if (subTopics.length > 0) quizData.subTopics = subTopics;
         else if (subTopic) quizData.subTopics = [subTopic];
 
+        const isBulkMode = req.body.mode === 'bulk';
         const mcqCount = parseInt(req.body.mcqCount) || 0;
         const shortCount = parseInt(req.body.shortCount) || 0;
         const mediumCount = parseInt(req.body.mediumCount) || 0;
         const comprehensionCount = parseInt(req.body.comprehensionCount) || 0;
         const totalConfigured = mcqCount + shortCount + mediumCount + comprehensionCount;
 
-        if (totalConfigured <= 0) {
+        if (!isBulkMode && totalConfigured <= 0) {
             const redirectUrl = (req.body.activeFlow === 'courses' && courseId)
                 ? `/teacher/course/${courseId}/make-quiz?error=` + encodeURIComponent('Question Configuration required: Please specify at least one question count.')
                 : '/teacher/make-quiz?error=' + encodeURIComponent('Question Configuration required: Please specify at least one question count.');
