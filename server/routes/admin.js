@@ -556,8 +556,9 @@ router.post('/quiz/:id/add-question', contentAdminProtect, async (req, res) => {
             { new: true }
         );
 
-        const newQ = quiz.questions[quiz.questions.length - 1];
-        res.json({ success: true, question: newQ, totalQuestions: quiz.questions.length });
+        const newQuestionsAdded = quiz.questions.slice(-count);
+        const newQ = newQuestionsAdded[newQuestionsAdded.length - 1];
+        res.json({ success: true, question: newQ, questions: newQuestionsAdded, totalQuestions: quiz.questions.length });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 

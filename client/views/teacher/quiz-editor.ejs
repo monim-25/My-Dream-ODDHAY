@@ -215,7 +215,7 @@
                 <!-- Feed -->
                 <div class="space-y-4 sm:space-y-6" id="questions-feed">
                     <% quiz.questions.forEach((q, index) => { %>
-                        <div class="q-card group animate-in fade-in slide-in-from-bottom-4 duration-500" id="q-<%= q._id %>" style="animation-delay: <%= index * 50 %>ms">
+                        <div class="q-card group animate-in fade-in slide-in-from-bottom-4 duration-500" id="q-<%= q._id %>" data-type="<%= q.questionType || 'MCQ' %>" style="animation-delay: <%= index * 50 %>ms">
                             <% 
                                 const isQBangla = (q.isBangla === true || q.language === 'bn' || /[\u0980-\u09FF]/.test((q.questionText || '') + (q.context || '') + (q.q1 || ''))); 
                                 const isDummyQText = !q.questionText || 
@@ -244,7 +244,7 @@
                                     <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
                                         <!-- Number of question -->
                                         <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold border border-slate-200/80 dark:border-slate-700 select-none shrink-0">
-                                            <span class="font-bold text-slate-800 dark:text-slate-200">#<%= index + 1 %></span>
+                                            <span class="q-card-num font-bold text-slate-800 dark:text-slate-200">#<%= index + 1 %></span>
                                             <span class="text-slate-300 dark:text-slate-600">•</span>
                                             <span class="font-medium text-slate-500 dark:text-slate-400"><%= q.questionType || 'MCQ' %></span>
                                         </div>
@@ -455,7 +455,7 @@
 
                 <!-- Empty state handled by JS list or initial render -->
                 <% if (quiz.questions.length === 0) { %>
-                    <div class="py-20 sm:py-28 flex flex-col items-center justify-center text-center px-4">
+                    <div id="no-questions-placeholder" class="py-20 sm:py-28 flex flex-col items-center justify-center text-center px-4">
                         <div class="size-20 rounded-2xl bg-blue-500/10 flex items-center justify-center text-primary mb-6 border border-blue-500/20">
                             <span class="material-symbols-rounded text-4xl">quiz</span>
                         </div>
@@ -477,9 +477,280 @@
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
-        const questionsData = <%- JSON.stringify(quiz.questions) %>;
+        let questionsData = <%- JSON.stringify(quiz.questions) %>;
         const quizId = '<%= quiz._id %>';
         const currentCourseId = '<%= typeof courseId !== "undefined" ? courseId : "" %>';
+        let cachedQuizEditorTopics = [];
+
+        function escapeEditorHtml(str) {
+            return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+        window.escapeEditorHtml = escapeEditorHtml;
+
+        function isDummyOptText(val) {
+            if (!val) return true;
+            const v = String(val).trim();
+            return /^Option\s+[A-D]$/i.test(v) || /^অপশন\s+[ক-ঘ]$/i.test(v) || v.startsWith('Option ') || v.startsWith('অপশন ');
+        }
+
+        function isDummyQText(val) {
+            if (!val) return true;
+            const v = String(val).trim();
+            return /^New\s+/i.test(v) || /^MCQ\s*প্রশ্ন/i.test(v) || /^প্রশ্ন\s*\d+/i.test(v) || /^উদ্দীপক/i.test(v) || /^Question\s*\d+$/i.test(v) || /^Answer\s*\d+$/i.test(v);
+        }
+
+        function reindexQuestions() {
+            const feed = document.getElementById('questions-feed');
+            if (!feed) return;
+            const cards = feed.querySelectorAll('.q-card');
+            cards.forEach((card, idx) => {
+                const numSpan = card.querySelector('.q-card-num');
+                if (numSpan) numSpan.textContent = `#${idx + 1}`;
+            });
+            const countEl = document.getElementById('total-count');
+            if (countEl) countEl.textContent = cards.length;
+        }
+        window.reindexQuestions = reindexQuestions;
+
+        function populateCardTopicDropdowns(qid) {
+            const chapSelect = document.getElementById(`chapter-${qid}`);
+            const topicSelect = document.getElementById(`topic-${qid}`);
+            const subTopicSelect = document.getElementById(`subtopic-${qid}`);
+            if (!chapSelect) return;
+
+            const chapters = Array.from(new Set((cachedQuizEditorTopics || []).map(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '').filter(Boolean))).sort();
+            let html = '<option value="">Optional</option>';
+            chapters.forEach(ch => {
+                html += `<option value="${escapeEditorHtml(ch)}">${escapeEditorHtml(ch)}</option>`;
+            });
+            chapSelect.innerHTML = html;
+            updateSelectPlaceholderStyle(chapSelect);
+
+            if (topicSelect) {
+                topicSelect.disabled = true;
+                topicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                topicSelect.innerHTML = '<option value="">Select Chapter First</option>';
+                topicSelect.value = '';
+                updateSelectPlaceholderStyle(topicSelect);
+            }
+            if (subTopicSelect) {
+                subTopicSelect.disabled = true;
+                subTopicSelect.classList.add('opacity-50', 'cursor-not-allowed');
+                subTopicSelect.innerHTML = '<option value="">Select Topic First</option>';
+                subTopicSelect.value = '';
+                updateSelectPlaceholderStyle(subTopicSelect);
+            }
+        }
+        window.populateCardTopicDropdowns = populateCardTopicDropdowns;
+
+        function renderQuestionCardHTML(q, index) {
+            const isQBangla = (q.isBangla === true || q.language === 'bn' || (typeof globalQuizIsBangla !== 'undefined' && globalQuizIsBangla) || /[\u0980-\u09FF]/.test((q.questionText || '') + (q.context || '') + (q.q1 || '')));
+            const type = q.questionType || 'MCQ';
+            let defaultMarks = 1;
+            if (type === 'Medium') defaultMarks = 2;
+            if (type === 'Comprehension') defaultMarks = 10;
+            const marksVal = (q.marks !== undefined && q.marks !== null) ? q.marks : defaultMarks;
+            const qid = q._id;
+
+            const cleanQText = isDummyQText(q.questionText) ? '' : (q.questionText || '');
+
+            let bodyHTML = '';
+            if (type === 'MCQ') {
+                const optA = (q.options && q.options[0] && !isDummyOptText(q.options[0])) ? q.options[0] : '';
+                const optB = (q.options && q.options[1] && !isDummyOptText(q.options[1])) ? q.options[1] : '';
+                const optC = (q.options && q.options[2] && !isDummyOptText(q.options[2])) ? q.options[2] : '';
+                const optD = (q.options && q.options[3] && !isDummyOptText(q.options[3])) ? q.options[3] : '';
+                const correct = parseInt(q.correctAnswer) || 0;
+                bodyHTML = `
+                    <div class="space-y-3.5 sm:space-y-4">
+                        <div>
+                            <label class="form-label">Question Text</label>
+                            <textarea id="qtext-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...'}">${escapeEditorHtml(cleanQText)}</textarea>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                            <div>
+                                <label class="form-label"><span id="optA-lbl-${qid}">${isQBangla ? 'অপশন ক *' : 'Option A *'}</span></label>
+                                <input type="text" id="optA-${qid}" value="${escapeEditorHtml(optA)}" placeholder="${isQBangla ? 'অপশন ক *' : 'Option A *'}" class="form-input">
+                            </div>
+                            <div>
+                                <label class="form-label"><span id="optB-lbl-${qid}">${isQBangla ? 'অপশন খ *' : 'Option B *'}</span></label>
+                                <input type="text" id="optB-${qid}" value="${escapeEditorHtml(optB)}" placeholder="${isQBangla ? 'অপশন খ *' : 'Option B *'}" class="form-input">
+                            </div>
+                            <div>
+                                <label class="form-label"><span id="optC-lbl-${qid}">${isQBangla ? 'অপশন গ *' : 'Option C *'}</span></label>
+                                <input type="text" id="optC-${qid}" value="${escapeEditorHtml(optC)}" placeholder="${isQBangla ? 'অপশন গ *' : 'Option C *'}" class="form-input">
+                            </div>
+                            <div>
+                                <label class="form-label"><span id="optD-lbl-${qid}">${isQBangla ? 'অপশন ঘ' : 'Option D'}</span></label>
+                                <input type="text" id="optD-${qid}" value="${escapeEditorHtml(optD)}" placeholder="${isQBangla ? 'অপশন ঘ' : 'Option D'}" class="form-input">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label">Correct Answer</label>
+                            <div class="relative w-full sm:w-44">
+                                <select id="correct-${qid}" class="form-input cursor-pointer appearance-none pr-8">
+                                    <option value="0" ${correct === 0 ? 'selected' : ''}>${isQBangla ? 'অপশন ক' : 'Option A'}</option>
+                                    <option value="1" ${correct === 1 ? 'selected' : ''}>${isQBangla ? 'অপশন খ' : 'Option B'}</option>
+                                    <option value="2" ${correct === 2 ? 'selected' : ''}>${isQBangla ? 'অপশন গ' : 'Option C'}</option>
+                                    <option value="3" ${correct === 3 ? 'selected' : ''}>${isQBangla ? 'অপশন ঘ' : 'Option D'}</option>
+                                </select>
+                                <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-base">expand_more</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label">Explanation</label>
+                            <textarea id="explain-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="Enter explanation here...">${escapeEditorHtml(q.explanation || '')}</textarea>
+                        </div>
+                    </div>
+                `;
+            } else if (type === 'Short' || type === 'Medium') {
+                let ansVal = q.answer || q.correctAnswer || '';
+                if (ansVal === 0 || ansVal === '0' || isDummyQText(ansVal)) ansVal = '';
+                bodyHTML = `
+                    <div class="space-y-3.5 sm:space-y-4">
+                        <div>
+                            <label class="form-label">Question Text</label>
+                            <textarea id="qtext-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...'}">${escapeEditorHtml(cleanQText)}</textarea>
+                        </div>
+                        <div>
+                            <label class="form-label">Answer</label>
+                            <textarea id="ans-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="Enter answer here..">${escapeEditorHtml(ansVal)}</textarea>
+                        </div>
+                        <div>
+                            <label class="form-label">Explanation</label>
+                            <textarea id="explain-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="Enter explanation here...">${escapeEditorHtml(q.explanation || '')}</textarea>
+                        </div>
+                    </div>
+                `;
+            } else if (type === 'Comprehension') {
+                const cleanContext = (q.context && !/^New\s+Context$/i.test(q.context)) ? q.context : '';
+                const cleanQ1 = (q.q1 && !/^Question\s*1$/i.test(q.q1)) ? q.q1 : '';
+                const cleanA1 = (q.a1 && !/^Answer\s*1$/i.test(q.a1)) ? q.a1 : '';
+                const cleanQ2 = (q.q2 && !/^Question\s*2$/i.test(q.q2)) ? q.q2 : '';
+                const cleanA2 = (q.a2 && !/^Answer\s*2$/i.test(q.a2)) ? q.a2 : '';
+                const cleanQ3 = (q.q3 && !/^Question\s*3$/i.test(q.q3)) ? q.q3 : '';
+                const cleanA3 = (q.a3 && !/^Answer\s*3$/i.test(q.a3)) ? q.a3 : '';
+                const cleanQ4 = (q.q4 && !/^Question\s*4$/i.test(q.q4)) ? q.q4 : '';
+                const cleanA4 = (q.a4 && !/^Answer\s*4$/i.test(q.a4)) ? q.a4 : '';
+                bodyHTML = `
+                    <div class="space-y-3.5 sm:space-y-4">
+                        <div>
+                            <label class="form-label">Context / উদ্দীপক</label>
+                            <textarea id="context-${qid}" class="form-input w-full resize-y min-h-[80px] text-xs sm:text-sm lg:text-[15px]" rows="3" placeholder="${isQBangla ? 'উদ্দীপক / অনুচ্ছেদ লিখুন...' : 'Enter context / passage...'}">${escapeEditorHtml(cleanContext)}</textarea>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                            <div class="space-y-2 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60">
+                                <div class="text-xs font-semibold text-primary"><span id="comp1-title-${qid}">${isQBangla ? '১. ক' : '1. Question 1'}</span></div>
+                                <div><label class="form-label text-[11px]"><span id="comp1-qlbl-${qid}">${isQBangla ? 'প্রশ্ন ক' : 'Question 1'}</span></label><textarea id="q1-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন ক...' : 'Enter question 1...'}">${escapeEditorHtml(cleanQ1)}</textarea></div>
+                                <div><label class="form-label text-[11px]"><span id="comp1-albl-${qid}">${isQBangla ? 'ক এর উত্তর' : 'Answer 1'}</span></label><textarea id="a1-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'ক এর উত্তর...' : 'Enter answer 1...'}">${escapeEditorHtml(cleanA1)}</textarea></div>
+                                <div><label class="form-label text-[11px]"><span id="comp1-slbl-${qid}">${isQBangla ? 'ক এর ব্যাখ্যা' : 'Explanation 1'}</span></label><textarea id="s1-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'ক এর ব্যাখ্যা...' : 'Explanation 1...'}">${escapeEditorHtml(q.s1 || q.solution1 || '')}</textarea></div>
+                            </div>
+                            <div class="space-y-2 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60">
+                                <div class="text-xs font-semibold text-primary"><span id="comp2-title-${qid}">${isQBangla ? '২. খ' : '2. Question 2'}</span></div>
+                                <div><label class="form-label text-[11px]"><span id="comp2-qlbl-${qid}">${isQBangla ? 'প্রশ্ন খ' : 'Question 2'}</span></label><textarea id="q2-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন খ...' : 'Enter question 2...'}">${escapeEditorHtml(cleanQ2)}</textarea></div>
+                                <div><label class="form-label text-[11px]"><span id="comp2-albl-${qid}">${isQBangla ? 'খ এর উত্তর' : 'Answer 2'}</span></label><textarea id="a2-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'খ এর উত্তর...' : 'Enter answer 2...'}">${escapeEditorHtml(cleanA2)}</textarea></div>
+                                <div><label class="form-label text-[11px]"><span id="comp2-slbl-${qid}">${isQBangla ? 'খ এর ব্যাখ্যা' : 'Explanation 2'}</span></label><textarea id="s2-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'খ এর ব্যাখ্যা...' : 'Explanation 2...'}">${escapeEditorHtml(q.s2 || q.solution2 || '')}</textarea></div>
+                            </div>
+                            <div class="space-y-2 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60">
+                                <div class="text-xs font-semibold text-primary"><span id="comp3-title-${qid}">${isQBangla ? '৩. গ' : '3. Question 3'}</span></div>
+                                <div><label class="form-label text-[11px]"><span id="comp3-qlbl-${qid}">${isQBangla ? 'প্রশ্ন গ' : 'Question 3'}</span></label><textarea id="q3-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন গ...' : 'Enter question 3...'}">${escapeEditorHtml(cleanQ3)}</textarea></div>
+                                <div><label class="form-label text-[11px]"><span id="comp3-albl-${qid}">${isQBangla ? 'গ এর উত্তর' : 'Answer 3'}</span></label><textarea id="a3-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'গ এর উত্তর...' : 'Enter answer 3...'}">${escapeEditorHtml(cleanA3)}</textarea></div>
+                                <div><label class="form-label text-[11px]"><span id="comp3-slbl-${qid}">${isQBangla ? 'গ এর ব্যাখ্যা' : 'Explanation 3'}</span></label><textarea id="s3-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'গ এর ব্যাখ্যা...' : 'Explanation 3...'}">${escapeEditorHtml(q.s3 || q.solution3 || '')}</textarea></div>
+                            </div>
+                            <div class="space-y-2 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60">
+                                <div class="text-xs font-semibold text-primary"><span id="comp4-title-${qid}">${isQBangla ? '৪. ঘ' : '4. Question 4'}</span></div>
+                                <div><label class="form-label text-[11px]"><span id="comp4-qlbl-${qid}">${isQBangla ? 'প্রশ্ন ঘ' : 'Question 4'}</span></label><textarea id="q4-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন ঘ...' : 'Enter question 4...'}">${escapeEditorHtml(cleanQ4)}</textarea></div>
+                                <div><label class="form-label text-[11px]"><span id="comp4-albl-${qid}">${isQBangla ? 'ঘ এর উত্তর' : 'Answer 4'}</span></label><textarea id="a4-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'ঘ এর উত্তর...' : 'Enter answer 4...'}">${escapeEditorHtml(cleanA4)}</textarea></div>
+                                <div><label class="form-label text-[11px]"><span id="comp4-slbl-${qid}">${isQBangla ? 'ঘ এর ব্যাখ্যা' : 'Explanation 4'}</span></label><textarea id="s4-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'ঘ এর ব্যাখ্যা...' : 'Explanation 4...'}">${escapeEditorHtml(q.s4 || q.solution4 || '')}</textarea></div>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label">Explanation</label>
+                            <textarea id="explain-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="Enter explanation here...">${escapeEditorHtml(q.explanation || '')}</textarea>
+                        </div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="q-card group animate-in fade-in slide-in-from-bottom-4 duration-500" id="q-${qid}" data-type="${escapeEditorHtml(type)}">
+                    <input type="hidden" id="isBangla-${qid}" value="${isQBangla ? 'true' : 'false'}">
+                    <!-- Card Header: 2-Line Layout -->
+                    <div class="mb-4 sm:mb-5 pb-3 border-b border-slate-100 dark:border-white/5 space-y-2.5">
+                        <!-- First Line: Number of question, Board, Year, Mark, Delete -->
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                            <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                                <!-- Number of question -->
+                                <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold border border-slate-200/80 dark:border-slate-700 select-none shrink-0">
+                                    <span class="q-card-num font-bold text-slate-800 dark:text-slate-200">#${index + 1}</span>
+                                    <span class="text-slate-300 dark:text-slate-600">•</span>
+                                    <span class="font-medium text-slate-500 dark:text-slate-400">${escapeEditorHtml(type)}</span>
+                                </div>
+                                <!-- Board -->
+                                <div class="flex items-center gap-1 shrink-0">
+                                    <span class="text-[11px] text-slate-400 shrink-0 font-medium">Board:</span>
+                                    <input type="text" id="board-${qid}" value="${escapeEditorHtml(q.board || '')}" class="form-input w-20 sm:w-24" style="height: 30px !important; padding: 0 8px; font-size: 11.5px;" placeholder="Board">
+                                </div>
+                                <!-- Year -->
+                                <div class="flex items-center gap-1 shrink-0">
+                                    <span class="text-[11px] text-slate-400 shrink-0 font-medium">Year:</span>
+                                    <input type="text" id="year-${qid}" value="${escapeEditorHtml(q.year || '')}" class="form-input w-16 sm:w-20" style="height: 30px !important; padding: 0 8px; font-size: 11.5px;" placeholder="Year">
+                                </div>
+                            </div>
+                            <!-- Right side: Mark placed beside delete icon -->
+                            <div class="flex items-center gap-2 shrink-0">
+                                <div class="flex items-center gap-1 shrink-0">
+                                    <span class="text-[11px] text-slate-400 shrink-0 font-medium">Mark:</span>
+                                    <input type="number" id="marks-${qid}" value="${marksVal}" class="form-input text-center w-12 sm:w-14" style="height: 30px !important; padding: 0 4px; font-size: 11.5px;">
+                                </div>
+                                <button type="button" onclick="deleteQuestion('${qid}')" class="size-7.5 sm:size-8 rounded-lg bg-rose-50 hover:bg-rose-500 hover:text-white dark:bg-rose-500/10 dark:hover:bg-rose-600 text-rose-500 transition-all flex items-center justify-center shrink-0 cursor-pointer active:scale-95 border border-rose-100 dark:border-rose-500/20" title="Delete">
+                                    <span class="material-symbols-rounded text-base sm:text-lg">delete</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Second Line: Chapter, Topic, Sub-topic -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-xs font-medium text-slate-600 dark:text-slate-300">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <span class="text-[11px] text-slate-400 shrink-0 font-medium">Chapter:</span>
+                                <select id="chapter-${qid}" class="form-input text-xs w-full cursor-pointer q-editor-chapter is-empty" data-is-empty="true" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="${escapeEditorHtml(q.chapter || '')}" onchange="onQuizEditorChapterChange(this, '${qid}')">
+                                    <option value="">Optional</option>
+                                    ${q.chapter ? `<option value="${escapeEditorHtml(q.chapter)}" selected>${escapeEditorHtml(q.chapter)}</option>` : ''}
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <span class="text-[11px] text-slate-400 shrink-0 font-medium">Topic:</span>
+                                <select id="topic-${qid}" onchange="onQuizEditorTopicChange(this, '${qid}')" disabled class="form-input text-xs w-full cursor-pointer q-editor-topic opacity-50 cursor-not-allowed is-empty" data-is-empty="true" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="${escapeEditorHtml(q.topic || '')}">
+                                    <option value="">Select Chapter First</option>
+                                    ${q.topic ? `<option value="${escapeEditorHtml(q.topic)}" selected>${escapeEditorHtml(q.topic)}</option>` : ''}
+                                </select>
+                            </div>
+                            <div class="flex items-center gap-1.5 min-w-0">
+                                <span class="text-[11px] text-slate-400 shrink-0 font-medium">Sub-topic:</span>
+                                <select id="subtopic-${qid}" onchange="onQuizEditorSubTopicChange(this, '${qid}')" disabled class="form-input text-xs w-full cursor-pointer q-editor-subtopic opacity-50 cursor-not-allowed is-empty" data-is-empty="true" style="height: 30px !important; padding: 0 8px; line-height: normal !important;" data-prefill="${escapeEditorHtml(q.subTopic || '')}">
+                                    <option value="">Select Topic First</option>
+                                    ${q.subTopic ? `<option value="${escapeEditorHtml(q.subTopic)}" selected>${escapeEditorHtml(q.subTopic)}</option>` : ''}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${bodyHTML}
+
+                    <div class="mt-4 sm:mt-6 flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800/80">
+                        <div id="card-status-${qid}" class="text-[11px] font-semibold text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                            <span class="material-symbols-rounded text-sm text-emerald-500">cloud_done</span>
+                            <span>Auto-saved</span>
+                        </div>
+                        <button type="button" onclick="saveCard('${qid}', '${type}', true)" class="h-8 px-3.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer" title="Save instantly">
+                            <span class="material-symbols-rounded text-sm">save</span> 
+                            <span>Save Now</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        window.renderQuestionCardHTML = renderQuestionCardHTML;
 
         function openAddModal() {
             Swal.fire({
@@ -562,8 +833,37 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
-                if((await response.json()).success) location.reload();
-                else Swal.fire('Error', 'Failed to deploy vector', 'error');
+                const res = await response.json();
+                if (res.success) {
+                    const newQuestions = res.questions && res.questions.length ? res.questions : (res.question ? [res.question] : []);
+                    const feed = document.getElementById('questions-feed');
+                    const emptyState = document.getElementById('no-questions-placeholder');
+                    if (emptyState) emptyState.remove();
+
+                    let firstNewCard = null;
+                    newQuestions.forEach(newQ => {
+                        questionsData.push(newQ);
+                        const currentIndex = questionsData.length - 1;
+                        const cardHTML = renderQuestionCardHTML(newQ, currentIndex);
+
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = cardHTML.trim();
+                        const newCard = tempDiv.firstElementChild;
+                        if (feed && newCard) {
+                            feed.appendChild(newCard);
+                            attachCardAutoSave(newCard, newQ._id, newQ.questionType || 'MCQ');
+                            populateCardTopicDropdowns(newQ._id);
+                            if (!firstNewCard) firstNewCard = newCard;
+                        }
+                    });
+
+                    reindexQuestions();
+                    if (firstNewCard) {
+                        firstNewCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                } else {
+                    Swal.fire('Error', res.error || 'Failed to deploy question', 'error');
+                }
             } catch (err) { Swal.fire('Error', 'Network error', 'error'); }
         }
 
@@ -579,7 +879,13 @@
                 btn.innerHTML = '<span class="material-symbols-rounded text-base animate-spin">sync</span><span>Adding...</span>';
             }
 
-            let data = { questionType: type, isSlot: true, count: count };
+            let data = { 
+                questionType: type, 
+                isSlot: true, 
+                count: count,
+                isBangla: typeof globalQuizIsBangla !== 'undefined' ? globalQuizIsBangla : false,
+                language: (typeof globalQuizIsBangla !== 'undefined' && globalQuizIsBangla) ? 'bn' : 'en'
+            };
             if (type === 'MCQ') {
                 data.questionText = '';
                 data.options = ['', '', '', ''];
@@ -616,16 +922,38 @@
                 });
                 const res = await response.json();
                 if (res.success) {
-                    location.reload();
+                    const newQuestions = res.questions && res.questions.length ? res.questions : (res.question ? [res.question] : []);
+                    const feed = document.getElementById('questions-feed');
+                    const emptyState = document.getElementById('no-questions-placeholder');
+                    if (emptyState) emptyState.remove();
+
+                    let firstNewCard = null;
+                    newQuestions.forEach(newQ => {
+                        questionsData.push(newQ);
+                        const currentIndex = questionsData.length - 1;
+                        const cardHTML = renderQuestionCardHTML(newQ, currentIndex);
+
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = cardHTML.trim();
+                        const newCard = tempDiv.firstElementChild;
+                        if (feed && newCard) {
+                            feed.appendChild(newCard);
+                            attachCardAutoSave(newCard, newQ._id, newQ.questionType || type);
+                            populateCardTopicDropdowns(newQ._id);
+                            if (!firstNewCard) firstNewCard = newCard;
+                        }
+                    });
+
+                    reindexQuestions();
+                    if (firstNewCard) {
+                        firstNewCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
                 } else {
                     Swal.fire('Error', res.error || 'Failed to add slot', 'error');
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = '<span class="material-symbols-rounded text-base">add</span><span>Add slot</span>';
-                    }
                 }
             } catch (err) {
                 Swal.fire('Error', 'Network error', 'error');
+            } finally {
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = '<span class="material-symbols-rounded text-base">add</span><span>Add slot</span>';
@@ -1026,22 +1354,25 @@
             }, 600);
         }
 
+        function attachCardAutoSave(card, qid, type) {
+            if (!card) return;
+            card.querySelectorAll('input, textarea, select').forEach(el => {
+                el.addEventListener('input', () => queueAutoSave(qid, type));
+                el.addEventListener('change', () => queueAutoSave(qid, type));
+                el.addEventListener('blur', () => {
+                    if (debounceTimers[qid]) {
+                        saveCard(qid, type, false);
+                    }
+                });
+            });
+        }
+        window.attachCardAutoSave = attachCardAutoSave;
+
         function initAutoSave() {
             questionsData.forEach(q => {
                 const card = document.getElementById(`q-${q._id}`);
                 if (!card) return;
-                const type = q.questionType || 'MCQ';
-
-                // Listen to input and change events on all textareas, inputs, and selects
-                card.querySelectorAll('input, textarea, select').forEach(el => {
-                    el.addEventListener('input', () => queueAutoSave(q._id, type));
-                    el.addEventListener('change', () => queueAutoSave(q._id, type));
-                    el.addEventListener('blur', () => {
-                        if (debounceTimers[q._id]) {
-                            saveCard(q._id, type, false);
-                        }
-                    });
-                });
+                attachCardAutoSave(card, q._id, q.questionType || 'MCQ');
             });
 
             // Flush any pending save before leaving / reloading page
@@ -1267,13 +1598,33 @@
                 confirmButtonText: 'Yes, Delete'
             });
             if (res.isConfirmed) {
+                const card = document.getElementById(`q-${qid}`);
+                if (card) {
+                    card.style.transition = 'all 0.3s ease';
+                    card.style.opacity = '0';
+                    card.style.transform = 'translateY(-10px)';
+                    setTimeout(() => {
+                        card.remove();
+                        reindexQuestions();
+                    }, 300);
+                }
+                if (debounceTimers[qid]) {
+                    clearTimeout(debounceTimers[qid]);
+                    delete debounceTimers[qid];
+                }
+                pendingSaves.delete(qid);
+                const qIdx = questionsData.findIndex(x => x._id === qid);
+                if (qIdx !== -1) questionsData.splice(qIdx, 1);
+
                 try {
                     const response = await fetch(`/teacher/quiz/${quizId}/question/${qid}/delete`, { method: 'POST' });
-                    if ((await response.json()).success) {
-                        document.getElementById(`q-${qid}`).classList.add('fade-out', 'translate-x-4');
-                        setTimeout(() => location.reload(), 300);
+                    const resJson = await response.json();
+                    if (!resJson.success) {
+                        Swal.fire('Error', resJson.error || 'Failed to delete question', 'error');
                     }
-                } catch (err) { Swal.fire('Error', 'Failed to delete question', 'error'); }
+                } catch (err) {
+                    Swal.fire('Error', 'Failed to delete question', 'error');
+                }
             }
         }
 
@@ -1329,8 +1680,6 @@
             initAutoSave();
             loadQuizEditorTopics();
         });
-
-        let cachedQuizEditorTopics = [];
 
         async function loadQuizEditorTopics() {
             const subject = <%- JSON.stringify(quiz.subject || '') %>;

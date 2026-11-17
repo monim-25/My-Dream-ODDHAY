@@ -3661,8 +3661,9 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
         }
         await quiz.save();
         
-        const newQ = quiz.questions[quiz.questions.length - 1];
-        res.json({ success: true, question: newQ, totalQuestions: quiz.questions.length });
+        const newQuestions = quiz.questions.slice(-count);
+        const newQ = newQuestions[newQuestions.length - 1];
+        res.json({ success: true, question: newQ, questions: newQuestions, totalQuestions: quiz.questions.length });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
