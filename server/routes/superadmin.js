@@ -283,8 +283,8 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
             // Fill remaining if fewer questions were found
             for (let i = mcqs.length; i < mcqCount; i++) {
                 quizData.questions.push({
-                    questionText: `New MCQ Question ${i + 1}`,
-                    options: ['Option A', 'Option B', 'Option C', 'Option D'],
+                    questionText: '',
+                    options: ['', '', '', ''],
                     correctAnswer: 0,
                     explanation: '',
                     questionType: 'MCQ'
@@ -292,7 +292,7 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
             }
             for (let i = shorts.length; i < shortCount; i++) {
                 quizData.questions.push({
-                    questionText: `New Short Question ${i + 1}`,
+                    questionText: '',
                     options: [],
                     correctAnswer: 0,
                     explanation: '',
@@ -301,7 +301,7 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
             }
             for (let i = mediums.length; i < mediumCount; i++) {
                 quizData.questions.push({
-                    questionText: `New Medium Question ${i + 1}`,
+                    questionText: '',
                     options: [],
                     correctAnswer: 0,
                     explanation: '',
@@ -310,7 +310,7 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
             }
             for (let i = comps.length; i < comprehensionCount; i++) {
                 quizData.questions.push({
-                    questionText: `New Comprehension Question ${i + 1}`,
+                    questionText: '',
                     options: [],
                     correctAnswer: 0,
                     explanation: '',
@@ -324,8 +324,8 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
 
             for (let i = 0; i < mcqCount; i++) {
                 quizData.questions.push({
-                    questionText: isBangla ? `MCQ প্রশ্ন ${i + 1}` : `New MCQ Question ${i + 1}`,
-                    options: isBangla ? ['অপশন ক', 'অপশন খ', 'অপশন গ', 'অপশন ঘ'] : ['Option A', 'Option B', 'Option C', 'Option D'],
+                    questionText: '',
+                    options: ['', '', '', ''],
                     correctAnswer: 0,
                     explanation: '',
                     questionType: 'MCQ',
@@ -335,7 +335,7 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
             }
             for (let i = 0; i < shortCount; i++) {
                 quizData.questions.push({
-                    questionText: isBangla ? `প্রশ্ন ${i + 1}` : `New Short Question ${i + 1}`,
+                    questionText: '',
                     options: [],
                     correctAnswer: 0,
                     explanation: '',
@@ -346,7 +346,7 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
             }
             for (let i = 0; i < mediumCount; i++) {
                 quizData.questions.push({
-                    questionText: isBangla ? `প্রশ্ন ${i + 1}` : `New Medium Question ${i + 1}`,
+                    questionText: '',
                     options: [],
                     correctAnswer: 0,
                     explanation: '',
@@ -357,7 +357,7 @@ router.post('/add-quiz', contentAdminProtect, async (req, res) => {
             }
             for (let i = 0; i < comprehensionCount; i++) {
                 quizData.questions.push({
-                    questionText: isBangla ? `উদ্দীপক / অনুচ্ছেদ ${i + 1}` : `New Comprehension Question ${i + 1}`,
+                    questionText: '',
                     options: [],
                     correctAnswer: 0,
                     explanation: '',
@@ -435,7 +435,8 @@ router.post('/quiz/:id/add-question', contentAdminProtect, async (req, res) => {
         
         const finalCorrectIndex = (correctAnswer !== undefined) ? parseInt(correctAnswer) : (parseInt(correctAnswerIndex) || 0);
 
-        if (!questionText || options.length < 2) {
+        const isSlot = req.body.isSlot === true || req.body.isSlot === 'true' || (!questionText);
+        if (!isSlot && (!questionText || options.length < 2)) {
             return res.status(400).json({ success: false, error: 'প্রশ্ন এবং কমপক্ষে ২টি অপশন দিন।' });
         }
 
@@ -444,8 +445,8 @@ router.post('/quiz/:id/add-question', contentAdminProtect, async (req, res) => {
             { 
                 $push: { 
                     questions: { 
-                        questionText: questionText.trim(), 
-                        options, 
+                        questionText: (questionText || '').trim(), 
+                        options: (!options || !options.length) ? ['', '', '', ''] : options, 
                         correctAnswerIndex: finalCorrectIndex, 
                         explanation: explanation?.trim() || '' 
                     } 

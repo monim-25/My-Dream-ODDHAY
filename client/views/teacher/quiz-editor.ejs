@@ -196,22 +196,33 @@
                             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 sm:mb-6 pb-3 border-b border-slate-100 dark:border-white/5">
                                 <!-- Top row on mobile: Badge + Type + Actions -->
                                 <div class="flex items-center justify-between sm:justify-start gap-2.5 sm:gap-3 w-full sm:w-auto">
-                                    <div class="flex items-center gap-2 sm:gap-3">
-                                        <div class="size-8 sm:size-10 rounded-lg bg-blue-500/10 text-primary dark:text-blue-400 font-bold text-xs sm:text-sm flex items-center justify-center shrink-0">
-                                            #<%= index + 1 %>
+                                    <% 
+                                        const isQBangla = (q.isBangla === true || q.language === 'bn' || /[\u0980-\u09FF]/.test((q.questionText || '') + (q.context || '') + (q.q1 || ''))); 
+                                        const isDummyQText = !q.questionText || 
+                                            /^New\s+/i.test(q.questionText) || 
+                                            /^MCQ\s*প্রশ্ন/i.test(q.questionText) || 
+                                            /^প্রশ্ন\s*\d+/i.test(q.questionText) || 
+                                            /^উদ্দীপক/i.test(q.questionText);
+                                        const cleanQText = isDummyQText ? '' : q.questionText;
+
+                                        const isDummyOpt = (val) => {
+                                            if (!val) return true;
+                                            const v = String(val).trim();
+                                            return /^Option\s+[A-D]$/i.test(v) || /^অপশন\s+[ক-ঘ]$/i.test(v) || v.startsWith('Option ') || v.startsWith('অপশন ');
+                                        };
+                                    %>
+                                    <div class="flex items-center gap-2">
+                                        <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 text-xs font-medium border border-slate-200/80 dark:border-slate-700 select-none">
+                                            <span class="font-bold text-slate-700 dark:text-slate-300">#<%= index + 1 %></span>
+                                            <span class="text-slate-300 dark:text-slate-600">•</span>
+                                            <span class="font-medium text-slate-500 dark:text-slate-400"><%= q.questionType || 'MCQ' %></span>
                                         </div>
-                                        <div class="flex flex-col">
-                                            <div class="flex items-center gap-1.5">
-                                                <span class="text-[10px] sm:text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider"><%= q.questionType || 'MCQ' %></span>
-                                                <% const isQBangla = (q.isBangla === true || q.language === 'bn' || /[\u0980-\u09FF]/.test((q.questionText || '') + (q.context || '') + (q.q1 || ''))); %>
-                                                <input type="hidden" id="isBangla-<%= q._id %>" value="<%= isQBangla ? 'true' : 'false' %>">
-                                                <button type="button" onclick="toggleQuizQuestionBangla('<%= q._id %>')" id="langbtn-<%= q._id %>" class="px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-all cursor-pointer <%= isQBangla ? 'border-emerald-300 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300' %>">
-                                                    <span id="langlbl-<%= q._id %>"><%= isQBangla ? 'বাংলা (ক, খ, গ, ঘ)' : 'EN (A, B, C, D)' %></span>
-                                                </button>
-                                            </div>
-                                            <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">Question <%= index + 1 %></span>
-                                        </div>
+                                        <input type="hidden" id="isBangla-<%= q._id %>" value="<%= isQBangla ? 'true' : 'false' %>">
+                                        <button type="button" onclick="toggleQuizQuestionBangla('<%= q._id %>')" id="langbtn-<%= q._id %>" class="px-2 py-0.5 rounded-md text-[11px] font-normal border transition-all cursor-pointer border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+                                            <span id="langlbl-<%= q._id %>"><%= isQBangla ? 'বাংলা' : 'English' %></span>
+                                        </button>
                                     </div>
+                                </div>
                                     <!-- Action Buttons on Mobile -->
                                     <div class="flex items-center gap-1.5 sm:hidden">
                                         <button onclick="editQuestion('<%= q._id %>')" class="h-8 px-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold flex items-center gap-1 active:scale-95" title="Quick Edit">
@@ -287,13 +298,13 @@
                                 <div class="space-y-3.5 sm:space-y-4">
                                     <div>
                                         <label class="form-label">Question Text</label>
-                                        <textarea id="qtext-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= q.questionText.startsWith('New ') ? 'Enter Question..' : q.questionText %>"><%= q.questionText.startsWith('New ') ? '' : q.questionText %></textarea>
+                                        <textarea id="qtext-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...' %>"><%= cleanQText %></textarea>
                                     </div>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
-                                        <div><label class="form-label"><span id="optA-lbl-<%= q._id %>"><%= isQBangla ? 'অপশন ক *' : 'Option A *' %></span></label><input type="text" id="optA-<%= q._id %>" value="<%= q.options[0] && q.options[0].startsWith('Option ') ? '' : q.options[0] || '' %>" placeholder="<%= isQBangla ? 'অপশন ক *' : 'Option A *' %>" class="form-input"></div>
-                                        <div><label class="form-label"><span id="optB-lbl-<%= q._id %>"><%= isQBangla ? 'অপশন খ *' : 'Option B *' %></span></label><input type="text" id="optB-<%= q._id %>" value="<%= q.options[1] && q.options[1].startsWith('Option ') ? '' : q.options[1] || '' %>" placeholder="<%= isQBangla ? 'অপশন খ *' : 'Option B *' %>" class="form-input"></div>
-                                        <div><label class="form-label"><span id="optC-lbl-<%= q._id %>"><%= isQBangla ? 'অপশন গ *' : 'Option C *' %></span></label><input type="text" id="optC-<%= q._id %>" value="<%= q.options[2] && q.options[2].startsWith('Option ') ? '' : q.options[2] || '' %>" placeholder="<%= isQBangla ? 'অপশন গ *' : 'Option C *' %>" class="form-input"></div>
-                                        <div><label class="form-label"><span id="optD-lbl-<%= q._id %>"><%= isQBangla ? 'অপশন ঘ' : 'Option D' %></span></label><input type="text" id="optD-<%= q._id %>" value="<%= q.options[3] && q.options[3].startsWith('Option ') ? '' : q.options[3] || '' %>" placeholder="<%= isQBangla ? 'অপশন ঘ' : 'Option D' %>" class="form-input"></div>
+                                        <div><label class="form-label"><span id="optA-lbl-<%= q._id %>"><%= isQBangla ? 'অপশন ক *' : 'Option A *' %></span></label><input type="text" id="optA-<%= q._id %>" value="<%= isDummyOpt(q.options[0]) ? '' : (q.options[0] || '') %>" placeholder="<%= isQBangla ? 'অপশন ক *' : 'Option A *' %>" class="form-input"></div>
+                                        <div><label class="form-label"><span id="optB-lbl-<%= q._id %>"><%= isQBangla ? 'অপশন খ *' : 'Option B *' %></span></label><input type="text" id="optB-<%= q._id %>" value="<%= isDummyOpt(q.options[1]) ? '' : (q.options[1] || '') %>" placeholder="<%= isQBangla ? 'অপশন খ *' : 'Option B *' %>" class="form-input"></div>
+                                        <div><label class="form-label"><span id="optC-lbl-<%= q._id %>"><%= isQBangla ? 'অপশন গ *' : 'Option C *' %></span></label><input type="text" id="optC-<%= q._id %>" value="<%= isDummyOpt(q.options[2]) ? '' : (q.options[2] || '') %>" placeholder="<%= isQBangla ? 'অপশন গ *' : 'Option C *' %>" class="form-input"></div>
+                                        <div><label class="form-label"><span id="optD-lbl-<%= q._id %>"><%= isQBangla ? 'অপশন ঘ' : 'Option D' %></span></label><input type="text" id="optD-<%= q._id %>" value="<%= isDummyOpt(q.options[3]) ? '' : (q.options[3] || '') %>" placeholder="<%= isQBangla ? 'অপশন ঘ' : 'Option D' %>" class="form-input"></div>
                                     </div>
                                     <div>
                                         <label class="form-label">Correct Answer</label>
@@ -316,13 +327,13 @@
                                 <div class="space-y-3.5 sm:space-y-4">
                                     <div>
                                         <label class="form-label">Question Text</label>
-                                        <textarea id="qtext-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= q.questionText.startsWith('New ') ? 'Enter Question..' : q.questionText %>"><%= q.questionText.startsWith('New ') ? '' : q.questionText %></textarea>
+                                        <textarea id="qtext-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...' %>"><%= cleanQText %></textarea>
                                     </div>
                                     <div>
                                         <label class="form-label">Answer</label>
                                         <textarea id="ans-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="Enter answer here.."><%
                                             let ansValShort = q.answer || q.correctAnswer || '';
-                                            if (ansValShort === 0 || ansValShort === '0') ansValShort = '';
+                                            if (ansValShort === 0 || ansValShort === '0' || /^New\s+Short/i.test(ansValShort)) ansValShort = '';
                                         %><%= ansValShort %></textarea>
                                     </div>
                                     <div>
@@ -334,13 +345,13 @@
                                 <div class="space-y-3.5 sm:space-y-4">
                                     <div>
                                         <label class="form-label">Question Text</label>
-                                        <textarea id="qtext-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= q.questionText.startsWith('New ') ? 'Enter Question..' : q.questionText %>"><%= q.questionText.startsWith('New ') ? '' : q.questionText %></textarea>
+                                        <textarea id="qtext-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...' %>"><%= cleanQText %></textarea>
                                     </div>
                                     <div>
                                         <label class="form-label">Answer</label>
                                         <textarea id="ans-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="Enter answer here.."><%
                                             let ansValMed = q.answer || q.correctAnswer || '';
-                                            if (ansValMed === 0 || ansValMed === '0') ansValMed = '';
+                                            if (ansValMed === 0 || ansValMed === '0' || /^New\s+Medium/i.test(ansValMed)) ansValMed = '';
                                         %><%= ansValMed %></textarea>
                                     </div>
                                     <div>
@@ -352,31 +363,31 @@
                                 <div class="space-y-3.5 sm:space-y-4">
                                     <div>
                                         <label class="form-label">Context / উদ্দীপক</label>
-                                        <textarea id="context-<%= q._id %>" class="form-input w-full resize-y min-h-[80px] text-xs sm:text-sm lg:text-[15px]" rows="3" placeholder="Enter context / উদ্দীপক..."><%= q.context || '' %></textarea>
+                                        <textarea id="context-<%= q._id %>" class="form-input w-full resize-y min-h-[80px] text-xs sm:text-sm lg:text-[15px]" rows="3" placeholder="<%= isQBangla ? 'উদ্দীপক / অনুচ্ছেদ লিখুন...' : 'Enter context / passage...' %>"><%= (q.context && !/^New\s+Context$/i.test(q.context)) ? q.context : '' %></textarea>
                                     </div>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                                         <div class="space-y-2 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60">
                                             <div class="text-xs font-semibold text-primary"><span id="comp1-title-<%= q._id %>"><%= isQBangla ? '১. ক' : '1. Question 1' %></span></div>
-                                            <div><label class="form-label text-[11px]"><span id="comp1-qlbl-<%= q._id %>"><%= isQBangla ? 'প্রশ্ন ক' : 'Question 1' %></span></label><textarea id="q1-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন ক...' : 'Enter question 1...' %>"><%= q.q1 || '' %></textarea></div>
-                                            <div><label class="form-label text-[11px]"><span id="comp1-albl-<%= q._id %>"><%= isQBangla ? 'ক এর উত্তর' : 'Answer 1' %></span></label><textarea id="a1-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'ক এর উত্তর...' : 'Enter answer 1...' %>"><%= q.a1 || '' %></textarea></div>
+                                            <div><label class="form-label text-[11px]"><span id="comp1-qlbl-<%= q._id %>"><%= isQBangla ? 'প্রশ্ন ক' : 'Question 1' %></span></label><textarea id="q1-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন ক...' : 'Enter question 1...' %>"><%= (q.q1 && !/^Question\s*1$/i.test(q.q1)) ? q.q1 : '' %></textarea></div>
+                                            <div><label class="form-label text-[11px]"><span id="comp1-albl-<%= q._id %>"><%= isQBangla ? 'ক এর উত্তর' : 'Answer 1' %></span></label><textarea id="a1-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'ক এর উত্তর...' : 'Enter answer 1...' %>"><%= (q.a1 && !/^Answer\s*1$/i.test(q.a1)) ? q.a1 : '' %></textarea></div>
                                             <div><label class="form-label text-[11px]"><span id="comp1-slbl-<%= q._id %>"><%= isQBangla ? 'ক এর ব্যাখ্যা' : 'Explanation 1' %></span></label><textarea id="s1-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'ক এর ব্যাখ্যা...' : 'Explanation 1...' %>"><%= q.s1 || q.solution1 || '' %></textarea></div>
                                         </div>
                                         <div class="space-y-2 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60">
                                             <div class="text-xs font-semibold text-primary"><span id="comp2-title-<%= q._id %>"><%= isQBangla ? '২. খ' : '2. Question 2' %></span></div>
-                                            <div><label class="form-label text-[11px]"><span id="comp2-qlbl-<%= q._id %>"><%= isQBangla ? 'প্রশ্ন খ' : 'Question 2' %></span></label><textarea id="q2-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন খ...' : 'Enter question 2...' %>"><%= q.q2 || '' %></textarea></div>
-                                            <div><label class="form-label text-[11px]"><span id="comp2-albl-<%= q._id %>"><%= isQBangla ? 'খ এর উত্তর' : 'Answer 2' %></span></label><textarea id="a2-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'খ এর উত্তর...' : 'Enter answer 2...' %>"><%= q.a2 || '' %></textarea></div>
+                                            <div><label class="form-label text-[11px]"><span id="comp2-qlbl-<%= q._id %>"><%= isQBangla ? 'প্রশ্ন খ' : 'Question 2' %></span></label><textarea id="q2-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন খ...' : 'Enter question 2...' %>"><%= (q.q2 && !/^Question\s*2$/i.test(q.q2)) ? q.q2 : '' %></textarea></div>
+                                            <div><label class="form-label text-[11px]"><span id="comp2-albl-<%= q._id %>"><%= isQBangla ? 'খ এর উত্তর' : 'Answer 2' %></span></label><textarea id="a2-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'খ এর উত্তর...' : 'Enter answer 2...' %>"><%= (q.a2 && !/^Answer\s*2$/i.test(q.a2)) ? q.a2 : '' %></textarea></div>
                                             <div><label class="form-label text-[11px]"><span id="comp2-slbl-<%= q._id %>"><%= isQBangla ? 'খ এর ব্যাখ্যা' : 'Explanation 2' %></span></label><textarea id="s2-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'খ এর ব্যাখ্যা...' : 'Explanation 2...' %>"><%= q.s2 || q.solution2 || '' %></textarea></div>
                                         </div>
                                         <div class="space-y-2 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60">
                                             <div class="text-xs font-semibold text-primary"><span id="comp3-title-<%= q._id %>"><%= isQBangla ? '৩. গ' : '3. Question 3' %></span></div>
-                                            <div><label class="form-label text-[11px]"><span id="comp3-qlbl-<%= q._id %>"><%= isQBangla ? 'প্রশ্ন গ' : 'Question 3' %></span></label><textarea id="q3-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন গ...' : 'Enter question 3...' %>"><%= q.q3 || '' %></textarea></div>
-                                            <div><label class="form-label text-[11px]"><span id="comp3-albl-<%= q._id %>"><%= isQBangla ? 'গ এর উত্তর' : 'Answer 3' %></span></label><textarea id="a3-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'গ এর উত্তর...' : 'Enter answer 3...' %>"><%= q.a3 || '' %></textarea></div>
+                                            <div><label class="form-label text-[11px]"><span id="comp3-qlbl-<%= q._id %>"><%= isQBangla ? 'প্রশ্ন গ' : 'Question 3' %></span></label><textarea id="q3-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন গ...' : 'Enter question 3...' %>"><%= (q.q3 && !/^Question\s*3$/i.test(q.q3)) ? q.q3 : '' %></textarea></div>
+                                            <div><label class="form-label text-[11px]"><span id="comp3-albl-<%= q._id %>"><%= isQBangla ? 'গ এর উত্তর' : 'Answer 3' %></span></label><textarea id="a3-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'গ এর উত্তর...' : 'Enter answer 3...' %>"><%= (q.a3 && !/^Answer\s*3$/i.test(q.a3)) ? q.a3 : '' %></textarea></div>
                                             <div><label class="form-label text-[11px]"><span id="comp3-slbl-<%= q._id %>"><%= isQBangla ? 'গ এর ব্যাখ্যা' : 'Explanation 3' %></span></label><textarea id="s3-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'গ এর ব্যাখ্যা...' : 'Explanation 3...' %>"><%= q.s3 || q.solution3 || '' %></textarea></div>
                                         </div>
                                         <div class="space-y-2 p-3 rounded-xl bg-slate-50/70 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60">
                                             <div class="text-xs font-semibold text-primary"><span id="comp4-title-<%= q._id %>"><%= isQBangla ? '৪. ঘ' : '4. Question 4' %></span></div>
-                                            <div><label class="form-label text-[11px]"><span id="comp4-qlbl-<%= q._id %>"><%= isQBangla ? 'প্রশ্ন ঘ' : 'Question 4' %></span></label><textarea id="q4-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন ঘ...' : 'Enter question 4...' %>"><%= q.q4 || '' %></textarea></div>
-                                            <div><label class="form-label text-[11px]"><span id="comp4-albl-<%= q._id %>"><%= isQBangla ? 'ঘ এর উত্তর' : 'Answer 4' %></span></label><textarea id="a4-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'ঘ এর উত্তর...' : 'Enter answer 4...' %>"><%= q.a4 || '' %></textarea></div>
+                                            <div><label class="form-label text-[11px]"><span id="comp4-qlbl-<%= q._id %>"><%= isQBangla ? 'প্রশ্ন ঘ' : 'Question 4' %></span></label><textarea id="q4-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন ঘ...' : 'Enter question 4...' %>"><%= (q.q4 && !/^Question\s*4$/i.test(q.q4)) ? q.q4 : '' %></textarea></div>
+                                            <div><label class="form-label text-[11px]"><span id="comp4-albl-<%= q._id %>"><%= isQBangla ? 'ঘ এর উত্তর' : 'Answer 4' %></span></label><textarea id="a4-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'ঘ এর উত্তর...' : 'Enter answer 4...' %>"><%= (q.a4 && !/^Answer\s*4$/i.test(q.a4)) ? q.a4 : '' %></textarea></div>
                                             <div><label class="form-label text-[11px]"><span id="comp4-slbl-<%= q._id %>"><%= isQBangla ? 'ঘ এর ব্যাখ্যা' : 'Explanation 4' %></span></label><textarea id="s4-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'ঘ এর ব্যাখ্যা...' : 'Explanation 4...' %>"><%= q.s4 || q.solution4 || '' %></textarea></div>
                                         </div>
                                     </div>
@@ -541,29 +552,29 @@
         }
 
         async function addSlot(type) {
-            let data = { questionType: type };
+            let data = { questionType: type, isSlot: true };
             if (type === 'MCQ') {
-                data.questionText = 'New MCQ Question';
-                data.options = ['Option A', 'Option B', 'Option C', 'Option D'];
+                data.questionText = '';
+                data.options = ['', '', '', ''];
                 data.correctAnswer = 0;
             } else if (type === 'Short') {
-                data.questionText = 'New Short Question';
+                data.questionText = '';
                 data.answer = '';
                 data.explanation = '';
             } else if (type === 'Medium') {
-                data.questionText = 'New Medium Question';
+                data.questionText = '';
                 data.answer = '';
             } else if (type === 'Comprehension') {
-                data.questionText = 'New Comprehension Question';
-                data.context = 'New Context';
-                data.q1 = 'Question 1';
-                data.q2 = 'Question 2';
-                data.q3 = 'Question 3';
-                data.q4 = 'Question 4';
-                data.a1 = 'Answer 1';
-                data.a2 = 'Answer 2';
-                data.a3 = 'Answer 3';
-                data.a4 = 'Answer 4';
+                data.questionText = '';
+                data.context = '';
+                data.q1 = '';
+                data.q2 = '';
+                data.q3 = '';
+                data.q4 = '';
+                data.a1 = '';
+                data.a2 = '';
+                data.a3 = '';
+                data.a4 = '';
             }
             
             if (type === 'Medium') data.marks = 2;
@@ -793,12 +804,21 @@
             const lbl = document.getElementById(`langlbl-${qid}`);
             if (btn && lbl) {
                 if (next) {
-                    btn.className = 'px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-all cursor-pointer border-emerald-300 dark:border-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400';
-                    lbl.innerText = 'বাংলা (ক, খ, গ, ঘ)';
+                    btn.className = 'px-2 py-0.5 rounded-md text-[11px] font-normal border transition-all cursor-pointer border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300';
+                    lbl.innerText = 'বাংলা';
                 } else {
-                    btn.className = 'px-1.5 py-0.5 rounded text-[10px] font-semibold border transition-all cursor-pointer border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300';
-                    lbl.innerText = 'EN (A, B, C, D)';
+                    btn.className = 'px-2 py-0.5 rounded-md text-[11px] font-normal border transition-all cursor-pointer border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400';
+                    lbl.innerText = 'English';
                 }
+            }
+
+            const qtextEl = document.getElementById(`qtext-${qid}`);
+            if (qtextEl) {
+                qtextEl.placeholder = next ? 'প্রশ্ন লিখুন...' : 'Enter question text...';
+            }
+            const contextEl = document.getElementById(`context-${qid}`);
+            if (contextEl) {
+                contextEl.placeholder = next ? 'উদ্দীপক / অনুচ্ছেদ লিখুন...' : 'Enter context / passage...';
             }
 
             // MCQ Option labels & placeholders
