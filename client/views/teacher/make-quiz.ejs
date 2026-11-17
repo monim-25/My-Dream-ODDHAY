@@ -160,8 +160,8 @@
                                     <label class="form-label">Exam Type</label>
                                     <div class="relative">
                                         <select name="examCategory" id="examCategory" onchange="updateView()" class="form-input cursor-pointer pr-8 appearance-none font-bold">
+                                            <option value="model" <%= !selectedCourseId ? 'selected' : '' %>>Model Test</option>
                                             <option value="course" <%= selectedCourseId ? 'selected' : '' %>>Course-Linked</option>
-                                            <option value="model" <%= !selectedCourseId && selectedClassLevel ? 'selected' : '' %>>Model Test</option>
                                             <option value="mock">Mock Test</option>
                                         </select>
                                         <span class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
@@ -529,7 +529,8 @@
         function filterSubjectsByClass(cls) {
             const subjSelect = document.getElementById('quizSubject');
             if (!subjSelect) return;
-            const available = CLASS_SUBJECT_MAP[cls] || [];
+            const clean = String(cls || '').replace(/^Class\s+/i, '').trim();
+            const available = CLASS_SUBJECT_MAP[cls] || CLASS_SUBJECT_MAP['Class ' + clean] || CLASS_SUBJECT_MAP[clean] || [];
             const allSubjects = <%- JSON.stringify(typeof subjects !== 'undefined' ? subjects : []) %>;
             const list = available.length > 0 ? available : allSubjects;
             const current = subjSelect.value;
@@ -546,8 +547,9 @@
 
         // ─── Course Select Change (Course-Linked mode) ───────────────────────────
         window.onCourseSelectChange = function() {
-            const isModelTest  = document.getElementById('isModelTest').value === 'true';
-            if (isModelTest) return;
+            const categorySelect = document.getElementById('examCategory');
+            const category = categorySelect ? categorySelect.value : (document.getElementById('isModelTest')?.value === 'true' ? 'model' : 'course');
+            if (category !== 'course') return;
 
             const courseSelect = document.getElementById('courseId');
             const subjSelect   = document.getElementById('quizSubject');
@@ -600,7 +602,9 @@
 
         // ─── Subject / Class change → load chapters ───────────────────────────────
         window.onQuizSubjectOrClassChange = async function(checkSegments = true) {
-            const isModelTest = document.getElementById('isModelTest').value === 'true';
+            const categorySelect = document.getElementById('examCategory');
+            const category = categorySelect ? categorySelect.value : (document.getElementById('isModelTest')?.value === 'true' ? 'model' : 'course');
+            const isCourseLinked = (category === 'course');
             const classLevelEl = document.getElementById('classLevel');
             const courseSelect = document.getElementById('courseId');
             const qs = document.getElementById('quizSubject');
@@ -616,7 +620,7 @@
             if (syncPortal) syncPortal.classList.add('hidden');
 
             // If Course-Linked mode and NO course is selected, DO NOT LOAD SYLLABUS
-            if (!isModelTest && (!courseSelect || !courseSelect.value)) {
+            if (isCourseLinked && (!courseSelect || !courseSelect.value)) {
                 if (syllabusWrapper) syllabusWrapper.classList.add('hidden');
                 return;
             }
@@ -625,7 +629,7 @@
             let classLevel = classLevelEl ? classLevelEl.value.trim() : '';
 
             // If classLevel is empty in course-linked mode, try getting it from course
-            if (!isModelTest && !classLevel && courseSelect && courseSelect.selectedIndex >= 0) {
+            if (isCourseLinked && !classLevel && courseSelect && courseSelect.selectedIndex >= 0) {
                 const selOpt = courseSelect.options[courseSelect.selectedIndex];
                 if (selOpt) {
                     const cCls = (selOpt.getAttribute('data-class') || '').trim();
@@ -1055,14 +1059,16 @@
         // ─── Bank metadata ────────────────────────────────────────────────────────
         async function syncBankMetadata() {
             const classLevel = document.getElementById('classLevel').value;
-            const isModelTest = document.getElementById('isModelTest').value === 'true';
+            const categorySelect = document.getElementById('examCategory');
+            const category = categorySelect ? categorySelect.value : (document.getElementById('isModelTest')?.value === 'true' ? 'model' : 'course');
+            const isCourseLinked = (category === 'course');
             let subject = '';
-            if (isModelTest) {
+            if (!isCourseLinked) {
                 const qs = document.getElementById('quizSubject');
                 subject = qs ? qs.value : '';
             } else {
                 const cs = document.getElementById('courseId');
-                const so = cs.options[cs.selectedIndex];
+                const so = cs && cs.selectedIndex >= 0 ? cs.options[cs.selectedIndex] : null;
                 subject = so ? (so.getAttribute('data-subject') || '') : '';
             }
             const board = document.getElementById('bankBoard') ? document.getElementById('bankBoard').value : '';
@@ -1095,7 +1101,7 @@
         // ─── Main view toggle ─────────────────────────────────────────────────────
         function updateView(preserveCourse = false) {
             const categorySelect = document.getElementById('examCategory');
-            const category = categorySelect ? categorySelect.value : (document.getElementById('isModelTest').value === 'true' ? 'model' : 'course');
+            const category = categorySelect ? categorySelect.value : (document.getElementById('isModelTest')?.value === 'true' ? 'model' : 'course');
             const isModelOrMock = (category === 'model' || category === 'mock');
             const isMock = (category === 'mock');
 
@@ -1113,6 +1119,10 @@
 
             if (isModelOrMock) {
                 // Standalone Model Test or Mock Test Mode:
+                if (courseSelect) {
+                    courseSelect.disabled = true;
+                    courseSelect.value = '';
+                }
                 courseContainer.classList.add('hidden');
                 subjectContainer.classList.remove('hidden');
                 subjectContainer.className = 'col-span-2 md:col-span-2';
@@ -1127,6 +1137,9 @@
                 }
             } else {
                 // Course-Linked Mode:
+                if (courseSelect) {
+                    courseSelect.disabled = false;
+                }
                 courseContainer.classList.remove('hidden');
                 courseContainer.className = 'col-span-1';
                 subjectContainer.classList.remove('hidden');
@@ -1224,10 +1237,12 @@
             if (text) text.textContent = 'Analyzing question bank for selected syllabus items...';
 
             const classLevel = document.getElementById('classLevel')?.value || '';
-            const isModelTest = document.getElementById('isModelTest')?.value === 'true';
+            const categorySelect = document.getElementById('examCategory');
+            const category = categorySelect ? categorySelect.value : (document.getElementById('isModelTest')?.value === 'true' ? 'model' : 'course');
+            const isCourseLinked = (category === 'course');
             let subject = '';
             let courseId = '';
-            if (isModelTest) {
+            if (!isCourseLinked) {
                 subject = document.getElementById('quizSubject')?.value || '';
             } else {
                 const cs = document.getElementById('courseId');
