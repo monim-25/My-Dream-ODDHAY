@@ -2713,17 +2713,26 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
             getAllAcademicFilters()
         ]);
 
-        // Combine classes/subjects from teacher's assigned profile, courses, existing banks, and platform academic setup
+        // Strictly use teacher's assigned subjects & classes; fallback to academic filters only if none assigned
         const teacherContext = await getTeacherAssignedContext(user._id);
         const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
-        const allSubjects = [...new Set([...courseSubjects, ...(teacherContext.rawAssignedSubjects || []), ...(stats.subjects || []), ...(academicFilters.subjects || [])])].filter(Boolean).sort((a, b) => a.localeCompare(b));
-        const allClasses = [...new Set([...courseClasses, ...(teacherContext.rawAssignedClasses || []), ...(stats.classes || []), ...(academicFilters.classes || [])])].filter(Boolean).sort((a, b) => {
+        const teacherAssignedSubjectList = [...new Set([...(teacherContext.rawAssignedSubjects || []), ...courseSubjects])].filter(Boolean);
+        const teacherAssignedClassList = [...new Set([...(teacherContext.rawAssignedClasses || []), ...courseClasses])].filter(Boolean);
+
+        const allSubjects = teacherAssignedSubjectList.length > 0
+            ? teacherAssignedSubjectList.sort((a, b) => a.localeCompare(b))
+            : (academicFilters.subjects || []).sort((a, b) => a.localeCompare(b));
+
+        const sortClassList = (arr) => arr.filter(Boolean).sort((a, b) => {
             const numA = parseInt(String(a).replace(/[^0-9]/g, ''), 10);
             const numB = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
             if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
             return String(a).localeCompare(String(b));
         });
+        const allClasses = teacherAssignedClassList.length > 0
+            ? sortClassList(teacherAssignedClassList)
+            : sortClassList(academicFilters.classes || []);
         const yearList = Array.from(new Set((dynamicYears || []).map(y => String(y || '').trim()).filter(Boolean))).sort().reverse();
 
         const academicBoardYearController = require('../controllers/academicBoardYearController');
@@ -2776,6 +2785,8 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
             },
             subjects: allSubjects,
             classes: allClasses,
+            assignedSubjects: allSubjects,
+            assignedClasses: allClasses,
             boards: activeBoards,
             years: activeYears,
             assignedCourses: userCourses,
@@ -2847,7 +2858,17 @@ router.get('/question-bank/:id', teacherProtect, async (req, res) => {
             totalPages: 1
         };
 
-        const academicFilters = await getAllAcademicFilters().catch(() => ({ subjects: [], classes: [] }));
+        const [academicFilters, teacherContext] = await Promise.all([
+            getAllAcademicFilters().catch(() => ({ subjects: [], classes: [] })),
+            getTeacherAssignedContext(req.session.user._id)
+        ]);
+
+        const assignedSubjects = (teacherContext.rawAssignedSubjects && teacherContext.rawAssignedSubjects.length > 0)
+            ? teacherContext.rawAssignedSubjects
+            : (academicFilters.subjects || []);
+        const assignedClasses = (teacherContext.rawAssignedClasses && teacherContext.rawAssignedClasses.length > 0)
+            ? teacherContext.rawAssignedClasses
+            : (academicFilters.classes || []);
 
         res.render('teacher/question-bank-details', {
             bank,
@@ -2855,8 +2876,8 @@ router.get('/question-bank/:id', teacherProtect, async (req, res) => {
             stats,
             engagement,
             qPagination,
-            subjects: academicFilters.subjects || [],
-            classes: academicFilters.classes || [],
+            subjects: assignedSubjects,
+            classes: assignedClasses,
             user: req.session.user,
             active: 'questions'
         });
@@ -4148,13 +4169,22 @@ router.get('/edit-question-bank/:id', teacherProtect, async (req, res) => {
         ]);
         const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
-        const assignedSubjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects, ...academicFilters.subjects])].sort();
-        const assignedClasses = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses, ...academicFilters.classes])].sort((a, b) => {
+        const teacherAssignedSubjectList = [...new Set([...courseSubjects, ...(teacherContext.rawAssignedSubjects || [])])].filter(Boolean);
+        const teacherAssignedClassList = [...new Set([...courseClasses, ...(teacherContext.rawAssignedClasses || [])])].filter(Boolean);
+
+        const assignedSubjects = teacherAssignedSubjectList.length > 0
+            ? teacherAssignedSubjectList.sort((a, b) => a.localeCompare(b))
+            : (academicFilters.subjects || []).sort((a, b) => a.localeCompare(b));
+
+        const sortClassList = (arr) => arr.filter(Boolean).sort((a, b) => {
             const numA = parseInt(String(a).replace(/[^0-9]/g, ''), 10);
             const numB = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
             if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
             return String(a).localeCompare(String(b));
         });
+        const assignedClasses = teacherAssignedClassList.length > 0
+            ? sortClassList(teacherAssignedClassList)
+            : sortClassList(academicFilters.classes || []);
 
         res.render('teacher/edit-question-bank', {
             bank,
@@ -4398,26 +4428,24 @@ router.get('/question-details', teacherProtect, async (req, res) => {
             Question.distinct('classLevel', { addedBy: user._id }).catch(() => [])
         ]);
 
-        const subjectSet = new Set(teacherContext.rawAssignedSubjects || []);
-        const classSet = new Set(teacherContext.rawAssignedClasses || []);
-        userCourses.forEach(c => {
-            if (Array.isArray(c.subject)) c.subject.forEach(s => subjectSet.add(s));
-            else if (c.subject) subjectSet.add(c.subject);
-            if (Array.isArray(c.classLevel)) c.classLevel.forEach(cl => classSet.add(cl));
-            else if (c.classLevel) classSet.add(c.classLevel);
-        });
-        (qSubjects || []).forEach(s => s && subjectSet.add(String(s).trim()));
-        (qClasses || []).forEach(cl => cl && classSet.add(String(cl).trim()));
-        (academicFilters.subjects || []).forEach(s => subjectSet.add(s));
-        (academicFilters.classes || []).forEach(cl => classSet.add(cl));
+        const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
+        const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
+        const teacherAssignedSubjectList = [...new Set([...(teacherContext.rawAssignedSubjects || []), ...courseSubjects])].filter(Boolean);
+        const teacherAssignedClassList = [...new Set([...(teacherContext.rawAssignedClasses || []), ...courseClasses])].filter(Boolean);
 
-        const assignedSubjects = Array.from(subjectSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
-        const assignedClasses = Array.from(classSet).filter(Boolean).sort((a, b) => {
+        const assignedSubjects = teacherAssignedSubjectList.length > 0
+            ? teacherAssignedSubjectList.sort((a, b) => a.localeCompare(b))
+            : (academicFilters.subjects || []).sort((a, b) => a.localeCompare(b));
+
+        const sortClassList = (arr) => arr.filter(Boolean).sort((a, b) => {
             const numA = parseInt(String(a).replace(/[^0-9]/g, ''), 10);
             const numB = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
             if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
             return String(a).localeCompare(String(b));
         });
+        const assignedClasses = teacherAssignedClassList.length > 0
+            ? sortClassList(teacherAssignedClassList)
+            : sortClassList(academicFilters.classes || []);
 
         const andClauses = [{ addedBy: user._id }];
         if (typeFilter !== 'all') andClauses.push({ questionType: typeFilter });
@@ -4518,25 +4546,24 @@ router.get('/add-question', teacherProtect, async (req, res) => {
             academicBoardYearController.getActiveYearStrings()
         ]);
 
-        // Build deduplicated subject and class lists from assigned profile, courses & academic setup
-        const subjectSet = new Set(teacherContext.rawAssignedSubjects || []);
-        const classSet = new Set(teacherContext.rawAssignedClasses || []);
-        userCourses.forEach(c => {
-            if (Array.isArray(c.subject)) c.subject.forEach(s => subjectSet.add(s));
-            else if (c.subject) subjectSet.add(c.subject);
-            if (Array.isArray(c.classLevel)) c.classLevel.forEach(cl => classSet.add(cl));
-            else if (c.classLevel) classSet.add(c.classLevel);
-        });
-        (academicFilters.subjects || []).forEach(s => subjectSet.add(s));
-        (academicFilters.classes || []).forEach(cl => classSet.add(cl));
+        const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
+        const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
+        const teacherAssignedSubjectList = [...new Set([...(teacherContext.rawAssignedSubjects || []), ...courseSubjects])].filter(Boolean);
+        const teacherAssignedClassList = [...new Set([...(teacherContext.rawAssignedClasses || []), ...courseClasses])].filter(Boolean);
 
-        const sortedSubjects = Array.from(subjectSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
-        const sortedClasses = Array.from(classSet).filter(Boolean).sort((a, b) => {
+        const sortedSubjects = teacherAssignedSubjectList.length > 0
+            ? teacherAssignedSubjectList.sort((a, b) => a.localeCompare(b))
+            : (academicFilters.subjects || []).sort((a, b) => a.localeCompare(b));
+
+        const sortClassList = (arr) => arr.filter(Boolean).sort((a, b) => {
             const numA = parseInt(String(a).replace(/[^0-9]/g, ''), 10);
             const numB = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
             if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
             return String(a).localeCompare(String(b));
         });
+        const sortedClasses = teacherAssignedClassList.length > 0
+            ? sortClassList(teacherAssignedClassList)
+            : sortClassList(academicFilters.classes || []);
 
         res.render('teacher/add-question', {
             banks,
