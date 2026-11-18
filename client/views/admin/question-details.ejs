@@ -84,9 +84,11 @@
                             <div class="relative w-28">
                                 <select onchange="window.location.href='?q=<%= filters.q %>&type=<%= filters.type %>&class=<%= filters.class %>&access=<%= filters.access %>&board=' + this.value" class="w-full h-10 pl-3 pr-8 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-[11px] font-bold outline-none cursor-pointer appearance-none transition-all focus:border-blue-500">
                                     <option value="all" <%= filters.board === 'all' ? 'selected' : '' %>>All Boards</option>
-                                    <% ['Dhaka Board', 'Comilla Board', 'Rajshahi Board', 'Chittagong Board', 'Sylhet Board', 'Barisal Board', 'Khulna Board', 'Rangpur Board', 'Mymensingh Board'].forEach(b => { %>
-                                        <option value="<%= b %>" <%= filters.board === b ? 'selected' : '' %>><%= b %></option>
-                                    <% }) %>
+                                    <% if (typeof boards !== 'undefined' && boards && boards.length > 0) { %>
+                                        <% boards.forEach(function(b) { const bName = typeof b === 'object' ? b.name : b; %>
+                                            <option value="<%= bName %>" <%= filters.board === bName ? 'selected' : '' %>><%= bName %></option>
+                                        <% }); %>
+                                    <% } %>
                                 </select>
                                 <span class="material-symbols-rounded absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-[18px]">expand_more</span>
                             </div>
@@ -306,11 +308,25 @@
                         <div class="grid grid-cols-2 gap-4">
                             <div class="space-y-1.5">
                                 <label class="text-[10px] font-black text-slate-400 ml-1">Board</label>
-                                <input type="text" id="editBoard" class="w-full h-10 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold outline-none focus:border-primary">
+                                <select id="editBoard" class="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold outline-none focus:border-primary cursor-pointer">
+                                    <option value="">Select Board</option>
+                                    <% if (typeof boards !== 'undefined' && boards && boards.length > 0) { %>
+                                        <% boards.forEach(function(b) { const bName = typeof b === 'object' ? b.name : b; %>
+                                            <option value="<%= bName %>"><%= bName %></option>
+                                        <% }); %>
+                                    <% } %>
+                                </select>
                             </div>
                             <div class="space-y-1.5">
                                 <label class="text-[10px] font-black text-slate-400 ml-1">Year</label>
-                                <input type="number" id="editYear" class="w-full h-10 px-4 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold outline-none focus:border-primary">
+                                <select id="editYear" class="w-full h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold outline-none focus:border-primary cursor-pointer">
+                                    <option value="">Select Year</option>
+                                    <% if (typeof years !== 'undefined' && years && years.length > 0) { %>
+                                        <% years.forEach(function(y) { const yVal = typeof y === 'object' ? y.year : y; %>
+                                            <option value="<%= yVal %>"><%= yVal %></option>
+                                        <% }); %>
+                                    <% } %>
+                                </select>
                             </div>
                             <div class="space-y-1.5">
                                 <label class="text-[10px] font-black text-slate-400 ml-1">Subject</label>
@@ -601,8 +617,21 @@
                 editBtn.classList.add('hidden');
 
                 document.getElementById('editQId').value = q._id;
-                document.getElementById('editBoard').value = q.board || '';
-                document.getElementById('editYear').value = q.year || '';
+                const bSelect = document.getElementById('editBoard');
+                if (bSelect) {
+                    if (q.board && !Array.from(bSelect.options).some(o => o.value === q.board)) {
+                        bSelect.appendChild(new Option(q.board + ' (Saved)', q.board, true, true));
+                    }
+                    bSelect.value = q.board || '';
+                }
+                const ySelect = document.getElementById('editYear');
+                if (ySelect) {
+                    const yStr = String(q.year || '');
+                    if (yStr && !Array.from(ySelect.options).some(o => o.value === yStr)) {
+                        ySelect.appendChild(new Option(yStr + ' (Saved)', yStr, true, true));
+                    }
+                    ySelect.value = yStr;
+                }
                 document.getElementById('editSubject').value = q.subject || '';
                 document.getElementById('editClass').value = q.classLevel || '';
                 document.getElementById('editAccessType').value = q.accessType || 'Free';

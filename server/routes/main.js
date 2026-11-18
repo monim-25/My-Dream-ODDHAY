@@ -3075,24 +3075,11 @@ router.get('/question-bank', protect, async (req, res) => {
             academicBoardYearController.getActiveBoardNames(),
             academicBoardYearController.getActiveYearStrings()
         ]);
-        const rawBoards = questions.map(q => (q.board || '').trim()).filter(Boolean);
-        const mergedBoards = Array.from(new Set([
-            ...activeBoards,
-            ...rawBoards
-        ].map(b => String(b || '').trim()).filter(Boolean))).sort();
-
-        // 3. YEARS: Central Superadmin Active Years + any existing Question DB years
-        const rawYears = questions.map(q => (q.year || '').trim()).filter(Boolean);
-        const mergedYears = Array.from(new Set([
-            ...activeYears,
-            ...rawYears
-        ].map(y => String(y || '').trim()).filter(Boolean))).sort((a, b) => Number(b) - Number(a));
-
         res.render('question-bank', {
             questions,
-            boards: mergedBoards,
+            boards: activeBoards,
             subjects: mergedSubjects,
-            years: mergedYears,
+            years: activeYears,
             userClass,
             search: search || '',
             activeBoard: board || 'all',

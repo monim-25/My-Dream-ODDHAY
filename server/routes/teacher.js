@@ -2710,8 +2710,6 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
             academicBoardYearController.getActiveBoardNames(),
             academicBoardYearController.getActiveYearStrings()
         ]);
-        const combinedBoards = Array.from(new Set([...activeBoards, ...(stats.boards || []).filter(Boolean)])).sort();
-        const combinedYears = Array.from(new Set([...activeYears, ...yearList])).sort((a, b) => Number(b) - Number(a));
 
         // Calculate actual question counts from Question collection
         const bankIds = banks.map(b => b._id);
@@ -2757,8 +2755,8 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
             },
             subjects: allSubjects,
             classes: allClasses,
-            boards: combinedBoards,
-            years: combinedYears,
+            boards: activeBoards,
+            years: activeYears,
             assignedCourses: userCourses,
             userCourses: userCourses,
             active: 'questions'
@@ -3132,19 +3130,22 @@ router.get('/api/bank-metadata', teacherProtect, async (req, res) => {
             ...syllabusTopics.map(t => t.name).filter(Boolean)
         ])].sort();
 
-        // Apply topic filter for board/year computation (cascading)
-        let filteredQuery = { ...baseQuery };
-        if (topic) filteredQuery.topic = topic;
-        const topicBanks = await QuestionBank.find(filteredQuery);
-        const boards = [...new Set(topicBanks.map(b => b.board).filter(Boolean))].sort();
+        const { getActiveBoardNames, getActiveYearStrings } = require('../controllers/academicBoardYearController');
+        const [activeBoards, activeYears] = await Promise.all([
+            getActiveBoardNames(),
+            getActiveYearStrings()
+        ]);
 
-        // Apply board filter for year computation (cascading)
-        let boardQuery = { ...filteredQuery };
-        if (board) boardQuery.board = board;
-        const boardBanks = await QuestionBank.find(boardQuery);
-        const years = [...new Set(boardBanks.map(b => b.year).filter(Boolean))].sort((a, b) => b - a);
+        // Filter active boards that have questions in this topic if any, otherwise return all active boards
+        const bankBoardSet = new Set(topicBanks.map(b => b.board).filter(Boolean));
+        let matchedBoards = activeBoards.filter(b => bankBoardSet.has(b));
+        if (matchedBoards.length === 0) matchedBoards = activeBoards;
 
-        res.json({ success: true, topics, boards, years });
+        const bankYearSet = new Set(boardBanks.map(b => String(b.year)).filter(Boolean));
+        let matchedYears = activeYears.filter(y => bankYearSet.has(String(y)));
+        if (matchedYears.length === 0) matchedYears = activeYears;
+
+        res.json({ success: true, topics, boards: matchedBoards, years: matchedYears, allActiveBoards: activeBoards, allActiveYears: activeYears });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 

@@ -194,6 +194,23 @@ const clearAcademicCache = () => {
 };
 app.set('clearAcademicCache', clearAcademicCache);
 
+// Global Central Academic Boards & Years In-Memory Cache (Platform-wide Enforced)
+let cachedActiveBoards = null;
+let cachedActiveYears = null;
+let lastBoardYearCacheTime = 0;
+const BOARD_YEAR_CACHE_TTL = 5 * 60 * 1000;
+const clearBoardYearCache = () => {
+    cachedActiveBoards = null;
+    cachedActiveYears = null;
+    lastBoardYearCacheTime = 0;
+};
+app.set('clearBoardYearCache', clearBoardYearCache);
+
+const academicBoardYearController = require('./controllers/academicBoardYearController');
+if (academicBoardYearController.onCacheInvalidate) {
+    academicBoardYearController.onCacheInvalidate(() => clearBoardYearCache());
+}
+
 // In-memory active user activity tracking (instant zero-latency access across routes)
 const userLastSeen = new Map();
 app.set('userLastSeen', userLastSeen);
@@ -215,6 +232,21 @@ app.use(async (req, res, next) => {
     res.locals.SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || 'monimmdmonim41@gmail.com').toLowerCase().trim();
     res.locals.unreadNotificationCount = 0;
     res.locals.unreadMessageCount = 0;
+
+    // Platform-wide Central Superadmin Active Boards & Years availability
+    try {
+        const now = Date.now();
+        if (!cachedActiveBoards || !cachedActiveYears || (now - lastBoardYearCacheTime > BOARD_YEAR_CACHE_TTL)) {
+            cachedActiveBoards = await academicBoardYearController.getActiveBoardNames();
+            cachedActiveYears = await academicBoardYearController.getActiveYearStrings();
+            lastBoardYearCacheTime = now;
+        }
+        res.locals.boards = cachedActiveBoards || [];
+        res.locals.years = cachedActiveYears || [];
+    } catch (e) {
+        res.locals.boards = res.locals.boards || [];
+        res.locals.years = res.locals.years || [];
+    }
 
     const uid = req.session && (req.session.userId || (req.session.user ? (req.session.user._id || req.session.user.id) : null));
     if (uid) {

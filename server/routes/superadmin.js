@@ -2914,6 +2914,12 @@ router.get('/question-bank', adminProtect, async (req, res) => {
 
         const stats = statsData[0] || { boards: [], subjects: [], latestYear: '---', paidCount: 0, freeCount: 0 };
 
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [activeBoards, activeYears] = await Promise.all([
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings()
+        ]);
+
         res.render('superadmin/question-bank', {
             questions: questions || [],
             user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
@@ -2936,7 +2942,8 @@ router.get('/question-bank', adminProtect, async (req, res) => {
                 access: accessFilter,
                 totalQuestions: totalCount
             },
-            boards: (stats.boards || []).filter(Boolean).sort(),
+            boards: activeBoards,
+            years: activeYears,
             subjects: (stats.subjects || []).filter(Boolean).sort()
         });
     } catch (err) {
@@ -5784,17 +5791,21 @@ router.get('/api/bank-metadata', superAdminProtect, async (req, res) => {
             ...syllabusTopics.map(t => t.name).filter(Boolean)
         ])].sort();
         
-        let filteredQuery = { ...baseQuery };
-        if (topic) filteredQuery.topic = topic;
-        const topicBanks = await QuestionBank.find(filteredQuery).lean();
-        const boards = [...new Set(topicBanks.map(b => b.board).filter(Boolean))].sort();
-        
-        let boardQuery = { ...filteredQuery };
-        if (board) boardQuery.board = board;
-        const boardBanks = await QuestionBank.find(boardQuery).lean();
-        const years = [...new Set(boardBanks.map(b => b.year).filter(Boolean))].sort((a, b) => b - a);
-        
-        res.json({ success: true, topics, boards, years });
+        const { getActiveBoardNames, getActiveYearStrings } = require('../controllers/academicBoardYearController');
+        const [activeBoards, activeYears] = await Promise.all([
+            getActiveBoardNames(),
+            getActiveYearStrings()
+        ]);
+
+        const bankBoardSet = new Set(topicBanks.map(b => b.board).filter(Boolean));
+        let matchedBoards = activeBoards.filter(b => bankBoardSet.has(b));
+        if (matchedBoards.length === 0) matchedBoards = activeBoards;
+
+        const bankYearSet = new Set(boardBanks.map(b => String(b.year)).filter(Boolean));
+        let matchedYears = activeYears.filter(y => bankYearSet.has(String(y)));
+        if (matchedYears.length === 0) matchedYears = activeYears;
+
+        res.json({ success: true, topics, boards: matchedBoards, years: matchedYears, allActiveBoards: activeBoards, allActiveYears: activeYears });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 router.post('/topics', superAdminProtect, topicController.createTopic);

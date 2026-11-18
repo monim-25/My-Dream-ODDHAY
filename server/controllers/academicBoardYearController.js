@@ -2,6 +2,17 @@ const AcademicBoard = require('../models/AcademicBoard');
 const AcademicYear = require('../models/AcademicYear');
 const { connectDB } = require('../config');
 
+// In-memory cache invalidation subscribers
+const cacheInvalidators = [];
+function onCacheInvalidate(fn) {
+    if (typeof fn === 'function') cacheInvalidators.push(fn);
+}
+function notifyCacheInvalidate() {
+    cacheInvalidators.forEach(fn => {
+        try { fn(); } catch (e) {}
+    });
+}
+
 const DEFAULT_BOARDS = [
     { name: 'Dhaka Board', code: 'DHK', order: 1 },
     { name: 'Rajshahi Board', code: 'RAJ', order: 2 },
@@ -125,6 +136,7 @@ async function addBoard(req, res) {
             createdBy: req.session?.user?._id
         });
         await newBoard.save();
+        notifyCacheInvalidate();
 
         res.json({ success: true, message: 'Board added successfully', board: newBoard });
     } catch (err) {
@@ -165,6 +177,7 @@ async function updateBoard(req, res) {
         if (!updated) {
             return res.status(404).json({ success: false, error: 'Board not found' });
         }
+        notifyCacheInvalidate();
 
         res.json({ success: true, message: 'Board updated successfully', board: updated });
     } catch (err) {
@@ -185,6 +198,7 @@ async function toggleBoardStatus(req, res) {
         board.isActive = !board.isActive;
         board.updatedBy = req.session?.user?._id;
         await board.save();
+        notifyCacheInvalidate();
 
         res.json({
             success: true,
@@ -205,6 +219,7 @@ async function deleteBoard(req, res) {
         if (!board) {
             return res.status(404).json({ success: false, error: 'Board not found' });
         }
+        notifyCacheInvalidate();
         res.json({ success: true, message: 'Board deleted successfully' });
     } catch (err) {
         console.error('Error deleting board:', err);
@@ -224,6 +239,7 @@ async function reorderBoards(req, res) {
             AcademicBoard.findByIdAndUpdate(id, { order: index + 1 })
         );
         await Promise.all(updates);
+        notifyCacheInvalidate();
 
         res.json({ success: true, message: 'Board order updated' });
     } catch (err) {
@@ -260,6 +276,7 @@ async function addYear(req, res) {
             createdBy: req.session?.user?._id
         });
         await newYear.save();
+        notifyCacheInvalidate();
 
         res.json({ success: true, message: 'Year added successfully', year: newYear });
     } catch (err) {
@@ -298,6 +315,7 @@ async function updateYear(req, res) {
         if (!updated) {
             return res.status(404).json({ success: false, error: 'Year not found' });
         }
+        notifyCacheInvalidate();
 
         res.json({ success: true, message: 'Year updated successfully', year: updated });
     } catch (err) {
@@ -318,6 +336,7 @@ async function toggleYearStatus(req, res) {
         yearDoc.isActive = !yearDoc.isActive;
         yearDoc.updatedBy = req.session?.user?._id;
         await yearDoc.save();
+        notifyCacheInvalidate();
 
         res.json({
             success: true,
@@ -338,6 +357,7 @@ async function deleteYear(req, res) {
         if (!yearDoc) {
             return res.status(404).json({ success: false, error: 'Year not found' });
         }
+        notifyCacheInvalidate();
         res.json({ success: true, message: 'Year deleted successfully' });
     } catch (err) {
         console.error('Error deleting year:', err);
@@ -357,6 +377,7 @@ async function reorderYears(req, res) {
             AcademicYear.findByIdAndUpdate(id, { order: index + 1 })
         );
         await Promise.all(updates);
+        notifyCacheInvalidate();
 
         res.json({ success: true, message: 'Year order updated' });
     } catch (err) {
@@ -370,23 +391,8 @@ module.exports = {
     getActiveBoardNames,
     getActiveYearStrings,
     getActiveBoardsAndYearsApi,
-    addBoard,
-    updateBoard,
-    toggleBoardStatus,
-    deleteBoard,
-    reorderBoards,
-    addYear,
-    updateYear,
-    toggleYearStatus,
-    deleteYear,
-    reorderYears
-};
-
-module.exports = {
-    ensureDefaultBoardsAndYears,
-    getActiveBoardNames,
-    getActiveYearStrings,
-    getActiveBoardsAndYearsApi,
+    onCacheInvalidate,
+    notifyCacheInvalidate,
     addBoard,
     updateBoard,
     toggleBoardStatus,

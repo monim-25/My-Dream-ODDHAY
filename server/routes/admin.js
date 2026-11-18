@@ -3121,7 +3121,6 @@ router.get('/question-bank', adminProtect, async (req, res) => {
             academicBoardYearController.getActiveBoardNames(),
             academicBoardYearController.getActiveYearStrings()
         ]);
-        const combinedBoards = Array.from(new Set([...activeBoards, ...(stats.boards || []).filter(Boolean)])).sort();
 
         res.render('admin/question-bank', {
             questions: questions || [],
@@ -3144,7 +3143,7 @@ router.get('/question-bank', adminProtect, async (req, res) => {
                 access: accessFilter,
                 totalQuestions: totalCount
             },
-            boards: combinedBoards,
+            boards: activeBoards,
             years: activeYears,
             subjects: (stats.subjects || []).filter(Boolean).sort()
         });
@@ -6183,17 +6182,21 @@ router.get('/api/bank-metadata', adminProtect, async (req, res) => {
             ...syllabusTopics.map(t => t.name).filter(Boolean)
         ])].sort();
         
-        let filteredQuery = { ...baseQuery };
-        if (topic) filteredQuery.topic = topic;
-        const topicBanks = await QuestionBank.find(filteredQuery).lean();
-        const boards = [...new Set(topicBanks.map(b => b.board).filter(Boolean))].sort();
-        
-        let boardQuery = { ...filteredQuery };
-        if (board) boardQuery.board = board;
-        const boardBanks = await QuestionBank.find(boardQuery).lean();
-        const years = [...new Set(boardBanks.map(b => b.year).filter(Boolean))].sort((a, b) => b - a);
-        
-        res.json({ success: true, topics, boards, years });
+        const { getActiveBoardNames, getActiveYearStrings } = require('../controllers/academicBoardYearController');
+        const [activeBoards, activeYears] = await Promise.all([
+            getActiveBoardNames(),
+            getActiveYearStrings()
+        ]);
+
+        const bankBoardSet = new Set(topicBanks.map(b => b.board).filter(Boolean));
+        let matchedBoards = activeBoards.filter(b => bankBoardSet.has(b));
+        if (matchedBoards.length === 0) matchedBoards = activeBoards;
+
+        const bankYearSet = new Set(boardBanks.map(b => String(b.year)).filter(Boolean));
+        let matchedYears = activeYears.filter(y => bankYearSet.has(String(y)));
+        if (matchedYears.length === 0) matchedYears = activeYears;
+
+        res.json({ success: true, topics, boards: matchedBoards, years: matchedYears, allActiveBoards: activeBoards, allActiveYears: activeYears });
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 

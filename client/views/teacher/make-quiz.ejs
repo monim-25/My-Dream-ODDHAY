@@ -533,6 +533,11 @@
                                                         onchange="syncBankMetadata()"
                                                         class="form-input cursor-pointer pr-8 appearance-none">
                                                         <option value="">Any Board</option>
+                                                        <% if (typeof boards !== 'undefined' && boards && boards.length > 0) { %>
+                                                            <% boards.forEach(function(b) { const bName = typeof b === 'object' ? b.name : b; %>
+                                                                <option value="<%= bName %>"><%= bName %></option>
+                                                            <% }); %>
+                                                        <% } %>
                                                     </select>
                                                     <span
                                                         class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
@@ -544,6 +549,11 @@
                                                     <select name="bankYear" id="bankYear" onchange="syncBankMetadata()"
                                                         class="form-input cursor-pointer pr-8 appearance-none">
                                                         <option value="">Any Year</option>
+                                                        <% if (typeof years !== 'undefined' && years && years.length > 0) { %>
+                                                            <% years.forEach(function(y) { const yVal = typeof y === 'object' ? y.year : y; %>
+                                                                <option value="<%= yVal %>"><%= yVal %></option>
+                                                            <% }); %>
+                                                        <% } %>
                                                     </select>
                                                     <span
                                                         class="material-symbols-rounded absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 text-sm">expand_more</span>
@@ -1314,9 +1324,12 @@
             }
             const board = document.getElementById('bankBoard') ? document.getElementById('bankBoard').value : '';
             const year = document.getElementById('bankYear') ? document.getElementById('bankYear').value : '';
+            const fallbackBoards = <%- JSON.stringify(typeof boards !== 'undefined' && boards ? boards.map(b => typeof b === 'object' ? b.name : b) : []) %>;
+            const fallbackYears = <%- JSON.stringify(typeof years !== 'undefined' && years ? years.map(y => typeof y === 'object' ? y.year : y) : []) %>;
+
             if (!classLevel || !subject) {
-                updateDropdown('bankBoard', [], '', 'Any Board');
-                updateDropdown('bankYear', [], '', 'Any Year');
+                updateDropdown('bankBoard', fallbackBoards, board, 'Any Board');
+                updateDropdown('bankYear', fallbackYears, year, 'Any Year');
                 return;
             }
             try {
@@ -1324,8 +1337,10 @@
                 const url = `/teacher/api/bank-metadata?classLevel=${encodeURIComponent(classLevel)}&subject=${encodeURIComponent(subject)}&chapters=${encodeURIComponent(chaps)}&board=${encodeURIComponent(board)}&year=${encodeURIComponent(year)}`;
                 const data = await (await fetch(url)).json();
                 if (data.success) {
-                    updateDropdown('bankBoard', data.boards, board, 'Any Board');
-                    updateDropdown('bankYear', data.years, year, 'Any Year');
+                    const bList = (data.boards && data.boards.length > 0) ? data.boards : fallbackBoards;
+                    const yList = (data.years && data.years.length > 0) ? data.years : fallbackYears;
+                    updateDropdown('bankBoard', bList, board, 'Any Board');
+                    updateDropdown('bankYear', yList, year, 'Any Year');
                 }
             } catch (err) { console.error('Failed to sync metadata', err); }
             analyzeBankQuestions();
@@ -1334,8 +1349,9 @@
         function updateDropdown(id, items, currentVal, placeholder) {
             const select = document.getElementById(id);
             if (!select) return;
+            const list = Array.isArray(items) && items.length > 0 ? items : (id === 'bankBoard' ? fallbackBoards : fallbackYears);
             let html = `<option value="">${placeholder}</option>`;
-            items.forEach(item => { html += `<option value="${item}" ${item === currentVal ? 'selected' : ''}>${item}</option>`; });
+            list.forEach(item => { const val = typeof item === 'object' ? (item.name || item.year) : item; html += `<option value="${val}" ${val === currentVal ? 'selected' : ''}>${val}</option>`; });
             select.innerHTML = html;
         }
 

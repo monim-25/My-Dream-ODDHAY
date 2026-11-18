@@ -453,13 +453,33 @@
                                         <!-- Board -->
                                         <div class="flex items-center gap-1 shrink-0">
                                             <span class="text-[11px] text-slate-400 shrink-0 font-medium">Board:</span>
-                                            <input type="text" id="board-<%= q._id %>" list="centralBoardList" value="<%= q.board || '' %>" class="form-input w-20 sm:w-24" style="height: 30px !important; padding: 0 8px; font-size: 11.5px;" placeholder="Board">
+                                            <select id="board-<%= q._id %>" class="form-input w-24 sm:w-28 cursor-pointer" style="height: 30px !important; padding: 0 4px; font-size: 11px;">
+                                                <option value="">Board</option>
+                                                <% if (typeof boards !== 'undefined' && boards && boards.length > 0) { %>
+                                                    <% boards.forEach(function(b) { const bName = typeof b === 'object' ? b.name : b; %>
+                                                        <option value="<%= bName %>" <%= q.board === bName ? 'selected' : '' %>><%= bName %></option>
+                                                    <% }); %>
+                                                <% } %>
+                                                <% if (q.board && (!boards || !boards.some(b => (typeof b === 'object' ? b.name : b) === q.board))) { %>
+                                                    <option value="<%= q.board %>" selected><%= q.board %> (Saved)</option>
+                                                <% } %>
+                                            </select>
                                         </div>
 
                                         <!-- Year -->
                                         <div class="flex items-center gap-1 shrink-0">
                                             <span class="text-[11px] text-slate-400 shrink-0 font-medium">Year:</span>
-                                            <input type="text" id="year-<%= q._id %>" list="centralYearList" value="<%= q.year || '' %>" class="form-input w-16 sm:w-20" style="height: 30px !important; padding: 0 8px; font-size: 11.5px;" placeholder="Year">
+                                            <select id="year-<%= q._id %>" class="form-input w-20 sm:w-24 cursor-pointer text-center" style="height: 30px !important; padding: 0 4px; font-size: 11px;">
+                                                <option value="">Year</option>
+                                                <% if (typeof years !== 'undefined' && years && years.length > 0) { %>
+                                                    <% years.forEach(function(y) { const yVal = typeof y === 'object' ? y.year : y; %>
+                                                        <option value="<%= yVal %>" <%= String(q.year) === String(yVal) ? 'selected' : '' %>><%= yVal %></option>
+                                                    <% }); %>
+                                                <% } %>
+                                                <% if (q.year && (!years || !years.some(y => String(typeof y === 'object' ? y.year : y) === String(q.year)))) { %>
+                                                    <option value="<%= q.year %>" selected><%= q.year %> (Saved)</option>
+                                                <% } %>
+                                            </select>
                                         </div>
                                     </div>
 
@@ -685,6 +705,38 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         let questionsData = <%- JSON.stringify(quiz.questions) %>;
+        const centralActiveBoards = <%- JSON.stringify(typeof boards !== 'undefined' && boards ? boards.map(b => typeof b === 'object' ? b.name : b) : []) %>;
+        const centralActiveYears = <%- JSON.stringify(typeof years !== 'undefined' && years ? years.map(y => typeof y === 'object' ? y.year : y) : []) %>;
+
+        function renderBoardOptions(selectedVal) {
+            let opts = '<option value="">Board</option>';
+            let matched = false;
+            (centralActiveBoards || []).forEach(b => {
+                const sel = b === selectedVal ? 'selected' : '';
+                if (sel) matched = true;
+                opts += `<option value="${escapeEditorHtml(b)}" ${sel}>${escapeEditorHtml(b)}</option>`;
+            });
+            if (selectedVal && !matched) {
+                opts += `<option value="${escapeEditorHtml(selectedVal)}" selected>${escapeEditorHtml(selectedVal)} (Saved)</option>`;
+            }
+            return opts;
+        }
+
+        function renderYearOptions(selectedVal) {
+            let opts = '<option value="">Year</option>';
+            let matched = false;
+            const sVal = String(selectedVal || '');
+            (centralActiveYears || []).forEach(y => {
+                const yStr = String(y);
+                const sel = yStr === sVal ? 'selected' : '';
+                if (sel) matched = true;
+                opts += `<option value="${escapeEditorHtml(yStr)}" ${sel}>${escapeEditorHtml(yStr)}</option>`;
+            });
+            if (sVal && !matched) {
+                opts += `<option value="${escapeEditorHtml(sVal)}" selected>${escapeEditorHtml(sVal)} (Saved)</option>`;
+            }
+            return opts;
+        }
         const quizId = '<%= quiz._id %>';
         const currentCourseId = '<%= typeof courseId !== "undefined" ? courseId : "" %>';
         let cachedQuizEditorTopics = [];
@@ -1126,12 +1178,16 @@
                                 <!-- Board -->
                                 <div class="flex items-center gap-1 shrink-0">
                                     <span class="text-[11px] text-slate-400 shrink-0 font-medium">Board:</span>
-                                    <input type="text" id="board-${qid}" list="centralBoardList" value="${escapeEditorHtml(q.board || '')}" class="form-input w-20 sm:w-24" style="height: 30px !important; padding: 0 8px; font-size: 11.5px;" placeholder="Board">
+                                    <select id="board-${qid}" class="form-input w-24 sm:w-28 cursor-pointer" style="height: 30px !important; padding: 0 4px; font-size: 11px;">
+                                        ${renderBoardOptions(q.board)}
+                                    </select>
                                 </div>
                                 <!-- Year -->
                                 <div class="flex items-center gap-1 shrink-0">
                                     <span class="text-[11px] text-slate-400 shrink-0 font-medium">Year:</span>
-                                    <input type="text" id="year-${qid}" list="centralYearList" value="${escapeEditorHtml(q.year || '')}" class="form-input w-16 sm:w-20" style="height: 30px !important; padding: 0 8px; font-size: 11.5px;" placeholder="Year">
+                                    <select id="year-${qid}" class="form-input w-20 sm:w-24 cursor-pointer text-center" style="height: 30px !important; padding: 0 4px; font-size: 11px;">
+                                        ${renderYearOptions(q.year)}
+                                    </select>
                                 </div>
                             </div>
                             <!-- Right side: Mark placed beside delete icon -->
