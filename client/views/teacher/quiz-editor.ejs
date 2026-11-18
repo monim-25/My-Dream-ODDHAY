@@ -549,7 +549,111 @@
                             </div>
 
                             <% if (q.questionType === 'MCQ' || !q.questionType) { %>
+                                <%
+                                    const mcqSubtype = q.mcqSubtype || 'standard';
+                                    const stmts = q.statements || [];
+                                    const stmt1 = stmts[0] || '';
+                                    const stmt2 = stmts[1] || '';
+                                    const stmt3 = stmts[2] || '';
+                                    const ctxId = q.contextId || '';
+                                    const ctxInst = q.contextInstruction || 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন';
+                                    const ctxText = q.context || '';
+                                %>
                                 <div class="space-y-3.5 sm:space-y-4">
+                                    <!-- MCQ Subtype Bar (Standard, Multiple Completion, Contextual) -->
+                                    <div class="flex flex-wrap items-center justify-between gap-2 p-1.5 rounded-xl bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800">
+                                        <div class="flex items-center gap-1">
+                                            <input type="hidden" id="mcqSubtype-<%= q._id %>" value="<%= mcqSubtype %>">
+                                            <input type="hidden" id="contextId-<%= q._id %>" value="<%= ctxId %>">
+                                            <button type="button" onclick="setQuizCardMcqSubtype('<%= q._id %>', 'standard')"
+                                                id="subtypeBtn-standard-<%= q._id %>"
+                                                class="px-2.5 py-1 rounded-lg text-[11px] font-semibold <%= mcqSubtype === 'standard' ? 'bg-white dark:bg-slate-800 text-primary shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white' %> transition-all cursor-pointer">
+                                                সাধারণ MCQ
+                                            </button>
+                                            <button type="button" onclick="setQuizCardMcqSubtype('<%= q._id %>', 'multiple_completion')"
+                                                id="subtypeBtn-multiple-<%= q._id %>"
+                                                class="px-2.5 py-1 rounded-lg text-[11px] font-semibold <%= mcqSubtype === 'multiple_completion' ? 'bg-white dark:bg-slate-800 text-primary shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white' %> transition-all cursor-pointer flex items-center gap-1">
+                                                <span>বহুপদী সমাপ্তিসূচক</span>
+                                                <span class="px-1 py-0.2 text-[9px] bg-primary/10 text-primary rounded font-bold">i, ii, iii</span>
+                                            </button>
+                                            <button type="button" onclick="setQuizCardMcqSubtype('<%= q._id %>', 'contextual')"
+                                                id="subtypeBtn-contextual-<%= q._id %>"
+                                                class="px-2.5 py-1 rounded-lg text-[11px] font-semibold <%= mcqSubtype === 'contextual' ? 'bg-white dark:bg-slate-800 text-primary shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white' %> transition-all cursor-pointer flex items-center gap-1">
+                                                <span>অভিন্ন তথ্যভিত্তিক</span>
+                                                <span class="px-1 py-0.2 text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded font-bold">উদ্দীপক</span>
+                                            </button>
+                                        </div>
+
+                                        <div class="flex items-center gap-1.5 ml-auto">
+                                            <!-- Auto-fill standard NCTB options button -->
+                                            <button type="button" onclick="autoFillQuizNctbOptions('<%= q._id %>')"
+                                                id="btnAutofillNctb-<%= q._id %>"
+                                                class="<%= mcqSubtype === 'multiple_completion' ? '' : 'hidden' %> px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-primary/10 hover:bg-primary/20 text-primary transition-all flex items-center gap-1 cursor-pointer"
+                                                title="ক: i ও ii, খ: i ও iii, গ: ii ও iii, ঘ: i, ii ও iii বসান">
+                                                <span class="material-symbols-rounded text-xs">auto_awesome</span>
+                                                <span>Auto NCTB অপশন</span>
+                                            </button>
+
+                                            <!-- Add linked question button -->
+                                            <button type="button" onclick="addLinkedQuizContextualQuestion('<%= q._id %>')"
+                                                id="btnAddLinkedQ-<%= q._id %>"
+                                                class="<%= mcqSubtype === 'contextual' ? '' : 'hidden' %> px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 transition-all flex items-center gap-1 cursor-pointer"
+                                                title="এই উদ্দীপকের অধীনে আরেকটি প্রশ্ন যোগ করুন">
+                                                <span class="material-symbols-rounded text-xs">add_link</span>
+                                                <span>+ একই উদ্দীপকে পরবর্তী প্রশ্ন</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Multiple Completion Statements Box (i, ii, iii) -->
+                                    <div id="multipleBox-<%= q._id %>" class="<%= mcqSubtype === 'multiple_completion' ? '' : 'hidden' %> space-y-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800">
+                                        <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                                            <span class="font-medium flex items-center gap-1 text-primary">
+                                                <span class="material-symbols-rounded text-sm">format_list_numbered</span>
+                                                <span>বিবৃতিসমূহ (Statements):</span>
+                                            </span>
+                                            <span class="text-[11px] text-slate-400">রোমান সংখ্যা (i, ii, iii)</span>
+                                        </div>
+                                        <div class="space-y-1.5">
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-6 h-8 rounded-lg bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">i.</span>
+                                                <input type="text" id="stmt1-<%= q._id %>" value="<%= stmt1 %>" placeholder="প্রথম তথ্য / বিবৃতি লিখুন..."
+                                                    class="form-input flex-1 h-8 text-xs">
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-6 h-8 rounded-lg bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">ii.</span>
+                                                <input type="text" id="stmt2-<%= q._id %>" value="<%= stmt2 %>" placeholder="দ্বিতীয় তথ্য / বিবৃতি লিখুন..."
+                                                    class="form-input flex-1 h-8 text-xs">
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span class="w-6 h-8 rounded-lg bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">iii.</span>
+                                                <input type="text" id="stmt3-<%= q._id %>" value="<%= stmt3 %>" placeholder="তৃতীয় তথ্য / বিবৃতি লিখুন..."
+                                                    class="form-input flex-1 h-8 text-xs">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Contextual Stimulus Box (উদ্দীপক / অনুচ্ছেদ) -->
+                                    <div id="contextualBox-<%= q._id %>" class="<%= mcqSubtype === 'contextual' ? '' : 'hidden' %> space-y-2 p-2.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40">
+                                        <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-amber-700 dark:text-amber-400">
+                                            <span class="font-medium flex items-center gap-1">
+                                                <span class="material-symbols-rounded text-sm">auto_stories</span>
+                                                <span>উদ্দীপক / অনুচ্ছেদ (Stem / Context):</span>
+                                            </span>
+                                            <div class="flex items-center gap-1.5 flex-1 sm:flex-initial justify-end">
+                                                <span class="text-[11px] text-amber-800 dark:text-amber-300 font-medium shrink-0">নির্দেশনা:</span>
+                                                <input type="text" id="contextInstruction-<%= q._id %>"
+                                                    class="h-7 px-2.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-300/80 dark:border-amber-700/60 text-[11px] text-amber-900 dark:text-amber-200 placeholder-amber-400/80 outline-none focus:border-amber-600 transition-all w-56 sm:w-64 max-w-full font-medium"
+                                                    placeholder="যেমন: উদ্দীপকটি পড়ে ২ ও ৩ নং প্রশ্নের উত্তর দিন"
+                                                    value="<%= ctxInst %>">
+                                            </div>
+                                        </div>
+                                        <textarea id="context-<%= q._id %>"
+                                            placeholder="উদ্দীপক / দৃশ্যকল্প এখানে লিখুন (যেমন: একটি গাড়ি স্থির অবস্থান থেকে যাত্রা শুরু করে...)"
+                                            class="form-input w-full p-2.5 resize-y min-h-[60px] text-xs text-slate-800 dark:text-slate-200"
+                                            rows="2"><%= ctxText %></textarea>
+                                    </div>
+
                                     <div>
                                         <label class="form-label">Question Text</label>
                                         <textarea id="qtext-<%= q._id %>" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="<%= isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...' %>"><%= cleanQText %></textarea>
@@ -1101,8 +1205,112 @@
                 const optC = (q.options && q.options[2] && !isDummyOptText(q.options[2])) ? q.options[2] : '';
                 const optD = (q.options && q.options[3] && !isDummyOptText(q.options[3])) ? q.options[3] : '';
                 const correct = parseInt(q.correctAnswer) || 0;
+
+                const mcqSubtype = q.mcqSubtype || 'standard';
+                const stmts = q.statements || [];
+                const stmt1 = stmts[0] || '';
+                const stmt2 = stmts[1] || '';
+                const stmt3 = stmts[2] || '';
+                const ctxId = q.contextId || '';
+                const ctxInst = q.contextInstruction || 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন';
+                const ctxText = q.context || '';
+
                 bodyHTML = `
                     <div class="space-y-3.5 sm:space-y-4">
+                        <!-- MCQ Subtype Bar (Standard, Multiple Completion, Contextual) -->
+                        <div class="flex flex-wrap items-center justify-between gap-2 p-1.5 rounded-xl bg-slate-100/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-800">
+                            <div class="flex items-center gap-1">
+                                <input type="hidden" id="mcqSubtype-${qid}" value="${mcqSubtype}">
+                                <input type="hidden" id="contextId-${qid}" value="${escapeEditorHtml(ctxId)}">
+                                <button type="button" onclick="setQuizCardMcqSubtype('${qid}', 'standard')"
+                                    id="subtypeBtn-standard-${qid}"
+                                    class="px-2.5 py-1 rounded-lg text-[11px] font-semibold ${mcqSubtype === 'standard' ? 'bg-white dark:bg-slate-800 text-primary shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'} transition-all cursor-pointer">
+                                    সাধারণ MCQ
+                                </button>
+                                <button type="button" onclick="setQuizCardMcqSubtype('${qid}', 'multiple_completion')"
+                                    id="subtypeBtn-multiple-${qid}"
+                                    class="px-2.5 py-1 rounded-lg text-[11px] font-semibold ${mcqSubtype === 'multiple_completion' ? 'bg-white dark:bg-slate-800 text-primary shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'} transition-all cursor-pointer flex items-center gap-1">
+                                    <span>বহুপদী সমাপ্তিসূচক</span>
+                                    <span class="px-1 py-0.2 text-[9px] bg-primary/10 text-primary rounded font-bold">i, ii, iii</span>
+                                </button>
+                                <button type="button" onclick="setQuizCardMcqSubtype('${qid}', 'contextual')"
+                                    id="subtypeBtn-contextual-${qid}"
+                                    class="px-2.5 py-1 rounded-lg text-[11px] font-semibold ${mcqSubtype === 'contextual' ? 'bg-white dark:bg-slate-800 text-primary shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'} transition-all cursor-pointer flex items-center gap-1">
+                                    <span>অভিন্ন তথ্যভিত্তিক</span>
+                                    <span class="px-1 py-0.2 text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded font-bold">উদ্দীপক</span>
+                                </button>
+                            </div>
+
+                            <div class="flex items-center gap-1.5 ml-auto">
+                                <!-- Auto-fill standard NCTB options button -->
+                                <button type="button" onclick="autoFillQuizNctbOptions('${qid}')"
+                                    id="btnAutofillNctb-${qid}"
+                                    class="${mcqSubtype === 'multiple_completion' ? '' : 'hidden'} px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-primary/10 hover:bg-primary/20 text-primary transition-all flex items-center gap-1 cursor-pointer"
+                                    title="ক: i ও ii, খ: i ও iii, গ: ii ও iii, ঘ: i, ii ও iii বসান">
+                                    <span class="material-symbols-rounded text-xs">auto_awesome</span>
+                                    <span>Auto NCTB অপশন</span>
+                                </button>
+
+                                <!-- Add linked question button -->
+                                <button type="button" onclick="addLinkedQuizContextualQuestion('${qid}')"
+                                    id="btnAddLinkedQ-${qid}"
+                                    class="${mcqSubtype === 'contextual' ? '' : 'hidden'} px-2 py-1 rounded-lg text-[10.5px] font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 transition-all flex items-center gap-1 cursor-pointer"
+                                    title="এই উদ্দীপকের অধীনে আরেকটি প্রশ্ন যোগ করুন">
+                                    <span class="material-symbols-rounded text-xs">add_link</span>
+                                    <span>+ একই উদ্দীপকে পরবর্তী প্রশ্ন</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Multiple Completion Statements Box (i, ii, iii) -->
+                        <div id="multipleBox-${qid}" class="${mcqSubtype === 'multiple_completion' ? '' : 'hidden'} space-y-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800">
+                            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                                <span class="font-medium flex items-center gap-1 text-primary">
+                                    <span class="material-symbols-rounded text-sm">format_list_numbered</span>
+                                    <span>বিবৃতিসমূহ (Statements):</span>
+                                </span>
+                                <span class="text-[11px] text-slate-400">রোমান সংখ্যা (i, ii, iii)</span>
+                            </div>
+                            <div class="space-y-1.5">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-6 h-8 rounded-lg bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">i.</span>
+                                    <input type="text" id="stmt1-${qid}" value="${escapeEditorHtml(stmt1)}" placeholder="প্রথম তথ্য / বিবৃতি লিখুন..."
+                                        class="form-input flex-1 h-8 text-xs">
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="w-6 h-8 rounded-lg bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">ii.</span>
+                                    <input type="text" id="stmt2-${qid}" value="${escapeEditorHtml(stmt2)}" placeholder="দ্বিতীয় তথ্য / বিবৃতি লিখুন..."
+                                        class="form-input flex-1 h-8 text-xs">
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="w-6 h-8 rounded-lg bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0">iii.</span>
+                                    <input type="text" id="stmt3-${qid}" value="${escapeEditorHtml(stmt3)}" placeholder="তৃতীয় তথ্য / বিবৃতি লিখুন..."
+                                        class="form-input flex-1 h-8 text-xs">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Contextual Stimulus Box (উদ্দীপক / অনুচ্ছেদ) -->
+                        <div id="contextualBox-${qid}" class="${mcqSubtype === 'contextual' ? '' : 'hidden'} space-y-2 p-2.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-800/40">
+                            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-amber-700 dark:text-amber-400">
+                                <span class="font-medium flex items-center gap-1">
+                                    <span class="material-symbols-rounded text-sm">auto_stories</span>
+                                    <span>উদ্দীপক / অনুচ্ছেদ (Stem / Context):</span>
+                                </span>
+                                <div class="flex items-center gap-1.5 flex-1 sm:flex-initial justify-end">
+                                    <span class="text-[11px] text-amber-800 dark:text-amber-300 font-medium shrink-0">নির্দেশনা:</span>
+                                    <input type="text" id="contextInstruction-${qid}"
+                                        class="h-7 px-2.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-300/80 dark:border-amber-700/60 text-[11px] text-amber-900 dark:text-amber-200 placeholder-amber-400/80 outline-none focus:border-amber-600 transition-all w-56 sm:w-64 max-w-full font-medium"
+                                        placeholder="যেমন: উদ্দীপকটি পড়ে ২ ও ৩ নং প্রশ্নের উত্তর দিন"
+                                        value="${escapeEditorHtml(ctxInst)}">
+                                </div>
+                            </div>
+                            <textarea id="context-${qid}"
+                                placeholder="উদ্দীপক / দৃশ্যকল্প এখানে লিখুন (যেমন: একটি গাড়ি স্থির অবস্থান থেকে যাত্রা শুরু করে...)"
+                                class="form-input w-full p-2.5 resize-y min-h-[60px] text-xs text-slate-800 dark:text-slate-200"
+                                rows="2">${escapeEditorHtml(ctxText)}</textarea>
+                        </div>
+
                         <div>
                             <label class="form-label">Question Text</label>
                             <textarea id="qtext-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...'}">${escapeEditorHtml(cleanQText)}</textarea>
@@ -1673,6 +1881,27 @@
                 const optDEl  = document.getElementById(`optD-${qid}`);
                 const correctEl = document.getElementById(`correct-${qid}`);
 
+                const subtypeEl = document.getElementById(`mcqSubtype-${qid}`);
+                data.mcqSubtype = subtypeEl ? subtypeEl.value : 'standard';
+
+                const stmt1El = document.getElementById(`stmt1-${qid}`);
+                const stmt2El = document.getElementById(`stmt2-${qid}`);
+                const stmt3El = document.getElementById(`stmt3-${qid}`);
+                data.statements = [
+                    stmt1El ? stmt1El.value.trim() : '',
+                    stmt2El ? stmt2El.value.trim() : '',
+                    stmt3El ? stmt3El.value.trim() : ''
+                ].filter(Boolean);
+
+                const ctxIdEl = document.getElementById(`contextId-${qid}`);
+                data.contextId = ctxIdEl ? ctxIdEl.value.trim() : '';
+
+                const ctxInstEl = document.getElementById(`contextInstruction-${qid}`);
+                data.contextInstruction = ctxInstEl ? ctxInstEl.value.trim() : '';
+
+                const ctxEl = document.getElementById(`context-${qid}`);
+                data.context = ctxEl ? ctxEl.value.trim() : '';
+
                 data.questionText = qtextEl ? qtextEl.value.trim() : '';
                 data.options = [
                     optAEl ? optAEl.value.trim() : '',
@@ -1721,6 +1950,137 @@
             }
             return data;
         }
+
+        function setQuizCardMcqSubtype(qid, subtype) {
+            const hiddenInput = document.getElementById(`mcqSubtype-${qid}`);
+            if (hiddenInput) hiddenInput.value = subtype;
+
+            const btnStd = document.getElementById(`subtypeBtn-standard-${qid}`);
+            const btnMulti = document.getElementById(`subtypeBtn-multiple-${qid}`);
+            const btnCtx = document.getElementById(`subtypeBtn-contextual-${qid}`);
+
+            const inactiveCls = 'px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer flex items-center gap-1';
+            const activeCls = 'px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white dark:bg-slate-800 text-primary shadow-xs transition-all cursor-pointer flex items-center gap-1';
+
+            if (btnStd) btnStd.className = (subtype === 'standard' ? activeCls : inactiveCls);
+            if (btnMulti) btnMulti.className = (subtype === 'multiple_completion' ? activeCls : inactiveCls);
+            if (btnCtx) btnCtx.className = (subtype === 'contextual' ? activeCls : inactiveCls);
+
+            const multiBox = document.getElementById(`multipleBox-${qid}`);
+            const ctxBox = document.getElementById(`contextualBox-${qid}`);
+            const autoFillBtn = document.getElementById(`btnAutofillNctb-${qid}`);
+            const addLinkedBtn = document.getElementById(`btnAddLinkedQ-${qid}`);
+            const qtextEl = document.getElementById(`qtext-${qid}`);
+
+            if (subtype === 'multiple_completion') {
+                if (multiBox) multiBox.classList.remove('hidden');
+                if (ctxBox) ctxBox.classList.add('hidden');
+                if (autoFillBtn) autoFillBtn.classList.remove('hidden');
+                if (addLinkedBtn) addLinkedBtn.classList.add('hidden');
+                if (qtextEl && !qtextEl.value.trim()) {
+                    qtextEl.value = 'নিচের তথ্যের আলোকে কোনটি সঠিক?';
+                }
+            } else if (subtype === 'contextual') {
+                if (multiBox) multiBox.classList.add('hidden');
+                if (ctxBox) ctxBox.classList.remove('hidden');
+                if (autoFillBtn) autoFillBtn.classList.add('hidden');
+                if (addLinkedBtn) addLinkedBtn.classList.remove('hidden');
+                const ctxIdEl = document.getElementById(`contextId-${qid}`);
+                if (ctxIdEl && !ctxIdEl.value) {
+                    ctxIdEl.value = 'ctx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                }
+            } else {
+                if (multiBox) multiBox.classList.add('hidden');
+                if (ctxBox) ctxBox.classList.add('hidden');
+                if (autoFillBtn) autoFillBtn.classList.add('hidden');
+                if (addLinkedBtn) addLinkedBtn.classList.add('hidden');
+            }
+            queueAutoSave(qid, 'MCQ');
+        }
+        window.setQuizCardMcqSubtype = setQuizCardMcqSubtype;
+
+        function autoFillQuizNctbOptions(qid) {
+            const isBanglaEl = document.getElementById(`isBangla-${qid}`);
+            const isBangla = isBanglaEl ? (isBanglaEl.value === 'true') : true;
+
+            const optA = document.getElementById(`optA-${qid}`);
+            const optB = document.getElementById(`optB-${qid}`);
+            const optC = document.getElementById(`optC-${qid}`);
+            const optD = document.getElementById(`optD-${qid}`);
+
+            if (isBangla) {
+                if (optA) optA.value = 'i ও ii';
+                if (optB) optB.value = 'i ও iii';
+                if (optC) optC.value = 'ii ও iii';
+                if (optD) optD.value = 'i, ii ও iii';
+            } else {
+                if (optA) optA.value = 'i and ii';
+                if (optB) optB.value = 'i and iii';
+                if (optC) optC.value = 'ii and iii';
+                if (optD) optD.value = 'i, ii and iii';
+            }
+
+            const qtext = document.getElementById(`qtext-${qid}`);
+            if (qtext && !qtext.value.trim()) {
+                qtext.value = isBangla ? 'নিচের তথ্যের আলোকে কোনটি সঠিক?' : 'Which of the following is correct?';
+            }
+
+            queueAutoSave(qid, 'MCQ');
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'NCTB অপশন যুক্ত হয়েছে!',
+                    text: 'ক: i ও ii, খ: i ও iii, গ: ii ও iii, ঘ: i, ii ও iii',
+                    timer: 1500,
+                    showConfirmButton: false,
+                    toast: true,
+                    position: 'top-end'
+                });
+            }
+        }
+        window.autoFillQuizNctbOptions = autoFillQuizNctbOptions;
+
+        async function addLinkedQuizContextualQuestion(qid) {
+            const ctxIdEl = document.getElementById(`contextId-${qid}`);
+            const ctxEl = document.getElementById(`context-${qid}`);
+            const ctxInstEl = document.getElementById(`contextInstruction-${qid}`);
+
+            let contextId = ctxIdEl ? ctxIdEl.value.trim() : '';
+            if (!contextId) {
+                contextId = 'ctx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                if (ctxIdEl) ctxIdEl.value = contextId;
+            }
+            const contextText = ctxEl ? ctxEl.value.trim() : '';
+            const contextInst = ctxInstEl ? ctxInstEl.value.trim() : 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন';
+
+            // Save current card first
+            await saveCard(qid, 'MCQ', false);
+
+            try {
+                const response = await fetch(`/teacher/quiz/${quizId}/add-question`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        questionType: 'MCQ',
+                        mcqSubtype: 'contextual',
+                        contextId: contextId,
+                        context: contextText,
+                        contextInstruction: contextInst,
+                        options: ['', '', '', ''],
+                        isSlot: true
+                    })
+                });
+                const res = await response.json();
+                if (res && res.success) {
+                    window.location.reload();
+                } else {
+                    Swal.fire('Error', res.error || 'Failed to add linked question', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', 'Failed to add linked question', 'error');
+            }
+        }
+        window.addLinkedQuizContextualQuestion = addLinkedQuizContextualQuestion;
 
         function applyQuestionLanguage(qid, isBangla, autoSave = true) {
             const q = questionsData.find(x => x._id === qid);
@@ -1999,6 +2359,23 @@
                         document.getElementById(`optD-${qid}`).value.trim()
                     ];
                     data.correctAnswer = parseInt(document.getElementById(`correct-${qid}`).value);
+
+                    const subtypeEl = document.getElementById(`mcqSubtype-${qid}`);
+                    data.mcqSubtype = subtypeEl ? subtypeEl.value : 'standard';
+                    const stmt1El = document.getElementById(`stmt1-${qid}`);
+                    const stmt2El = document.getElementById(`stmt2-${qid}`);
+                    const stmt3El = document.getElementById(`stmt3-${qid}`);
+                    data.statements = [
+                        stmt1El ? stmt1El.value.trim() : '',
+                        stmt2El ? stmt2El.value.trim() : '',
+                        stmt3El ? stmt3El.value.trim() : ''
+                    ].filter(Boolean);
+                    const ctxIdEl = document.getElementById(`contextId-${qid}`);
+                    data.contextId = ctxIdEl ? ctxIdEl.value.trim() : '';
+                    const ctxInstEl = document.getElementById(`contextInstruction-${qid}`);
+                    data.contextInstruction = ctxInstEl ? ctxInstEl.value.trim() : '';
+                    const ctxEl = document.getElementById(`context-${qid}`);
+                    data.context = ctxEl ? ctxEl.value.trim() : '';
 
                     if (!data.questionText) {
                         document.getElementById(`qtext-${qid}`).focus();
@@ -2294,10 +2671,48 @@
                     options.push('');
                 }
 
+                let mcqSubtype = 'standard';
+                let statements = [];
+                let context = '';
+                let contextInstruction = 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন';
+
+                // Detect Roman numeral statements
+                const stmtMatches = [];
+                const nonStmtLines = [];
+                qText.split('\n').forEach(ql => {
+                    const m = ql.match(/^\s*(?:(?:i{1,3}|I{1,3}|[ⅰ-ⅲ])[\.\)]|\((?:i{1,3}|I{1,3}|[ⅰ-ⅲ])\))\s*(.+)$/);
+                    if (m) {
+                        stmtMatches.push(m[1].trim());
+                    } else {
+                        nonStmtLines.push(ql);
+                    }
+                });
+
+                if (stmtMatches.length >= 2) {
+                    mcqSubtype = 'multiple_completion';
+                    statements = stmtMatches;
+                    qText = nonStmtLines.join('\n').trim() || 'নিচের তথ্যের আলোকে কোনটি সঠিক?';
+                }
+
+                const instMatch = block.match(/(?:(?:নিচের\s+)?(?:উদ্দীপকটি|অনুচ্ছেদটি)\s+পড়ে[^\n]+প্রশ্নের?\s+উত্তর\s+(?:দাও|দিন)[\:\-\–]?)/im);
+                if (instMatch) {
+                    contextInstruction = instMatch[0].replace(/[\:\-\–]+$/, '').trim();
+                }
+
+                const ctxMatch = block.match(/(?:\[(?:উদ্দীপক|অনুচ্ছেদ|Stem|Context)\]|^(?:উদ্দীপক|অনুচ্ছেদ|Stem|Context)\s*[:\-\–])\s*([\s\S]*?)(?=(?:[\d০-৯]+[\.\)]|Q\d|প্রশ্ন|\(?ক[\)\.]))/im);
+                if (ctxMatch) {
+                    context = ctxMatch[1].trim();
+                    mcqSubtype = 'contextual';
+                }
+
                 const isValid = (qText.trim().length > 0 && options.filter(o => o.trim().length > 0).length >= 3 && correctIndex >= 0);
 
                 parsed.push({
                     qText: qText.trim(),
+                    mcqSubtype,
+                    statements,
+                    context,
+                    contextInstruction,
                     options: options.slice(0, 4),
                     correctIndex,
                     explanation: explanation.trim(),
@@ -2343,6 +2758,10 @@
                             isBangla: q.isBangla,
                             language: q.isBangla ? 'bn' : 'en',
                             questionType: 'MCQ',
+                            mcqSubtype: q.mcqSubtype || 'standard',
+                            statements: q.statements || [],
+                            context: q.context || '',
+                            contextInstruction: q.contextInstruction || '',
                             marks: 1
                         };
                         try {

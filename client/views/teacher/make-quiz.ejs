@@ -1733,10 +1733,48 @@
                     options.push('');
                 }
 
+                let mcqSubtype = 'standard';
+                let statements = [];
+                let context = '';
+                let contextInstruction = 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন';
+
+                // Detect Roman numeral statements
+                const stmtMatches = [];
+                const nonStmtLines = [];
+                qText.split('\n').forEach(ql => {
+                    const m = ql.match(/^\s*(?:(?:i{1,3}|I{1,3}|[ⅰ-ⅲ])[\.\)]|\((?:i{1,3}|I{1,3}|[ⅰ-ⅲ])\))\s*(.+)$/);
+                    if (m) {
+                        stmtMatches.push(m[1].trim());
+                    } else {
+                        nonStmtLines.push(ql);
+                    }
+                });
+
+                if (stmtMatches.length >= 2) {
+                    mcqSubtype = 'multiple_completion';
+                    statements = stmtMatches;
+                    qText = nonStmtLines.join('\n').trim() || 'নিচের তথ্যের আলোকে কোনটি সঠিক?';
+                }
+
+                const instMatch = block.match(/(?:(?:নিচের\s+)?(?:উদ্দীপকটি|অনুচ্ছেদটি)\s+পড়ে[^\n]+প্রশ্নের?\s+উত্তর\s+(?:দাও|দিন)[\:\-\–]?)/im);
+                if (instMatch) {
+                    contextInstruction = instMatch[0].replace(/[\:\-\–]+$/, '').trim();
+                }
+
+                const ctxMatch = block.match(/(?:\[(?:উদ্দীপক|অনুচ্ছেদ|Stem|Context)\]|^(?:উদ্দীপক|অনুচ্ছেদ|Stem|Context)\s*[:\-\–])\s*([\s\S]*?)(?=(?:[\d০-৯]+[\.\)]|Q\d|প্রশ্ন|\(?ক[\)\.]))/im);
+                if (ctxMatch) {
+                    context = ctxMatch[1].trim();
+                    mcqSubtype = 'contextual';
+                }
+
                 const isValid = (qText.trim().length > 0 && options.filter(o => o.trim().length > 0).length >= 3 && correctIndex >= 0);
 
                 parsed.push({
                     qText: qText.trim(),
+                    mcqSubtype,
+                    statements,
+                    context,
+                    contextInstruction,
                     options: options.slice(0, 4),
                     correctIndex,
                     explanation: explanation.trim(),

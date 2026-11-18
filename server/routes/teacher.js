@@ -3552,6 +3552,10 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                         correctAnswerIndex: corrIndex,
                         explanation: bq.explanation || '',
                         questionType: bq.questionType || 'MCQ',
+                        mcqSubtype: bq.mcqSubtype || 'standard',
+                        statements: bq.statements || [],
+                        contextId: bq.contextId || '',
+                        contextInstruction: bq.contextInstruction || '',
                         chapter: bq.chapter || '',
                         topic: bq.topic || '',
                         subTopic: bq.subTopic || '',
@@ -3868,6 +3872,10 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
                 subTopic: defaultQuizSubTop,
                 board: (req.body.board || '').trim(),
                 year: (req.body.year || '').trim(),
+                mcqSubtype: req.body.mcqSubtype || 'standard',
+                statements: Array.isArray(req.body.statements) ? req.body.statements.filter(Boolean) : [],
+                contextId: (req.body.contextId || '').trim(),
+                contextInstruction: (req.body.contextInstruction || '').trim(),
                 context: req.body.context || '',
                 q1: req.body.q1 || '',
                 q2: req.body.q2 || '',
@@ -3907,7 +3915,7 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
             return res.status(403).json({ success: false, error: 'Access denied' });
         }
 
-        let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation, answer, context, q1, q2, q3, q4, a1, a2, a3, a4, s1, s2, s3, s4, marks, board, year, questionType, topic, chapter, subTopic } = req.body;
+        let { questionText, optionA, optionB, optionC, optionD, options, correctAnswerIndex, correctAnswer, explanation, answer, context, contextInstruction, mcqSubtype, statements, contextId, q1, q2, q3, q4, a1, a2, a3, a4, s1, s2, s3, s4, marks, board, year, questionType, topic, chapter, subTopic } = req.body;
 
         if (!options || !Array.isArray(options)) {
             options = [optionA, optionB, optionC, optionD].filter(o => o !== undefined && o !== null);
@@ -3961,6 +3969,12 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
             if (answer !== undefined) updateData['questions.$.answer'] = answer;
         }
         if (context !== undefined) updateData['questions.$.context'] = context;
+        if (contextInstruction !== undefined) updateData['questions.$.contextInstruction'] = contextInstruction;
+        if (mcqSubtype !== undefined) updateData['questions.$.mcqSubtype'] = mcqSubtype;
+        if (statements !== undefined) {
+            updateData['questions.$.statements'] = Array.isArray(statements) ? statements.filter(Boolean) : [statements].filter(Boolean);
+        }
+        if (contextId !== undefined) updateData['questions.$.contextId'] = contextId;
         if (q1 !== undefined) updateData['questions.$.q1'] = q1;
         if (q2 !== undefined) updateData['questions.$.q2'] = q2;
         if (q3 !== undefined) updateData['questions.$.q3'] = q3;
