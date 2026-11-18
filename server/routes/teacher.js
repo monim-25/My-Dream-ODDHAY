@@ -3587,8 +3587,36 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             }
             // Only generate from existing questions matching selected items - no empty filler slots!
         } else if (req.body.mode === 'bulk') {
-            // Bulk Studio mode: creates exam without filler slots, user will paste questions in editor
-            quizData.questions = [];
+            // Bulk Studio mode: parse questions if pasted in make-quiz, otherwise creates exam ready for bulk editor
+            let parsedBulk = [];
+            if (req.body.bulkQuestionsPayload) {
+                try { parsedBulk = JSON.parse(req.body.bulkQuestionsPayload); } catch (e) { parsedBulk = []; }
+            }
+            if (Array.isArray(parsedBulk) && parsedBulk.length > 0) {
+                quizData.questions = parsedBulk.map(q => {
+                    const isB = Boolean(q.isBangla || /[\u0980-\u09FF]/.test(q.qText || ''));
+                    return {
+                        questionText: (q.qText || '').trim(),
+                        options: (q.options && q.options.length) ? q.options : ['', '', '', ''],
+                        correctAnswer: q.correctIndex >= 0 ? q.correctIndex : 0,
+                        explanation: (q.explanation || '').trim(),
+                        questionType: 'MCQ',
+                        mcqSubtype: q.mcqSubtype || 'standard',
+                        statements: Array.isArray(q.statements) ? q.statements.filter(Boolean) : [],
+                        context: (q.context || '').trim(),
+                        contextInstruction: (q.contextInstruction || '').trim(),
+                        contextId: (q.contextId || '').trim(),
+                        isBangla: isB,
+                        language: isB ? 'bn' : 'en',
+                        chapter: chapter || '',
+                        topic: topic || '',
+                        subTopic: subTopic || '',
+                        marks: 1
+                    };
+                });
+            } else {
+                quizData.questions = [];
+            }
         } else {
             // Manual Strategy: Create empty questions based on counts
             const mcqCount = parseInt(req.body.mcqCount) || 0;
@@ -3699,6 +3727,9 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         }
 
         if (req.body.mode === 'bulk') {
+            if (quizData.questions && quizData.questions.length > 0) {
+                return res.redirect(`/teacher/quiz/${quiz._id}`);
+            }
             return res.redirect(`/teacher/quiz/${quiz._id}?openBulk=true`);
         } else if (req.body.activeFlow === 'courses' && courseId) {
             res.redirect(`/teacher/course/${courseId}/quiz/${quiz._id}`);

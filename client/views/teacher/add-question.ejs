@@ -3304,45 +3304,137 @@
             if (!rawText || !rawText.trim()) return [];
 
             const lines = rawText.split(/\r?\n/);
+
+            const qStartRegex = /^\s*(?:[\d০-৯]+[\.\)]|\([\d০-৯]+\)|Q(?:uestion)?\s*[\d০-৯]+[:\.\)]|প্রশ্ন\s*[\d০-৯]+[:\.\)])/i;
+            const stimulusHeaderRegex = /^\s*(?:\[(?:উদ্দীপক|অনুচ্ছেদ|Stem|Context|Passage)\]|(?:উদ্দীপক|অনুচ্ছেদ|দৃশ্যকল্প|Stem|Context)\s*[:\-\–]|(?:নিচের\s+)?(?:উদ্দীপকটি|অনুচ্ছেদটি|দৃশ্যকল্পটি)\s+পড়ে)/i;
+
+            const bnToEn = s => String(s).replace(/[০-৯]/g, d => '০১২৩৪৫৬৭৮৯'.indexOf(d));
+
+            function extractRangeFromInstruction(text) {
+                const m = text.match(/([\d০-৯]+)\s*(?:[ও\-,–]|এবং|হতে|থেকে|to)\s*([\d০-৯]+)\s*নং/i);
+                if (m) {
+                    const start = parseInt(bnToEn(m[1]));
+                    const end = parseInt(bnToEn(m[2]));
+                    return { start, end };
+                }
+                return null;
+            }
+
+            // Step 1: Chunk into question blocks with associated preambles (stimuli)
             const blocks = [];
             let currentBlock = [];
-
-            // Pattern detecting start of question: e.g. 1. or ১. or Q1: or (1)
-            const qStartRegex = /^\s*(?:[\d০-৯]+[\.\)]|\([\d০-৯]+\)|Q(?:uestion)?\s*[\d০-৯]+[:\.\)]|প্রশ্ন\s*[\d০-৯]+[:\.\)])/i;
+            let pendingPreambleLines = [];
+            let inPreamble = false;
 
             lines.forEach(line => {
                 const trimmed = line.trim();
+                if (!trimmed) return;
+
+                if (stimulusHeaderRegex.test(trimmed)) {
+                    if (currentBlock.length > 0) {
+                        blocks.push({
+                            text: currentBlock.join('\n'),
+                            preamble: pendingPreambleLines.join('\n')
+                        });
+                        currentBlock = [];
+                        pendingPreambleLines = [];
+                    }
+                    inPreamble = true;
+                    pendingPreambleLines.push(line);
+                    return;
+                }
+
+                if (inPreamble) {
+                    if (qStartRegex.test(trimmed)) {
+                        inPreamble = false;
+                        currentBlock.push(line);
+                    } else {
+                        pendingPreambleLines.push(line);
+                    }
+                    return;
+                }
+
                 if (qStartRegex.test(trimmed)) {
                     if (currentBlock.length > 0) {
-                        blocks.push(currentBlock.join('\n'));
+                        blocks.push({
+                            text: currentBlock.join('\n'),
+                            preamble: pendingPreambleLines.join('\n')
+                        });
                         currentBlock = [];
+                        pendingPreambleLines = [];
                     }
-                }
-                if (trimmed.length > 0 || currentBlock.length > 0) {
                     currentBlock.push(line);
+                    return;
+                }
+
+                if (currentBlock.length > 0) {
+                    currentBlock.push(line);
+                } else {
+                    pendingPreambleLines.push(line);
                 }
             });
+
             if (currentBlock.length > 0) {
-                blocks.push(currentBlock.join('\n'));
+                blocks.push({
+                    text: currentBlock.join('\n'),
+                    preamble: pendingPreambleLines.join('\n')
+                });
             }
 
-            const parsed = [];
+            if (blocks.length === 0 && pendingPreambleLines.length > 0) {
+                blocks.push({ text: pendingPreambleLines.join('\n'), preamble: '' });
+            }
 
-            blocks.forEach((block, idx) => {
+            // Step 2: Parse each block into a structured question object
+            const parsed = [];
+            let activeSharedContext = null;
+
+            blocks.forEach((blockObj, idx) => {
+                const block = blockObj.text;
+                const preamble = blockObj.preamble || '';
                 const bLines = block.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
                 if (bLines.length === 0) return;
+
+                // Check preamble stimulus
+                if (preamble && (stimulusHeaderRegex.test(preamble) || /উদ্দীপক|অনুচ্ছেদ|Stem|Context/i.test(preamble))) {
+                    let pInst = 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন';
+                    const instMatch = preamble.match(/(?:(?:নিচের\s+)?(?:উদ্দীপকটি|অনুচ্ছেদটি|দৃশ্যকল্পটি)\s+পড়ে[^\n]+প্রশ্নের?\s+উত্তর\s+(?:দাও|দিন)[\:\-\–]?)/im);
+                    if (instMatch) {
+                        pInst = instMatch[0].replace(/[\:\-\–]+$/, '').trim();
+                    }
+                    let cleanCtx = preamble
+                        .replace(/\[(?:উদ্দীপক|অনুচ্ছেদ|Stem|Context|Passage)\]/gi, '')
+                        .replace(/^(?:উদ্দীপক|অনুচ্ছেদ|দৃশ্যকল্প|Stem|Context)\s*[:\-\–]/gim, '')
+                        .replace(/(?:(?:নিচের\s+)?(?:উদ্দীপকটি|অনুচ্ছেদটি|দৃশ্যকল্পটি)\s+পড়ে[^\n]+প্রশ্নের?\s+উত্তর\s+(?:দাও|দিন)[\:\-\–]?)/gim, '')
+                        .trim();
+
+                    const range = extractRangeFromInstruction(pInst);
+                    activeSharedContext = {
+                        contextId: 'ctx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                        context: cleanCtx || preamble.trim(),
+                        contextInstruction: pInst,
+                        range: range,
+                        remainingCount: range ? (range.end - range.start + 1) : 2
+                    };
+                }
 
                 let qText = '';
                 let options = [];
                 let correctIndex = -1;
                 let explanation = '';
-                let isBangla = /[\u0980-\u09FF]/.test(block);
+                let isBangla = /[\u0980-\u09FF]/.test(block + ' ' + preamble);
 
-                // Strip leading question markers
+                // Extract Question Number
+                let qNum = null;
+                const qNumMatch = bLines[0].match(/^\s*(?:([\d০-৯]+)[\.\)]|\(([\d০-৯]+)\)|Q(?:uestion)?\s*([\d০-৯]+)|প্রশ্ন\s*([\d০-৯]+))/i);
+                if (qNumMatch) {
+                    const rawNum = qNumMatch[1] || qNumMatch[2] || qNumMatch[3] || qNumMatch[4];
+                    qNum = parseInt(bnToEn(rawNum));
+                }
+
+                // Clean first line
                 let firstLine = bLines[0]
-                    .replace(/^[\s\d০-৯\.\)\(\:\-\–]+/, '')
-                    .replace(/^Q(?:uestion)?\s*[\d০-৯]*[:\.\)\-]?\s*/i, '')
-                    .replace(/^প্রশ্ন\s*[\d০-৯]*[:\.\)\-]?\s*/i, '')
+                    .replace(/^\s*(?:[\d০-৯]+[\.\)]|\([\d০-৯]+\)|Q(?:uestion)?\s*[\d০-৯]*[:\.\)\-]?|প্রশ্ন\s*[\d০-৯]*[:\.\)\-]?)\s*/i, '')
                     .trim();
                 qText = firstLine;
 
@@ -3352,7 +3444,7 @@
                 for (let i = 1; i < bLines.length; i++) {
                     const line = bLines[i];
 
-                    // Answer Detection (support Bengali and English)
+                    // Answer Detection
                     const ansMatch = line.match(/^(?:উত্তরঃ|উত্তর|উঃ|উ:|Ans(?:wer)?|Correct(?:\s*Answer)?|Key|সঠিক(?:\s*উত্তর)?)\s*[:\-\–\.\ঃ]?\s*(.+)$/i);
                     if (ansMatch) {
                         const ansRaw = ansMatch[1].trim();
@@ -3381,7 +3473,7 @@
                         continue;
                     }
 
-                    // Check multiple options on single line (e.g. (ক) ... (খ) ... (গ) ... (ঘ) ...)
+                    // Check multiple options on single line
                     const multiParts = line.split(/(?=(?:^|[\s\t]+)(?:\(?([ক-ঘa-dA-D1-4])[\)\.\:]\s*))/).filter(Boolean);
                     let hasMulti = false;
                     let tempOpts = [];
@@ -3411,7 +3503,6 @@
                     }
                 }
 
-                // Fill up to 4 options with empty strings if less than 4
                 while (options.length < 4) {
                     options.push('');
                 }
@@ -3419,15 +3510,24 @@
                 let mcqSubtype = 'standard';
                 let statements = [];
                 let context = '';
+                let contextInstruction = 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন';
+                let contextId = '';
 
-                // Detect Roman numeral statements (i., ii., iii. or ⅰ., ⅱ., ⅲ.)
+                // 1. Detect Roman numeral statements (i., ii., iii. or ⅰ., ⅱ., ⅲ. or I., II., III.)
                 const stmtMatches = [];
                 const nonStmtLines = [];
+                const romanSplitRegex = /(?=(?:^|[\s\t]+)(?:(?:i{1,3}|I{1,3}|[ⅰ-ⅲ])[\.\)]|\((?:i{1,3}|I{1,3}|[ⅰ-ⅲ])\))\s*)/i;
                 qText.split('\n').forEach(ql => {
-                    const m = ql.match(/^\s*(?:(?:i{1,3}|I{1,3}|[ⅰ-ⅲ])[\.\)]|\((?:i{1,3}|I{1,3}|[ⅰ-ⅲ])\))\s*(.+)$/);
-                    if (m) {
-                        stmtMatches.push(m[1].trim());
-                    } else {
+                    const parts = ql.split(romanSplitRegex).map(p => p.trim()).filter(Boolean);
+                    let lineHadStmt = false;
+                    parts.forEach(p => {
+                        const m = p.match(/^(?:(?:i{1,3}|I{1,3}|[ⅰ-ⅲ])[\.\)]|\((?:i{1,3}|I{1,3}|[ⅰ-ⅲ])\))\s*(.+)$/i);
+                        if (m) {
+                            stmtMatches.push(m[1].trim());
+                            lineHadStmt = true;
+                        }
+                    });
+                    if (!lineHadStmt) {
                         nonStmtLines.push(ql);
                     }
                 });
@@ -3438,17 +3538,33 @@
                     qText = nonStmtLines.join('\n').trim() || 'নিচের তথ্যের আলোকে কোনটি সঠিক?';
                 }
 
-                // Detect Stimulus/Context if marked with [উদ্দীপক] or উদ্দীপক:
-                let contextInstruction = 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন';
-                const instMatch = block.match(/(?:(?:নিচের\s+)?(?:উদ্দীপকটি|অনুচ্ছেদটি)\s+পড়ে[^\n]+প্রশ্নের?\s+উত্তর\s+(?:দাও|দিন)[\:\-\–]?)/im);
-                if (instMatch) {
-                    contextInstruction = instMatch[0].replace(/[\:\-\–]+$/, '').trim();
-                }
-
-                const ctxMatch = block.match(/(?:\[(?:উদ্দীপক|অনুচ্ছেদ|Stem|Context)\]|^(?:উদ্দীপক|অনুচ্ছেদ|Stem|Context)\s*[:\-\–])\s*([\s\S]*?)(?=(?:[\d০-৯]+[\.\)]|Q\d|প্রশ্ন|\(?ক[\)\.]))/im);
+                // 2. Stimulus/Context Detection
+                const ctxMatch = block.match(/(?:\[(?:উদ্দীপক|অনুচ্ছেদ|Stem|Context|Passage)\]|^(?:উদ্দীপক|অনুচ্ছেদ|দৃশ্যকল্প|Stem|Context)\s*[:\-\–])\s*([\s\S]*?)(?=(?:[\d০-৯]+[\.\)]|Q\d|প্রশ্ন|\(?ক[\)\.]))/im);
                 if (ctxMatch) {
                     context = ctxMatch[1].trim();
                     mcqSubtype = 'contextual';
+                    const instMatch = block.match(/(?:(?:নিচের\s+)?(?:উদ্দীপকটি|অনুচ্ছেদটি|দৃশ্যকল্পটি)\s+পড়ে[^\n]+প্রশ্নের?\s+উত্তর\s+(?:দাও|দিন)[\:\-\–]?)/im);
+                    if (instMatch) {
+                        contextInstruction = instMatch[0].replace(/[\:\-\–]+$/, '').trim();
+                    }
+                    contextId = 'ctx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                } else if (activeSharedContext) {
+                    let applies = false;
+                    if (activeSharedContext.range && qNum !== null) {
+                        applies = (qNum >= activeSharedContext.range.start && qNum <= activeSharedContext.range.end);
+                    } else if (activeSharedContext.remainingCount > 0) {
+                        applies = true;
+                        activeSharedContext.remainingCount--;
+                    }
+
+                    if (applies) {
+                        mcqSubtype = 'contextual';
+                        context = activeSharedContext.context;
+                        contextInstruction = activeSharedContext.contextInstruction;
+                        contextId = activeSharedContext.contextId;
+                    } else {
+                        activeSharedContext = null;
+                    }
                 }
 
                 const isValid = (qText.trim().length > 0 && options.filter(o => o.trim().length > 0).length >= 3 && correctIndex >= 0);
@@ -3459,6 +3575,7 @@
                     statements,
                     context,
                     contextInstruction,
+                    contextId,
                     options: options.slice(0, 4),
                     correctIndex,
                     explanation: explanation.trim(),
@@ -3538,6 +3655,17 @@
                                     #${q.isBangla ? toBanglaNumber(qIdx + 1) : (qIdx + 1)}
                                 </span>
                                 <span class="text-[11px] font-medium text-slate-400">MCQ</span>
+                                ${q.mcqSubtype === 'multiple_completion' ? `
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                                        <span class="material-symbols-rounded text-[11px]">format_list_numbered</span>
+                                        <span>বহুপদী</span>
+                                    </span>
+                                ` : (q.mcqSubtype === 'contextual' ? `
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                                        <span class="material-symbols-rounded text-[11px]">auto_stories</span>
+                                        <span>উদ্দীপকভিত্তিক</span>
+                                    </span>
+                                ` : '')}
                                 ${q.isValid ? `
                                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30">
                                         <span class="material-symbols-rounded text-[13px]">check_circle</span>
@@ -3555,11 +3683,33 @@
                             </button>
                         </div>
 
+                        ${q.context ? `
+                            <div class="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                                <div class="flex items-center justify-between text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                                    <span class="flex items-center gap-1"><span class="material-symbols-rounded text-sm">auto_stories</span> উদ্দীপক</span>
+                                    <span class="text-[10.5px] truncate max-w-[200px]">${escapeBulkHtml(q.contextInstruction || '')}</span>
+                                </div>
+                                <p class="text-xs leading-relaxed whitespace-pre-wrap">${escapeBulkHtml(q.context)}</p>
+                            </div>
+                        ` : ''}
+
                         <!-- Question Text Textarea -->
                         <div>
                             <textarea rows="2" placeholder="প্রশ্ন..." oninput="updateBulkQText(${qIdx}, this.value); autoResizeBulkTextarea(this);"
                                 class="w-full p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all leading-relaxed resize-y min-h-[50px]">${escapeBulkHtml(q.qText || '')}</textarea>
                         </div>
+
+                        ${q.statements && q.statements.length > 0 ? `
+                            <div class="p-2 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-800 space-y-1 text-xs">
+                                ${q.statements.map((st, sI) => `
+                                    <div class="flex items-center gap-1.5 text-slate-700 dark:text-slate-300">
+                                        <span class="px-1.5 py-0.2 rounded bg-primary/10 text-primary font-bold text-[10px]">${['i.', 'ii.', 'iii.', 'iv.'][sI] || (sI + 1) + '.'}</span>
+                                        <span class="truncate">${escapeBulkHtml(st)}</span>
+                                    </div>
+                                `).join('')}
+                                <p class="text-[10px] font-semibold text-slate-400 pt-0.5">নিচের কোনটি সঠিক?</p>
+                            </div>
+                        ` : ''}
 
                         <!-- 4 Options Grid -->
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -3905,6 +4055,8 @@ Correct Answer: B`;
                     if (ctxTextarea && q.context) ctxTextarea.value = q.context;
                     const ctxInstInput = row.querySelector('.row-context-instruction');
                     if (ctxInstInput && q.contextInstruction) ctxInstInput.value = q.contextInstruction;
+                    const ctxIdInput = row.querySelector('.row-context-id');
+                    if (ctxIdInput && q.contextId) ctxIdInput.value = q.contextId;
                 }
 
                 container.appendChild(clone);
