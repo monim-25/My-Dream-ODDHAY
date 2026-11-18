@@ -1,5 +1,6 @@
 /**
- * Academic System Helper for ODDHAY
+
+* Academic System Helper for ODDHAY
  * Standardizes Class Names, Group/Stream Management, Multi-Class Sharing, and Subject Resolution.
  */
 
