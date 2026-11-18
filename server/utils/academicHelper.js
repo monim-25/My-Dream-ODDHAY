@@ -146,7 +146,7 @@ function extractSubjectsForStudent(classDoc, groupName) {
         const common = (classDoc.commonSubjects || []).map(s => String(s || '').trim()).filter(Boolean);
 
         if (normGroup !== 'General') {
-            const matchedGroup = classDoc.groups.find(g => 
+            const matchedGroup = classDoc.groups.find(g =>
                 normalizeGroup(g.name) === normGroup
             );
             if (matchedGroup && Array.isArray(matchedGroup.subjects)) {
@@ -190,8 +190,8 @@ async function getStudentSubjects(user) {
     let classDoc = await AcademicClass.findOne({ name: userClass }).lean();
     if (!classDoc) {
         // Fallback case-insensitive regex
-        classDoc = await AcademicClass.findOne({ 
-            name: { $regex: new RegExp(`^${userClass}$`, 'i') } 
+        classDoc = await AcademicClass.findOne({
+            name: { $regex: new RegExp(`^${userClass}$`, 'i') }
         }).lean();
     }
 
@@ -199,8 +199,8 @@ async function getStudentSubjects(user) {
         // Second fallback: any class matching the digit
         const num = userClass.replace(/[^0-9]/g, '');
         if (num) {
-            classDoc = await AcademicClass.findOne({ 
-                name: { $regex: new RegExp(`Class\\s*${num}`, 'i') } 
+            classDoc = await AcademicClass.findOne({
+                name: { $regex: new RegExp(`Class\\s*${num}`, 'i') }
             }).lean();
         }
     }
@@ -219,11 +219,11 @@ async function getStudentSubjects(user) {
 function stringSimilarity(s1, s2) {
     if (s1 === s2) return 1.0;
     if (!s1 || !s2) return 0;
-    
+
     const longer = s1.length > s2.length ? s1 : s2;
     const shorter = s1.length > s2.length ? s2 : s1;
     if (longer.length === 0) return 1.0;
-    
+
     const costs = [];
     for (let i = 0; i <= longer.length; i++) {
         let lastValue = i;
@@ -252,17 +252,17 @@ function detectSubjectRenames(oldList = [], newList = []) {
     const renames = [];
     const oldNorm = (oldList || []).map(s => String(s || '').trim()).filter(Boolean);
     const newNorm = (newList || []).map(s => String(s || '').trim()).filter(Boolean);
-    
+
     const newSet = new Set(newNorm);
     const oldSet = new Set(oldNorm);
-    
+
     const removed = oldNorm.filter(s => !newSet.has(s));
     const added = newNorm.filter(s => !oldSet.has(s));
-    
+
     if (removed.length === 0 || added.length === 0) {
         return renames;
     }
-    
+
     // 1. Position-based check when lengths are identical
     if (oldNorm.length === newNorm.length) {
         for (let i = 0; i < oldNorm.length; i++) {
@@ -276,21 +276,21 @@ function detectSubjectRenames(oldList = [], newList = []) {
             return renames;
         }
     }
-    
+
     // 2. Exact 1-to-1 change (1 removed, 1 added)
     if (removed.length === 1 && added.length === 1) {
         renames.push({ oldSubject: removed[0], newSubject: added[0] });
         return renames;
     }
-    
+
     // 3. Similarity-based matching for remaining removed/added
     const availableAdded = [...added];
     for (const rem of removed) {
         if (availableAdded.length === 0) break;
-        
+
         let bestMatch = null;
         let highestScore = 0;
-        
+
         for (const add of availableAdded) {
             const score = stringSimilarity(rem.toLowerCase(), add.toLowerCase());
             if (score > highestScore) {
@@ -298,14 +298,14 @@ function detectSubjectRenames(oldList = [], newList = []) {
                 bestMatch = add;
             }
         }
-        
+
         if (bestMatch && highestScore >= 0.4) {
             renames.push({ oldSubject: rem, newSubject: bestMatch });
             const idx = availableAdded.indexOf(bestMatch);
             if (idx > -1) availableAdded.splice(idx, 1);
         }
     }
-    
+
     return renames;
 }
 
@@ -314,7 +314,7 @@ function detectSubjectRenames(oldList = [], newList = []) {
  */
 async function cascadeSubjectRename(oldSubject, newSubject, className = null) {
     if (!oldSubject || !newSubject || oldSubject.trim().toLowerCase() === newSubject.trim().toLowerCase()) return;
-    
+
     const cleanOld = oldSubject.trim();
     const cleanNew = newSubject.trim();
     const User = require('../models/User');
@@ -402,37 +402,37 @@ async function cascadeSubjectRename(oldSubject, newSubject, className = null) {
         try {
             const Question = require('../models/Question');
             updateTasks.push(Question.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
-        } catch (_) {}
+        } catch (_) { }
 
         try {
             const QuestionBank = require('../models/QuestionBank');
             updateTasks.push(QuestionBank.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
-        } catch (_) {}
+        } catch (_) { }
 
         try {
             const Quiz = require('../models/Quiz');
             updateTasks.push(Quiz.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
-        } catch (_) {}
+        } catch (_) { }
 
         try {
             const Topic = require('../models/Topic');
             updateTasks.push(Topic.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
-        } catch (_) {}
+        } catch (_) { }
 
         try {
             const Note = require('../models/Note');
             updateTasks.push(Note.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
-        } catch (_) {}
+        } catch (_) { }
 
         try {
             const Book = require('../models/Book');
             updateTasks.push(Book.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
-        } catch (_) {}
+        } catch (_) { }
 
         try {
             const Folder = require('../models/Folder');
             updateTasks.push(Folder.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
-        } catch (_) {}
+        } catch (_) { }
 
         try {
             const Course = require('../models/Course');
@@ -441,12 +441,12 @@ async function cascadeSubjectRename(oldSubject, newSubject, className = null) {
                 { $set: { 'subject.$[elem]': cleanNew } },
                 { arrayFilters: [{ 'elem': exactOldRegex }] }
             ));
-        } catch (_) {}
+        } catch (_) { }
 
         try {
             const AIKnowledge = require('../models/AIKnowledge');
             updateTasks.push(AIKnowledge.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
-        } catch (_) {}
+        } catch (_) { }
 
         if (updateTasks.length > 0) {
             await Promise.allSettled(updateTasks);
@@ -470,8 +470,8 @@ async function getAllAcademicFilters() {
         'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'
     ];
     const defaultSubjects = [
-        'Bangla', 'English', 'Mathematics', 'Higher Mathematics', 'Physics', 
-        'Chemistry', 'Biology', 'ICT', 'Accounting', 'Finance & Banking', 
+        'Bangla', 'English', 'Mathematics', 'Higher Mathematics', 'Physics',
+        'Chemistry', 'Biology', 'ICT', 'Accounting', 'Finance & Banking',
         'Business Organization', 'Economics', 'General Science', 'Bangladesh & Global Studies'
     ];
 
