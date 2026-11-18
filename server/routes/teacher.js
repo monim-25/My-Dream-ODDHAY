@@ -3597,6 +3597,9 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                     const isB = Boolean(q.isBangla || /[\u0980-\u09FF]/.test(q.qText || ''));
                     return {
                         questionText: (q.qText || '').trim(),
+                        questionImage: (q.questionImage || '').trim(),
+                        contextImage: (q.contextImage || '').trim(),
+                        explanationImage: (q.explanationImage || '').trim(),
                         options: (q.options && q.options.length) ? q.options : ['', '', '', ''],
                         correctAnswer: q.correctIndex >= 0 ? q.correctIndex : 0,
                         explanation: (q.explanation || '').trim(),
@@ -3892,6 +3895,9 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
         for (let c = 0; c < count; c++) {
             quiz.questions.push({
                 questionText: (questionText || '').trim(),
+                questionImage: (req.body.questionImage || '').trim(),
+                contextImage: (req.body.contextImage || '').trim(),
+                explanationImage: (req.body.explanationImage || '').trim(),
                 options: (type === 'MCQ' && (!options || !options.length)) ? ['', '', '', ''] : (options || []),
                 correctAnswer: finalCorrectIndex,
                 explanation: explanation?.trim() || '',
@@ -4001,6 +4007,9 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
         }
         if (context !== undefined) updateData['questions.$.context'] = context;
         if (contextInstruction !== undefined) updateData['questions.$.contextInstruction'] = contextInstruction;
+        if (req.body.questionImage !== undefined) updateData['questions.$.questionImage'] = (req.body.questionImage || '').trim();
+        if (req.body.contextImage !== undefined) updateData['questions.$.contextImage'] = (req.body.contextImage || '').trim();
+        if (req.body.explanationImage !== undefined) updateData['questions.$.explanationImage'] = (req.body.explanationImage || '').trim();
         if (mcqSubtype !== undefined) updateData['questions.$.mcqSubtype'] = mcqSubtype;
         if (statements !== undefined) {
             updateData['questions.$.statements'] = Array.isArray(statements) ? statements.filter(Boolean) : [statements].filter(Boolean);
@@ -4314,7 +4323,7 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
             return res.status(403).send('Unauthorized');
         }
 
-        const { questionIds, texts, correctAnswers, correctIndices, answers, explanations, marks, contexts, q1s, a1s, s1s, q2s, a2s, s2s, q3s, a3s, s3s, q4s, a4s, s4s, isBanglas, languages } = req.body;
+        const { questionIds, texts, correctAnswers, correctIndices, answers, explanations, marks, contexts, q1s, a1s, s1s, q2s, a2s, s2s, q3s, a3s, s3s, q4s, a4s, s4s, isBanglas, languages, questionImages, contextImages, explanationImages } = req.body;
         if (!questionIds || !Array.isArray(questionIds)) {
             return res.redirect(`/teacher/edit-question-bank/${req.params.id}?error=No questions to update`);
         }
@@ -4325,6 +4334,9 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
             const updateObj = {};
 
             if (text) updateObj.questionText = text;
+            if (questionImages && questionImages[i] !== undefined) updateObj.questionImage = (questionImages[i] || '').trim();
+            if (contextImages && contextImages[i] !== undefined) updateObj.contextImage = (contextImages[i] || '').trim();
+            if (explanationImages && explanationImages[i] !== undefined) updateObj.explanationImage = (explanationImages[i] || '').trim();
 
             if (contexts && contexts[i] !== undefined) {
                 updateObj.context = contexts[i];
@@ -4641,6 +4653,28 @@ router.post('/upload-paper-file', teacherProtect, (req, res, next) => {
     }
 });
 
+// Dedicated route for async image upload for questions, contexts, explanations
+router.post('/upload-question-image', teacherProtect, (req, res, next) => {
+    const upload = router.upload;
+    if (upload) {
+        upload.single('image')(req, res, (err) => {
+            if (err || !req.file) {
+                return upload.single('file')(req, res, next);
+            }
+            next();
+        });
+    } else next();
+}, async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ success: false, error: 'No image file uploaded' });
+        const fileUrl = await processUploadedFile(req.file, 'questions');
+        res.json({ success: true, fileUrl, url: fileUrl });
+    } catch (err) {
+        console.error('Question image upload error:', err);
+        res.status(500).json({ success: false, error: 'Image upload failed' });
+    }
+});
+
 router.post('/add-question-full', teacherProtect, (req, res, next) => {
     const upload = router.upload;
     if (upload) upload.single('file')(req, res, next);
@@ -4662,6 +4696,9 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const qChapters = [].concat(body['qChapter[]'] || body.qChapter || []);
         const qTopics = [].concat(body['qTopic[]'] || body.qTopic || []);
         const qSubTopics = [].concat(body['qSubTopic[]'] || body.qSubTopic || []);
+        const qQuestionImages = [].concat(body['qQuestionImage[]'] || body.qQuestionImage || []);
+        const qContextImages = [].concat(body['qContextImage[]'] || body.qContextImage || []);
+        const qExplanationImages = [].concat(body['qExplanationImage[]'] || body.qExplanationImage || []);
 
         // Comprehension specific fields
         const qContexts = [].concat(body['qContext[]'] || body.qContext || []);
@@ -4863,6 +4900,9 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
 
             return {
                 questionText: questionTextFinal,
+                questionImage: (qQuestionImages[i] || '').trim(),
+                contextImage: (qContextImages[i] || '').trim(),
+                explanationImage: (qExplanationImages[i] || '').trim(),
                 questionType: type,
                 mcqSubtype: isMCQ ? mcqSubtypeVal : 'standard',
                 statements: (isMCQ && stmts.length > 0) ? stmts : [],
@@ -4951,6 +4991,9 @@ router.post('/edit-question/:id', teacherProtect, async (req, res) => {
         if (contextId !== undefined) updateData.contextId = contextId;
         if (contextInstruction !== undefined) updateData.contextInstruction = contextInstruction;
         if (context !== undefined) updateData.context = context;
+        if (req.body.questionImage !== undefined) updateData.questionImage = (req.body.questionImage || '').trim();
+        if (req.body.contextImage !== undefined) updateData.contextImage = (req.body.contextImage || '').trim();
+        if (req.body.explanationImage !== undefined) updateData.explanationImage = (req.body.explanationImage || '').trim();
 
         if (req.body.isBangla !== undefined) {
             const isB = req.body.isBangla === true || req.body.isBangla === 'true';

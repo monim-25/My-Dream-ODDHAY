@@ -886,6 +886,114 @@
         }
         window.escapeEditorHtml = escapeEditorHtml;
 
+        function renderEditorImageSlotHTML(slotId, imgUrl, label) {
+            const hasImg = Boolean(imgUrl && String(imgUrl).trim());
+            const safeUrl = escapeEditorHtml(imgUrl || '');
+            return `
+                <div class="image-uploader-slot flex items-center gap-1.5 shrink-0">
+                    <input type="hidden" id="${slotId}" value="${safeUrl}">
+                    <input type="file" accept="image/*" class="hidden image-file-input" onchange="handleEditorImageUpload(this, '${slotId}')">
+                    <button type="button" onclick="triggerEditorImageUpload(this)"
+                        class="btn-trigger-upload inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-slate-500 hover:text-primary hover:bg-primary/5 dark:hover:bg-primary/10 border border-slate-200/80 dark:border-slate-700/80 transition-all cursor-pointer ${hasImg ? 'hidden' : ''}"
+                        title="${label}">
+                        <span class="material-symbols-rounded text-sm">add_photo_alternate</span>
+                        <span>${label}</span>
+                    </button>
+                    <div class="image-preview-badge ${hasImg ? 'flex' : 'hidden'} items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-700 dark:text-emerald-300">
+                        <a href="${safeUrl || '#'}" target="_blank" class="preview-img-link font-medium hover:underline flex items-center gap-1">
+                            <span class="material-symbols-rounded text-xs">image</span>
+                            <span>চিত্র যুক্ত</span>
+                        </a>
+                        <button type="button" onclick="removeEditorImage(this, '${slotId}')" class="text-rose-500 hover:text-rose-700 ml-1 cursor-pointer" title="চিত্র মুছুন">✕</button>
+                    </div>
+                </div>
+            `;
+        }
+        window.renderEditorImageSlotHTML = renderEditorImageSlotHTML;
+
+        function triggerEditorImageUpload(btn) {
+            const slot = btn.closest('.image-uploader-slot');
+            if (!slot) return;
+            const fileInput = slot.querySelector('.image-file-input');
+            if (fileInput) fileInput.click();
+        }
+        window.triggerEditorImageUpload = triggerEditorImageUpload;
+
+        async function handleEditorImageUpload(fileInput, slotId) {
+            const file = fileInput.files && fileInput.files[0];
+            if (!file) return;
+
+            const slot = fileInput.closest('.image-uploader-slot');
+            if (!slot) return;
+
+            const btn = slot.querySelector('.btn-trigger-upload');
+            const badge = slot.querySelector('.image-preview-badge');
+            const previewLink = slot.querySelector('.preview-img-link');
+            const hiddenInp = document.getElementById(slotId);
+
+            const origBtnHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = `<span class="text-xs">⏳</span> <span class="text-[10px]">আপলোড হচ্ছে...</span>`;
+                btn.disabled = true;
+            }
+
+            const formData = new FormData();
+            formData.append('image', file);
+
+            try {
+                const res = await fetch('/teacher/upload-question-image', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+                if (data && (data.fileUrl || data.url)) {
+                    const finalUrl = data.fileUrl || data.url;
+                    if (hiddenInp) hiddenInp.value = finalUrl;
+                    if (previewLink) previewLink.href = finalUrl;
+                    if (btn) btn.classList.add('hidden');
+                    if (badge) {
+                        badge.classList.remove('hidden');
+                        badge.classList.add('flex');
+                    }
+                } else {
+                    alert('Image upload failed: ' + (data.error || 'Server error'));
+                    if (btn) {
+                        btn.innerHTML = origBtnHtml;
+                        btn.disabled = false;
+                    }
+                }
+            } catch (err) {
+                console.error('Editor image upload error:', err);
+                alert('Image upload failed.');
+                if (btn) {
+                    btn.innerHTML = origBtnHtml;
+                    btn.disabled = false;
+                }
+            } finally {
+                fileInput.value = '';
+            }
+        }
+        window.handleEditorImageUpload = handleEditorImageUpload;
+
+        function removeEditorImage(btn, slotId) {
+            const slot = btn.closest('.image-uploader-slot');
+            if (!slot) return;
+            const hiddenInp = document.getElementById(slotId);
+            const triggerBtn = slot.querySelector('.btn-trigger-upload');
+            const badge = slot.querySelector('.image-preview-badge');
+            if (hiddenInp) hiddenInp.value = '';
+            if (badge) {
+                badge.classList.add('hidden');
+                badge.classList.remove('flex');
+            }
+            if (triggerBtn) {
+                triggerBtn.classList.remove('hidden');
+                triggerBtn.disabled = false;
+                triggerBtn.innerHTML = `<span class="material-symbols-rounded text-sm">add_photo_alternate</span> <span>চিত্র যুক্ত করুন</span>`;
+            }
+        }
+        window.removeEditorImage = removeEditorImage;
+
         function isDummyOptText(val) {
             if (!val) return true;
             const v = String(val).trim();
@@ -1297,10 +1405,11 @@
                                     <span class="material-symbols-rounded text-sm">auto_stories</span>
                                     <span>উদ্দীপক / অনুচ্ছেদ (Stem / Context):</span>
                                 </span>
-                                <div class="flex items-center gap-1.5 flex-1 sm:flex-initial justify-end">
+                                <div class="flex items-center gap-2 flex-1 sm:flex-initial justify-end">
+                                    ${renderEditorImageSlotHTML('ctximg-' + qid, q.contextImage, 'উদ্দীপকে চিত্র')}
                                     <span class="text-[11px] text-amber-800 dark:text-amber-300 font-medium shrink-0">নির্দেশনা:</span>
                                     <input type="text" id="contextInstruction-${qid}"
-                                        class="h-7 px-2.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-300/80 dark:border-amber-700/60 text-[11px] text-amber-900 dark:text-amber-200 placeholder-amber-400/80 outline-none focus:border-amber-600 transition-all w-56 sm:w-64 max-w-full font-medium"
+                                        class="h-7 px-2.5 rounded-lg bg-white dark:bg-slate-900 border border-amber-300/80 dark:border-amber-700/60 text-[11px] text-amber-900 dark:text-amber-200 placeholder-amber-400/80 outline-none focus:border-amber-600 transition-all w-48 sm:w-56 max-w-full font-medium"
                                         placeholder="যেমন: উদ্দীপকটি পড়ে ২ ও ৩ নং প্রশ্নের উত্তর দিন"
                                         value="${escapeEditorHtml(ctxInst)}">
                                 </div>
@@ -1312,7 +1421,10 @@
                         </div>
 
                         <div>
-                            <label class="form-label">Question Text</label>
+                            <div class="flex items-center justify-between">
+                                <label class="form-label">Question Text</label>
+                                ${renderEditorImageSlotHTML('qimg-' + qid, q.questionImage, 'প্রশ্নে চিত্র')}
+                            </div>
                             <textarea id="qtext-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...'}">${escapeEditorHtml(cleanQText)}</textarea>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
@@ -1346,7 +1458,10 @@
                             </div>
                         </div>
                         <div>
-                            <label class="form-label">Explanation</label>
+                            <div class="flex items-center justify-between">
+                                <label class="form-label">Explanation</label>
+                                ${renderEditorImageSlotHTML('expimg-' + qid, q.explanationImage, 'ব্যাখ্যায় চিত্র')}
+                            </div>
                             <textarea id="explain-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="Enter explanation here...">${escapeEditorHtml(q.explanation || '')}</textarea>
                         </div>
                     </div>
@@ -1357,7 +1472,10 @@
                 bodyHTML = `
                     <div class="space-y-3.5 sm:space-y-4">
                         <div>
-                            <label class="form-label">Question Text</label>
+                            <div class="flex items-center justify-between">
+                                <label class="form-label">Question Text</label>
+                                ${renderEditorImageSlotHTML('qimg-' + qid, q.questionImage, 'প্রশ্নে চিত্র')}
+                            </div>
                             <textarea id="qtext-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...'}">${escapeEditorHtml(cleanQText)}</textarea>
                         </div>
                         <div>
@@ -1365,7 +1483,10 @@
                             <textarea id="ans-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="Enter answer here..">${escapeEditorHtml(ansVal)}</textarea>
                         </div>
                         <div>
-                            <label class="form-label">Explanation</label>
+                            <div class="flex items-center justify-between">
+                                <label class="form-label">Explanation</label>
+                                ${renderEditorImageSlotHTML('expimg-' + qid, q.explanationImage, 'ব্যাখ্যায় চিত্র')}
+                            </div>
                             <textarea id="explain-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="Enter explanation here...">${escapeEditorHtml(q.explanation || '')}</textarea>
                         </div>
                     </div>
@@ -1383,7 +1504,10 @@
                 bodyHTML = `
                     <div class="space-y-3.5 sm:space-y-4">
                         <div>
-                            <label class="form-label">Context / উদ্দীপক</label>
+                            <div class="flex items-center justify-between">
+                                <label class="form-label">Context / উদ্দীপক</label>
+                                ${renderEditorImageSlotHTML('ctximg-' + qid, q.contextImage, 'উদ্দীপকে চিত্র')}
+                            </div>
                             <textarea id="context-${qid}" class="form-input w-full resize-y min-h-[80px] text-xs sm:text-sm lg:text-[15px]" rows="3" placeholder="${isQBangla ? 'উদ্দীপক / অনুচ্ছেদ লিখুন...' : 'Enter context / passage...'}">${escapeEditorHtml(cleanContext)}</textarea>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
@@ -1413,7 +1537,10 @@
                             </div>
                         </div>
                         <div>
-                            <label class="form-label">Explanation</label>
+                            <div class="flex items-center justify-between">
+                                <label class="form-label">Explanation</label>
+                                ${renderEditorImageSlotHTML('expimg-' + qid, q.explanationImage, 'ব্যাখ্যায় চিত্র')}
+                            </div>
                             <textarea id="explain-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="Enter explanation here...">${escapeEditorHtml(q.explanation || '')}</textarea>
                         </div>
                     </div>
@@ -1870,7 +1997,10 @@
                 subTopic: (subTopicEl ? subTopicEl.value.trim() : '') || globalQuizSubTopic || '',
                 board: boardEl ? boardEl.value.trim() : '',
                 year: yearEl ? yearEl.value.trim() : '',
-                explanation: explainEl ? explainEl.value.trim() : ''
+                explanation: explainEl ? explainEl.value.trim() : '',
+                questionImage: document.getElementById(`qimg-${qid}`)?.value.trim() || '',
+                contextImage: document.getElementById(`ctximg-${qid}`)?.value.trim() || '',
+                explanationImage: document.getElementById(`expimg-${qid}`)?.value.trim() || ''
             };
 
             if (type === 'MCQ' || !type) {
@@ -2486,6 +2616,10 @@
                     }
                 }
                 
+                data.questionImage = document.getElementById(`qimg-${qid}`)?.value.trim() || '';
+                data.contextImage = document.getElementById(`ctximg-${qid}`)?.value.trim() || '';
+                data.explanationImage = document.getElementById(`expimg-${qid}`)?.value.trim() || '';
+
                 updates.push({ qid, data });
             }
             
