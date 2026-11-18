@@ -1,6 +1,6 @@
 const fs = require('fs');
 
-const content = \`<!DOCTYPE html>
+const content = `<!DOCTYPE html>
 <html lang="bn" class="light">
 <head>
     <meta charset="UTF-8">

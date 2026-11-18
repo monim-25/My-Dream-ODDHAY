@@ -4,6 +4,7 @@ const router = express.Router();
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const mongoose = require('mongoose');
 const { connectDB, protect, adminProtect, superAdminProtect, User, Notification, NotificationLog, Message } = require('../config');
 const pushNotificationService = require('../services/pushNotificationService');
 const topicController = require('../controllers/topicController');
@@ -118,7 +119,7 @@ router.post('/upload-complete', express.json(), async (req, res) => {
             });
         }
 
-        const { GridFSBucket } = require('mongodb');
+        const { GridFSBucket } = mongoose.mongo;
         const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'notes_files' });
         const cleanName = path.basename(filename);
         const uploadStream = bucket.openUploadStream(cleanName, {
@@ -157,7 +158,7 @@ router.get('/files/raw/:fileId/:filename?', async (req, res) => {
         if (mongoose.connection.readyState !== 1) await connectDB();
 
         const { fileId } = req.params;
-        const { ObjectId, GridFSBucket } = require('mongodb');
+        const { ObjectId, GridFSBucket } = mongoose.mongo;
         if (!ObjectId.isValid(fileId)) return res.status(404).send('File not found');
 
         const bucket = new GridFSBucket(mongoose.connection.db, { bucketName: 'notes_files' });

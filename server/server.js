@@ -197,6 +197,18 @@ app.set('clearAcademicCache', clearAcademicCache);
 const userLastSeen = new Map();
 app.set('userLastSeen', userLastSeen);
 
+// Serverless DB connection middleware (ensures DB is connected on Vercel cold starts)
+app.use(async (req, res, next) => {
+    try {
+        if (mongoose.connection.readyState !== 1) {
+            await connectDB();
+        }
+    } catch (err) {
+        console.error('❌ Serverless MongoDB connection error:', err.message);
+    }
+    next();
+});
+
 app.use(async (req, res, next) => {
     res.locals.user = req.session.user || null;
     res.locals.SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || 'monimmdmonim41@gmail.com').toLowerCase().trim();
