@@ -5539,14 +5539,27 @@ router.get('/academic-setup', superAdminProtect, async (req, res) => {
         await connectDB();
         const AcademicClass = require('../models/AcademicClass');
         const SubjectRule = require('../models/SubjectRule');
-        const activeClasses = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
-        const archivedClasses = await AcademicClass.find({ isArchived: { $in: [true, 'true', 1] } }).sort({ updatedAt: -1, order: 1 }).lean();
-        const subjectRules = await SubjectRule.find().sort({ order: 1, createdAt: -1 }).populate('createdBy', 'name email').lean();
+        const AcademicBoard = require('../models/AcademicBoard');
+        const AcademicYear = require('../models/AcademicYear');
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+
+        await academicBoardYearController.ensureDefaultBoardsAndYears();
+
+        const [activeClasses, archivedClasses, subjectRules, boards, years] = await Promise.all([
+            AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean(),
+            AcademicClass.find({ isArchived: { $in: [true, 'true', 1] } }).sort({ updatedAt: -1, order: 1 }).lean(),
+            SubjectRule.find().sort({ order: 1, createdAt: -1 }).populate('createdBy', 'name email').lean(),
+            AcademicBoard.find().sort({ order: 1, name: 1 }).populate('createdBy', 'name email').lean(),
+            AcademicYear.find().sort({ order: 1, year: -1 }).populate('createdBy', 'name email').lean()
+        ]);
+
         res.render('superadmin/academic-setup', { 
             active: 'academic-setup',
             classes: activeClasses || [],
             archivedClasses: archivedClasses || [],
             subjectRules: subjectRules || [],
+            boards: boards || [],
+            years: years || [],
             user: req.session.user || { name: 'Super Admin', role: 'superadmin' }
         });
     } catch (error) {
@@ -5697,6 +5710,27 @@ router.get('/academic-setup/subject-rules', superAdminProtect, subjectRuleContro
 router.post('/academic-setup/subject-rules', superAdminProtect, subjectRuleController.saveSubjectRule);
 router.post('/academic-setup/subject-rules/delete', superAdminProtect, subjectRuleController.deleteSubjectRule);
 router.delete('/academic-setup/subject-rules/:id', superAdminProtect, subjectRuleController.deleteSubjectRule);
+
+// Academic Boards & Exam Years Management
+const academicBoardYearController = require('../controllers/academicBoardYearController');
+router.get('/academic-setup/boards-and-years', superAdminProtect, academicBoardYearController.getActiveBoardsAndYearsApi);
+
+router.post('/academic-setup/boards', superAdminProtect, academicBoardYearController.addBoard);
+router.put('/academic-setup/boards/:id', superAdminProtect, academicBoardYearController.updateBoard);
+router.patch('/academic-setup/boards/:id/toggle', superAdminProtect, academicBoardYearController.toggleBoardStatus);
+router.post('/academic-setup/boards/:id/toggle', superAdminProtect, academicBoardYearController.toggleBoardStatus);
+router.delete('/academic-setup/boards/:id', superAdminProtect, academicBoardYearController.deleteBoard);
+router.post('/academic-setup/boards/:id/delete', superAdminProtect, academicBoardYearController.deleteBoard);
+router.post('/academic-setup/boards/reorder', superAdminProtect, academicBoardYearController.reorderBoards);
+
+router.post('/academic-setup/years', superAdminProtect, academicBoardYearController.addYear);
+router.put('/academic-setup/years/:id', superAdminProtect, academicBoardYearController.updateYear);
+router.patch('/academic-setup/years/:id/toggle', superAdminProtect, academicBoardYearController.toggleYearStatus);
+router.post('/academic-setup/years/:id/toggle', superAdminProtect, academicBoardYearController.toggleYearStatus);
+router.delete('/academic-setup/years/:id', superAdminProtect, academicBoardYearController.deleteYear);
+router.post('/academic-setup/years/:id/delete', academicBoardYearController.deleteYear);
+router.post('/academic-setup/years/reorder', superAdminProtect, academicBoardYearController.reorderYears);
+
 
 // ==========================================
 // SYLLABUS & TOPIC SYSTEM - SUPERADMIN ROUTES

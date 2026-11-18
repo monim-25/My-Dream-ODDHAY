@@ -432,9 +432,12 @@
                                                         class="material-symbols-rounded text-sm text-primary">check</span>
                                                     <% } %>
                                             </div>
-                                            <% ['Dhaka Board', 'Comilla Board' , 'Rajshahi Board' , 'Chittagong Board'
-                                                , 'Sylhet Board' , 'Barisal Board' , 'Khulna Board' , 'Rangpur Board'
-                                                , 'Mymensingh Board' ].forEach(b=> { %>
+                                            <% 
+                                                const boardFilterList = (typeof boards !== 'undefined' && Array.isArray(boards) && boards.length > 0)
+                                                    ? boards
+                                                    : ['Dhaka Board', 'Rajshahi Board', 'Comilla Board', 'Jessore Board', 'Chittagong Board', 'Barisal Board', 'Sylhet Board', 'Dinajpur Board', 'Mymensingh Board', 'Madrasah Board', 'Technical Board', 'All Board'];
+                                                boardFilterList.forEach(b => { 
+                                            %>
                                                 <div onclick="updateFilter('board', '<%= b %>')"
                                                     class="px-2.5 py-1.5 text-xs font-medium cursor-pointer rounded-lg mx-1 flex items-center justify-between <%= activeBoard === b ? 'bg-primary/10 text-primary font-semibold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800' %>">
                                                     <span class="truncate">
@@ -1112,16 +1115,24 @@
                             <div class="space-y-1">
                                 <label
                                     class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Board</label>
-                                <input type="text" id="editBoard"
-                                    class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all"
-                                    placeholder="e.g. Dhaka">
+                                <select id="editBoard"
+                                    class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all cursor-pointer">
+                                    <option value="">General / No Board</option>
+                                    <% (typeof boards !== 'undefined' && Array.isArray(boards) ? boards : []).forEach(b => { %>
+                                        <option value="<%= b %>"><%= b %></option>
+                                    <% }) %>
+                                </select>
                             </div>
                             <div class="space-y-1">
                                 <label
                                     class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Year</label>
-                                <input type="number" id="editYear"
-                                    class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all"
-                                    placeholder="2024">
+                                <select id="editYear"
+                                    class="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all cursor-pointer">
+                                    <option value="">None / General</option>
+                                    <% (typeof years !== 'undefined' && Array.isArray(years) ? years : []).forEach(y => { %>
+                                        <option value="<%= y %>"><%= y %></option>
+                                    <% }) %>
+                                </select>
                             </div>
                         </div>
 
@@ -2553,8 +2564,22 @@
                 if (modalTitle) modalTitle.innerText = 'Edit question';
 
                 document.getElementById('editQId').value = q._id;
-                document.getElementById('editBoard').value = q.board || '';
-                document.getElementById('editYear').value = q.year || '';
+                const boardSel = document.getElementById('editBoard');
+                if (boardSel) {
+                    if (q.board && !Array.from(boardSel.options).some(o => o.value === q.board)) {
+                        boardSel.add(new Option(q.board, q.board));
+                    }
+                    boardSel.value = q.board || '';
+                }
+
+                const yearSel = document.getElementById('editYear');
+                if (yearSel) {
+                    const yStr = String(q.year || '').trim();
+                    if (yStr && !Array.from(yearSel.options).some(o => o.value === yStr)) {
+                        yearSel.add(new Option(yStr, yStr));
+                    }
+                    yearSel.value = yStr;
+                }
 
                 const qSub = q.subject || 'General';
                 selectWizardOption('editSubject', qSub, qSub);

@@ -3,6 +3,10 @@
     const safeClasses = (typeof classes !== 'undefined' && Array.isArray(classes)) ? classes : [];
     const safeArchived = (typeof archivedClasses !== 'undefined' && Array.isArray(archivedClasses)) ? archivedClasses : [];
     const safeRules = (typeof subjectRules !== 'undefined' && Array.isArray(subjectRules)) ? subjectRules : [];
+    const safeBoards = (typeof boards !== 'undefined' && Array.isArray(boards)) ? boards : [];
+    const safeYears = (typeof years !== 'undefined' && Array.isArray(years)) ? years : [];
+    const activeBoardsCount = safeBoards.filter(b => b.isActive).length;
+    const activeYearsCount = safeYears.filter(y => y.isActive).length;
     const groupCount = safeClasses.filter(c => c.hasGroups).length;
 
     // Aggregate all unique subjects across active classes
@@ -73,6 +77,12 @@
                             <span class="material-symbols-rounded text-[17px] text-indigo-500">segment</span>
                             <span>Subject Segmentation Rules</span>
                             <span id="tabBadgeRules" class="px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-black leading-none"><%= safeRules.length %></span>
+                        </button>
+                        <button type="button" id="tabBoardsYearsBtn" onclick="switchAcademicTab('boards-years')"
+                                class="px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white shrink-0 whitespace-nowrap">
+                            <span class="material-symbols-rounded text-[17px] text-amber-500">account_balance</span>
+                            <span>Boards & Exam Years</span>
+                            <span id="tabBadgeBoardsYears" class="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 font-black leading-none"><%= safeBoards.length %> / <%= safeYears.length %></span>
                         </button>
                         <button type="button" id="tabArchiveBtn" onclick="switchAcademicTab('archive')"
                                 class="px-3 py-1.5 rounded-md font-bold text-xs transition-all flex items-center gap-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white shrink-0 whitespace-nowrap">
@@ -365,6 +375,194 @@
                     </div>
                 </div>
 
+                <!-- Central Boards & Exam Years Management View -->
+                <div id="boardsYearsView" class="hidden p-3 sm:p-4 space-y-4">
+                    <!-- Notice / Header Bar -->
+                    <div class="p-3.5 bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-transparent rounded-lg border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="size-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-2xl">account_balance</span>
+                            </div>
+                            <div>
+                                <h4 class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <span>সেন্ট্রাল বোর্ড ও পরীক্ষার বছর নিয়ন্ত্রণ ব্যবস্থা</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300 font-extrabold uppercase">Platform Enforced</span>
+                                </h4>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    এখানে যে বোর্ড এবং বছরগুলো সক্রিয় (Active) থাকবে, শুধুমাত্র সেগুলোই পুরো প্ল্যাটফর্মে শিক্ষক ও অ্যাডমিনদের প্রশ্ন আর্কাইভ তৈরি, ফিল্টারিং এবং কুইজ মেকারে প্রযোজ্য হবে।
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <span class="px-2.5 py-1 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                                বোর্ড: <strong id="activeBoardsBadgeCount" class="text-primary font-black"><%= activeBoardsCount %></strong>/<%= safeBoards.length %> সক্রিয়
+                            </span>
+                            <span class="px-2.5 py-1 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                                বছর: <strong id="activeYearsBadgeCount" class="text-emerald-500 font-black"><%= activeYearsCount %></strong>/<%= safeYears.length %> সক্রিয়
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- 2 Column Responsive Grid: Boards on Left, Years on Right -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <!-- 1. EDUCATION BOARDS CARD -->
+                        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-lg p-3.5 sm:p-4 shadow-xs flex flex-col gap-3">
+                            <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                                <div class="flex items-center gap-2">
+                                    <span class="material-symbols-rounded text-lg text-primary">school</span>
+                                    <h5 class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">শিক্ষা বোর্ড তালিকা (Education Boards)</h5>
+                                    <span id="boardsTotalCountBadge" class="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold"><%= safeBoards.length %></span>
+                                </div>
+                            </div>
+
+                            <!-- Quick Add Board Form -->
+                            <form onsubmit="handleAddNewBoard(event)" class="flex flex-col sm:flex-row gap-2">
+                                <input type="text" id="newBoardName" required placeholder="বোর্ডের নাম (যেমন: ঢাকা বোর্ড বা Dhaka Board)"
+                                       class="flex-1 h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white outline-none focus:border-primary transition-all">
+                                <input type="text" id="newBoardCode" placeholder="Code (DHK)"
+                                       class="w-24 h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white outline-none focus:border-primary transition-all uppercase">
+                                <button type="submit" id="btnAddBoardSubmit"
+                                        class="h-9 px-3.5 rounded-lg bg-primary hover:bg-primary-dark text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer">
+                                    <span class="material-symbols-rounded text-base">add</span>
+                                    <span>বোর্ড যোগ করুন</span>
+                                </button>
+                            </form>
+
+                            <!-- Boards List Table -->
+                            <div class="overflow-x-auto border border-slate-200 dark:border-slate-800/80 rounded-lg">
+                                <table class="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                        <tr class="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-bold text-[11px]">
+                                            <th class="py-2 px-3 w-10 text-center">#</th>
+                                            <th class="py-2 px-3">বোর্ডের নাম (Name)</th>
+                                            <th class="py-2 px-2 text-center w-20">Code</th>
+                                            <th class="py-2 px-2 text-center w-28">Status</th>
+                                            <th class="py-2 px-3 text-right w-24">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="boardsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                                        <% if (safeBoards.length === 0) { %>
+                                            <tr id="emptyBoardsRow">
+                                                <td colspan="5" class="py-6 text-center text-xs text-slate-400">কোনো বোর্ড যুক্ত করা হয়নি। উপরে নতুন বোর্ড যোগ করুন।</td>
+                                            </tr>
+                                        <% } else { %>
+                                            <% safeBoards.forEach((b, idx) => { %>
+                                                <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors board-row-item" data-id="<%= b._id %>">
+                                                    <td class="py-2 px-3 text-center text-slate-400 font-mono text-[11px]"><%= idx + 1 %></td>
+                                                    <td class="py-2 px-3 font-semibold text-slate-900 dark:text-white">
+                                                        <span class="board-name-text"><%= b.name %></span>
+                                                    </td>
+                                                    <td class="py-2 px-2 text-center">
+                                                        <% if (b.code) { %>
+                                                            <span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[10px] text-slate-600 dark:text-slate-300 font-bold board-code-text"><%= b.code %></span>
+                                                        <% } else { %>
+                                                            <span class="text-slate-300 dark:text-slate-600 board-code-text">---</span>
+                                                        <% } %>
+                                                    </td>
+                                                    <td class="py-2 px-2 text-center">
+                                                        <button type="button" onclick="toggleBoardStatus('<%= b._id %>')"
+                                                                id="board-status-btn-<%= b._id %>"
+                                                                class="px-2 py-0.5 rounded-full text-[10.5px] font-bold transition-all cursor-pointer <%= b.isActive ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 border border-emerald-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200 border border-slate-300 dark:border-slate-700' %>">
+                                                            <%= b.isActive ? 'Active' : 'Inactive' %>
+                                                        </button>
+                                                    </td>
+                                                    <td class="py-2 px-3 text-right">
+                                                        <div class="flex items-center justify-end gap-1">
+                                                            <button type="button" onclick="editBoardModal('<%= b._id %>', '<%= b.name.replace(/'/g, "\\'") %>', '<%= (b.code || '').replace(/'/g, "\\'") %>')"
+                                                                    title="Edit Board"
+                                                                    class="size-7 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-primary transition-colors flex items-center justify-center cursor-pointer">
+                                                                <span class="material-symbols-rounded text-sm">edit</span>
+                                                            </button>
+                                                            <button type="button" onclick="deleteBoardConfirm('<%= b._id %>', '<%= b.name.replace(/'/g, "\\'") %>')"
+                                                                    title="Delete Board"
+                                                                    class="size-7 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-500 transition-colors flex items-center justify-center cursor-pointer">
+                                                                <span class="material-symbols-rounded text-sm">delete</span>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <% }) %>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- 2. ACADEMIC & EXAM YEARS CARD -->
+                        <div class="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800/80 rounded-lg p-3.5 sm:p-4 shadow-xs flex flex-col gap-3">
+                            <div class="flex items-center justify-between pb-2.5 border-b border-slate-100 dark:border-slate-800">
+                                <div class="flex items-center gap-2">
+                                    <span class="material-symbols-rounded text-lg text-emerald-500">calendar_today</span>
+                                    <h5 class="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">পরীক্ষার বছর তালিকা (Exam & Academic Years)</h5>
+                                    <span id="yearsTotalCountBadge" class="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold"><%= safeYears.length %></span>
+                                </div>
+                            </div>
+
+                            <!-- Quick Add Year Form -->
+                            <form onsubmit="handleAddNewYear(event)" class="flex gap-2">
+                                <input type="text" id="newYearVal" required placeholder="নতুন বছর (যেমন: 2027)"
+                                       class="flex-1 h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-900 dark:text-white outline-none focus:border-emerald-500 transition-all">
+                                <button type="submit" id="btnAddYearSubmit"
+                                        class="h-9 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer">
+                                    <span class="material-symbols-rounded text-base">add</span>
+                                    <span>বছর যোগ করুন</span>
+                                </button>
+                            </form>
+
+                            <!-- Years List Table -->
+                            <div class="overflow-x-auto border border-slate-200 dark:border-slate-800/80 rounded-lg">
+                                <table class="w-full text-left border-collapse text-xs">
+                                    <thead>
+                                        <tr class="bg-slate-50 dark:bg-slate-900/60 border-b border-slate-200 dark:border-slate-800 text-slate-500 font-bold text-[11px]">
+                                            <th class="py-2 px-3 w-10 text-center">#</th>
+                                            <th class="py-2 px-3">পরীক্ষার বছর (Year)</th>
+                                            <th class="py-2 px-2 text-center w-28">Status</th>
+                                            <th class="py-2 px-3 text-right w-24">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="yearsTableBody" class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                                        <% if (safeYears.length === 0) { %>
+                                            <tr id="emptyYearsRow">
+                                                <td colspan="4" class="py-6 text-center text-xs text-slate-400">কোনো বছর যুক্ত করা হয়নি। উপরে নতুন বছর যোগ করুন।</td>
+                                            </tr>
+                                        <% } else { %>
+                                            <% safeYears.forEach((y, idx) => { %>
+                                                <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-900/30 transition-colors year-row-item" data-id="<%= y._id %>">
+                                                    <td class="py-2 px-3 text-center text-slate-400 font-mono text-[11px]"><%= idx + 1 %></td>
+                                                    <td class="py-2 px-3 font-semibold text-slate-900 dark:text-white">
+                                                        <span class="font-mono text-xs year-name-text"><%= y.year %></span>
+                                                    </td>
+                                                    <td class="py-2 px-2 text-center">
+                                                        <button type="button" onclick="toggleYearStatus('<%= y._id %>')"
+                                                                id="year-status-btn-<%= y._id %>"
+                                                                class="px-2 py-0.5 rounded-full text-[10.5px] font-bold transition-all cursor-pointer <%= y.isActive ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 border border-emerald-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200 border border-slate-300 dark:border-slate-700' %>">
+                                                            <%= y.isActive ? 'Active' : 'Inactive' %>
+                                                        </button>
+                                                    </td>
+                                                    <td class="py-2 px-3 text-right">
+                                                        <div class="flex items-center justify-end gap-1">
+                                                            <button type="button" onclick="editYearModal('<%= y._id %>', '<%= String(y.year).replace(/'/g, "\\'") %>')"
+                                                                    title="Edit Year"
+                                                                    class="size-7 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-emerald-500 transition-colors flex items-center justify-center cursor-pointer">
+                                                                <span class="material-symbols-rounded text-sm">edit</span>
+                                                            </button>
+                                                            <button type="button" onclick="deleteYearConfirm('<%= y._id %>', '<%= String(y.year).replace(/'/g, "\\'") %>')"
+                                                                    title="Delete Year"
+                                                                    class="size-7 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 text-slate-400 hover:text-rose-500 transition-colors flex items-center justify-center cursor-pointer">
+                                                                <span class="material-symbols-rounded text-sm">delete</span>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            <% }) %>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 4. History Bucket (Archived Classes View) -->
                 <div id="archivedClassesView" class="hidden p-3 sm:p-4 space-y-3">
                     <div class="p-3 bg-amber-50/60 dark:bg-amber-950/20 rounded-md border border-amber-200/80 dark:border-amber-900/40 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
@@ -528,10 +726,14 @@
         function switchAcademicTab(tab) {
             const activeView = document.getElementById('activeClassesView');
             const rulesView = document.getElementById('subjectRulesView');
+            const boardsYearsView = document.getElementById('boardsYearsView');
             const archiveView = document.getElementById('archivedClassesView');
+
             const tabActiveBtn = document.getElementById('tabActiveBtn');
             const tabRulesBtn = document.getElementById('tabRulesBtn');
+            const tabBoardsYearsBtn = document.getElementById('tabBoardsYearsBtn');
             const tabArchiveBtn = document.getElementById('tabArchiveBtn');
+
             const addClassBtn = document.getElementById('addClassBtn');
             const addSubjectBtn = document.getElementById('addSubjectBtn');
             const saveBtn = document.getElementById('saveBtn');
@@ -544,10 +746,12 @@
 
             if (tabActiveBtn) tabActiveBtn.className = inactiveBtnClass;
             if (tabRulesBtn) tabRulesBtn.className = inactiveBtnClass;
+            if (tabBoardsYearsBtn) tabBoardsYearsBtn.className = inactiveBtnClass;
             if (tabArchiveBtn) tabArchiveBtn.className = inactiveBtnClass;
 
             if (activeView) activeView.classList.add('hidden');
             if (rulesView) rulesView.classList.add('hidden');
+            if (boardsYearsView) boardsYearsView.classList.add('hidden');
             if (archiveView) archiveView.classList.add('hidden');
             if (notice) notice.classList.add('hidden');
 
@@ -568,6 +772,15 @@
                 if (saveBtn) saveBtn.classList.add('hidden');
                 if (window.history.replaceState) {
                     window.history.replaceState(null, '', window.location.pathname + '?tab=rules');
+                }
+            } else if (tab === 'boards-years') {
+                if (boardsYearsView) boardsYearsView.classList.remove('hidden');
+                if (tabBoardsYearsBtn) tabBoardsYearsBtn.className = activeBtnClass;
+                if (addClassBtn) addClassBtn.classList.add('hidden');
+                if (addSubjectBtn) addSubjectBtn.classList.add('hidden');
+                if (saveBtn) saveBtn.classList.add('hidden');
+                if (window.history.replaceState) {
+                    window.history.replaceState(null, '', window.location.pathname + '?tab=boards-years');
                 }
             } else {
                 if (archiveView) archiveView.classList.remove('hidden');
@@ -901,6 +1114,8 @@
                 switchAcademicTab('archive');
             } else if (urlParams.get('tab') === 'rules' || window.location.hash === '#rules') {
                 switchAcademicTab('rules');
+            } else if (urlParams.get('tab') === 'boards-years' || window.location.hash === '#boards-years' || urlParams.get('tab') === 'boards') {
+                switchAcademicTab('boards-years');
             } else {
                 switchAcademicTab('active');
             }
@@ -1589,6 +1804,315 @@
             }
         }
 
+        // ==========================================
+        // ACADEMIC BOARDS & YEARS CONTROLS
+        // ==========================================
+        async function handleAddNewBoard(e) {
+            e.preventDefault();
+            const nameInput = document.getElementById('newBoardName');
+            const codeInput = document.getElementById('newBoardCode');
+            const submitBtn = document.getElementById('btnAddBoardSubmit');
+
+            const name = (nameInput?.value || '').trim();
+            const code = (codeInput?.value || '').trim().toUpperCase();
+
+            if (!name) {
+                Swal.fire('নাম প্রয়োজন', 'অনুগ্রহ করে বোর্ডের নাম লিখুন', 'warning');
+                return;
+            }
+
+            if (submitBtn) submitBtn.disabled = true;
+
+            try {
+                const res = await fetch(`${apiBase}/academic-setup/boards`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, code })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'বোর্ড যুক্ত হয়েছে!',
+                        text: `"${name}" সফলভাবে যুক্ত করা হয়েছে।`,
+                        timer: 1400,
+                        showConfirmButton: false
+                    });
+                    window.location.href = `${window.location.pathname}?tab=boards-years`;
+                } else {
+                    Swal.fire('Error', data.error || 'বোর্ড যুক্ত করতে ব্যর্থ হয়েছে', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', err.message || 'Network error', 'error');
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        }
+
+        async function toggleBoardStatus(id) {
+            const btn = document.getElementById(`board-status-btn-${id}`);
+            try {
+                const res = await fetch(`${apiBase}/academic-setup/boards/${id}/toggle`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    if (btn) {
+                        if (data.isActive) {
+                            btn.className = 'px-2 py-0.5 rounded-full text-[10.5px] font-bold transition-all cursor-pointer bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 border border-emerald-500/20';
+                            btn.innerText = 'Active';
+                        } else {
+                            btn.className = 'px-2 py-0.5 rounded-full text-[10.5px] font-bold transition-all cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200 border border-slate-300 dark:border-slate-700';
+                            btn.innerText = 'Inactive';
+                        }
+                    }
+                    const activeCountEl = document.getElementById('activeBoardsBadgeCount');
+                    if (activeCountEl) {
+                        const currentCount = parseInt(activeCountEl.innerText, 10) || 0;
+                        activeCountEl.innerText = data.isActive ? (currentCount + 1) : Math.max(0, currentCount - 1);
+                    }
+                } else {
+                    Swal.fire('Error', data.error || 'Failed to toggle status', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', err.message || 'Network error', 'error');
+            }
+        }
+
+        async function editBoardModal(id, currentName, currentCode) {
+            const { value: formValues } = await Swal.fire({
+                title: 'বোর্ড সম্পাদন (Edit Board)',
+                html: `
+                    <div class="space-y-3 text-left">
+                        <div>
+                            <label class="text-xs font-bold text-slate-600 block mb-1">বোর্ডের নাম (Board Name)</label>
+                            <input id="swalEditBoardName" class="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm outline-none" value="${currentName}">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-600 block mb-1">বোর্ড কোড (Code)</label>
+                            <input id="swalEditBoardCode" class="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm uppercase outline-none" value="${currentCode || ''}" placeholder="e.g. DHK">
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: 'আপডেট করুন',
+                cancelButtonText: 'বাতিল',
+                preConfirm: () => {
+                    const name = document.getElementById('swalEditBoardName').value.trim();
+                    const code = document.getElementById('swalEditBoardCode').value.trim().toUpperCase();
+                    if (!name) {
+                        Swal.showValidationMessage('বোর্ডের নাম প্রয়োজন');
+                        return false;
+                    }
+                    return { name, code };
+                }
+            });
+
+            if (formValues) {
+                try {
+                    const res = await fetch(`${apiBase}/academic-setup/boards/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formValues)
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'আপডেট সম্পন্ন!',
+                            timer: 1300,
+                            showConfirmButton: false
+                        });
+                        window.location.href = `${window.location.pathname}?tab=boards-years`;
+                    } else {
+                        Swal.fire('Error', data.error || 'বোর্ড আপডেট করতে ব্যর্থ হয়েছে', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error', err.message || 'Network error', 'error');
+                }
+            }
+        }
+
+        async function deleteBoardConfirm(id, name) {
+            const result = await Swal.fire({
+                title: 'বোর্ড মুছে ফেলতে চান?',
+                text: `"${name}" মুছে ফেলা হবে।`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                confirmButtonText: 'হ্যাঁ, মুছুন',
+                cancelButtonText: 'না'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`${apiBase}/academic-setup/boards/${id}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'মুছে ফেলা হয়েছে!',
+                            timer: 1300,
+                            showConfirmButton: false
+                        });
+                        window.location.href = `${window.location.pathname}?tab=boards-years`;
+                    } else {
+                        Swal.fire('Error', data.error || 'Failed to delete board', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error', err.message || 'Network error', 'error');
+                }
+            }
+        }
+
+        // Years Handlers
+        async function handleAddNewYear(e) {
+            e.preventDefault();
+            const yearInput = document.getElementById('newYearVal');
+            const submitBtn = document.getElementById('btnAddYearSubmit');
+
+            const year = (yearInput?.value || '').trim();
+
+            if (!year) {
+                Swal.fire('বছর প্রয়োজন', 'অনুগ্রহ করে পরীক্ষার বছর লিখুন', 'warning');
+                return;
+            }
+
+            if (submitBtn) submitBtn.disabled = true;
+
+            try {
+                const res = await fetch(`${apiBase}/academic-setup/years`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ year })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'বছর যুক্ত হয়েছে!',
+                        text: `"${year}" সফলভাবে যুক্ত করা হয়েছে।`,
+                        timer: 1400,
+                        showConfirmButton: false
+                    });
+                    window.location.href = `${window.location.pathname}?tab=boards-years`;
+                } else {
+                    Swal.fire('Error', data.error || 'বছর যুক্ত করতে ব্যর্থ হয়েছে', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', err.message || 'Network error', 'error');
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        }
+
+        async function toggleYearStatus(id) {
+            const btn = document.getElementById(`year-status-btn-${id}`);
+            try {
+                const res = await fetch(`${apiBase}/academic-setup/years/${id}/toggle`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    if (btn) {
+                        if (data.isActive) {
+                            btn.className = 'px-2 py-0.5 rounded-full text-[10.5px] font-bold transition-all cursor-pointer bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 border border-emerald-500/20';
+                            btn.innerText = 'Active';
+                        } else {
+                            btn.className = 'px-2 py-0.5 rounded-full text-[10.5px] font-bold transition-all cursor-pointer bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200 border border-slate-300 dark:border-slate-700';
+                            btn.innerText = 'Inactive';
+                        }
+                    }
+                    const activeCountEl = document.getElementById('activeYearsBadgeCount');
+                    if (activeCountEl) {
+                        const currentCount = parseInt(activeCountEl.innerText, 10) || 0;
+                        activeCountEl.innerText = data.isActive ? (currentCount + 1) : Math.max(0, currentCount - 1);
+                    }
+                } else {
+                    Swal.fire('Error', data.error || 'Failed to toggle status', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', err.message || 'Network error', 'error');
+            }
+        }
+
+        async function editYearModal(id, currentYear) {
+            const { value: newYear } = await Swal.fire({
+                title: 'বছর সম্পাদন (Edit Year)',
+                input: 'text',
+                inputValue: currentYear,
+                showCancelButton: true,
+                confirmButtonText: 'আপডেট করুন',
+                cancelButtonText: 'বাতিল',
+                inputValidator: (val) => {
+                    if (!val || !val.trim()) return 'বছর খালি রাখা যাবে না';
+                }
+            });
+
+            if (newYear) {
+                try {
+                    const res = await fetch(`${apiBase}/academic-setup/years/${id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ year: newYear.trim() })
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'আপডেট সম্পন্ন!',
+                            timer: 1300,
+                            showConfirmButton: false
+                        });
+                        window.location.href = `${window.location.pathname}?tab=boards-years`;
+                    } else {
+                        Swal.fire('Error', data.error || 'বছর আপডেট করতে ব্যর্থ হয়েছে', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error', err.message || 'Network error', 'error');
+                }
+            }
+        }
+
+        async function deleteYearConfirm(id, year) {
+            const result = await Swal.fire({
+                title: 'বছর মুছে ফেলতে চান?',
+                text: `"${year}" মুছে ফেলা হবে।`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                confirmButtonText: 'হ্যাঁ, মুছুন',
+                cancelButtonText: 'না'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    const res = await fetch(`${apiBase}/academic-setup/years/${id}`, {
+                        method: 'DELETE'
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        await Swal.fire({
+                            icon: 'success',
+                            title: 'মুছে ফেলা হয়েছে!',
+                            timer: 1300,
+                            showConfirmButton: false
+                        });
+                        window.location.href = `${window.location.pathname}?tab=boards-years`;
+                    } else {
+                        Swal.fire('Error', data.error || 'Failed to delete year', 'error');
+                    }
+                } catch (err) {
+                    Swal.fire('Error', err.message || 'Network error', 'error');
+                }
+            }
+        }
+
         // Auto Tab from URL for Academic Setup
         document.addEventListener('DOMContentLoaded', () => {
             const p = new URLSearchParams(window.location.search);
@@ -1596,6 +2120,8 @@
                 switchAcademicTab('archive');
             } else if (p.get('tab') === 'rules' || window.location.hash === '#rules') {
                 switchAcademicTab('rules');
+            } else if (p.get('tab') === 'boards-years' || window.location.hash === '#boards-years' || p.get('tab') === 'boards') {
+                switchAcademicTab('boards-years');
             } else {
                 switchAcademicTab('active');
             }

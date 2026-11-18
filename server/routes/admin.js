@@ -3116,6 +3116,13 @@ router.get('/question-bank', adminProtect, async (req, res) => {
 
         const stats = statsData[0] || { boards: [], subjects: [], latestYear: '---', paidCount: 0, freeCount: 0 };
 
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [activeBoards, activeYears] = await Promise.all([
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings()
+        ]);
+        const combinedBoards = Array.from(new Set([...activeBoards, ...(stats.boards || []).filter(Boolean)])).sort();
+
         res.render('admin/question-bank', {
             questions: questions || [],
             user: req.session.user,
@@ -3137,7 +3144,8 @@ router.get('/question-bank', adminProtect, async (req, res) => {
                 access: accessFilter,
                 totalQuestions: totalCount
             },
-            boards: (stats.boards || []).filter(Boolean).sort(),
+            boards: combinedBoards,
+            years: activeYears,
             subjects: (stats.subjects || []).filter(Boolean).sort()
         });
     } catch (err) {
@@ -3483,9 +3491,16 @@ router.get('/add-question', contentAdminProtect, async (req, res) => {
     try {
         await connectDB();
         const mode = req.query.mode || 'standalone';
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [boards, years] = await Promise.all([
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings()
+        ]);
         res.render('admin/add-question', {
             user: req.session.user,
             mode,
+            boards: boards || [],
+            years: years || [],
             active: mode === 'archive' ? 'questions' : 'question-details'
         });
     } catch (err) {
@@ -5905,14 +5920,27 @@ router.get('/academic-setup', adminProtect, async (req, res) => {
         await connectDB();
         const AcademicClass = require('../models/AcademicClass');
         const SubjectRule = require('../models/SubjectRule');
-        const activeClasses = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
-        const archivedClasses = await AcademicClass.find({ isArchived: { $in: [true, 'true', 1] } }).sort({ updatedAt: -1, order: 1 }).lean();
-        const subjectRules = await SubjectRule.find().sort({ order: 1, createdAt: -1 }).populate('createdBy', 'name email').lean();
+        const AcademicBoard = require('../models/AcademicBoard');
+        const AcademicYear = require('../models/AcademicYear');
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+
+        await academicBoardYearController.ensureDefaultBoardsAndYears();
+
+        const [activeClasses, archivedClasses, subjectRules, boards, years] = await Promise.all([
+            AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean(),
+            AcademicClass.find({ isArchived: { $in: [true, 'true', 1] } }).sort({ updatedAt: -1, order: 1 }).lean(),
+            SubjectRule.find().sort({ order: 1, createdAt: -1 }).populate('createdBy', 'name email').lean(),
+            AcademicBoard.find().sort({ order: 1, name: 1 }).populate('createdBy', 'name email').lean(),
+            AcademicYear.find().sort({ order: 1, year: -1 }).populate('createdBy', 'name email').lean()
+        ]);
+
         res.render('superadmin/academic-setup', {
             active: 'academic-setup',
             classes: activeClasses || [],
             archivedClasses: archivedClasses || [],
             subjectRules: subjectRules || [],
+            boards: boards || [],
+            years: years || [],
             user: req.session.user || { name: 'Admin', role: 'admin' }
         });
     } catch (error) {
@@ -6058,6 +6086,27 @@ router.get('/academic-setup/subject-rules', adminProtect, subjectRuleController.
 router.post('/academic-setup/subject-rules', adminProtect, subjectRuleController.saveSubjectRule);
 router.post('/academic-setup/subject-rules/delete', adminProtect, subjectRuleController.deleteSubjectRule);
 router.delete('/academic-setup/subject-rules/:id', adminProtect, subjectRuleController.deleteSubjectRule);
+
+// Academic Boards & Exam Years Management
+const academicBoardYearController = require('../controllers/academicBoardYearController');
+router.get('/academic-setup/boards-and-years', adminProtect, academicBoardYearController.getActiveBoardsAndYearsApi);
+
+router.post('/academic-setup/boards', adminProtect, academicBoardYearController.addBoard);
+router.put('/academic-setup/boards/:id', adminProtect, academicBoardYearController.updateBoard);
+router.patch('/academic-setup/boards/:id/toggle', adminProtect, academicBoardYearController.toggleBoardStatus);
+router.post('/academic-setup/boards/:id/toggle', adminProtect, academicBoardYearController.toggleBoardStatus);
+router.delete('/academic-setup/boards/:id', adminProtect, academicBoardYearController.deleteBoard);
+router.post('/academic-setup/boards/:id/delete', adminProtect, academicBoardYearController.deleteBoard);
+router.post('/academic-setup/boards/reorder', adminProtect, academicBoardYearController.reorderBoards);
+
+router.post('/academic-setup/years', adminProtect, academicBoardYearController.addYear);
+router.put('/academic-setup/years/:id', adminProtect, academicBoardYearController.updateYear);
+router.patch('/academic-setup/years/:id/toggle', adminProtect, academicBoardYearController.toggleYearStatus);
+router.post('/academic-setup/years/:id/toggle', adminProtect, academicBoardYearController.toggleYearStatus);
+router.delete('/academic-setup/years/:id', adminProtect, academicBoardYearController.deleteYear);
+router.post('/academic-setup/years/:id/delete', academicBoardYearController.deleteYear);
+router.post('/academic-setup/years/reorder', adminProtect, academicBoardYearController.reorderYears);
+
 
 // ==========================================
 // SYLLABUS & TOPIC SYSTEM - ADMIN ROUTES

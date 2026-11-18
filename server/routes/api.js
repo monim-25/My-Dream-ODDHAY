@@ -38,6 +38,11 @@ router.get('/subject-rules', async (req, res) => {
     }
 });
 
+// GET /api/academic-boards-and-years — Central active boards and years
+const academicBoardYearController = require('../controllers/academicBoardYearController');
+router.get('/academic-boards-and-years', academicBoardYearController.getActiveBoardsAndYearsApi);
+
+
 // GET /api/cloudinary-signature — Direct browser upload signature (bypasses Vercel 4.5MB payload limit)
 router.get('/cloudinary-signature', (req, res) => {
     try {

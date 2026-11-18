@@ -2705,6 +2705,14 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
         const allClasses = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].filter(Boolean).sort();
         const yearList = Array.from(new Set((dynamicYears || []).map(y => String(y || '').trim()).filter(Boolean))).sort().reverse();
 
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [activeBoards, activeYears] = await Promise.all([
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings()
+        ]);
+        const combinedBoards = Array.from(new Set([...activeBoards, ...(stats.boards || []).filter(Boolean)])).sort();
+        const combinedYears = Array.from(new Set([...activeYears, ...yearList])).sort((a, b) => Number(b) - Number(a));
+
         // Calculate actual question counts from Question collection
         const bankIds = banks.map(b => b._id);
         const questionCounts = await Question.aggregate([
@@ -2749,8 +2757,8 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
             },
             subjects: allSubjects,
             classes: allClasses,
-            boards: (stats.boards || []).filter(Boolean).sort(),
-            years: yearList.length > 0 ? yearList : ['2026', '2025', '2024', '2023', '2022', '2021', '2020'],
+            boards: combinedBoards,
+            years: combinedYears,
             assignedCourses: userCourses,
             userCourses: userCourses,
             active: 'questions'
@@ -4377,11 +4385,19 @@ router.get('/question-details', teacherProtect, async (req, res) => {
             ]).then(res => res[0] || {})
         ]);
 
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [activeBoards, activeYears] = await Promise.all([
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings()
+        ]);
+
         res.render('teacher/question-details', {
             questions,
             user,
             assignedSubjects,
             assignedClasses,
+            boards: activeBoards,
+            years: activeYears,
             mCQCount: stats.mCQCount || 0,
             shortCount: stats.shortCount || 0,
             mediumCount: stats.mediumCount || 0,
@@ -4426,12 +4442,20 @@ router.get('/add-question', teacherProtect, async (req, res) => {
             else if (c.classLevel) classSet.add(c.classLevel);
         });
 
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [activeBoards, activeYears] = await Promise.all([
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings()
+        ]);
+
         res.render('teacher/add-question', {
             banks,
             user,
             userCourses,
             assignedSubjects: Array.from(subjectSet).sort(),
             assignedClasses: Array.from(classSet).sort(),
+            boards: activeBoards,
+            years: activeYears,
             active: req.query.mode === 'archive' ? 'questions' : 'question-details',
             mode: req.query.mode || 'standalone'
         });

@@ -3069,26 +3069,22 @@ router.get('/question-bank', protect, async (req, res) => {
 
         const mergedSubjects = Array.from(new Set(assignedSubjects)).sort();
 
-        // 2. BOARDS IN ENGLISH: Standard Bangladesh boards + DB boards
-        const standardBoards = [
-            'Dhaka Board', 'Chittagong Board', 'Comilla Board', 'Rajshahi Board',
-            'Jessore Board', 'Dinajpur Board', 'Sylhet Board', 'Barisal Board',
-            'Mymensingh Board', 'Madrasah Board', 'Technical Board'
-        ];
+        // 2. BOARDS: Central Superadmin Active Boards + any existing Question DB boards
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [activeBoards, activeYears] = await Promise.all([
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings()
+        ]);
         const rawBoards = questions.map(q => (q.board || '').trim()).filter(Boolean);
         const mergedBoards = Array.from(new Set([
-            ...standardBoards,
+            ...activeBoards,
             ...rawBoards
         ].map(b => String(b || '').trim()).filter(Boolean))).sort();
 
-        // 3. YEARS (1980 to 2026 + any custom year in DB)
-        const defaultYears = [];
-        for (let y = 2026; y >= 1980; y--) {
-            defaultYears.push(String(y));
-        }
+        // 3. YEARS: Central Superadmin Active Years + any existing Question DB years
         const rawYears = questions.map(q => (q.year || '').trim()).filter(Boolean);
         const mergedYears = Array.from(new Set([
-            ...defaultYears,
+            ...activeYears,
             ...rawYears
         ].map(y => String(y || '').trim()).filter(Boolean))).sort((a, b) => Number(b) - Number(a));
 
