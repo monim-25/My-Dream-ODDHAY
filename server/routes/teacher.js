@@ -2847,12 +2847,16 @@ router.get('/question-bank/:id', teacherProtect, async (req, res) => {
             totalPages: 1
         };
 
+        const academicFilters = await getAllAcademicFilters().catch(() => ({ subjects: [], classes: [] }));
+
         res.render('teacher/question-bank-details', {
             bank,
             questions,
             stats,
             engagement,
             qPagination,
+            subjects: academicFilters.subjects || [],
+            classes: academicFilters.classes || [],
             user: req.session.user,
             active: 'questions'
         });
@@ -4135,17 +4139,32 @@ router.get('/edit-question-bank/:id', teacherProtect, async (req, res) => {
         ]);
         if (!bank) return res.status(404).send('Bank not found');
 
-        const teacherContext = await getTeacherAssignedContext(req.session.user._id);
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [teacherContext, academicFilters, activeBoards, activeYears] = await Promise.all([
+            getTeacherAssignedContext(req.session.user._id),
+            getAllAcademicFilters(),
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings()
+        ]);
         const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
-        const assignedSubjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].sort();
-        const assignedClasses = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].sort();
+        const assignedSubjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects, ...academicFilters.subjects])].sort();
+        const assignedClasses = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses, ...academicFilters.classes])].sort((a, b) => {
+            const numA = parseInt(String(a).replace(/[^0-9]/g, ''), 10);
+            const numB = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return String(a).localeCompare(String(b));
+        });
 
         res.render('teacher/edit-question-bank', {
             bank,
             questions,
             assignedSubjects,
             assignedClasses,
+            subjects: assignedSubjects,
+            classes: assignedClasses,
+            boards: activeBoards,
+            years: activeYears,
             user: req.session.user,
             active: 'questions'
         });
@@ -4457,6 +4476,8 @@ router.get('/question-details', teacherProtect, async (req, res) => {
             user,
             assignedSubjects,
             assignedClasses,
+            subjects: assignedSubjects,
+            classes: assignedClasses,
             boards: activeBoards,
             years: activeYears,
             mCQCount: stats.mCQCount || 0,
@@ -4486,35 +4507,45 @@ router.get('/add-question', teacherProtect, async (req, res) => {
     try {
         await connectDB();
         const user = req.session.user;
-        const [banks, userCourses] = await Promise.all([
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [banks, userCourses, teacherContext, academicFilters, activeBoards, activeYears] = await Promise.all([
             QuestionBank.find({ addedBy: user._id }),
             Course.find({ $or: [{ instructor: user._id }, { permittedTeachers: user._id }] })
-                .select('title _id accessType subject classLevel')
+                .select('title _id accessType subject classLevel'),
+            getTeacherAssignedContext(user._id),
+            getAllAcademicFilters(),
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings()
         ]);
 
-        // Build deduplicated subject and class lists from assigned profile & courses
-        const teacherContext = await getTeacherAssignedContext(user._id);
-        const subjectSet = new Set(teacherContext.rawAssignedSubjects);
-        const classSet = new Set(teacherContext.rawAssignedClasses);
+        // Build deduplicated subject and class lists from assigned profile, courses & academic setup
+        const subjectSet = new Set(teacherContext.rawAssignedSubjects || []);
+        const classSet = new Set(teacherContext.rawAssignedClasses || []);
         userCourses.forEach(c => {
             if (Array.isArray(c.subject)) c.subject.forEach(s => subjectSet.add(s));
             else if (c.subject) subjectSet.add(c.subject);
             if (Array.isArray(c.classLevel)) c.classLevel.forEach(cl => classSet.add(cl));
             else if (c.classLevel) classSet.add(c.classLevel);
         });
+        (academicFilters.subjects || []).forEach(s => subjectSet.add(s));
+        (academicFilters.classes || []).forEach(cl => classSet.add(cl));
 
-        const academicBoardYearController = require('../controllers/academicBoardYearController');
-        const [activeBoards, activeYears] = await Promise.all([
-            academicBoardYearController.getActiveBoardNames(),
-            academicBoardYearController.getActiveYearStrings()
-        ]);
+        const sortedSubjects = Array.from(subjectSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
+        const sortedClasses = Array.from(classSet).filter(Boolean).sort((a, b) => {
+            const numA = parseInt(String(a).replace(/[^0-9]/g, ''), 10);
+            const numB = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return String(a).localeCompare(String(b));
+        });
 
         res.render('teacher/add-question', {
             banks,
             user,
             userCourses,
-            assignedSubjects: Array.from(subjectSet).sort(),
-            assignedClasses: Array.from(classSet).sort(),
+            assignedSubjects: sortedSubjects,
+            assignedClasses: sortedClasses,
+            subjects: sortedSubjects,
+            classes: sortedClasses,
             boards: activeBoards,
             years: activeYears,
             active: req.query.mode === 'archive' ? 'questions' : 'question-details',

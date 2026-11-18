@@ -2660,7 +2660,13 @@ router.get('/question/:id/delete', adminProtect, async (req, res) => {
 router.get('/edit-question/:id', adminProtect, async (req, res) => {
     try {
         await connectDB();
-        const question = await Question.findById(req.params.id);
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [question, academicFilters, activeBoards, activeYears] = await Promise.all([
+            Question.findById(req.params.id),
+            getAllAcademicFilters().catch(() => ({ subjects: [], classes: [] })),
+            academicBoardYearController.getActiveBoardNames().catch(() => []),
+            academicBoardYearController.getActiveYearStrings().catch(() => [])
+        ]);
         if (!question) return res.status(404).send('Question not found');
 
         const email = (req.session.user.email || '').toLowerCase().trim();
@@ -2672,6 +2678,10 @@ router.get('/edit-question/:id', adminProtect, async (req, res) => {
             user: req.session.user,
             question,
             isSuperAdmin,
+            boards: activeBoards,
+            years: activeYears,
+            subjects: academicFilters.subjects || [],
+            classes: academicFilters.classes || [],
             active: 'question-details'
         });
     } catch (err) {
@@ -3395,11 +3405,15 @@ router.get('/question-bank/:id', adminProtect, async (req, res) => {
             total: qTotal
         };
 
+        const academicFilters = await getAllAcademicFilters().catch(() => ({ subjects: [], classes: [] }));
+
         res.render('admin/question-bank-details', {
             user: req.session.user,
             bank,
             questions: combinedQuestions,
             stats: combinedStats,
+            subjects: academicFilters.subjects || [],
+            classes: academicFilters.classes || [],
             qPagination: {
                 page: 1,
                 limit: combinedQuestions.length,
@@ -3425,7 +3439,13 @@ router.get('/question-bank/:id', adminProtect, async (req, res) => {
 router.get('/edit-question-bank/:id', adminProtect, async (req, res) => {
     try {
         await connectDB();
-        const bank = await QuestionBank.findById(req.params.id);
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [bank, academicFilters, activeBoards, activeYears] = await Promise.all([
+            QuestionBank.findById(req.params.id),
+            getAllAcademicFilters().catch(() => ({ subjects: [], classes: [] })),
+            academicBoardYearController.getActiveBoardNames().catch(() => []),
+            academicBoardYearController.getActiveYearStrings().catch(() => [])
+        ]);
         if (!bank) return res.status(404).send('Bank not found');
 
         const questions = await Question.find({ bankId: bank._id }).sort({ createdAt: 1 });
@@ -3434,6 +3454,10 @@ router.get('/edit-question-bank/:id', adminProtect, async (req, res) => {
             user: req.session.user,
             bank,
             questions,
+            boards: activeBoards,
+            years: activeYears,
+            subjects: academicFilters.subjects || [],
+            classes: academicFilters.classes || [],
             active: 'questions'
         });
     } catch (err) {
@@ -3550,15 +3574,18 @@ router.get('/add-question', contentAdminProtect, async (req, res) => {
         await connectDB();
         const mode = req.query.mode || 'standalone';
         const academicBoardYearController = require('../controllers/academicBoardYearController');
-        const [boards, years] = await Promise.all([
+        const [boards, years, academicFilters] = await Promise.all([
             academicBoardYearController.getActiveBoardNames(),
-            academicBoardYearController.getActiveYearStrings()
+            academicBoardYearController.getActiveYearStrings(),
+            getAllAcademicFilters()
         ]);
         res.render('admin/add-question', {
             user: req.session.user,
             mode,
             boards: boards || [],
             years: years || [],
+            classes: academicFilters.classes || [],
+            subjects: academicFilters.subjects || [],
             active: mode === 'archive' ? 'questions' : 'question-details'
         });
     } catch (err) {

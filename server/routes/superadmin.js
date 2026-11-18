@@ -3383,11 +3383,15 @@ router.get('/question-bank/:id', adminProtect, async (req, res) => {
             total: qTotal
         };
 
+        const academicFilters = await getAllAcademicFilters().catch(() => ({ subjects: [], classes: [] }));
+
         res.render('superadmin/question-bank-details', {
             user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             bank,
             questions: combinedQuestions,
             stats: combinedStats,
+            subjects: academicFilters.subjects || [],
+            classes: academicFilters.classes || [],
             qPagination: {
                 page: 1,
                 limit: combinedQuestions.length,
