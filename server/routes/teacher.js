@@ -3598,6 +3598,7 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                     return {
                         questionText: (q.qText || '').trim(),
                         questionImage: (q.questionImage || '').trim(),
+                        questionImagePosition: ['above', 'below', 'left', 'right'].includes(q.questionImagePosition) ? q.questionImagePosition : 'above',
                         contextImage: (q.contextImage || '').trim(),
                         explanationImage: (q.explanationImage || '').trim(),
                         options: (q.options && q.options.length) ? q.options : ['', '', '', ''],
@@ -3896,6 +3897,7 @@ router.post('/quiz/:id/add-question', teacherProtect, async (req, res) => {
             quiz.questions.push({
                 questionText: (questionText || '').trim(),
                 questionImage: (req.body.questionImage || '').trim(),
+                questionImagePosition: ['above', 'below', 'left', 'right'].includes(req.body.questionImagePosition) ? req.body.questionImagePosition : 'above',
                 contextImage: (req.body.contextImage || '').trim(),
                 explanationImage: (req.body.explanationImage || '').trim(),
                 options: (type === 'MCQ' && (!options || !options.length)) ? ['', '', '', ''] : (options || []),
@@ -4008,6 +4010,7 @@ router.post('/quiz/:id/question/:qid/edit', teacherProtect, async (req, res) => 
         if (context !== undefined) updateData['questions.$.context'] = context;
         if (contextInstruction !== undefined) updateData['questions.$.contextInstruction'] = contextInstruction;
         if (req.body.questionImage !== undefined) updateData['questions.$.questionImage'] = (req.body.questionImage || '').trim();
+        if (req.body.questionImagePosition !== undefined) updateData['questions.$.questionImagePosition'] = ['above', 'below', 'left', 'right'].includes(req.body.questionImagePosition) ? req.body.questionImagePosition : 'above';
         if (req.body.contextImage !== undefined) updateData['questions.$.contextImage'] = (req.body.contextImage || '').trim();
         if (req.body.explanationImage !== undefined) updateData['questions.$.explanationImage'] = (req.body.explanationImage || '').trim();
         if (mcqSubtype !== undefined) updateData['questions.$.mcqSubtype'] = mcqSubtype;
@@ -4323,7 +4326,7 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
             return res.status(403).send('Unauthorized');
         }
 
-        const { questionIds, texts, correctAnswers, correctIndices, answers, explanations, marks, contexts, q1s, a1s, s1s, q2s, a2s, s2s, q3s, a3s, s3s, q4s, a4s, s4s, isBanglas, languages, questionImages, contextImages, explanationImages } = req.body;
+        const { questionIds, texts, correctAnswers, correctIndices, answers, explanations, marks, contexts, q1s, a1s, s1s, q2s, a2s, s2s, q3s, a3s, s3s, q4s, a4s, s4s, isBanglas, languages, questionImages, questionImagePositions, contextImages, explanationImages } = req.body;
         if (!questionIds || !Array.isArray(questionIds)) {
             return res.redirect(`/teacher/edit-question-bank/${req.params.id}?error=No questions to update`);
         }
@@ -4335,6 +4338,7 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
 
             if (text) updateObj.questionText = text;
             if (questionImages && questionImages[i] !== undefined) updateObj.questionImage = (questionImages[i] || '').trim();
+            if (questionImagePositions && questionImagePositions[i] !== undefined) updateObj.questionImagePosition = ['above', 'below', 'left', 'right'].includes(questionImagePositions[i]) ? questionImagePositions[i] : 'above';
             if (contextImages && contextImages[i] !== undefined) updateObj.contextImage = (contextImages[i] || '').trim();
             if (explanationImages && explanationImages[i] !== undefined) updateObj.explanationImage = (explanationImages[i] || '').trim();
 
@@ -4697,6 +4701,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const qTopics = [].concat(body['qTopic[]'] || body.qTopic || []);
         const qSubTopics = [].concat(body['qSubTopic[]'] || body.qSubTopic || []);
         const qQuestionImages = [].concat(body['qQuestionImage[]'] || body.qQuestionImage || []);
+        const qQuestionImagePositions = [].concat(body['qQuestionImagePosition[]'] || body.qQuestionImagePosition || []);
         const qContextImages = [].concat(body['qContextImage[]'] || body.qContextImage || []);
         const qExplanationImages = [].concat(body['qExplanationImage[]'] || body.qExplanationImage || []);
 
@@ -4901,6 +4906,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
             return {
                 questionText: questionTextFinal,
                 questionImage: (qQuestionImages[i] || '').trim(),
+                questionImagePosition: ['above', 'below', 'left', 'right'].includes(qQuestionImagePositions[i]) ? qQuestionImagePositions[i] : 'above',
                 contextImage: (qContextImages[i] || '').trim(),
                 explanationImage: (qExplanationImages[i] || '').trim(),
                 questionType: type,
@@ -4992,6 +4998,7 @@ router.post('/edit-question/:id', teacherProtect, async (req, res) => {
         if (contextInstruction !== undefined) updateData.contextInstruction = contextInstruction;
         if (context !== undefined) updateData.context = context;
         if (req.body.questionImage !== undefined) updateData.questionImage = (req.body.questionImage || '').trim();
+        if (req.body.questionImagePosition !== undefined) updateData.questionImagePosition = ['above', 'below', 'left', 'right'].includes(req.body.questionImagePosition) ? req.body.questionImagePosition : 'above';
         if (req.body.contextImage !== undefined) updateData.contextImage = (req.body.contextImage || '').trim();
         if (req.body.explanationImage !== undefined) updateData.explanationImage = (req.body.explanationImage || '').trim();
 

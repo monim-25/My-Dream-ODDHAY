@@ -886,11 +886,26 @@
         }
         window.escapeEditorHtml = escapeEditorHtml;
 
-        function renderEditorImageSlotHTML(slotId, imgUrl, label) {
+        function renderEditorImageSlotHTML(slotId, imgUrl, label, imgPos = 'above') {
             const hasImg = Boolean(imgUrl && String(imgUrl).trim());
             const safeUrl = escapeEditorHtml(imgUrl || '');
+            const isQuestionImg = slotId.startsWith('qimg-');
+            const safePos = ['above', 'below', 'left', 'right'].includes(imgPos) ? imgPos : 'above';
+
+            const posSelectorHTML = isQuestionImg ? `
+                <div class="qimg-pos-box ${hasImg ? 'flex' : 'hidden'} items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400 border-l border-emerald-300 dark:border-emerald-700 pl-1.5">
+                    <span class="font-medium text-[10px]">অবস্থান:</span>
+                    <select id="${slotId}-pos" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-[10.5px] font-medium outline-none">
+                        <option value="above" ${safePos === 'above' ? 'selected' : ''}>⬆️ উপরে</option>
+                        <option value="below" ${safePos === 'below' ? 'selected' : ''}>⬇️ নিচে</option>
+                        <option value="left" ${safePos === 'left' ? 'selected' : ''}>⬅️ বামে</option>
+                        <option value="right" ${safePos === 'right' ? 'selected' : ''}>➡️ ডানে</option>
+                    </select>
+                </div>
+            ` : '';
+
             return `
-                <div class="image-uploader-slot flex items-center gap-1.5 shrink-0">
+                <div class="image-uploader-slot flex items-center gap-1.5 shrink-0 flex-wrap">
                     <input type="hidden" id="${slotId}" value="${safeUrl}">
                     <input type="file" accept="image/*" class="hidden image-file-input" onchange="handleEditorImageUpload(this, '${slotId}')">
                     <button type="button" onclick="triggerEditorImageUpload(this)"
@@ -900,16 +915,70 @@
                         <span>${label}</span>
                     </button>
                     <div class="image-preview-badge ${hasImg ? 'flex' : 'hidden'} items-center gap-1.5 px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] text-emerald-700 dark:text-emerald-300">
-                        <a href="${safeUrl || '#'}" target="_blank" class="preview-img-link font-medium hover:underline flex items-center gap-1">
+                        <span class="preview-img-link font-medium flex items-center gap-1 cursor-pointer hover:underline" onclick="openQuizEditorLightbox(document.getElementById('${slotId}')?.value)">
                             <span class="material-symbols-rounded text-xs">image</span>
                             <span>চিত্র যুক্ত</span>
-                        </a>
+                        </span>
+                        ${posSelectorHTML}
                         <button type="button" onclick="removeEditorImage(this, '${slotId}')" class="text-rose-500 hover:text-rose-700 ml-1 cursor-pointer" title="চিত্র মুছুন">✕</button>
                     </div>
                 </div>
             `;
         }
         window.renderEditorImageSlotHTML = renderEditorImageSlotHTML;
+
+        function renderQuestionWithImageHTML(qText, imgSrc, imgPos = 'above', isTitle = true) {
+            const safeText = escapeEditorHtml(qText || '');
+            if (!imgSrc) {
+                return `<div class="${isTitle ? 'font-semibold text-slate-900 dark:text-white' : ''} leading-relaxed whitespace-pre-wrap select-text">${safeText}</div>`;
+            }
+            const pos = ['above', 'below', 'left', 'right'].includes(imgPos) ? imgPos : 'above';
+            const imgTag = `
+                <div class="inline-flex shrink-0">
+                    <img src="${escapeEditorHtml(imgSrc)}" 
+                         onclick="openQuizEditorLightbox('${escapeEditorHtml(imgSrc)}')" 
+                         class="max-h-36 sm:max-h-44 max-w-[220px] sm:max-w-xs w-auto object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 shadow-2xs cursor-pointer hover:opacity-90 hover:shadow-md transition-all" 
+                         alt="Question Diagram" title="ক্লিক করে বড় করে দেখুন">
+                </div>
+            `;
+            const textTag = `<div class="flex-1 ${isTitle ? 'font-semibold text-slate-900 dark:text-white' : ''} leading-relaxed whitespace-pre-wrap select-text">${safeText}</div>`;
+
+            if (pos === 'above') {
+                return `<div class="flex flex-col gap-2.5 items-start">${imgTag}${textTag}</div>`;
+            } else if (pos === 'below') {
+                return `<div class="flex flex-col gap-2.5 items-start">${textTag}${imgTag}</div>`;
+            } else if (pos === 'left') {
+                return `<div class="flex flex-col sm:flex-row gap-3.5 items-start">${imgTag}${textTag}</div>`;
+            } else if (pos === 'right') {
+                return `<div class="flex flex-col sm:flex-row-reverse gap-3.5 items-start justify-between">${imgTag}${textTag}</div>`;
+            }
+            return `<div class="flex flex-col gap-2.5 items-start">${imgTag}${textTag}</div>`;
+        }
+        window.renderQuestionWithImageHTML = renderQuestionWithImageHTML;
+
+        function renderExplanationWithImageHTML(expText, expImgSrc) {
+            if (!expText && !expImgSrc) return '';
+            const safeExp = escapeEditorHtml(expText || '');
+            const imgTag = expImgSrc ? `
+                <div class="inline-flex shrink-0 my-1">
+                    <img src="${escapeEditorHtml(expImgSrc)}" 
+                         onclick="openQuizEditorLightbox('${escapeEditorHtml(expImgSrc)}')" 
+                         class="max-h-36 sm:max-h-44 max-w-[220px] sm:max-w-xs w-auto object-contain rounded-lg border border-amber-300/40 dark:border-amber-500/30 bg-white/60 dark:bg-slate-900/60 shadow-2xs cursor-pointer hover:opacity-90 hover:shadow-md transition-all" 
+                         alt="Explanation Diagram" title="ক্লিক করে বড় করে দেখুন">
+                </div>
+            ` : '';
+            return `
+                <div class="p-3 rounded-xl bg-amber-50/60 dark:bg-amber-500/10 border border-amber-200/60 dark:border-amber-500/20 text-xs text-slate-700 dark:text-slate-300 space-y-1.5 select-text">
+                    <div class="flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-400">
+                        <span class="material-symbols-rounded text-sm">lightbulb</span>
+                        <span>Explanation:</span>
+                    </div>
+                    ${imgTag}
+                    ${safeExp ? `<p class="leading-relaxed whitespace-pre-wrap">${safeExp}</p>` : ''}
+                </div>
+            `;
+        }
+        window.renderExplanationWithImageHTML = renderExplanationWithImageHTML;
 
         function triggerEditorImageUpload(btn) {
             const slot = btn.closest('.image-uploader-slot');
@@ -955,6 +1024,11 @@
                         badge.classList.remove('hidden');
                         badge.classList.add('flex');
                     }
+                    const posBox = slot.querySelector('.qimg-pos-box');
+                    if (posBox) {
+                        posBox.classList.remove('hidden');
+                        posBox.classList.add('flex');
+                    }
                 } else {
                     alert('Image upload failed: ' + (data.error || 'Server error'));
                     if (btn) {
@@ -985,6 +1059,11 @@
             if (badge) {
                 badge.classList.add('hidden');
                 badge.classList.remove('flex');
+            }
+            const posBox = slot.querySelector('.qimg-pos-box');
+            if (posBox) {
+                posBox.classList.add('hidden');
+                posBox.classList.remove('flex');
             }
             if (triggerBtn) {
                 triggerBtn.classList.remove('hidden');
@@ -1154,14 +1233,19 @@
                     });
 
                     let stemHTML = '';
-                    if (q.context) {
+                    if (q.context || q.contextImage) {
                         stemHTML = `
-                            <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200">
+                            <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 space-y-2">
                                 <div class="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-amber-500/20">
                                     <span class="font-bold flex items-center gap-1"><span class="material-symbols-rounded text-sm">auto_stories</span> উদ্দীপক:</span>
                                     <span class="text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-md">${escapeEditorHtml(q.contextInstruction || 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন')}</span>
                                 </div>
-                                <div class="whitespace-pre-wrap select-text leading-relaxed">${escapeEditorHtml(q.context)}</div>
+                                ${q.context ? `<div class="whitespace-pre-wrap select-text leading-relaxed">${escapeEditorHtml(q.context)}</div>` : ''}
+                                ${q.contextImage ? `
+                                    <div class="mt-2 flex justify-start">
+                                        <img src="${escapeEditorHtml(q.contextImage)}" onclick="openQuizEditorLightbox('${escapeEditorHtml(q.contextImage)}')" class="max-h-36 sm:max-h-44 max-w-[220px] sm:max-w-xs w-auto object-contain rounded-lg border border-amber-500/20 bg-white/50 dark:bg-slate-900/50 shadow-2xs cursor-pointer hover:opacity-90 hover:shadow-md transition-all" alt="Stimulus Diagram" title="ক্লিক করে বড় করে দেখুন">
+                                    </div>
+                                ` : ''}
                             </div>
                         `;
                     }
@@ -1183,22 +1267,22 @@
                     bodyContent = `
                         <div class="space-y-3.5">
                             ${stemHTML}
-                            <div class="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-xs sm:text-sm lg:text-[15px] font-semibold text-slate-900 dark:text-white leading-relaxed whitespace-pre-wrap select-text shadow-2xs">
-                                ${escapeEditorHtml(q.questionText || '')}
+                            <div class="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-xs sm:text-sm lg:text-[15px] leading-relaxed select-text shadow-2xs">
+                                ${renderQuestionWithImageHTML(q.questionText || '', q.questionImage, q.questionImagePosition)}
                             </div>
                             ${stmtsHTML}
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                                 ${optionsHTML}
                             </div>
-                            ${q.explanation ? `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 select-text"><strong class="font-semibold text-slate-800 dark:text-slate-200">Explanation:</strong> ${escapeEditorHtml(q.explanation)}</div>` : ''}
+                            ${renderExplanationWithImageHTML(q.explanation, q.explanationImage)}
                         </div>
                     `;
                 } else if (type === 'Short' || type === 'Medium') {
                     const ansVal = q.answer || q.correctAnswer || '';
                     bodyContent = `
                         <div class="space-y-3.5">
-                            <div class="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-xs sm:text-sm lg:text-[15px] font-semibold text-slate-900 dark:text-white leading-relaxed whitespace-pre-wrap select-text shadow-2xs">
-                                ${escapeEditorHtml(q.questionText || '')}
+                            <div class="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-xs sm:text-sm lg:text-[15px] leading-relaxed select-text shadow-2xs">
+                                ${renderQuestionWithImageHTML(q.questionText || '', q.questionImage, q.questionImagePosition)}
                             </div>
                             ${ansVal ? `
                                 <div class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-400 dark:border-emerald-600/60 text-xs sm:text-sm text-slate-800 dark:text-slate-200 select-text">
@@ -1209,7 +1293,7 @@
                                     <div class="whitespace-pre-wrap font-medium select-text">${escapeEditorHtml(ansVal)}</div>
                                 </div>
                             ` : ''}
-                            ${q.explanation ? `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 select-text"><strong class="font-semibold text-slate-800 dark:text-slate-200">Explanation:</strong> ${escapeEditorHtml(q.explanation)}</div>` : ''}
+                            ${renderExplanationWithImageHTML(q.explanation, q.explanationImage)}
                         </div>
                     `;
                 } else if (type === 'Comprehension') {
@@ -1232,19 +1316,24 @@
                     });
                     bodyContent = `
                         <div class="space-y-3.5">
-                            ${q.context ? `
-                                <div class="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap select-text shadow-2xs">
+                            ${(q.context || q.contextImage) ? `
+                                <div class="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-xs sm:text-sm text-slate-800 dark:text-slate-200 leading-relaxed select-text shadow-2xs space-y-2">
                                     <div class="text-[11px] font-bold text-primary mb-1 flex items-center gap-1">
                                         <span class="material-symbols-rounded text-sm">menu_book</span>
                                         <span>Context / উদ্দীপক:</span>
                                     </div>
-                                    <div>${escapeEditorHtml(q.context)}</div>
+                                    ${q.context ? `<div class="whitespace-pre-wrap leading-relaxed">${escapeEditorHtml(q.context)}</div>` : ''}
+                                    ${q.contextImage ? `
+                                        <div class="mt-2 flex justify-start">
+                                            <img src="${escapeEditorHtml(q.contextImage)}" onclick="openQuizEditorLightbox('${escapeEditorHtml(q.contextImage)}')" class="max-h-36 sm:max-h-44 max-w-[220px] sm:max-w-xs w-auto object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 shadow-2xs cursor-pointer hover:opacity-90 hover:shadow-md transition-all" alt="Context Diagram" title="ক্লিক করে বড় করে দেখুন">
+                                        </div>
+                                    ` : ''}
                                 </div>
                             ` : ''}
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 ${subQsHTML}
                             </div>
-                            ${q.explanation ? `<div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 select-text"><strong class="font-semibold text-slate-800 dark:text-slate-200">Explanation:</strong> ${escapeEditorHtml(q.explanation)}</div>` : ''}
+                            ${renderExplanationWithImageHTML(q.explanation, q.explanationImage)}
                         </div>
                     `;
                 }
@@ -1423,7 +1512,7 @@
                         <div>
                             <div class="flex items-center justify-between">
                                 <label class="form-label">Question Text</label>
-                                ${renderEditorImageSlotHTML('qimg-' + qid, q.questionImage, 'প্রশ্নে চিত্র')}
+                                ${renderEditorImageSlotHTML('qimg-' + qid, q.questionImage, 'প্রশ্নে চিত্র', q.questionImagePosition)}
                             </div>
                             <textarea id="qtext-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...'}">${escapeEditorHtml(cleanQText)}</textarea>
                         </div>
@@ -1474,7 +1563,7 @@
                         <div>
                             <div class="flex items-center justify-between">
                                 <label class="form-label">Question Text</label>
-                                ${renderEditorImageSlotHTML('qimg-' + qid, q.questionImage, 'প্রশ্নে চিত্র')}
+                                ${renderEditorImageSlotHTML('qimg-' + qid, q.questionImage, 'প্রশ্নে চিত্র', q.questionImagePosition)}
                             </div>
                             <textarea id="qtext-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...'}">${escapeEditorHtml(cleanQText)}</textarea>
                         </div>
@@ -1999,6 +2088,7 @@
                 year: yearEl ? yearEl.value.trim() : '',
                 explanation: explainEl ? explainEl.value.trim() : '',
                 questionImage: document.getElementById(`qimg-${qid}`)?.value.trim() || '',
+                questionImagePosition: document.getElementById(`qimg-${qid}-pos`)?.value || 'above',
                 contextImage: document.getElementById(`ctximg-${qid}`)?.value.trim() || '',
                 explanationImage: document.getElementById(`expimg-${qid}`)?.value.trim() || ''
             };
@@ -2617,6 +2707,7 @@
                 }
                 
                 data.questionImage = document.getElementById(`qimg-${qid}`)?.value.trim() || '';
+                data.questionImagePosition = document.getElementById(`qimg-${qid}-pos`)?.value || 'above';
                 data.contextImage = document.getElementById(`ctximg-${qid}`)?.value.trim() || '';
                 data.explanationImage = document.getElementById(`expimg-${qid}`)?.value.trim() || '';
 
@@ -3347,7 +3438,31 @@
         function escapeEditorHtml(str) {
             return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
+        function openQuizEditorLightbox(src) {
+            if (!src) return;
+            const m = document.getElementById('quizEditorImageLightbox');
+            const img = document.getElementById('quizEditorLightboxImg');
+            if (m && img) {
+                img.src = src;
+                m.classList.remove('hidden');
+            }
+        }
+        window.openQuizEditorLightbox = openQuizEditorLightbox;
+
+        function closeQuizEditorLightbox() {
+            const m = document.getElementById('quizEditorImageLightbox');
+            if (m) m.classList.add('hidden');
+        }
+        window.closeQuizEditorLightbox = closeQuizEditorLightbox;
     </script>
+
+    <!-- Quiz Editor In-Page Image Lightbox Modal -->
+    <div id="quizEditorImageLightbox" class="fixed inset-0 z-[9999] hidden bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 cursor-zoom-out" onclick="closeQuizEditorLightbox()">
+        <div class="relative max-w-4xl max-h-[90vh] flex items-center justify-center" onclick="event.stopPropagation()">
+            <img id="quizEditorLightboxImg" src="" class="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl bg-white/5 border border-white/10" alt="Enlarged Diagram">
+            <button type="button" onclick="closeQuizEditorLightbox()" class="absolute -top-3 -right-3 size-8 rounded-full bg-slate-900/90 hover:bg-rose-600 text-white flex items-center justify-center text-sm shadow-lg transition-all cursor-pointer border border-white/20">✕</button>
+        </div>
+    </div>
     <datalist id="centralBoardList"></datalist>
     <datalist id="centralYearList"></datalist>
     <script>

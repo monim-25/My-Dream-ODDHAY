@@ -25,6 +25,7 @@ const questionSchema = new mongoose.Schema({
     accessType: { type: String, enum: ['Free', 'Paid'], default: 'Free' },
     fileUrl: { type: String, default: '' },
     questionImage: { type: String, default: '' },
+    questionImagePosition: { type: String, enum: ['above', 'below', 'left', 'right'], default: 'above' },
     contextImage: { type: String, default: '' },
     explanationImage: { type: String, default: '' },
     explanation: { type: String, default: '' },

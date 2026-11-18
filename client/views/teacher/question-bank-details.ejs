@@ -345,18 +345,56 @@
                                             </div>
                                         </div>
                                     <% } else { %>
-                                        <% if (q.context && q.questionType !== 'Comprehension') { %>
-                                            <div class="mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200">
+                                        <% if ((q.context || q.contextImage) && q.questionType !== 'Comprehension') { %>
+                                            <div class="mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 space-y-2">
                                                 <div class="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-amber-500/20">
                                                     <span class="font-bold flex items-center gap-1"><span class="material-symbols-rounded text-sm">auto_stories</span> উদ্দীপক:</span>
                                                     <span class="text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-md"><%= q.contextInstruction || 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন' %></span>
                                                 </div>
-                                                <p class="whitespace-pre-wrap leading-relaxed"><%= q.context %></p>
+                                                <% if (q.context) { %>
+                                                    <p class="whitespace-pre-wrap leading-relaxed"><%= q.context %></p>
+                                                <% } %>
+                                                <% if (q.contextImage) { %>
+                                                    <div class="mt-2 flex justify-start">
+                                                        <img src="<%= q.contextImage %>" class="max-h-36 sm:max-h-44 max-w-[220px] sm:max-w-xs w-auto object-contain rounded-lg border border-amber-500/20 bg-white/50 dark:bg-slate-900/50 shadow-2xs cursor-pointer hover:opacity-90" onclick="window.open(this.src)" title="চিত্র">
+                                                    </div>
+                                                <% } %>
                                             </div>
                                         <% } %>
-                                        <div class="text-xs sm:text-base font-semibold text-slate-800 dark:text-slate-100 leading-relaxed mb-0">
-                                            <%- q.questionText || q.title || 'Untitled Question' %>
-                                        </div>
+
+                                        <% const qPos = (q.questionImagePosition && ['above', 'below', 'left', 'right'].includes(q.questionImagePosition)) ? q.questionImagePosition : 'above'; %>
+                                        <% const qImgEl = q.questionImage ? `
+                                            <div class="shrink-0 inline-flex">
+                                                <img src="${q.questionImage}" class="max-h-36 sm:max-h-44 max-w-[220px] sm:max-w-xs w-auto object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 shadow-2xs cursor-pointer hover:opacity-90" onclick="window.open(this.src)" title="চিত্র">
+                                            </div>` : ''; %>
+                                        <% const qTxtEl = `
+                                            <div class="flex-1 text-xs sm:text-base font-semibold text-slate-800 dark:text-slate-100 leading-relaxed mb-0">
+                                                ${q.questionText || q.title || 'Untitled Question'}
+                                            </div>`; %>
+
+                                        <% if (!q.questionImage) { %>
+                                            <%- qTxtEl %>
+                                        <% } else if (qPos === 'above') { %>
+                                            <div class="flex flex-col items-start gap-2.5 mb-2">
+                                                <%- qImgEl %>
+                                                <%- qTxtEl %>
+                                            </div>
+                                        <% } else if (qPos === 'below') { %>
+                                            <div class="flex flex-col items-start gap-2.5 mb-2">
+                                                <%- qTxtEl %>
+                                                <%- qImgEl %>
+                                            </div>
+                                        <% } else if (qPos === 'left') { %>
+                                            <div class="flex flex-col sm:flex-row items-start gap-3.5 mb-2">
+                                                <%- qImgEl %>
+                                                <%- qTxtEl %>
+                                            </div>
+                                        <% } else if (qPos === 'right') { %>
+                                            <div class="flex flex-col sm:flex-row-reverse items-start justify-between gap-3.5 mb-2">
+                                                <%- qImgEl %>
+                                                <%- qTxtEl %>
+                                            </div>
+                                        <% } %>
                                         <% if (q.statements && q.statements.length > 0) { %>
                                             <div class="my-2.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 space-y-1.5">
                                                 <% const rNums = ['i.', 'ii.', 'iii.', 'iv.']; %>
@@ -524,14 +562,21 @@
                                             </div>
 
                                             <% const expMCQ = String(q.explanation || q.explanationText || q.solution || '').trim(); %>
-                                            <% if (expMCQ !== '') { %>
+                                            <% if (expMCQ !== '' || q.explanationImage) { %>
                                                 <div class="mt-2.5 p-3 sm:p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex gap-2.5 sm:gap-3 items-start">
                                                     <div class="size-7 sm:size-8 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                                                         <span class="material-symbols-rounded text-sm sm:text-base">lightbulb</span>
                                                     </div>
-                                                    <div class="flex-1 min-w-0">
+                                                    <div class="flex-1 min-w-0 space-y-1.5">
                                                         <p class="text-[9px] sm:text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-0.5"><%= isQBangla ? 'ব্যাখ্যা' : 'Explanation' %></p>
-                                                        <p class="text-xs sm:text-[13px] font-medium text-slate-700 dark:text-slate-300 leading-relaxed"><%= expMCQ %></p>
+                                                        <% if (q.explanationImage) { %>
+                                                            <div class="my-1 flex justify-start">
+                                                                <img src="<%= q.explanationImage %>" class="max-h-36 sm:max-h-44 max-w-[220px] sm:max-w-xs w-auto object-contain rounded-lg border border-amber-300/40 dark:border-amber-500/30 bg-white/60 dark:bg-slate-900/60 shadow-2xs cursor-pointer hover:opacity-90" onclick="window.open(this.src)" title="চিত্র">
+                                                            </div>
+                                                        <% } %>
+                                                        <% if (expMCQ) { %>
+                                                            <p class="text-xs sm:text-[13px] font-medium text-slate-700 dark:text-slate-300 leading-relaxed"><%= expMCQ %></p>
+                                                        <% } %>
                                                     </div>
                                                 </div>
                                             <% } %>
@@ -548,14 +593,21 @@
                                                 </div>
                                             </div>
                                             <% const expNonMCQ = String(q.explanation || q.explanationText || q.solution || '').trim(); %>
-                                            <% if (expNonMCQ !== '') { %>
+                                            <% if (expNonMCQ !== '' || q.explanationImage) { %>
                                                 <div class="mt-2.5 p-3 sm:p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 flex gap-2.5 sm:gap-3 items-start">
                                                     <div class="size-7 sm:size-8 rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                                                         <span class="material-symbols-rounded text-sm sm:text-base">lightbulb</span>
                                                     </div>
-                                                    <div class="flex-1 min-w-0">
+                                                    <div class="flex-1 min-w-0 space-y-1.5">
                                                         <p class="text-[9px] sm:text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-0.5"><%= isQBangla ? 'ব্যাখ্যা' : 'Explanation' %></p>
-                                                        <p class="text-xs sm:text-[13px] font-medium text-slate-700 dark:text-slate-300 leading-relaxed"><%= expNonMCQ %></p>
+                                                        <% if (q.explanationImage) { %>
+                                                            <div class="my-1 flex justify-start">
+                                                                <img src="<%= q.explanationImage %>" class="max-h-36 sm:max-h-44 max-w-[220px] sm:max-w-xs w-auto object-contain rounded-lg border border-amber-300/40 dark:border-amber-500/30 bg-white/60 dark:bg-slate-900/60 shadow-2xs cursor-pointer hover:opacity-90" onclick="window.open(this.src)" title="চিত্র">
+                                                            </div>
+                                                        <% } %>
+                                                        <% if (expNonMCQ) { %>
+                                                            <p class="text-xs sm:text-[13px] font-medium text-slate-700 dark:text-slate-300 leading-relaxed"><%= expNonMCQ %></p>
+                                                        <% } %>
                                                     </div>
                                                 </div>
                                             <% } %>
