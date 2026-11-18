@@ -1,4 +1,4 @@
-const { normalizeClass, normalizeGroup, isClassWithGroups, getLinkedClasses, buildClassQuery } = require('../utils/academicHelper');
+const { normalizeClass, normalizeGroup, isClassWithGroups, getLinkedClasses, buildClassQuery, getAllAcademicFilters } = require('../utils/academicHelper');
 const express = require('express');
 const router = express.Router();
 const path = require('path');
@@ -2642,11 +2642,26 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
         let query = { addedBy: user._id };
         if (subjectFilter !== 'all') {
             query.$and = query.$and || [];
-            query.$and.push({ $or: [{ subject: subjectFilter }, { subjects: subjectFilter }] });
+            query.$and.push({
+                $or: [
+                    { subject: subjectFilter },
+                    { subjects: subjectFilter },
+                    { subject: { $regex: new RegExp(`^${subjectFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
+                ]
+            });
         }
         if (classFilter !== 'all') {
+            const classNum = String(classFilter).replace(/[^0-9]/g, '');
+            const classRegex = new RegExp(`(^|\\b)(${classFilter}${classNum ? '|' + classNum : ''})($|\\b)`, 'i');
             query.$and = query.$and || [];
-            query.$and.push({ $or: [{ classLevel: classFilter }, { classLevel: { $in: [classFilter] } }] });
+            query.$and.push({
+                $or: [
+                    { classLevel: classFilter },
+                    { classLevel: { $regex: classRegex } },
+                    { classLevel: { $in: [classFilter, classNum, `Class ${classNum}`].filter(Boolean) } },
+                    { classLevels: { $in: [classFilter, classNum, `Class ${classNum}`].filter(Boolean) } }
+                ]
+            });
         }
         if (boardFilter !== 'all') query.board = boardFilter;
         if (yearFilter !== 'all') query.year = yearFilter;
@@ -2671,7 +2686,7 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
 
         const teacherObjId = new mongoose.Types.ObjectId(String(user._id));
 
-        const [banks, totalCount, stats, userCourses, pendingCount, approvedCount, rejectedCount, dynamicYears] = await Promise.all([
+        const [banks, totalCount, stats, userCourses, pendingCount, approvedCount, rejectedCount, dynamicYears, academicFilters] = await Promise.all([
             QuestionBank.find(query).populate('addedBy', 'name profilePicture profileImage').populate('course', 'title _id').sort({ createdAt: -1 }).skip(skip).limit(limit),
             QuestionBank.countDocuments(query),
             QuestionBank.aggregate([
@@ -2694,15 +2709,21 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
             QuestionBank.countDocuments({ addedBy: user._id, status: 'pending' }),
             QuestionBank.countDocuments({ addedBy: user._id, $or: [{ status: 'approved' }, { status: { $exists: false } }] }),
             QuestionBank.countDocuments({ addedBy: user._id, status: 'rejected' }),
-            QuestionBank.distinct('year', { addedBy: user._id })
+            QuestionBank.distinct('year', { addedBy: user._id }),
+            getAllAcademicFilters()
         ]);
 
-        // Combine classes/subjects from teacher's assigned profile and courses
+        // Combine classes/subjects from teacher's assigned profile, courses, existing banks, and platform academic setup
         const teacherContext = await getTeacherAssignedContext(user._id);
         const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
-        const allSubjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].filter(Boolean).sort();
-        const allClasses = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].filter(Boolean).sort();
+        const allSubjects = [...new Set([...courseSubjects, ...(teacherContext.rawAssignedSubjects || []), ...(stats.subjects || []), ...(academicFilters.subjects || [])])].filter(Boolean).sort((a, b) => a.localeCompare(b));
+        const allClasses = [...new Set([...courseClasses, ...(teacherContext.rawAssignedClasses || []), ...(stats.classes || []), ...(academicFilters.classes || [])])].filter(Boolean).sort((a, b) => {
+            const numA = parseInt(String(a).replace(/[^0-9]/g, ''), 10);
+            const numB = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return String(a).localeCompare(String(b));
+        });
         const yearList = Array.from(new Set((dynamicYears || []).map(y => String(y || '').trim()).filter(Boolean))).sort().reverse();
 
         const academicBoardYearController = require('../controllers/academicBoardYearController');
@@ -4345,11 +4366,19 @@ router.get('/question-details', teacherProtect, async (req, res) => {
         const boardFilter = req.query.board || 'all';
         const search = req.query.q || '';
 
-        // Query assigned courses and profile to strictly populate dropdowns
-        const userCourses = await Course.find({
-            $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
-        });
-        const teacherContext = await getTeacherAssignedContext(user._id);
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [userCourses, teacherContext, academicFilters, activeBoards, activeYears, qSubjects, qClasses] = await Promise.all([
+            Course.find({
+                $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
+            }),
+            getTeacherAssignedContext(user._id),
+            getAllAcademicFilters(),
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings(),
+            Question.distinct('subject', { addedBy: user._id }).catch(() => []),
+            Question.distinct('classLevel', { addedBy: user._id }).catch(() => [])
+        ]);
+
         const subjectSet = new Set(teacherContext.rawAssignedSubjects || []);
         const classSet = new Set(teacherContext.rawAssignedClasses || []);
         userCourses.forEach(c => {
@@ -4358,16 +4387,53 @@ router.get('/question-details', teacherProtect, async (req, res) => {
             if (Array.isArray(c.classLevel)) c.classLevel.forEach(cl => classSet.add(cl));
             else if (c.classLevel) classSet.add(c.classLevel);
         });
-        const assignedSubjects = Array.from(subjectSet).filter(Boolean).sort();
-        const assignedClasses = Array.from(classSet).filter(Boolean).sort();
+        (qSubjects || []).forEach(s => s && subjectSet.add(String(s).trim()));
+        (qClasses || []).forEach(cl => cl && classSet.add(String(cl).trim()));
+        (academicFilters.subjects || []).forEach(s => subjectSet.add(s));
+        (academicFilters.classes || []).forEach(cl => classSet.add(cl));
 
-        let query = { addedBy: user._id };
-        if (typeFilter !== 'all') query.questionType = typeFilter;
-        if (classFilter !== 'all') query.classLevel = classFilter;
-        if (subjectFilter !== 'all') query.subject = subjectFilter;
-        if (accessFilter !== 'all') query.accessType = accessFilter;
-        if (boardFilter !== 'all') query.board = boardFilter;
-        if (search) query.questionText = { $regex: search, $options: 'i' };
+        const assignedSubjects = Array.from(subjectSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
+        const assignedClasses = Array.from(classSet).filter(Boolean).sort((a, b) => {
+            const numA = parseInt(String(a).replace(/[^0-9]/g, ''), 10);
+            const numB = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return String(a).localeCompare(String(b));
+        });
+
+        const andClauses = [{ addedBy: user._id }];
+        if (typeFilter !== 'all') andClauses.push({ questionType: typeFilter });
+        if (accessFilter !== 'all') andClauses.push({ accessType: accessFilter });
+        if (boardFilter !== 'all') andClauses.push({ board: { $regex: new RegExp(`^${boardFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
+        if (subjectFilter !== 'all') {
+            andClauses.push({
+                $or: [
+                    { subject: subjectFilter },
+                    { subjects: subjectFilter },
+                    { subject: { $regex: new RegExp(`^${subjectFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
+                ]
+            });
+        }
+        if (classFilter !== 'all') {
+            const classNum = String(classFilter).replace(/[^0-9]/g, '');
+            const classRegex = new RegExp(`(^|\\b)(${classFilter}${classNum ? '|' + classNum : ''})($|\\b)`, 'i');
+            andClauses.push({
+                $or: [
+                    { classLevel: classFilter },
+                    { classLevel: { $regex: classRegex } },
+                    { classLevel: { $in: [classFilter, classNum, `Class ${classNum}`].filter(Boolean) } },
+                    { classLevels: { $in: [classFilter, classNum, `Class ${classNum}`].filter(Boolean) } }
+                ]
+            });
+        }
+        if (search) {
+            andClauses.push({
+                $or: [
+                    { questionText: { $regex: search, $options: 'i' } },
+                    { subject: { $regex: search, $options: 'i' } }
+                ]
+            });
+        }
+        const query = andClauses.length === 1 ? andClauses[0] : { $and: andClauses };
 
         const [questions, totalCount, stats] = await Promise.all([
             Question.find(query).populate('addedBy', 'name profileImage').sort({ createdAt: -1 }).skip(skip).limit(limit),
@@ -4384,12 +4450,6 @@ router.get('/question-details', teacherProtect, async (req, res) => {
                     }
                 }
             ]).then(res => res[0] || {})
-        ]);
-
-        const academicBoardYearController = require('../controllers/academicBoardYearController');
-        const [activeBoards, activeYears] = await Promise.all([
-            academicBoardYearController.getActiveBoardNames(),
-            academicBoardYearController.getActiveYearStrings()
         ]);
 
         res.render('teacher/question-details', {

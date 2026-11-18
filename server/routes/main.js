@@ -1,4 +1,4 @@
-const { normalizeClass, normalizeGroup, isClassWithGroups, getLinkedClasses, buildClassQuery, extractSubjectsForStudent, getStudentSubjects } = require('../utils/academicHelper');
+const { normalizeClass, normalizeGroup, isClassWithGroups, getLinkedClasses, buildClassQuery, extractSubjectsForStudent, getStudentSubjects, getAllAcademicFilters } = require('../utils/academicHelper');
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
@@ -3061,13 +3061,15 @@ router.get('/question-bank', protect, async (req, res) => {
         // 1. DYNAMIC SUBJECTS: Strictly use superadmin assigned class & group subjects
         let assignedSubjects = await getStudentSubjects(dbUser);
 
-        if (assignedSubjects.length === 0) {
+        if (!assignedSubjects || assignedSubjects.length === 0) {
             const subSet = new Set();
             questions.forEach(q => q.subject && subSet.add(q.subject.trim()));
+            const academicFilters = await getAllAcademicFilters();
+            (academicFilters.subjects || []).forEach(s => subSet.add(s));
             assignedSubjects = Array.from(subSet);
         }
 
-        const mergedSubjects = Array.from(new Set(assignedSubjects)).sort();
+        const mergedSubjects = Array.from(new Set(assignedSubjects)).filter(Boolean).sort();
 
         // 2. BOARDS: Central Superadmin Active Boards + any existing Question DB boards
         const academicBoardYearController = require('../controllers/academicBoardYearController');

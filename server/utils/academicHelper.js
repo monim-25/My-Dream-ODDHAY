@@ -458,6 +458,108 @@ async function cascadeSubjectRename(oldSubject, newSubject, className = null) {
     }
 }
 
+/**
+ * Return all distinct active classes and subjects for filter dropdowns across the platform
+ */
+async function getAllAcademicFilters() {
+    const AcademicClass = require('../models/AcademicClass');
+    const QuestionBank = require('../models/QuestionBank');
+    const Question = require('../models/Question');
+
+    const defaultClasses = [
+        'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'
+    ];
+    const defaultSubjects = [
+        'Bangla', 'English', 'Mathematics', 'Higher Mathematics', 'Physics', 
+        'Chemistry', 'Biology', 'ICT', 'Accounting', 'Finance & Banking', 
+        'Business Organization', 'Economics', 'General Science', 'Bangladesh & Global Studies'
+    ];
+
+    const [classDocs, qbSubjects, qbClasses, qSubjects, qClasses] = await Promise.all([
+        AcademicClass.find({ isArchived: { $ne: true } }).sort({ order: 1, name: 1 }).lean().catch(() => []),
+        QuestionBank.distinct('subject').catch(() => []),
+        QuestionBank.distinct('classLevel').catch(() => []),
+        Question.distinct('subject').catch(() => []),
+        Question.distinct('classLevel').catch(() => [])
+    ]);
+
+    const classSet = new Set(defaultClasses);
+    const addClass = (raw) => {
+        if (!raw) return;
+        const str = String(raw).trim();
+        if (str.includes(',')) {
+            str.split(',').forEach(part => addClass(part));
+            return;
+        }
+        if (/^(6|7|8|9|10|11|12)$/.test(str)) {
+            classSet.add(`Class ${str}`);
+            return;
+        }
+        const norm = normalizeClass(str);
+        if (norm && norm !== 'All Classes') {
+            classSet.add(norm);
+        } else if (str) {
+            classSet.add(str);
+        }
+    };
+
+    (classDocs || []).forEach(cd => {
+        if (cd && cd.name) addClass(cd.name);
+    });
+    [...(qbClasses || []), ...(qClasses || [])].forEach(cl => {
+        if (Array.isArray(cl)) {
+            cl.forEach(c => addClass(c));
+        } else if (cl) {
+            addClass(cl);
+        }
+    });
+
+    const subjectSet = new Set(defaultSubjects);
+    const addSubject = (raw) => {
+        if (!raw) return;
+        const str = String(raw).trim();
+        if (str.includes(',')) {
+            str.split(',').forEach(part => addSubject(part));
+            return;
+        }
+        if (str.length > 1) {
+            subjectSet.add(str);
+        }
+    };
+
+    (classDocs || []).forEach(cd => {
+        if (!cd) return;
+        (cd.subjects || []).forEach(s => addSubject(s));
+        (cd.commonSubjects || []).forEach(s => addSubject(s));
+        (cd.groups || []).forEach(g => {
+            (g.subjects || []).forEach(s => addSubject(s));
+        });
+    });
+    [...(qbSubjects || []), ...(qSubjects || [])].forEach(s => {
+        if (Array.isArray(s)) {
+            s.forEach(sub => addSubject(sub));
+        } else if (s) {
+            addSubject(s);
+        }
+    });
+
+    const sortedClasses = Array.from(classSet).filter(Boolean).sort((a, b) => {
+        const numA = parseInt(String(a).replace(/[^0-9]/g, ''), 10);
+        const numB = parseInt(String(b).replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        if (!isNaN(numA)) return -1;
+        if (!isNaN(numB)) return 1;
+        return a.localeCompare(b);
+    });
+
+    const sortedSubjects = Array.from(subjectSet).filter(Boolean).sort((a, b) => a.localeCompare(b));
+
+    return {
+        classes: sortedClasses,
+        subjects: sortedSubjects
+    };
+}
+
 module.exports = {
     CANONICAL_CLASSES,
     VALID_GROUPS,
@@ -470,6 +572,7 @@ module.exports = {
     getStudentSubjects,
     stringSimilarity,
     detectSubjectRenames,
-    cascadeSubjectRename
+    cascadeSubjectRename,
+    getAllAcademicFilters
 };
 

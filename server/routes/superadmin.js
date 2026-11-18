@@ -7,7 +7,7 @@ const Question = require('../models/Question');
 const Topic = require('../models/Topic');
 const AcademicClass = require('../models/AcademicClass');
 const AIKnowledge = require('../models/AIKnowledge');
-const { detectSubjectRenames, cascadeSubjectRename } = require('../utils/academicHelper');
+const { detectSubjectRenames, cascadeSubjectRename, getAllAcademicFilters } = require('../utils/academicHelper');
 const { sendPaymentApprovalEmail, sendStaffInviteEmail, sendPasswordResetNotificationEmail } = require('../services/emailService');
 
 // Helper to log system activity
@@ -2409,41 +2409,68 @@ router.get('/question-details', adminProtect, async (req, res) => {
         const search = req.query.q || '';
         const typeFilter = req.query.type || 'all';
         const classFilter = req.query.class || 'all';
+        const subjectFilter = req.query.subject || 'all';
         const boardFilter = req.query.board || 'all';
         const accessFilter = req.query.access || 'all';
         const authorFilter = req.query.author || null;
 
-        let query = {};
-        if (search) {
-            query.$or = [
-                { questionText: { $regex: search, $options: 'i' } },
-                { subject: { $regex: search, $options: 'i' } }
-            ];
-        }
+        const andClauses = [];
         if (typeFilter !== 'all') {
-            query.questionType = typeFilter;
-        }
-        if (classFilter !== 'all') {
-            query.classLevel = { $regex: classFilter, $options: 'i' };
-        }
-        if (boardFilter !== 'all') {
-            query.board = { $regex: boardFilter, $options: 'i' };
+            andClauses.push({ questionType: typeFilter });
         }
         if (accessFilter !== 'all') {
-            query.accessType = accessFilter;
+            andClauses.push({ accessType: accessFilter });
+        }
+        if (boardFilter !== 'all') {
+            andClauses.push({ board: { $regex: new RegExp(`^${boardFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
+        }
+        if (subjectFilter !== 'all') {
+            andClauses.push({
+                $or: [
+                    { subject: subjectFilter },
+                    { subjects: subjectFilter },
+                    { subject: { $regex: new RegExp(`^${subjectFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
+                ]
+            });
+        }
+        if (classFilter !== 'all') {
+            const classNum = String(classFilter).replace(/[^0-9]/g, '');
+            const classRegex = new RegExp(`(^|\\b)(${classFilter}${classNum ? '|' + classNum : ''})($|\\b)`, 'i');
+            andClauses.push({
+                $or: [
+                    { classLevel: classFilter },
+                    { classLevel: { $regex: classRegex } },
+                    { classLevel: { $in: [classFilter, classNum, `Class ${classNum}`].filter(Boolean) } },
+                    { classLevels: { $in: [classFilter, classNum, `Class ${classNum}`].filter(Boolean) } }
+                ]
+            });
         }
         if (authorFilter) {
             const mongoose = require('mongoose');
-            if (mongoose.Types.ObjectId.isValid(authorFilter)) query.addedBy = authorFilter;
+            if (mongoose.Types.ObjectId.isValid(authorFilter)) andClauses.push({ addedBy: authorFilter });
+        }
+        if (search) {
+            andClauses.push({
+                $or: [
+                    { questionText: { $regex: search, $options: 'i' } },
+                    { subject: { $regex: search, $options: 'i' } }
+                ]
+            });
         }
 
-        const [mCQCount, shortCount, mediumCount, compCount, questions, totalCount] = await Promise.all([
+        const query = andClauses.length > 0 ? { $and: andClauses } : {};
+
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [mCQCount, shortCount, mediumCount, compCount, questions, totalCount, activeBoards, activeYears, academicFilters] = await Promise.all([
             Question.countDocuments({ questionType: 'MCQ' }),
             Question.countDocuments({ questionType: 'Short' }),
             Question.countDocuments({ questionType: 'Medium' }),
             Question.countDocuments({ questionType: 'Comprehension' }),
             Question.find(query).populate('addedBy', 'name profileImage').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-            Question.countDocuments(query)
+            Question.countDocuments(query),
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings(),
+            getAllAcademicFilters()
         ]);
         
         const totalQuestions = mCQCount + shortCount + mediumCount + compCount;
@@ -2467,12 +2494,17 @@ router.get('/question-details', adminProtect, async (req, res) => {
             user: req.session.user || { name: 'Super Admin', role: 'superadmin' },
             active: 'question-details',
             filterTeacher,
+            boards: activeBoards,
+            years: activeYears,
+            classes: academicFilters.classes,
+            subjects: academicFilters.subjects,
             filters: {
                 page,
                 totalPages: Math.ceil(totalCount / limit) || 1,
                 q: search,
                 type: typeFilter,
                 class: classFilter,
+                subject: subjectFilter,
                 board: boardFilter,
                 access: accessFilter,
                 author: authorFilter || '',
@@ -2888,37 +2920,63 @@ router.get('/question-bank', adminProtect, async (req, res) => {
         const subjectFilter = req.query.subject || 'all';
         const accessFilter = req.query.access || 'all';
 
-        let query = {};
-        if (user.role === 'teacher') query.addedBy = user._id;
+        const andClauses = [];
+        if (user.role === 'teacher') andClauses.push({ addedBy: user._id });
         
         if (search) {
-            query.$or = [
-                { subject: { $regex: search, $options: 'i' } },
-                { board: { $regex: search, $options: 'i' } }
-            ];
+            andClauses.push({
+                $or: [
+                    { subject: { $regex: search, $options: 'i' } },
+                    { board: { $regex: search, $options: 'i' } }
+                ]
+            });
         }
-        if (boardFilter !== 'all') query.board = boardFilter;
-        if (classFilter !== 'all') query.classLevel = classFilter;
-        if (subjectFilter !== 'all') query.subject = subjectFilter;
-        if (accessFilter !== 'all') query.accessType = accessFilter;
+        if (boardFilter !== 'all') {
+            andClauses.push({ board: { $regex: new RegExp(`^${boardFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
+        }
+        if (classFilter !== 'all') {
+            const classNum = String(classFilter).replace(/[^0-9]/g, '');
+            const classRegex = new RegExp(`(^|\\b)(${classFilter}${classNum ? '|' + classNum : ''})($|\\b)`, 'i');
+            andClauses.push({
+                $or: [
+                    { classLevel: classFilter },
+                    { classLevel: { $regex: classRegex } },
+                    { classLevel: { $in: [classFilter, classNum, `Class ${classNum}`].filter(Boolean) } },
+                    { classLevels: { $in: [classFilter, classNum, `Class ${classNum}`].filter(Boolean) } }
+                ]
+            });
+        }
+        if (subjectFilter !== 'all') {
+            andClauses.push({
+                $or: [
+                    { subject: subjectFilter },
+                    { subjects: subjectFilter },
+                    { subject: { $regex: new RegExp(`^${subjectFilter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
+                ]
+            });
+        }
+        if (accessFilter !== 'all') {
+            andClauses.push({ accessType: accessFilter });
+        }
 
-        const [questions, totalCount, statsData, totalPaidStudents, pendingCount] = await Promise.all([
+        const query = andClauses.length > 0 ? { $and: andClauses } : {};
+
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
+        const [questions, totalCount, statsData, totalPaidStudents, pendingCount, activeBoards, activeYears, academicFilters] = await Promise.all([
             QuestionBank.find(query).populate('addedBy', 'name profileImage').sort({ year: -1, createdAt: -1 }).skip(skip).limit(limit).lean(),
             QuestionBank.countDocuments(query),
             QuestionBank.aggregate([
                 { $group: { _id: null, boards: { $addToSet: '$board' }, subjects: { $addToSet: '$subject' }, latestYear: { $max: '$year' }, paidCount: { $sum: { $cond: [{ $eq: ['$accessType', 'Paid'] }, 1, 0] } }, freeCount: { $sum: { $cond: [{ $eq: ['$accessType', 'Free'] }, 1, { $cond: [{ $eq: ['$accessType', 'Paid'] }, 0, 1] }] } } } }
             ]),
             User.countDocuments({ role: 'student', 'enrolledCourses.0': { $exists: true } }),
-            QuestionBank.countDocuments({ status: 'pending' })
+            QuestionBank.countDocuments({ status: 'pending' }),
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings(),
+            getAllAcademicFilters()
         ]);
 
         const stats = statsData[0] || { boards: [], subjects: [], latestYear: '---', paidCount: 0, freeCount: 0 };
-
-        const academicBoardYearController = require('../controllers/academicBoardYearController');
-        const [activeBoards, activeYears] = await Promise.all([
-            academicBoardYearController.getActiveBoardNames(),
-            academicBoardYearController.getActiveYearStrings()
-        ]);
+        const combinedSubjects = Array.from(new Set([...(stats.subjects || []).filter(Boolean), ...(academicFilters.subjects || [])])).sort((a, b) => a.localeCompare(b));
 
         res.render('superadmin/question-bank', {
             questions: questions || [],
@@ -2944,7 +3002,8 @@ router.get('/question-bank', adminProtect, async (req, res) => {
             },
             boards: activeBoards,
             years: activeYears,
-            subjects: (stats.subjects || []).filter(Boolean).sort()
+            classes: academicFilters.classes,
+            subjects: combinedSubjects
         });
     } catch (err) {
         console.error('Question Bank Error:', err);
