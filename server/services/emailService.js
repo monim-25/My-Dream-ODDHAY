@@ -3,7 +3,7 @@ const nodemailer = require('nodemailer');
 
 // Helper to get Base URL for outgoing emails
 const getBaseUrl = () => {
-    let url = process.env.BASE_URL || 'https://oddhay.net';
+    let url = process.env.BASE_URL || process.env.BASE || 'https://oddhay.net';
     url = url.trim().replace(/\/+$/, '');
     if (url.includes('vercel.app')) {
         url = 'https://oddhay.net';

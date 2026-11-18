@@ -27,7 +27,8 @@ const allowedOrigins = [
     'https://oddhay.net',
     'https://www.oddhay.net',
     'https://oddhay.vercel.app',
-    process.env.BASE_URL
+    process.env.BASE_URL,
+    process.env.BASE
 ].filter(Boolean);
 
 const io = new SocketIO(http, {
