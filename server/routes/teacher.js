@@ -4639,6 +4639,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const qStatement2s = [].concat(body['qStatement2[]'] || body.qStatement2 || []);
         const qStatement3s = [].concat(body['qStatement3[]'] || body.qStatement3 || []);
         const qContextIds = [].concat(body['qContextId[]'] || body.qContextId || []);
+        const qContextInstructions = [].concat(body['qContextInstruction[]'] || body.qContextInstruction || []);
 
         // qOptions[] comes as groups of 4 per question
         const allOptions = [].concat(body['qOptions[]'] || body.qOptions || []);
@@ -4821,6 +4822,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 mcqSubtype: isMCQ ? mcqSubtypeVal : 'standard',
                 statements: (isMCQ && stmts.length > 0) ? stmts : [],
                 contextId: isMCQ ? contextIdVal : '',
+                contextInstruction: (isMCQ && mcqSubtypeVal === 'contextual') ? ((qContextInstructions[i] || '').trim() || 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন') : '',
                 options: opts,
                 correctAnswerIndex: isMCQ ? parseInt(qCorrects[i] || 0) : undefined,
                 correctAnswer: isMCQ ? undefined : answerFinal,
@@ -4886,7 +4888,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
 router.post('/edit-question/:id', teacherProtect, async (req, res) => {
     try {
         await connectDB();
-        const { questionText, questionType, mcqSubtype, statements, contextId, options, correctAnswerIndex, correctAnswer, explanation, board, year, subject, classLevel, accessType, context, q1, q2, q3, q4, a1, a2, a3, a4, s1, s2, s3, s4, solution1, solution2, solution3, solution4, chapter, topic, subTopic } = req.body;
+        const { questionText, questionType, mcqSubtype, statements, contextId, contextInstruction, options, correctAnswerIndex, correctAnswer, explanation, board, year, subject, classLevel, accessType, context, q1, q2, q3, q4, a1, a2, a3, a4, s1, s2, s3, s4, solution1, solution2, solution3, solution4, chapter, topic, subTopic } = req.body;
         const q = await Question.findById(req.params.id);
         if (!q) return res.status(404).send('Not found');
         if (q.addedBy.toString() !== req.session.user._id.toString()) return res.status(403).send('Unauthorized');
@@ -4902,6 +4904,7 @@ router.post('/edit-question/:id', teacherProtect, async (req, res) => {
             updateData.statements = Array.isArray(statements) ? statements.filter(Boolean) : [statements].filter(Boolean);
         }
         if (contextId !== undefined) updateData.contextId = contextId;
+        if (contextInstruction !== undefined) updateData.contextInstruction = contextInstruction;
         if (context !== undefined) updateData.context = context;
 
         if (req.body.isBangla !== undefined) {

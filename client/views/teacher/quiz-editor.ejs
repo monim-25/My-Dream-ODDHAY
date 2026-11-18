@@ -302,9 +302,30 @@
                             <!-- Question Content: Read-Only Review Display -->
                             <% if (q.questionType === 'MCQ' || !q.questionType) { %>
                                 <div class="space-y-3.5">
+                                    <% if (q.context) { %>
+                                        <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200">
+                                            <div class="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-amber-500/20">
+                                                <span class="font-bold flex items-center gap-1"><span class="material-symbols-rounded text-sm">auto_stories</span> উদ্দীপক:</span>
+                                                <span class="text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-md"><%= q.contextInstruction || 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন' %></span>
+                                            </div>
+                                            <div class="whitespace-pre-wrap select-text leading-relaxed"><%= q.context %></div>
+                                        </div>
+                                    <% } %>
                                     <div class="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-xs sm:text-sm lg:text-[15px] font-semibold text-slate-900 dark:text-white leading-relaxed whitespace-pre-wrap select-text shadow-2xs">
                                         <%= q.questionText %>
                                     </div>
+                                    <% if (q.statements && q.statements.length > 0) { %>
+                                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 space-y-1.5 text-xs">
+                                            <% const rNums = ['i.', 'ii.', 'iii.', 'iv.']; %>
+                                            <% q.statements.forEach((st, sIdx) => { %>
+                                                <div class="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                                                    <span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold text-xs"><%= rNums[sIdx] || (sIdx + 1) + '.' %></span>
+                                                    <span><%= st %></span>
+                                                </div>
+                                            <% }); %>
+                                            <p class="font-semibold text-slate-500 dark:text-slate-400 pt-1">নিচের কোনটি সঠিক?</p>
+                                        </div>
+                                    <% } %>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                                         <% 
                                             const corrIndex = (typeof q.correctAnswer === 'number') ? q.correctAnswer : (parseInt(q.correctAnswer) || 0);
@@ -919,11 +940,41 @@
                             </div>
                         `;
                     });
+
+                    let stemHTML = '';
+                    if (q.context) {
+                        stemHTML = `
+                            <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200">
+                                <div class="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-amber-500/20">
+                                    <span class="font-bold flex items-center gap-1"><span class="material-symbols-rounded text-sm">auto_stories</span> উদ্দীপক:</span>
+                                    <span class="text-[11px] font-semibold text-amber-800 dark:text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-md">${escapeEditorHtml(q.contextInstruction || 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন')}</span>
+                                </div>
+                                <div class="whitespace-pre-wrap select-text leading-relaxed">${escapeEditorHtml(q.context)}</div>
+                            </div>
+                        `;
+                    }
+                    let stmtsHTML = '';
+                    if (q.statements && q.statements.length > 0) {
+                        const rNums = ['i.', 'ii.', 'iii.', 'iv.'];
+                        let items = '';
+                        q.statements.forEach((st, sIdx) => {
+                            items += `<div class="flex items-center gap-2 text-slate-700 dark:text-slate-300"><span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold text-xs">${rNums[sIdx] || (sIdx + 1) + '.'}</span><span>${escapeEditorHtml(st)}</span></div>`;
+                        });
+                        stmtsHTML = `
+                            <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 space-y-1.5 text-xs">
+                                ${items}
+                                <p class="font-semibold text-slate-500 dark:text-slate-400 pt-1">নিচের কোনটি সঠিক?</p>
+                            </div>
+                        `;
+                    }
+
                     bodyContent = `
                         <div class="space-y-3.5">
+                            ${stemHTML}
                             <div class="p-3.5 sm:p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 text-xs sm:text-sm lg:text-[15px] font-semibold text-slate-900 dark:text-white leading-relaxed whitespace-pre-wrap select-text shadow-2xs">
                                 ${escapeEditorHtml(q.questionText || '')}
                             </div>
+                            ${stmtsHTML}
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
                                 ${optionsHTML}
                             </div>

@@ -17,6 +17,7 @@ const questionSchema = new mongoose.Schema({
     mcqSubtype: { type: String, enum: ['standard', 'multiple_completion', 'contextual'], default: 'standard' },
     statements: [{ type: String }], // Roman numeral statements for multiple completion MCQ (i, ii, iii)
     contextId: { type: String, default: '' }, // Groups multiple contextual MCQs sharing the same stimulus/context
+    contextInstruction: { type: String, default: '' }, // Directive e.g. "উদ্দীপকটি পড়ে ২ ও ৩ নং প্রশ্নের উত্তর দিন"
     board: { type: String, default: '' },
     year: { type: String, default: '' },
     addedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
