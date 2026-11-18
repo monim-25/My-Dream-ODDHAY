@@ -475,6 +475,11 @@
                                                                 class="inline-flex items-center px-2 py-0.5 rounded-md bg-<%= color %>-50 dark:bg-<%= color %>-500/10 text-<%= color %>-600 dark:text-<%= color %>-400 text-[10px] font-medium border border-<%= color %>-100 dark:border-<%= color %>-500/20">
                                                                 <%= q.questionType %>
                                                             </span>
+                                                            <% if (q.questionType === 'MCQ' && (q.mcqSubtype === 'multiple_completion' || (q.statements && q.statements.length > 0))) { %>
+                                                                <span class="px-1.5 py-0.5 rounded-md bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[9px] font-bold border border-sky-100 dark:border-sky-500/20">বহুপদী</span>
+                                                            <% } else if (q.questionType === 'MCQ' && (q.mcqSubtype === 'contextual' || q.context)) { %>
+                                                                <span class="px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-bold border border-amber-100 dark:border-amber-500/20">উদ্দীপকভিত্তিক</span>
+                                                            <% } %>
                                                             <% if (q.accessType==='Paid' ) { %>
                                                                 <span
                                                                     class="px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-medium border border-amber-100 dark:border-amber-500/20">Paid</span>
@@ -602,6 +607,11 @@
                                                             class="inline-flex items-center px-2 py-0.5 rounded-md bg-<%= color %>-50 dark:bg-<%= color %>-500/10 text-<%= color %>-600 dark:text-<%= color %>-400 text-[9px] font-bold border border-<%= color %>-100 dark:border-<%= color %>-500/20">
                                                             <%= q.questionType %>
                                                         </span>
+                                                        <% if (q.questionType === 'MCQ' && (q.mcqSubtype === 'multiple_completion' || (q.statements && q.statements.length > 0))) { %>
+                                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[8px] font-bold border border-sky-100 dark:border-sky-500/20 ml-1">বহুপদী</span>
+                                                        <% } else if (q.questionType === 'MCQ' && (q.mcqSubtype === 'contextual' || q.context)) { %>
+                                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded-md bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[8px] font-bold border border-amber-100 dark:border-amber-500/20 ml-1">উদ্দীপকভিত্তিক</span>
+                                                        <% } %>
                                                 </td>
                                                 <td class="px-6 py-3 whitespace-nowrap">
                                                     <div class="flex flex-col">
@@ -768,11 +778,23 @@
                         </div>
 
                         <!-- Standard Question Area (MCQ, Short, Medium) -->
-                        <div id="modalStandardQuestionArea" class="space-y-1">
+                        <div id="modalStandardQuestionArea" class="space-y-2">
+                            <!-- Stimulus / Context (for contextual questions) -->
+                            <div id="modalStemContainer" class="hidden p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 space-y-1">
+                                <span class="font-bold flex items-center gap-1"><span class="material-symbols-rounded text-sm">auto_stories</span> উদ্দীপক (Stem):</span>
+                                <p id="modalStemText" class="whitespace-pre-wrap leading-relaxed text-xs"></p>
+                            </div>
+
                             <p class="text-xs font-medium text-slate-400">Question</p>
                             <h3 id="modalText"
                                 class="text-sm sm:text-base font-normal text-slate-800 dark:text-slate-100 leading-relaxed whitespace-pre-wrap">
                             </h3>
+
+                            <!-- Roman Numeral Statements (for Multiple Completion questions) -->
+                            <div id="modalStatementsContainer" class="hidden space-y-1.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
+                                <div id="modalStatementsList" class="space-y-1"></div>
+                                <p class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 pt-1">নিচের কোনটি সঠিক?</p>
+                            </div>
                         </div>
 
                         <!-- Comprehension View Area -->
@@ -2278,6 +2300,36 @@
                 if (stdArea) stdArea.classList.remove('hidden');
                 if (compArea) compArea.classList.add('hidden');
                 document.getElementById('modalText').innerText = q.questionText || '';
+
+                // Contextual stimulus handling
+                const modalStemContainer = document.getElementById('modalStemContainer');
+                if (modalStemContainer) {
+                    if (q.context && q.questionType !== 'Comprehension') {
+                        modalStemContainer.classList.remove('hidden');
+                        document.getElementById('modalStemText').innerText = q.context;
+                    } else {
+                        modalStemContainer.classList.add('hidden');
+                    }
+                }
+
+                // Multiple completion statements handling
+                const modalStatementsContainer = document.getElementById('modalStatementsContainer');
+                if (modalStatementsContainer) {
+                    if (q.statements && q.statements.length > 0) {
+                        modalStatementsContainer.classList.remove('hidden');
+                        const stmtList = document.getElementById('modalStatementsList');
+                        stmtList.innerHTML = '';
+                        const romanNums = ['i.', 'ii.', 'iii.', 'iv.'];
+                        q.statements.forEach((st, sIdx) => {
+                            const li = document.createElement('div');
+                            li.className = 'flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300';
+                            li.innerHTML = `<span class="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-bold text-[11px]">${romanNums[sIdx] || (sIdx + 1) + '.'}</span><span>${st}</span>`;
+                            stmtList.appendChild(li);
+                        });
+                    } else {
+                        modalStatementsContainer.classList.add('hidden');
+                    }
+                }
 
                 if (q.questionType === 'MCQ') {
                     if (optionsContainer) optionsContainer.classList.remove('hidden');

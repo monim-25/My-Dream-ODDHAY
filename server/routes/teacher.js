@@ -4634,6 +4634,11 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         const qSubS4s = [].concat(body['qSubS4[]'] || body.qSubS4 || body['s4[]'] || body.s4 || []);
         const qIsBanglas = [].concat(body['qIsBangla[]'] || body.qIsBangla || body['isBangla[]'] || body.isBangla || []);
         const qLanguages = [].concat(body['qLanguage[]'] || body.qLanguage || []);
+        const qMcqSubtypes = [].concat(body['qMcqSubtype[]'] || body.qMcqSubtype || []);
+        const qStatement1s = [].concat(body['qStatement1[]'] || body.qStatement1 || []);
+        const qStatement2s = [].concat(body['qStatement2[]'] || body.qStatement2 || []);
+        const qStatement3s = [].concat(body['qStatement3[]'] || body.qStatement3 || []);
+        const qContextIds = [].concat(body['qContextId[]'] || body.qContextId || []);
 
         // qOptions[] comes as groups of 4 per question
         const allOptions = [].concat(body['qOptions[]'] || body.qOptions || []);
@@ -4803,14 +4808,24 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 ? String(qSubTopics[i]).trim()
                 : globalSubTopic;
 
+            const mcqSubtypeVal = qMcqSubtypes[i] || 'standard';
+            const stmt1 = (qStatement1s[i] || '').trim();
+            const stmt2 = (qStatement2s[i] || '').trim();
+            const stmt3 = (qStatement3s[i] || '').trim();
+            const stmts = [stmt1, stmt2, stmt3].filter(Boolean);
+            const contextIdVal = (qContextIds[i] || '').trim();
+
             return {
                 questionText: questionTextFinal,
                 questionType: type,
+                mcqSubtype: isMCQ ? mcqSubtypeVal : 'standard',
+                statements: (isMCQ && stmts.length > 0) ? stmts : [],
+                contextId: isMCQ ? contextIdVal : '',
                 options: opts,
                 correctAnswerIndex: isMCQ ? parseInt(qCorrects[i] || 0) : undefined,
                 correctAnswer: isMCQ ? undefined : answerFinal,
                 explanation: explanationFinal,
-                context: isComprehension ? contextVal : '',
+                context: isComprehension ? contextVal : (mcqSubtypeVal === 'contextual' ? contextVal : ''),
                 q1: isComprehension ? q1Val : '',
                 a1: isComprehension ? a1Val : '',
                 s1: isComprehension ? s1Val : '',
@@ -4871,7 +4886,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
 router.post('/edit-question/:id', teacherProtect, async (req, res) => {
     try {
         await connectDB();
-        const { questionText, questionType, options, correctAnswerIndex, correctAnswer, explanation, board, year, subject, classLevel, accessType, context, q1, q2, q3, q4, a1, a2, a3, a4, s1, s2, s3, s4, solution1, solution2, solution3, solution4, chapter, topic, subTopic } = req.body;
+        const { questionText, questionType, mcqSubtype, statements, contextId, options, correctAnswerIndex, correctAnswer, explanation, board, year, subject, classLevel, accessType, context, q1, q2, q3, q4, a1, a2, a3, a4, s1, s2, s3, s4, solution1, solution2, solution3, solution4, chapter, topic, subTopic } = req.body;
         const q = await Question.findById(req.params.id);
         if (!q) return res.status(404).send('Not found');
         if (q.addedBy.toString() !== req.session.user._id.toString()) return res.status(403).send('Unauthorized');
@@ -4881,6 +4896,13 @@ router.post('/edit-question/:id', teacherProtect, async (req, res) => {
             correctAnswer: correctAnswer || '',
             updatedAt: new Date()
         };
+
+        if (mcqSubtype !== undefined) updateData.mcqSubtype = mcqSubtype;
+        if (statements !== undefined) {
+            updateData.statements = Array.isArray(statements) ? statements.filter(Boolean) : [statements].filter(Boolean);
+        }
+        if (contextId !== undefined) updateData.contextId = contextId;
+        if (context !== undefined) updateData.context = context;
 
         if (req.body.isBangla !== undefined) {
             const isB = req.body.isBangla === true || req.body.isBangla === 'true';
