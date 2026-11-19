@@ -2119,6 +2119,17 @@
                     if (boardInput) qData.board = boardInput.value;
                     if (yearInput) qData.year = yearInput.value;
 
+                    // Capture attached images and layout positions for 100% autosave persistence
+                    const qImgInput = row.querySelector('.standard-question-block input[name="qQuestionImage[]"]');
+                    const qPosInput = row.querySelector('.standard-question-block input[name="qQuestionImagePosition[]"]');
+                    const ctxImgInput = row.querySelector('input[name="qContextImage[]"]');
+                    const expImgInput = row.querySelector('input[name="qExplanationImage[]"]');
+
+                    qData.questionImage = qImgInput ? qImgInput.value : '';
+                    qData.questionImagePosition = qPosInput ? qPosInput.value : 'above';
+                    qData.contextImage = ctxImgInput ? ctxImgInput.value : '';
+                    qData.explanationImage = expImgInput ? expImgInput.value : '';
+
                     draft.questions.push(qData);
                 });
 
@@ -2174,6 +2185,20 @@
                 });
 
                 updateIndices();
+
+                // Restore live math equation previews across all inputs containing equations
+                container.querySelectorAll('textarea, input[type="text"]').forEach(input => {
+                    if (input.value && input.value.includes('$') && typeof updateLiveMathPreviewForInput === 'function') {
+                        updateLiveMathPreviewForInput(input);
+                    }
+                });
+
+                // Update math tier UI based on active subject
+                const curSub = document.getElementById('globalSubject')?.value || '';
+                if (typeof updateMathTierUI === 'function') {
+                    updateMathTierUI(curSub);
+                }
+
                 const badge = document.getElementById('draftStatusBadge');
                 const statusText = document.getElementById('draftStatusText');
                 if (badge) {
@@ -2368,6 +2393,65 @@
                 applyRowBanglaUI(row, true);
             } else {
                 applyRowBanglaUI(row, false);
+            }
+
+            // Restore question image & layout position
+            if (qData.questionImage) {
+                const imgInput = row.querySelector('.standard-question-block input[name="qQuestionImage[]"]');
+                const triggerBtn = row.querySelector('.standard-question-block .btn-trigger-upload');
+                const badge = row.querySelector('.standard-question-block .image-preview-badge');
+                const inlinePreview = row.querySelector('.studio-inline-img-preview');
+                const posSelect = row.querySelector('.img-pos-selector select');
+
+                if (imgInput) imgInput.value = qData.questionImage;
+                if (triggerBtn) triggerBtn.classList.add('hidden');
+                if (badge) {
+                    badge.classList.remove('hidden');
+                    badge.classList.add('flex');
+                }
+                if (inlinePreview) {
+                    const pImg = inlinePreview.querySelector('img');
+                    if (pImg) pImg.src = qData.questionImage;
+                    inlinePreview.classList.remove('hidden');
+                    inlinePreview.classList.add('flex');
+                }
+                const pos = qData.questionImagePosition || 'above';
+                if (posSelect) posSelect.value = pos;
+                if (posSelect && typeof updateStudioQuestionImageLayout === 'function') {
+                    updateStudioQuestionImageLayout(posSelect);
+                }
+            }
+
+            // Restore Context Image
+            if (qData.contextImage) {
+                const ctxImgInput = row.querySelector('input[name="qContextImage[]"]');
+                const slot = ctxImgInput ? ctxImgInput.closest('.image-uploader-slot') : null;
+                if (ctxImgInput) ctxImgInput.value = qData.contextImage;
+                if (slot) {
+                    const triggerBtn = slot.querySelector('.btn-trigger-upload');
+                    const badge = slot.querySelector('.image-preview-badge');
+                    if (triggerBtn) triggerBtn.classList.add('hidden');
+                    if (badge) {
+                        badge.classList.remove('hidden');
+                        badge.classList.add('flex');
+                    }
+                }
+            }
+
+            // Restore Explanation Image
+            if (qData.explanationImage) {
+                const expImgInput = row.querySelector('input[name="qExplanationImage[]"]');
+                const slot = expImgInput ? expImgInput.closest('.image-uploader-slot') : null;
+                if (expImgInput) expImgInput.value = qData.explanationImage;
+                if (slot) {
+                    const triggerBtn = slot.querySelector('.btn-trigger-upload');
+                    const badge = slot.querySelector('.image-preview-badge');
+                    if (triggerBtn) triggerBtn.classList.add('hidden');
+                    if (badge) {
+                        badge.classList.remove('hidden');
+                        badge.classList.add('flex');
+                    }
+                }
             }
 
             container.appendChild(clone);
