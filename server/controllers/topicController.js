@@ -772,15 +772,16 @@ const getTopicsApi = async (req, res) => {
         }
 
         const topics = await Topic.find(filter)
-            .select('_id name subject classLevel chapter segment subTopics order')
+            .select('_id name subject classLevel chapter segment subTopics order isChapterPlaceholder')
             .sort({ 'chapter.number': 1, order: 1, name: 1 })
             .lean();
         const chapterList = Array.from(new Set(topics.map(t => (t.chapter && t.chapter.name) ? t.chapter.name.trim() : '').filter(Boolean)));
+        const cleanTopics = topics.filter(t => !t.isChapterPlaceholder && t.name !== '__EMPTY_CHAPTER__');
 
         const responsePayload = {
             success: true,
-            count: topics.length,
-            topics: topics || [],
+            count: cleanTopics.length,
+            topics: cleanTopics || [],
             chapters: chapterList
         };
         _topicsApiCache.set(cacheKey, { timestamp: Date.now(), data: responsePayload });
