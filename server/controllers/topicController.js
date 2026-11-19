@@ -1565,7 +1565,7 @@ const editChapter = async (req, res) => {
                 { $set: { name: newChapterName.trim() } }
             );
             await ensureSyllabusFoldersForChapter(targetClasses, subject.trim(), newChapterName.trim());
-        } catch (e) {}
+        } catch (e) { }
 
         clearTopicsApiCache();
 
@@ -1579,14 +1579,14 @@ const editChapter = async (req, res) => {
                     url: '/superadmin/topics?tab=pending',
                     type: 'system'
                 };
-                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
-                pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
-            } catch (e) {}
+                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => { });
+                pushNotificationService.sendToRole('admin', notifPayload).catch(() => { });
+            } catch (e) { }
         }
 
         return res.json({
             success: true,
-            message: isTeacher 
+            message: isTeacher
                 ? `Chapter name updated to "${newChapterName.trim()}" and submitted for Admin review (${result.modifiedCount} topics updated).`
                 : `Chapter name updated to "${newChapterName.trim()}" successfully (${result.modifiedCount} topics updated).`,
             modifiedCount: result.modifiedCount
@@ -2000,6 +2000,7 @@ const getTeacherTopicsPage = async (req, res) => {
         // 2. Query Live Approved Topics (Only for assigned class & subject)
         let activeTopics = [];
         let chapters = [];
+        let segmentStats = {};
 
         if (selectedClass && selectedSubject) {
             const escClass = selectedClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -2050,7 +2051,7 @@ const getTeacherTopicsPage = async (req, res) => {
                 chapters = Array.from(chaptersMap.values()).sort((a, b) => a.number - b.number);
             }
 
-            const segmentStats = {};
+            segmentStats = {};
             if (subjectHasSegments && Array.isArray(subjectSegments)) {
                 subjectSegments.forEach(seg => {
                     const segLower = seg.toLowerCase();
