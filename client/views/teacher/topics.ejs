@@ -359,7 +359,15 @@
                                                                 <% } %>
                                                             </div>
                                                         </div>
-                                                        <div class="flex items-center shrink-0">
+                                                        <div class="flex items-center shrink-0 gap-1">
+                                                            <!-- Edit Topic Button -->
+                                                            <button type="button" 
+                                                                    onclick="openUnifiedModal(<%= JSON.stringify(ch.name) %>, <%= ch.number || 1 %>, <%= JSON.stringify(t.name) %>, <%= JSON.stringify(t.subject || ch.subject) %>, '<%= t._id %>', <%= JSON.stringify(t.subTopics || []) %>, <%= JSON.stringify(t.segment || ch.segment || '') %>, <%= JSON.stringify(t.code || '') %>, <%= JSON.stringify(t.difficulty || 'Medium') %>, <%= JSON.stringify(t.description || '') %>)" 
+                                                                    class="size-7 rounded hover:bg-amber-100 dark:hover:bg-amber-950/50 text-slate-400 hover:text-amber-600 flex items-center justify-center transition-colors" 
+                                                                    title="Edit Topic & Submit for Approval">
+                                                                <span class="material-symbols-rounded text-base">edit</span>
+                                                            </button>
+
                                                             <% if (t.deletionRequest && t.deletionRequest.isRequested && t.deletionRequest.status === 'pending') { %>
                                                                 <button type="button" 
                                                                         onclick="cancelDeletionRequest('<%= t._id %>', <%= JSON.stringify(t.name) %>)" 
@@ -2021,7 +2029,7 @@
             }
         }
 
-        async function openUnifiedModal(chapterName = '', chapterNumber = 1, defaultTopicName = '', subjectName = '', topicId = '', existingSubTopics = [], prefillSegment = '') {
+        async function openUnifiedModal(chapterName = '', chapterNumber = 1, defaultTopicName = '', subjectName = '', topicId = '', existingSubTopics = [], prefillSegment = '', topicCode = '', topicDifficulty = 'Medium', topicDesc = '') {
             if (!currentClassLevel) {
                 Swal.fire({
                     icon: 'warning',
@@ -2044,22 +2052,22 @@
 
             if (topicId) {
                 if (topicIdInput) topicIdInput.value = topicId;
-                if (modalTitle) modalTitle.textContent = 'Edit & Resubmit Topic';
-                if (submitBtnText) submitBtnText.textContent = 'Save & Resubmit';
+                if (modalTitle) modalTitle.textContent = 'Edit Topic & Submit for Approval';
+                if (submitBtnText) submitBtnText.textContent = 'Submit for Approval';
                 if (modeTabs) modeTabs.classList.add('hidden');
                 if (defaultTopicName) {
                     stagedTopics = [{
                         name: defaultTopicName,
-                        code: '',
-                        difficulty: 'Medium',
-                        description: '',
+                        code: topicCode || '',
+                        difficulty: topicDifficulty || 'Medium',
+                        description: topicDesc || '',
                         subTopics: [...editingSubTopics]
                     }];
                 }
             } else {
                 if (topicIdInput) topicIdInput.value = '';
                 if (modalTitle) modalTitle.textContent = 'Add Topics';
-                if (submitBtnText) submitBtnText.textContent = 'Submit';
+                if (submitBtnText) submitBtnText.textContent = 'Submit for Approval';
                 if (modeTabs) modeTabs.classList.remove('hidden');
             }
 
@@ -2073,6 +2081,9 @@
             if (chapterName) document.getElementById('unifiedChapterName').value = chapterName;
             if (chapterNumber) document.getElementById('unifiedChapterNumber').value = chapterNumber;
             if (defaultTopicName) document.getElementById('singleTopicName').value = defaultTopicName;
+            if (topicCode && document.getElementById('singleTopicCode')) document.getElementById('singleTopicCode').value = topicCode;
+            if (topicDifficulty && document.getElementById('singleDifficulty')) document.getElementById('singleDifficulty').value = topicDifficulty;
+            if (topicDesc && document.getElementById('singleDescription')) document.getElementById('singleDescription').value = topicDesc;
 
             document.getElementById('unifiedTopicModal').classList.remove('hidden');
 
@@ -2091,7 +2102,7 @@
             const checkedClasses = Array.from(document.querySelectorAll('#teacherModalClassGrid input[name="targetClass"]:checked')).map(cb => cb.value);
             const classLevel = checkedClasses[0] || currentClassLevel || '';
 
-            if (!subject) {
+            if (!subject && !prefillVal) {
                 wrap.classList.add('hidden');
                 select.required = false;
                 select.innerHTML = '<option value="">Select Segment...</option>';
@@ -2099,15 +2110,25 @@
             }
 
             try {
-                const res = await fetch(`/api/subjects/segments?subject=${encodeURIComponent(subject)}&classLevel=${encodeURIComponent(classLevel)}`);
-                const data = await res.json();
-                if (data && data.hasSegments && Array.isArray(data.segments) && data.segments.length > 0) {
+                let segments = [];
+                try {
+                    const res = await fetch(`/api/subjects/segments?subject=${encodeURIComponent(subject)}&classLevel=${encodeURIComponent(classLevel)}`);
+                    const data = await res.json();
+                    if (data && data.hasSegments && Array.isArray(data.segments)) {
+                        segments = [...data.segments];
+                    }
+                } catch (e) {}
+
+                if (prefillVal && !segments.includes(prefillVal)) {
+                    segments.unshift(prefillVal);
+                }
+
+                if (segments.length > 0) {
                     wrap.classList.remove('hidden');
-                    select.required = true;
-                    let opts = '<option value="">Select Segment...</option>';
-                    data.segments.forEach(seg => {
+                    let opts = '<option value="">Select Segment / Topic Type...</option>';
+                    segments.forEach(seg => {
                         const isSel = (prefillVal && prefillVal === seg) ? 'selected' : '';
-                        opts += `<option value="${seg}" ${isSel}>${seg}</option>`;
+                        opts += `<option value="${escapeHtml(seg)}" ${isSel}>${escapeHtml(seg)}</option>`;
                     });
                     select.innerHTML = opts;
                     if (prefillVal) {

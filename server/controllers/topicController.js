@@ -888,8 +888,8 @@ const createTopic = async (req, res) => {
         if (editingTopicId && mongoose.Types.ObjectId.isValid(editingTopicId)) {
             const existingTopic = await Topic.findById(editingTopicId);
             if (existingTopic) {
-                if (isTeacher && existingTopic.submittedBy && existingTopic.submittedBy.toString() !== req.session.user._id.toString()) {
-                    return res.status(403).json({ success: false, error: 'Unauthorized to edit this topic.' });
+                if (isTeacher) {
+                    existingTopic.submittedBy = req.session.user._id;
                 }
 
                 existingTopic.name = name.trim();
