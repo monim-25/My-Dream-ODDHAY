@@ -1005,9 +1005,8 @@ const createTopic = async (req, res) => {
             });
 
             if (existing) {
-                if (subTopicsArray.length > 0) {
-                    const merged = Array.from(new Set([...(existing.subTopics || []), ...subTopicsArray]));
-                    existing.subTopics = merged;
+                if (Array.isArray(subTopicsArray)) {
+                    existing.subTopics = subTopicsArray;
                 }
                 if (existing.status === 'rejected') {
                     existing.status = topicStatus;
@@ -1086,7 +1085,7 @@ const createTopic = async (req, res) => {
 const bulkCreateTopics = async (req, res) => {
     try {
         await connectDB();
-        const { classLevel, classLevels, group, subject, chapterName, chapterNumber, topicList, difficulty, segment } = req.body;
+        const { classLevel, classLevels, group, subject, chapterName, chapterNumber, topicList, difficulty, segment, isChapterEdit, oldChapterName } = req.body;
         const topicSegment = (segment || '').trim();
 
         if (!subject || !chapterName) {
@@ -1166,6 +1165,51 @@ const bulkCreateTopics = async (req, res) => {
         const createdTopics = [];
 
         for (const cls of targetClasses) {
+            // If editing a chapter, handle any topics that were removed from the chapter in the editing form
+            if (isChapterEdit) {
+                const effectiveOldChName = (oldChapterName || chapterName).trim();
+                const submittedNamesLower = new Set(topicsToProcess.map(t => t.name.toLowerCase()));
+
+                const existingInChapter = await Topic.find({
+                    classLevel: new RegExp(`^${escapeRegex(cls)}$`, 'i'),
+                    subject: new RegExp(`^${escapeRegex(subject)}$`, 'i'),
+                    'chapter.name': new RegExp(`^${escapeRegex(effectiveOldChName)}$`, 'i'),
+                    isArchived: { $ne: true }
+                });
+
+                const removedTopics = existingInChapter.filter(t => !submittedNamesLower.has(t.name.trim().toLowerCase()));
+                if (removedTopics.length > 0) {
+                    if (isTeacher) {
+                        // Unapproved (pending/rejected) topics removed from form are directly deleted
+                        const unapprovedRemovedIds = removedTopics.filter(t => t.status === 'pending' || t.status === 'rejected').map(t => t._id);
+                        if (unapprovedRemovedIds.length > 0) {
+                            await Topic.deleteMany({ _id: { $in: unapprovedRemovedIds } });
+                        }
+                        // Already approved topics removed by teacher are submitted as deletion request
+                        const approvedRemovedIds = removedTopics.filter(t => t.status === 'approved').map(t => t._id);
+                        if (approvedRemovedIds.length > 0) {
+                            await Topic.updateMany(
+                                { _id: { $in: approvedRemovedIds } },
+                                {
+                                    $set: {
+                                        'deletionRequest.isRequested': true,
+                                        'deletionRequest.reason': 'Removed from chapter during teacher edit / চ্যাপ্টার সম্পাদনার সময় বাদ দেওয়া হয়েছে',
+                                        'deletionRequest.requestedBy': req.session.user._id,
+                                        'deletionRequest.requestedByName': req.session.user.name || 'Teacher',
+                                        'deletionRequest.requestedAt': new Date(),
+                                        'deletionRequest.status': 'pending'
+                                    }
+                                }
+                            );
+                        }
+                    } else {
+                        // For Superadmin/Admin: permanently delete removed topics and their sub-topics
+                        const removedIds = removedTopics.map(t => t._id);
+                        await Topic.deleteMany({ _id: { $in: removedIds } });
+                    }
+                }
+            }
+
             for (let i = 0; i < topicsToProcess.length; i++) {
                 const item = topicsToProcess[i];
                 const name = item.name;
@@ -1199,9 +1243,8 @@ const bulkCreateTopics = async (req, res) => {
                     });
                     createdTopics.push(topic);
                 } else {
-                    if (item.subTopics && item.subTopics.length > 0) {
-                        const mergedSubTopics = Array.from(new Set([...(existing.subTopics || []), ...item.subTopics]));
-                        existing.subTopics = mergedSubTopics;
+                    if (Array.isArray(item.subTopics)) {
+                        existing.subTopics = item.subTopics;
                     }
                     if (existing.status === 'rejected') {
                         existing.status = topicStatus;

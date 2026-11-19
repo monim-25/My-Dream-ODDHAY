@@ -311,7 +311,7 @@
                                             </button>
                                             
                                             <!-- Edit Chapter & Manage Topics Button (Opens Full Form) -->
-                                            <button type="button" onclick="openSuperChapterEditModal('<%= ch.name %>', <%= ch.number %>, <%= JSON.stringify((ch.topics || []).map(t => t.name)) %>, '<%= ch.segment || '' %>')"
+                                            <button type="button" onclick="openSuperChapterEditModal('<%= ch.name %>', <%= ch.number %>, <%= JSON.stringify((ch.topics || []).map(t => ({ id: t._id, name: t.name, code: t.code || '', difficulty: t.difficulty || 'Medium', description: t.description || '', keywords: (t.keywords || []).join(', '), subTopics: t.subTopics || [] }))) %>, '<%= ch.segment || '' %>')"
                                                     class="size-7 rounded hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 flex items-center justify-center transition-colors" title="Edit Chapter Name & Add/Manage Topics">
                                                 <span class="material-symbols-rounded text-base">edit</span>
                                             </button>
@@ -2059,11 +2059,28 @@
 
         let superCurrentChapterExistingTopics = [];
 
-        function openSuperChapterEditModal(chName, chNumber, topicNames = [], segment = '') {
-            superCurrentChapterExistingTopics = Array.isArray(topicNames) ? topicNames : [];
+        function openSuperChapterEditModal(chName, chNumber, existingTopics = [], segment = '') {
+            const rawTopics = Array.isArray(existingTopics) ? existingTopics : [];
+            superCurrentChapterExistingTopics = rawTopics.map(t => {
+                if (typeof t === 'string') {
+                    return { id: '', name: t.trim(), code: '', difficulty: 'Medium', description: '', keywords: '', subTopics: [] };
+                }
+                return {
+                    id: t.id || t._id || '',
+                    name: String(t.name || '').trim(),
+                    code: String(t.code || '').trim(),
+                    difficulty: t.difficulty || 'Medium',
+                    description: String(t.description || '').trim(),
+                    keywords: String(t.keywords || '').trim(),
+                    subTopics: Array.isArray(t.subTopics) ? t.subTopics.map(s => String(s || '').trim()).filter(Boolean) : []
+                };
+            }).filter(t => t.name);
 
             // Open the full unified modal
-            openUnifiedModal(chName, chNumber, 'single', segment);
+            openUnifiedModal(chName, chNumber, 'bulk', segment);
+
+            // Populate superStagedTopics with ALL existing topics and their sub-topics
+            superStagedTopics = JSON.parse(JSON.stringify(superCurrentChapterExistingTopics));
 
             // Mark as chapter edit mode
             const isChEditInput = document.getElementById('unifiedIsChapterEdit');
@@ -2073,11 +2090,34 @@
             const oldNumInput = document.getElementById('unifiedOldChapterNumber');
             if (oldNumInput) oldNumInput.value = chNumber;
 
+            // Pre-fill bulkTopicList with existing topic names
+            const bulkList = document.getElementById('bulkTopicList');
+            if (bulkList) bulkList.value = superStagedTopics.map(t => t.name).join('\n');
+
+            // Pre-fill single topic fields with first topic if available
+            if (superStagedTopics.length > 0) {
+                const singleNameEl = document.getElementById('singleTopicName');
+                const singleSubEl = document.getElementById('superSingleSubTopics');
+                const singleCodeEl = document.getElementById('singleTopicCode');
+                const singleDiffEl = document.getElementById('singleTopicDifficulty');
+                const singleDescEl = document.getElementById('singleTopicDesc');
+                const singleKeyEl = document.getElementById('singleTopicKeywords');
+                if (singleNameEl) singleNameEl.value = superStagedTopics[0].name;
+                if (singleSubEl) singleSubEl.value = (superStagedTopics[0].subTopics || []).join('\n');
+                if (singleCodeEl) singleCodeEl.value = superStagedTopics[0].code || '';
+                if (singleDiffEl) singleDiffEl.value = superStagedTopics[0].difficulty || 'Medium';
+                if (singleDescEl) singleDescEl.value = superStagedTopics[0].description || '';
+                if (singleKeyEl) singleKeyEl.value = superStagedTopics[0].keywords || '';
+            }
+
             // Update title & subtitle
             const modalTitle = document.getElementById('unifiedModalTitle');
             if (modalTitle) modalTitle.textContent = `Edit Chapter: ${chName}`;
             const modalSub = document.getElementById('unifiedModalSubtitle');
-            if (modalSub) modalSub.textContent = 'Edit chapter name/number and add topics using Single or Bulk tab.';
+            if (modalSub) modalSub.textContent = `Loaded ${superStagedTopics.length} existing topic(s) & sub-topics. Edit topics here or click Next to view/manage sub-topics.`;
+
+            // Default to bulk mode tab for easy viewing/editing
+            setTopicMode('bulk');
 
             // Show Load Existing Topics button in Bulk mode if topics exist
             const btnLoad = document.getElementById('superBtnLoadChapterTopics');
@@ -2097,10 +2137,12 @@
                 Swal.fire('Info', 'No existing topics found for this chapter.', 'info');
                 return;
             }
+            superStagedTopics = JSON.parse(JSON.stringify(superCurrentChapterExistingTopics));
             const bulkList = document.getElementById('bulkTopicList');
-            if (!bulkList) return;
-            bulkList.value = superCurrentChapterExistingTopics.join('\n');
-            bulkList.focus();
+            if (bulkList) {
+                bulkList.value = superStagedTopics.map(t => t.name).join('\n');
+                bulkList.focus();
+            }
         }
 
         async function saveSuperChapterEditDirectly(targetClasses, subject, oldChName, newChName, newChNum) {
@@ -2560,6 +2602,16 @@
             }
             superStagedTopics.splice(idx, 1);
             renderSuperadminStagedTopics();
+            const bulkList = document.getElementById('bulkTopicList');
+            if (bulkList) bulkList.value = superStagedTopics.map(t => t.name).join('\n');
+            if (superStagedTopics.length > 0) {
+                const singleName = document.getElementById('singleTopicName');
+                const singleSub = document.getElementById('superSingleSubTopics');
+                if (singleName && singleName.value) {
+                    singleName.value = superStagedTopics[0].name;
+                    if (singleSub) singleSub.value = (superStagedTopics[0].subTopics || []).join('\n');
+                }
+            }
         }
 
         async function addSuperadminAnotherTopicPrompt() {
@@ -2607,6 +2659,11 @@
             const chapterName = form.chapterName.value.trim();
             const chapterNumber = form.chapterNumber.value;
 
+            const isChapterEdit = document.getElementById('unifiedIsChapterEdit')?.value === 'true';
+            const oldChName = document.getElementById('unifiedOldChapterName')?.value.trim();
+            const oldChNum = parseInt(document.getElementById('unifiedOldChapterNumber')?.value, 10);
+            const chapterChanged = oldChName && (oldChName.toLowerCase() !== chapterName.toLowerCase() || oldChNum !== parseInt(chapterNumber, 10));
+
             const payload = {
                 classLevels,
                 classLevel,
@@ -2615,13 +2672,11 @@
                 segment,
                 chapterName,
                 chapterNumber,
-                topics: superStagedTopics
+                topics: superStagedTopics,
+                isChapterEdit,
+                oldChapterName: oldChName || chapterName,
+                oldChapterNumber: oldChNum || chapterNumber
             };
-
-            const isChapterEdit = document.getElementById('unifiedIsChapterEdit')?.value === 'true';
-            const oldChName = document.getElementById('unifiedOldChapterName')?.value.trim();
-            const oldChNum = parseInt(document.getElementById('unifiedOldChapterNumber')?.value, 10);
-            const chapterChanged = oldChName && (oldChName.toLowerCase() !== chapterName.toLowerCase() || oldChNum !== parseInt(chapterNumber, 10));
 
             if (isChapterEdit && chapterChanged) {
                 try {
