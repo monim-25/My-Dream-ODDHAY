@@ -74,7 +74,7 @@ const parseSubTopics = (raw) => {
             try {
                 const parsed = JSON.parse(trimmed);
                 if (Array.isArray(parsed)) return parsed.map(s => String(s || '').trim()).filter(Boolean);
-            } catch (e) {}
+            } catch (e) { }
         }
         return raw.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
     }
@@ -115,7 +115,7 @@ const ensureSyllabusFoldersForChapter = async (targetClasses, subjectName, chapt
             } else if (!subjectFolder.isSyllabusFolder || !subjectFolder.isSystem) {
                 subjectFolder.isSyllabusFolder = true;
                 subjectFolder.isSystem = true;
-                await subjectFolder.save().catch(() => {});
+                await subjectFolder.save().catch(() => { });
             }
 
             // 2. Ensure Chapter Subfolder under this Subject Folder for this class
@@ -138,7 +138,7 @@ const ensureSyllabusFoldersForChapter = async (targetClasses, subjectName, chapt
             } else if (!chapterFolder.isSyllabusFolder || !chapterFolder.isSystem) {
                 chapterFolder.isSyllabusFolder = true;
                 chapterFolder.isSystem = true;
-                await chapterFolder.save().catch(() => {});
+                await chapterFolder.save().catch(() => { });
             }
         } catch (err) {
             console.error('ensureSyllabusFoldersForChapter error for ' + cls + ' - ' + cleanSubject + ' - ' + cleanChapter + ':', err.message);
@@ -235,7 +235,7 @@ const resolveGroupByClassAndSubject = async (clsName, subjectName, explicitGroup
     try {
         const cleanName = String(clsName).trim();
         const cleanSub = String(subjectName).trim().toLowerCase();
-        const ac = await AcademicClass.findOne({ 
+        const ac = await AcademicClass.findOne({
             name: new RegExp('^' + escapeRegex(cleanName) + '$', 'i'),
             isArchived: { $ne: true }
         }).lean();
@@ -262,7 +262,7 @@ const ensureSubjectInAcademicClass = async (clsName, subjectName, groupName) => 
         if (!clsName || !subjectName) return;
         const cleanName = clsName.trim();
         const cleanSub = subjectName.trim();
-        const ac = await AcademicClass.findOne({ 
+        const ac = await AcademicClass.findOne({
             name: new RegExp(`^${escapeRegex(cleanName)}$`, 'i'),
             isArchived: { $ne: true }
         });
@@ -338,7 +338,7 @@ const addSubjectToClasses = async (req, res) => {
 
         const updatedClasses = [];
         for (const clsName of targetClasses) {
-            const ac = await AcademicClass.findOne({ 
+            const ac = await AcademicClass.findOne({
                 name: new RegExp(`^${escapeRegex(clsName)}$`, 'i'),
                 isArchived: { $ne: true }
             });
@@ -386,7 +386,7 @@ const addSubjectToClasses = async (req, res) => {
         }
 
         if (req.app && req.app.get && req.app.get('clearAcademicCache')) {
-            try { req.app.get('clearAcademicCache')(); } catch(_) {}
+            try { req.app.get('clearAcademicCache')(); } catch (_) { }
         }
 
         return res.json({
@@ -508,7 +508,7 @@ const getTopicsPage = async (req, res) => {
         await seedDefaultTopicsIfEmpty();
 
         const classes = await AcademicClass.find({ isArchived: { $nin: [true, 'true', 1] } }).sort({ order: 1 }).lean();
-        
+
         let rawClass = req.query.classLevels || req.query.classLevel || '';
         let selectedClasses = [];
         if (Array.isArray(rawClass)) {
@@ -603,17 +603,17 @@ const getTopicsPage = async (req, res) => {
         const archivedTopics = await Topic.find({ isArchived: { $in: [true, 'true', 1] } }).sort({ updatedAt: -1 }).lean();
 
         // Pending Submissions Query (Awaiting Admin Review)
-        const pendingTopics = await Topic.find({ 
-            status: 'pending', 
-            isArchived: { $nin: [true, 'true', 1] } 
+        const pendingTopics = await Topic.find({
+            status: 'pending',
+            isArchived: { $nin: [true, 'true', 1] }
         }).populate('submittedBy', 'name email profilePicture profileImage').populate('createdBy', 'name email profilePicture profileImage').sort({ createdAt: -1 }).lean();
         const pendingTopicCount = await Topic.countDocuments({ status: 'pending', isArchived: { $nin: [true, 'true', 1] } });
 
         // Deletion Requests Query (Awaiting Admin Review)
-        const deletionRequests = await Topic.find({ 
-            'deletionRequest.isRequested': true, 
-            'deletionRequest.status': 'pending', 
-            isArchived: { $nin: [true, 'true', 1] } 
+        const deletionRequests = await Topic.find({
+            'deletionRequest.isRequested': true,
+            'deletionRequest.status': 'pending',
+            isArchived: { $nin: [true, 'true', 1] }
         }).populate('deletionRequest.requestedBy', 'name email profilePicture profileImage').sort({ 'deletionRequest.requestedAt': -1 }).lean();
         const deletionRequestCount = deletionRequests.length;
 
@@ -688,7 +688,7 @@ const getTopicsApi = async (req, res) => {
                     if (norm) expandedClasses.add(norm);
                     const linked = getLinkedClasses(c);
                     if (Array.isArray(linked)) linked.forEach(l => expandedClasses.add(l));
-                } catch (e) {}
+                } catch (e) { }
             });
             const finalClassList = Array.from(expandedClasses).filter(Boolean);
 
@@ -785,10 +785,10 @@ const getChaptersApi = async (req, res) => {
                 if (norm) expandedClasses.add(norm);
                 const linked = getLinkedClasses(c);
                 if (Array.isArray(linked)) linked.forEach(l => expandedClasses.add(l));
-            } catch (e) {}
+            } catch (e) { }
         });
         const finalClassList = Array.from(expandedClasses).filter(Boolean);
-        const classFilter = finalClassList.length === 1 
+        const classFilter = finalClassList.length === 1
             ? new RegExp('^' + escapeRegex(finalClassList[0]) + '$', 'i')
             : (finalClassList.length > 1 ? new RegExp('^(?:' + finalClassList.map(escapeRegex).join('|') + ')$', 'i') : new RegExp('^' + escapeRegex(rawClass) + '$', 'i'));
 
@@ -862,7 +862,7 @@ const createTopic = async (req, res) => {
             return res.status(400).json({ success: false, error: 'At least one class level is required' });
         }
 
-        const keywordsArray = Array.isArray(keywords) 
+        const keywordsArray = Array.isArray(keywords)
             ? keywords.map(s => String(s || '').trim()).filter(Boolean)
             : String(keywords || '').split(',').map(s => s.trim()).filter(Boolean);
 
@@ -979,9 +979,9 @@ const createTopic = async (req, res) => {
                             url: '/superadmin/topics?tab=pending',
                             type: 'system'
                         };
-                        pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
-                        pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
-                    } catch (e) {}
+                        pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => { });
+                        pushNotificationService.sendToRole('admin', notifPayload).catch(() => { });
+                    } catch (e) { }
                 }
 
                 return res.json({
@@ -1046,7 +1046,7 @@ const createTopic = async (req, res) => {
         // Ensure Subject folder and Chapter subfolder exist in Notes for these classes
         await ensureSyllabusFoldersForChapter(targetClasses, subject.trim(), chapterName.trim(), req.session && req.session.user ? req.session.user._id : null);
 
-        const successMsg = isTeacher 
+        const successMsg = isTeacher
             ? `Topic "${name.trim()}" submitted for Admin review across ${targetClasses.length} class(es): ${targetClasses.join(', ')}`
             : `Topic "${name.trim()}" created successfully for ${targetClasses.length} class(es): ${targetClasses.join(', ')}`;
 
@@ -1060,9 +1060,9 @@ const createTopic = async (req, res) => {
                     url: '/superadmin/topics',
                     type: 'system'
                 };
-                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
-                pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
-            } catch(e) {}
+                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => { });
+                pushNotificationService.sendToRole('admin', notifPayload).catch(() => { });
+            } catch (e) { }
         }
 
         res.json({
@@ -1112,7 +1112,7 @@ const bulkCreateTopics = async (req, res) => {
             if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
                 try {
                     rawTopicsInput = JSON.parse(trimmed);
-                } catch (e) {}
+                } catch (e) { }
             }
         }
 
@@ -1219,7 +1219,7 @@ const bulkCreateTopics = async (req, res) => {
         // Ensure Subject folder and Chapter subfolder exist in Notes for these classes
         await ensureSyllabusFoldersForChapter(targetClasses, subject.trim(), chapterName.trim(), req.session && req.session.user ? req.session.user._id : null);
 
-        const successMsg = isTeacher 
+        const successMsg = isTeacher
             ? `${createdTopics.length} topics submitted for Admin review across ${targetClasses.length} class(es): ${targetClasses.join(', ')}`
             : `${createdTopics.length} topics added to "${chapterName}" across ${targetClasses.length} class(es): ${targetClasses.join(', ')}`;
 
@@ -1233,9 +1233,9 @@ const bulkCreateTopics = async (req, res) => {
                     url: '/superadmin/topics',
                     type: 'system'
                 };
-                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
-                pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
-            } catch(e) {}
+                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => { });
+                pushNotificationService.sendToRole('admin', notifPayload).catch(() => { });
+            } catch (e) { }
         }
 
         res.json({
@@ -1276,7 +1276,7 @@ const updateTopic = async (req, res) => {
         if (description !== undefined) updatePayload.description = description.trim();
         if (order !== undefined) updatePayload.order = parseInt(order, 10) || 0;
         if (keywords) {
-            updatePayload.keywords = Array.isArray(keywords) 
+            updatePayload.keywords = Array.isArray(keywords)
                 ? keywords.map(s => String(s || '').trim()).filter(Boolean)
                 : String(keywords || '').split(',').map(s => s.trim()).filter(Boolean);
         }
@@ -1419,6 +1419,111 @@ const deleteChapter = async (req, res) => {
     }
 };
 
+// Edit / Rename Chapter Name & Number across topics
+const editChapter = async (req, res) => {
+    try {
+        await connectDB();
+        const { classLevel, classLevels, subject, oldChapterName, newChapterName, newChapterNumber } = req.body;
+
+        if (!classLevel || !subject || !oldChapterName || !newChapterName || !newChapterName.trim()) {
+            return res.status(400).json({ success: false, error: 'Class, Subject, Old Chapter Name, and New Chapter Name are required' });
+        }
+
+        const isTeacher = req.session && req.session.user && req.session.user.role === 'teacher';
+
+        // Normalize target classes (supports cross-class sync for Class 9-10 & 11-12)
+        let targetClasses = [];
+        if (Array.isArray(classLevels) && classLevels.length > 0) {
+            targetClasses = classLevels.map(s => String(s || '').trim()).filter(Boolean);
+        } else if (typeof classLevels === 'string' && classLevels.trim()) {
+            targetClasses = classLevels.split(',').map(s => s.trim()).filter(Boolean);
+        } else {
+            const linked = getLinkedClasses(classLevel);
+            targetClasses = Array.isArray(linked) && linked.length > 0 ? linked : [classLevel.trim()];
+        }
+
+        // Permission check for teachers
+        if (isTeacher) {
+            const { assignedClasses, assignedSubjects } = await getTeacherAssignments(req.session.user._id);
+            for (const cls of targetClasses) {
+                if (assignedClasses.length > 0 && !matchesClass(cls, assignedClasses)) {
+                    return res.status(403).json({ success: false, error: `You are not assigned to class "${cls}"` });
+                }
+            }
+            if (assignedSubjects.length > 0 && !matchesSubject(subject, assignedSubjects)) {
+                return res.status(403).json({ success: false, error: `You are not assigned to subject "${subject}"` });
+            }
+        }
+
+        const escapedOld = oldChapterName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escapedSub = subject.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const classRegexes = targetClasses.map(c => new RegExp(`^${c.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'));
+
+        const filter = {
+            classLevel: { $in: classRegexes },
+            subject: new RegExp(`^${escapedSub}$`, 'i'),
+            'chapter.name': new RegExp(`^${escapedOld}$`, 'i'),
+            isArchived: { $ne: true }
+        };
+
+        const updateSet = {
+            'chapter.name': newChapterName.trim(),
+            updatedAt: new Date()
+        };
+
+        if (newChapterNumber !== undefined && !isNaN(parseInt(newChapterNumber, 10))) {
+            updateSet['chapter.number'] = parseInt(newChapterNumber, 10);
+        }
+
+        if (isTeacher) {
+            updateSet.status = 'pending';
+            updateSet.submittedBy = req.session.user._id;
+            updateSet.rejectionReason = '';
+            updateSet.reviewedBy = null;
+            updateSet.reviewedAt = null;
+        }
+
+        const result = await Topic.updateMany(filter, { $set: updateSet });
+
+        // Update folder names in Notes if existing
+        try {
+            await Folder.updateMany(
+                { name: new RegExp(`^${escapedOld}$`, 'i'), classLevel: { $in: classRegexes } },
+                { $set: { name: newChapterName.trim() } }
+            );
+            await ensureSyllabusFoldersForChapter(targetClasses, subject.trim(), newChapterName.trim());
+        } catch (e) {}
+
+        clearTopicsApiCache();
+
+        if (isTeacher) {
+            try {
+                const pushNotificationService = require('../services/pushNotificationService');
+                const teacherName = req.session.user ? req.session.user.name : 'Teacher';
+                const notifPayload = {
+                    title: 'Chapter Name Edited Awaiting Approval',
+                    body: `Teacher ${teacherName} renamed chapter "${oldChapterName.trim()}" to "${newChapterName.trim()}" (${targetClasses.join(', ')} - ${subject}).`,
+                    url: '/superadmin/topics?tab=pending',
+                    type: 'system'
+                };
+                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
+                pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
+            } catch (e) {}
+        }
+
+        return res.json({
+            success: true,
+            message: isTeacher 
+                ? `Chapter name updated to "${newChapterName.trim()}" and submitted for Admin review (${result.modifiedCount} topics updated).`
+                : `Chapter name updated to "${newChapterName.trim()}" successfully (${result.modifiedCount} topics updated).`,
+            modifiedCount: result.modifiedCount
+        });
+    } catch (error) {
+        console.error('editChapter Error:', error);
+        return res.status(500).json({ success: false, error: 'Server error: ' + error.message });
+    }
+};
+
 // Bulk Action on Multiple Selected Topics (Archive or Restore to/from History Bucket)
 const bulkActionTopics = async (req, res) => {
     try {
@@ -1486,8 +1591,8 @@ const approveTopic = async (req, res) => {
                     body: `Your topic "${topic.name}" has been approved and published to the live syllabus.`,
                     url: '/teacher/topics?tab=submissions&subStatus=approved',
                     type: 'system'
-                }).catch(() => {});
-            } catch(e) {}
+                }).catch(() => { });
+            } catch (e) { }
         }
 
         res.json({
@@ -1514,13 +1619,13 @@ const bulkApproveTopics = async (req, res) => {
         const topicsToApprove = await Topic.find({ _id: { $in: validIds } }).select('classLevel subject chapter createdBy submittedBy').lean();
         const result = await Topic.updateMany(
             { _id: { $in: validIds } },
-            { 
-                $set: { 
+            {
+                $set: {
                     status: 'approved',
                     reviewedBy: req.session.user ? req.session.user._id : null,
                     reviewedAt: new Date(),
                     rejectionReason: ''
-                } 
+                }
             }
         );
 
@@ -1545,9 +1650,9 @@ const bulkApproveTopics = async (req, res) => {
                     body: `${tList.length} of your submitted topic(s) have been approved and published to the live syllabus.`,
                     url: '/teacher/topics?tab=submissions&subStatus=approved',
                     type: 'system'
-                }).catch(() => {});
+                }).catch(() => { });
             });
-        } catch(e) {}
+        } catch (e) { }
 
         res.json({
             success: true,
@@ -1586,8 +1691,8 @@ const rejectTopic = async (req, res) => {
                     body: `Topic "${topic.name}" requires revision: ${reason || 'Please review syllabus alignment.'}`,
                     url: '/teacher/topics?tab=submissions&subStatus=rejected',
                     type: 'system'
-                }).catch(() => {});
-            } catch(e) {}
+                }).catch(() => { });
+            } catch (e) { }
         }
 
         res.json({
@@ -1615,13 +1720,13 @@ const bulkRejectTopics = async (req, res) => {
         const topicsToReject = await Topic.find({ _id: { $in: validIds } }).select('name submittedBy createdBy').lean();
         const result = await Topic.updateMany(
             { _id: { $in: validIds } },
-            { 
-                $set: { 
+            {
+                $set: {
                     status: 'rejected',
                     rejectionReason: (reason || 'Revisions required by admin').trim(),
                     reviewedBy: req.session.user ? req.session.user._id : null,
                     reviewedAt: new Date()
-                } 
+                }
             }
         );
 
@@ -1642,9 +1747,9 @@ const bulkRejectTopics = async (req, res) => {
                     body: `${tList.length} of your submitted topic(s) require revision: ${reason || 'Please review and resubmit.'}`,
                     url: '/teacher/topics?tab=submissions&subStatus=rejected',
                     type: 'system'
-                }).catch(() => {});
+                }).catch(() => { });
             });
-        } catch(e) {}
+        } catch (e) { }
 
         res.json({
             success: true,
@@ -1766,8 +1871,8 @@ const getTeacherTopicsPage = async (req, res) => {
             if (currentClassObj.hasGroups && currentClassObj.groups && currentClassObj.groups.length > 0) {
                 const allGrpSubs = currentClassObj.groups.flatMap(g => g.subjects || []);
                 classSubjects = Array.from(new Set([
-                    ...(currentClassObj.commonSubjects || []), 
-                    ...(currentClassObj.subjects || []), 
+                    ...(currentClassObj.commonSubjects || []),
+                    ...(currentClassObj.subjects || []),
                     ...allGrpSubs
                 ]));
             } else {
@@ -1826,8 +1931,8 @@ const getTeacherTopicsPage = async (req, res) => {
         if (selectedClass && selectedSubject) {
             const escClass = selectedClass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const escSub = selectedSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const activeFilter = { 
-                isArchived: { $nin: [true, 'true', 1] }, 
+            const activeFilter = {
+                isArchived: { $nin: [true, 'true', 1] },
                 status: { $nin: ['pending', 'rejected'] },
                 classLevel: new RegExp('^' + escClass + '$', 'i'),
                 subject: new RegExp('^' + escSub + '$', 'i')
@@ -1859,7 +1964,7 @@ const getTeacherTopicsPage = async (req, res) => {
         }
 
         // 3. Query Teacher's Own Submitted Topics
-        const subFilter = isSuperOrAdmin 
+        const subFilter = isSuperOrAdmin
             ? { isArchived: { $nin: [true, 'true', 1] }, $or: [{ submittedBy: req.session.user._id }, { createdBy: req.session.user._id }, { status: 'pending' }] }
             : { isArchived: { $nin: [true, 'true', 1] }, $or: [{ submittedBy: req.session.user._id }, { createdBy: req.session.user._id }] };
 
@@ -2039,9 +2144,9 @@ const bulkActionTeacherSubmissions = async (req, res) => {
                         url: '/superadmin/topics',
                         type: 'system'
                     };
-                    pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
-                    pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
-                } catch(e) {}
+                    pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => { });
+                    pushNotificationService.sendToRole('admin', notifPayload).catch(() => { });
+                } catch (e) { }
             }
 
             return res.json({
@@ -2062,7 +2167,7 @@ const bulkActionTeacherSubmissions = async (req, res) => {
 const checkCrossClassTopic = async (req, res) => {
     try {
         if (mongoose.connection && mongoose.connection.readyState !== 1) {
-            try { await connectDB(); } catch (e) {}
+            try { await connectDB(); } catch (e) { }
         }
         const { subject, topic, chapter } = req.query;
         const currentClassesRaw = req.query.currentClasses || req.query.currentClass || "";
@@ -2136,7 +2241,7 @@ const checkCrossClassTopic = async (req, res) => {
             const cls = (t.classLevel || "").trim();
             if (!cls) return;
             const clsLower = cls.toLowerCase();
-            
+
             // Check if this class is already in currentClasses
             const isCurrent = currentClasses.some(cc => cc === clsLower);
             if (isCurrent) return;
@@ -2232,9 +2337,9 @@ const requestDeleteTopics = async (req, res) => {
                     url: '/superadmin/topics?tab=deletion',
                     type: 'system'
                 };
-                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
-                pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
-            } catch (e) {}
+                pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => { });
+                pushNotificationService.sendToRole('admin', notifPayload).catch(() => { });
+            } catch (e) { }
         }
 
         return res.json({
@@ -2347,9 +2452,9 @@ const approveDeletionRequest = async (req, res) => {
                     body: `Admin ${adminName} approved deletion for ${tList.length} topic(s).`,
                     url: '/teacher/topics',
                     type: 'system'
-                }).catch(() => {});
+                }).catch(() => { });
             });
-        } catch (e) {}
+        } catch (e) { }
 
         return res.json({
             success: true,
@@ -2410,9 +2515,9 @@ const declineDeletionRequest = async (req, res) => {
                     body: `Deletion request for ${tList.length} topic(s) was declined: ${declineReason}`,
                     url: '/teacher/topics',
                     type: 'system'
-                }).catch(() => {});
+                }).catch(() => { });
             });
-        } catch (e) {}
+        } catch (e) { }
 
         return res.json({
             success: true,
@@ -2438,6 +2543,7 @@ module.exports = {
     restoreTopic,
     permanentDeleteTopic,
     deleteChapter,
+    editChapter,
     bulkActionTopics,
     approveTopic,
     bulkApproveTopics,

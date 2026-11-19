@@ -5877,6 +5877,7 @@ router.post('/topics/add-subject', superAdminProtect, topicController.addSubject
 router.post('/topics/copy-to-classes', superAdminProtect, topicController.copyTopicsToClasses);
 router.post('/topics/bulk', superAdminProtect, topicController.bulkCreateTopics);
 router.post('/topics/chapter/delete', superAdminProtect, topicController.deleteChapter);
+router.post('/topics/chapter/edit', superAdminProtect, topicController.editChapter);
 router.post('/topics/bulk-action', superAdminProtect, topicController.bulkActionTopics);
 router.post('/topics/archive', superAdminProtect, topicController.archiveTopic);
 router.post('/topics/restore', superAdminProtect, topicController.restoreTopic);

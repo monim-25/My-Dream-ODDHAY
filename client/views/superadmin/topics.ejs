@@ -310,6 +310,12 @@
                                                 <span class="sm:hidden">Add</span>
                                             </button>
                                             
+                                            <!-- Edit Chapter Name & Number Button -->
+                                            <button type="button" onclick="openEditChapterModal('<%= ch.name %>', <%= ch.number %>, <%= ch.topics.length %>)"
+                                                    class="size-7 rounded hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 flex items-center justify-center transition-colors" title="Edit Chapter Name & Number">
+                                                <span class="material-symbols-rounded text-base">edit</span>
+                                            </button>
+
                                             <!-- Move Whole Chapter to History Bucket -->
                                             <button type="button" onclick="deleteChapter('<%= ch.name %>', <%= ch.topics.length %>)"
                                                     class="size-7 rounded hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 flex items-center justify-center transition-colors" title="Move Chapter to History Bucket">
@@ -1539,6 +1545,92 @@
                     const text = r.innerText.toLowerCase();
                     r.classList.toggle('hidden', Boolean(query && !text.includes(query)));
                 });
+            }
+        }
+
+        // ==========================================
+        // CHAPTER EDIT & RENAME MODAL
+        // ==========================================
+        async function openEditChapterModal(chapterName, chapterNumber, topicCount) {
+            const targetNorm = (currentClassLevel || '').trim().toLowerCase();
+            const linked = (targetNorm === 'class 9' || targetNorm === 'class 10')
+                ? ['Class 9', 'Class 10']
+                : (targetNorm === 'class 11' || targetNorm === 'class 12')
+                    ? ['Class 11', 'Class 12']
+                    : [currentClassLevel];
+
+            const { value: formValues } = await Swal.fire({
+                title: 'Edit Chapter Name',
+                html: `
+                    <div class="text-left space-y-3 pt-1">
+                        <div>
+                            <label class="text-xs font-semibold text-slate-700 dark:text-slate-200 block mb-1">Chapter Name *</label>
+                            <input id="swalAdminEditChapterName" class="w-full h-9 px-3 text-xs rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none focus:border-primary" value="${escapeHtml(chapterName)}" placeholder="Enter chapter name">
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-slate-700 dark:text-slate-200 block mb-1">Chapter Number *</label>
+                            <input id="swalAdminEditChapterNumber" type="number" min="1" class="w-full h-9 px-3 text-xs rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 outline-none focus:border-primary" value="${chapterNumber || 1}">
+                        </div>
+                        <div class="p-2.5 rounded bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60">
+                            <span class="text-[11px] text-slate-500 dark:text-slate-400 block font-normal">
+                                এই অধ্যায়ের অধীনে থাকা <strong>${topicCount}টি টপিক</strong> এবং সংশ্লিষ্ট ক্লাসের (${linked.join(', ')}) চ্যাপ্টার নাম একসাথে আপডেট হবে।
+                            </span>
+                        </div>
+                    </div>
+                `,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#137fec',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Save Changes',
+                cancelButtonText: 'Cancel',
+                focusConfirm: false,
+                preConfirm: () => {
+                    const newName = document.getElementById('swalAdminEditChapterName').value.trim();
+                    const newNum = parseInt(document.getElementById('swalAdminEditChapterNumber').value, 10);
+                    if (!newName) {
+                        Swal.showValidationMessage('Chapter name is required');
+                        return false;
+                    }
+                    if (isNaN(newNum) || newNum < 1) {
+                        Swal.showValidationMessage('Valid chapter number (1 or greater) is required');
+                        return false;
+                    }
+                    return { newChapterName: newName, newChapterNumber: newNum };
+                }
+            });
+
+            if (!formValues) return;
+
+            try {
+                Swal.fire({ title: 'Updating Chapter...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const res = await fetch(`${apiBase}/topics/chapter/edit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({
+                        classLevel: currentClassLevel,
+                        classLevels: linked,
+                        subject: currentSubject,
+                        oldChapterName: chapterName,
+                        newChapterName: formValues.newChapterName,
+                        newChapterNumber: formValues.newChapterNumber
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Chapter Updated!',
+                        text: data.message || 'Chapter name updated successfully.',
+                        confirmButtonColor: '#137fec'
+                    });
+                    window.location.reload();
+                } else {
+                    Swal.fire('Error', data.error || 'Failed to update chapter name', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', err.message || 'Connection error', 'error');
             }
         }
 

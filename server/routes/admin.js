@@ -6207,6 +6207,7 @@ router.post('/topics/add-subject', adminProtect, topicController.addSubjectToCla
 router.post('/topics/copy-to-classes', adminProtect, topicController.copyTopicsToClasses);
 router.post('/topics/bulk', adminProtect, topicController.bulkCreateTopics);
 router.post('/topics/chapter/delete', adminProtect, topicController.deleteChapter);
+router.post('/topics/chapter/edit', adminProtect, topicController.editChapter);
 router.post('/topics/bulk-action', adminProtect, topicController.bulkActionTopics);
 router.post('/topics/archive', adminProtect, topicController.archiveTopic);
 router.post('/topics/restore', adminProtect, topicController.restoreTopic);
