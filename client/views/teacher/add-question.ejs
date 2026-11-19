@@ -537,8 +537,9 @@
                                     <div class="flex items-center gap-2 flex-wrap">
                                         <!-- Tier 2 Math Toggle (Appears ONLY for Tier 2 subjects) -->
                                         <div id="tier2MathToggleWrap" class="hidden items-center">
-                                            <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none" title="মাঝেমধ্যে সমীকরণ দরকার হলে অন করুন">
-                                                <input type="checkbox" id="tier2MathCheckbox" onchange="onTier2MathToggle(this.checked)" class="size-3.5 rounded border-slate-300 dark:border-slate-700 text-violet-600 focus:ring-violet-500">
+                                            <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-violet-50/80 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/60 text-xs font-semibold text-violet-700 dark:text-violet-300 cursor-pointer select-none hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors shadow-2xs" title="মাঝেমধ্যে সমীকরণ বা প্রতীক দরকার হলে অন করুন">
+                                                <input type="checkbox" id="tier2MathCheckbox" onchange="onTier2MathToggle(this.checked)" class="size-3.5 rounded border-violet-300 dark:border-violet-600 text-violet-600 focus:ring-violet-500 cursor-pointer">
+                                                <span class="material-symbols-rounded text-[14px]">functions</span>
                                                 <span>সমীকরণ টুলবার (fx Math)</span>
                                             </label>
                                         </div>
@@ -1598,6 +1599,9 @@
             if (typeof loadTopicsForQuestionStudio === 'function') {
                 loadTopicsForQuestionStudio();
             }
+            if (typeof updateMathTierUI === 'function') {
+                updateMathTierUI(hidden ? hidden.value : '');
+            }
             saveStudioDraft();
         }
         window.syncGlobalSubjects = syncGlobalSubjects;
@@ -1678,19 +1682,6 @@
         // ==========================================
         // 3-TIER MATHEMATICAL EQUATION (fx) SYSTEM
         // ==========================================
-        const MATH_TIER_KEYWORDS = {
-            TIER_1: [
-                'math', 'mathematics', 'higher math', 'physics', 'chemistry',
-                'finance', 'banking', 'accounting', 'economics', 'statistics', 'geography', 'science',
-                'গণিত', 'উচ্চতর গণিত', 'পদার্থ', 'রসায়ন', 'রসায়ন', 'ফিন্যান্স', 'হিসাববিজ্ঞান',
-                'অর্থনীতি', 'পরিসংখ্যান', 'ভূগোল', 'বিজ্ঞান'
-            ],
-            TIER_2: [
-                'ict', 'information technology', 'general science', 'business', 'agriculture', 'agricultural',
-                'তথ্য ও যোগাযোগ প্রযুক্তি', 'কৃষি শিক্ষা', 'ব্যবসায় উদ্যোগ', 'গার্হস্থ্য বিজ্ঞান'
-            ]
-        };
-
         let _currentMathTier = 3;
         let _isTier2MathActive = false;
         window._lastFocusedStudioInput = null;
@@ -1698,8 +1689,57 @@
         function detectSubjectMathTier(subjectName) {
             if (!subjectName) return 3;
             const s = String(subjectName).trim().toLowerCase();
-            if (MATH_TIER_KEYWORDS.TIER_1.some(k => s.includes(k.toLowerCase()))) return 1;
-            if (MATH_TIER_KEYWORDS.TIER_2.some(k => s.includes(k.toLowerCase()))) return 2;
+
+            // TIER 3 (Exclusions): Pure Humanities, Social Sciences, Languages, Arts, Religion
+            // Checked first so subjects like "সমাজবিজ্ঞান" (Sociology) or "Social Science"
+            // are NOT mistakenly classified as science/math despite containing "বিজ্ঞান" or "science".
+            const tier3Exclusions = [
+                'bangla', 'bengali', 'english', 'history', 'civics', 'sociology', 'social work',
+                'political science', 'logic', 'religion', 'islam', 'hindu', 'buddhist', 'christian',
+                'moral', 'physical education', 'arts', 'crafts', 'career',
+                'বাংলা', 'ইংরেজি', 'ইতিহাস', 'পৌরনীতি', 'সমাজবিজ্ঞান', 'সমাজকর্ম',
+                'রাষ্ট্রবিজ্ঞান', 'যুক্তিবিদ্যা', 'ধর্ম', 'ইসলাম', 'হিন্দু', 'বৌদ্ধ', 'খ্রিস্ট',
+                'নৈতিক', 'শারীরিক শিক্ষা', 'চারু ও কারুকলা', 'ক্যারিয়ার'
+            ];
+            if (tier3Exclusions.some(k => s.includes(k.toLowerCase()))) {
+                return 3;
+            }
+
+            // TIER 1: Core Math / Heavy Calculations / Formula-heavy (fx Tools ALWAYS directly available)
+            const tier1Keywords = [
+                'higher math', 'mathematics', 'general math', 'math',
+                'physics', 'chemistry',
+                'accounting', 'finance', 'banking', 'economics', 'statistics', 'geography',
+                'উচ্চতর গণিত', 'সাধারণ গণিত', 'গণিত',
+                'পদার্থবিজ্ঞান', 'পদার্থ বিজ্ঞান', 'পদার্থ',
+                'রসায়নবিজ্ঞান', 'রসায়ন', 'রসায়ন',
+                'হিসাববিজ্ঞান', 'হিসাব বিজ্ঞান',
+                'ফিন্যান্স', 'ব্যাংকিং',
+                'অর্থনীতি', 'পরিসংখ্যান', 'ভূগোল'
+            ];
+            if (tier1Keywords.some(k => s.includes(k.toLowerCase()))) {
+                return 1;
+            }
+
+            // TIER 2: Semi-Math / Occasional Formulas & Equations (SHOW TOGGLE: [ ] সমীকরণ টুলবার (fx Math))
+            // ICT, General Science, Biology, Business Studies, Agriculture, Home Science
+            const tier2Keywords = [
+                'ict', 'information technology', 'information and communication', 'computer',
+                'general science', 'science', 'biology', 'botany', 'zoology',
+                'business studies', 'business organization', 'business entrepreneurship', 'business',
+                'agriculture', 'agricultural', 'home science', 'home economics',
+                'তথ্য ও যোগাযোগ প্রযুক্তি', 'তথ্য প্রযুক্তি', 'আইসিটি', 'কম্পিউটার',
+                'সাধারণ বিজ্ঞান', 'বিজ্ঞান',
+                'জীববিজ্ঞান', 'জীব বিজ্ঞান', 'উদ্ভিদবিজ্ঞান', 'প্রাণিবিজ্ঞান', 'বায়োলজি',
+                'কৃষি শিক্ষা', 'কৃষি',
+                'ব্যবসায় উদ্যোগ', 'ব্যবসায়ী উদ্যোগ', 'ব্যবসায় সংগঠন', 'ব্যবসায় শিক্ষা', 'ব্যবসায়',
+                'গার্হস্থ্য বিজ্ঞান', 'গার্হস্থ্য অর্থনীতি', 'গার্হস্থ্য'
+            ];
+            if (tier2Keywords.some(k => s.includes(k.toLowerCase()))) {
+                return 2;
+            }
+
+            // Default to Tier 3 (Pure clean, no toggle, no fx)
             return 3;
         }
         window.detectSubjectMathTier = detectSubjectMathTier;
@@ -1709,36 +1749,73 @@
             _currentMathTier = tier;
 
             const tier2Wrap = document.getElementById('tier2MathToggleWrap');
+            const tier2Chk = document.getElementById('tier2MathCheckbox');
             const globalMathBtnWrap = document.getElementById('globalMathToolbarWrap');
             const globalTray = document.getElementById('globalMathTray');
             const bulkMathToggleWrap = document.getElementById('bulkMathPreviewToggleWrap');
             const rowFxButtons = document.querySelectorAll('.btn-row-fx-tool');
 
             if (tier === 1) {
-                // TIER 1: Core Math/Science -> Always available
-                if (tier2Wrap) tier2Wrap.classList.add('hidden');
-                if (globalMathBtnWrap) globalMathBtnWrap.classList.remove('hidden');
-                if (bulkMathToggleWrap) bulkMathToggleWrap.classList.remove('hidden');
+                // TIER 1: Core Math/Science -> Always available directly
+                if (tier2Wrap) {
+                    tier2Wrap.classList.add('hidden');
+                    tier2Wrap.classList.remove('flex');
+                }
+                if (globalMathBtnWrap) {
+                    globalMathBtnWrap.classList.remove('hidden');
+                    globalMathBtnWrap.classList.add('flex');
+                }
+                if (bulkMathToggleWrap) {
+                    bulkMathToggleWrap.classList.remove('hidden');
+                    bulkMathToggleWrap.classList.add('flex');
+                }
                 rowFxButtons.forEach(btn => btn.classList.remove('hidden'));
             } else if (tier === 2) {
-                // TIER 2: Semi-Math -> Subtle toggle
-                if (tier2Wrap) tier2Wrap.classList.remove('hidden');
+                // TIER 2: Semi-Math -> Show the subtle toggle
+                if (tier2Wrap) {
+                    tier2Wrap.classList.remove('hidden');
+                    tier2Wrap.classList.add('flex');
+                }
+                if (tier2Chk) {
+                    tier2Chk.checked = _isTier2MathActive;
+                }
                 if (_isTier2MathActive) {
-                    if (globalMathBtnWrap) globalMathBtnWrap.classList.remove('hidden');
-                    if (bulkMathToggleWrap) bulkMathToggleWrap.classList.remove('hidden');
+                    if (globalMathBtnWrap) {
+                        globalMathBtnWrap.classList.remove('hidden');
+                        globalMathBtnWrap.classList.add('flex');
+                    }
+                    if (bulkMathToggleWrap) {
+                        bulkMathToggleWrap.classList.remove('hidden');
+                        bulkMathToggleWrap.classList.add('flex');
+                    }
                     rowFxButtons.forEach(btn => btn.classList.remove('hidden'));
                 } else {
-                    if (globalMathBtnWrap) globalMathBtnWrap.classList.add('hidden');
+                    if (globalMathBtnWrap) {
+                        globalMathBtnWrap.classList.add('hidden');
+                        globalMathBtnWrap.classList.remove('flex');
+                    }
                     if (globalTray) globalTray.classList.add('hidden');
-                    if (bulkMathToggleWrap) bulkMathToggleWrap.classList.add('hidden');
+                    if (bulkMathToggleWrap) {
+                        bulkMathToggleWrap.classList.add('hidden');
+                        bulkMathToggleWrap.classList.remove('flex');
+                    }
                     rowFxButtons.forEach(btn => btn.classList.add('hidden'));
                 }
             } else {
                 // TIER 3: Pure Humanities & Languages -> 100% hidden & clean
-                if (tier2Wrap) tier2Wrap.classList.add('hidden');
-                if (globalMathBtnWrap) globalMathBtnWrap.classList.add('hidden');
+                if (tier2Wrap) {
+                    tier2Wrap.classList.add('hidden');
+                    tier2Wrap.classList.remove('flex');
+                }
+                if (globalMathBtnWrap) {
+                    globalMathBtnWrap.classList.add('hidden');
+                    globalMathBtnWrap.classList.remove('flex');
+                }
                 if (globalTray) globalTray.classList.add('hidden');
-                if (bulkMathToggleWrap) bulkMathToggleWrap.classList.add('hidden');
+                if (bulkMathToggleWrap) {
+                    bulkMathToggleWrap.classList.add('hidden');
+                    bulkMathToggleWrap.classList.remove('flex');
+                }
                 rowFxButtons.forEach(btn => btn.classList.add('hidden'));
             }
         }
@@ -1750,6 +1827,9 @@
             updateMathTierUI(globalSub);
             if (_isTier2MathActive) {
                 toggleGlobalMathToolbar(true);
+            }
+            if (typeof saveStudioDraft === 'function') {
+                saveStudioDraft();
             }
         }
         window.onTier2MathToggle = onTier2MathToggle;
@@ -2002,6 +2082,7 @@
                 const draft = {
                     mode,
                     isGlobalBangla: typeof isGlobalBangla !== 'undefined' ? isGlobalBangla : false,
+                    isTier2MathActive: Boolean(_isTier2MathActive),
                     globalMeta: {},
                     questions: []
                 };
@@ -2163,6 +2244,12 @@
                 if (typeof draft.isGlobalBangla === 'boolean') {
                     isGlobalBangla = draft.isGlobalBangla;
                     if (typeof updateGlobalBanglaUI === 'function') updateGlobalBanglaUI();
+                }
+
+                if (typeof draft.isTier2MathActive === 'boolean') {
+                    _isTier2MathActive = draft.isTier2MathActive;
+                    const chk = document.getElementById('tier2MathCheckbox');
+                    if (chk) chk.checked = _isTier2MathActive;
                 }
 
                 if (draft.globalMeta) {
