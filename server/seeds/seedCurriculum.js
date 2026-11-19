@@ -462,6 +462,16 @@ const curriculumConfigs = [
     }
 ];
 
+const resolveSeededSegment = (subject, chapterName) => {
+    if (subject === 'Bangla 1st Paper') {
+        const cn = (chapterName || '').toLowerCase();
+        if (cn.includes('সহপাঠ') || cn.includes('উপন্যাস') || cn.includes('নাটক')) return 'বাংলা সহপাঠ';
+        if (cn.includes('পদ্য') || cn.includes('কবিতা')) return 'পদ্য';
+        return 'গদ্য';
+    }
+    return '';
+};
+
 const buildCurriculumTopics = () => {
     const docs = [];
 
@@ -484,7 +494,7 @@ const buildCurriculumTopics = () => {
                             code: `${config.codePrefix}-C${chapterNumber}-T${topOrder}`,
                             classLevel: cls,
                             subject: config.subject,
-                            segment: config.segment || '',
+                            segment: resolveSeededSegment(config.subject, chapterName),
                             group: config.group || 'None',
                             chapter: {
                                 number: chapterNumber,

@@ -584,15 +584,17 @@ const getTopicsPage = async (req, res) => {
         activeTopics.forEach(top => {
             const chName = (top.chapter && top.chapter.name) ? top.chapter.name.trim() : 'General / অধ্যায়হীন';
             const chNum = (top.chapter && typeof top.chapter.number === 'number') ? top.chapter.number : 1;
+            const isValidSeg = subjectHasSegments && top.segment && subjectSegments.some(s => s.toLowerCase() === top.segment.toLowerCase());
+            const chSeg = isValidSeg ? top.segment : '';
             if (!chaptersMap.has(chName)) {
                 chaptersMap.set(chName, {
                     name: chName,
                     number: chNum,
-                    segment: top.segment || '',
+                    segment: chSeg,
                     topics: []
                 });
-            } else if (!chaptersMap.get(chName).segment && top.segment) {
-                chaptersMap.get(chName).segment = top.segment;
+            } else if (!chaptersMap.get(chName).segment && chSeg) {
+                chaptersMap.get(chName).segment = chSeg;
             }
             chaptersMap.get(chName).topics.push(top);
         });
@@ -1948,15 +1950,17 @@ const getTeacherTopicsPage = async (req, res) => {
             activeTopics.forEach(top => {
                 const chName = (top.chapter && top.chapter.name) ? top.chapter.name.trim() : 'General / অধ্যায়হীন';
                 const chNum = (top.chapter && typeof top.chapter.number === 'number') ? top.chapter.number : 1;
+                const isValidSeg = subjectHasSegments && top.segment && subjectSegments.some(s => s.toLowerCase() === top.segment.toLowerCase());
+                const chSeg = isValidSeg ? top.segment : '';
                 if (!chaptersMap.has(chName)) {
                     chaptersMap.set(chName, {
                         name: chName,
                         number: chNum,
-                        segment: top.segment || '',
+                        segment: chSeg,
                         topics: []
                     });
-                } else if (!chaptersMap.get(chName).segment && top.segment) {
-                    chaptersMap.get(chName).segment = top.segment;
+                } else if (!chaptersMap.get(chName).segment && chSeg) {
+                    chaptersMap.get(chName).segment = chSeg;
                 }
                 chaptersMap.get(chName).topics.push(top);
             });
