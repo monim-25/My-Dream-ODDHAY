@@ -1836,15 +1836,37 @@
         }
 
         async function confirmResetNctbCurriculum(e) {
-            const btn = e ? e.currentTarget : null;
-            const confirmed = confirm('⚠️ সতর্কতা (DANGER / RESET):\n\nআপনি কি নিশ্চিত যে সম্পূর্ণ NCTB কারিকুলাম রিসেট করতে চান?\n\nএটি একটি সংবেদনশীল অ্যাকশন। সকল বর্তমান সিলেবাস রিসেট হয়ে অফিসিয়াল প্রমিত মাস্টার সিলেবাস লোড হবে।');
-            if (!confirmed) return;
+            const result = await Swal.fire({
+                title: 'Reset NCTB Master Curriculum?',
+                html: `
+                    <div class="text-left text-xs sm:text-sm text-slate-600 dark:text-slate-300 space-y-2">
+                        <p class="font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                            <span class="material-symbols-rounded text-base">warning</span>
+                            <span>সতর্কতা: এটি একটি সংবেদনশীল অ্যাকশন (Sensitive Action)</span>
+                        </p>
+                        <p>আপনি কি নিশ্চিত যে Class 9 থেকে Class 12 পর্যন্ত সকল বিষয়ের সিলেবাস <strong>অফিসিয়াল NCTB মাস্টার কারিকুলাম</strong> অনুযায়ী সম্পূর্ণ রিসেট ও সিঙ্ক করতে চান?</p>
+                        <p class="text-[11px] text-slate-500">নোট: প্রশ্ন ব্যাংক ও পূর্বের পরীক্ষার কোনো প্রশ্ন ক্ষতিগ্রস্ত হবে না।</p>
+                    </div>
+                `,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'হ্যাঁ, কারিকুলাম রিসেট করুন',
+                cancelButtonText: 'বাতিল',
+                reverseButtons: true
+            });
 
-            const origContent = btn ? btn.innerHTML : '';
-            if (btn) {
-                btn.disabled = true;
-                btn.innerHTML = '<span class="material-symbols-rounded animate-spin text-[16px]">refresh</span>';
-            }
+            if (!result.isConfirmed) return;
+
+            Swal.fire({
+                title: 'কারিকুলাম রিসেট হচ্ছে...',
+                html: '<span class="text-xs text-slate-500">NCTB প্রমিত অধ্যায় ও টপিকসমূহ ডাটাবেজে লোড হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন...</span>',
+                allowOutsideClick: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
 
             try {
                 const res = await fetch('/superadmin/topics/seed-curriculum', {
@@ -1854,21 +1876,27 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    alert(data.message || 'NCTB কারিকুলাম সফলভাবে আপডেট হয়েছে!');
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'রিসেট সফল হয়েছে!',
+                        text: data.message || 'NCTB কারিকুলাম সফলভাবে আপডেট হয়েছে।',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
                     window.location.reload();
                 } else {
-                    alert('ত্রুটি: ' + (data.error || 'Failed to seed curriculum'));
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = origContent;
-                    }
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'ত্রুটি!',
+                        text: data.error || 'Failed to seed curriculum'
+                    });
                 }
             } catch (err) {
-                alert('নেটওয়ার্ক ত্রুটি: ' + err.message);
-                if (btn) {
-                    btn.disabled = false;
-                    btn.innerHTML = origContent;
-                }
+                Swal.fire({
+                    icon: 'error',
+                    title: 'নেটওয়ার্ক ত্রুটি',
+                    text: err.message
+                });
             }
         }
 
