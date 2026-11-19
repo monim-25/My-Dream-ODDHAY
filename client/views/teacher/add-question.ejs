@@ -4,9 +4,54 @@
 <head>
     <%- include('../partials/head') %>
         <title>Compose Matrix | ODDHAY Command Center</title>
+        <!-- KaTeX for High-Performance Math Equation Rendering -->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+        <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
         <style>
             * {
                 font-family: 'Inter', 'Noto Sans Bengali', 'Hind Siliguri', sans-serif;
+            }
+
+            .katex-display {
+                overflow-x: auto;
+                overflow-y: hidden;
+                padding: 4px 0;
+                margin: 4px 0;
+            }
+
+            .math-sym-btn {
+                height: 26px;
+                min-width: 26px;
+                padding: 0 6px;
+                border-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                background: rgba(255, 255, 255, 0.8);
+                border: 1px solid rgba(139, 92, 246, 0.25);
+                color: #6d28d9;
+                cursor: pointer;
+                transition: all 0.15s ease;
+                user-select: none;
+            }
+
+            .dark .math-sym-btn {
+                background: rgba(30, 41, 59, 0.8);
+                border-color: rgba(139, 92, 246, 0.35);
+                color: #c4b5fd;
+            }
+
+            .math-sym-btn:hover {
+                background: rgba(139, 92, 246, 0.15);
+                border-color: rgba(139, 92, 246, 0.5);
+                transform: translateY(-1px);
+            }
+
+            .math-sym-btn:active {
+                transform: scale(0.95);
             }
 
             .material-symbols-rounded {
@@ -489,7 +534,24 @@
                                         <!-- Metadata Badges -->
                                         <div id="studioMetaBadges" class="flex flex-wrap items-center gap-1.5"></div>
                                     </div>
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <!-- Tier 2 Math Toggle (Appears ONLY for Tier 2 subjects) -->
+                                        <div id="tier2MathToggleWrap" class="hidden items-center">
+                                            <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none" title="মাঝেমধ্যে সমীকরণ দরকার হলে অন করুন">
+                                                <input type="checkbox" id="tier2MathCheckbox" onchange="onTier2MathToggle(this.checked)" class="size-3.5 rounded border-slate-300 dark:border-slate-700 text-violet-600 focus:ring-violet-500">
+                                                <span>সমীকরণ টুলবার (fx Math)</span>
+                                            </label>
+                                        </div>
+
+                                        <!-- Global Math Toolbar Trigger (For Tier 1 or when Tier 2 toggle is ON) -->
+                                        <div id="globalMathToolbarWrap" class="hidden items-center">
+                                            <button type="button" onclick="toggleGlobalMathToolbar()" id="btnGlobalMathToolbar"
+                                                class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-violet-500/10 hover:bg-violet-500/20 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-500/30 transition-all cursor-pointer shadow-2xs">
+                                                <span class="material-symbols-rounded text-[15px]">function</span>
+                                                <span>Math Tools (fx)</span>
+                                            </button>
+                                        </div>
+
                                         <!-- Form-Level Language Toggle (Applies to all questions) -->
                                         <div
                                             class="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -508,6 +570,58 @@
                                             <span id="draftStatusText">Draft autosaved</span>
                                         </div>
                                     </div>
+                                </div>
+
+                                <!-- GLOBAL COLLAPSIBLE MATH TRAY -->
+                                <div id="globalMathTray" class="hidden p-2.5 rounded-xl bg-violet-50/80 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/60 shadow-xs mb-3 space-y-2 animate-slide-up">
+                                    <div class="flex items-center justify-between text-[11px] font-semibold text-violet-900 dark:text-violet-300 pb-1.5 border-b border-violet-200/60 dark:border-violet-800/40">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="material-symbols-rounded text-sm">function</span>
+                                            <span>১-ক্লিক সমীকরণ ও প্রতীক টুলবার (ইনপুট বক্সে ক্লিক করে যেকোনো বাটনে চাপুন)</span>
+                                        </div>
+                                        <button type="button" onclick="toggleGlobalMathToolbar(false)" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">✕</button>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-1.5">
+                                        <!-- Powers & Indices -->
+                                        <div class="flex items-center gap-1 pr-1.5 border-r border-violet-200 dark:border-violet-800">
+                                            <button type="button" onclick="insertMathCode('^2', 'power')" class="math-sym-btn" title="বর্গ (Square)">x²</button>
+                                            <button type="button" onclick="insertMathCode('^3', 'power')" class="math-sym-btn" title="ঘন (Cube)">x³</button>
+                                            <button type="button" onclick="insertMathCode('^{n}', 'power')" class="math-sym-btn" title="পাওয়ার (Power)">xⁿ</button>
+                                            <button type="button" onclick="insertMathCode('_{1}', 'sub')" class="math-sym-btn" title="সাবস্ক্রিপ্ট ১">x₁</button>
+                                            <button type="button" onclick="insertMathCode('_{2}', 'sub')" class="math-sym-btn" title="সাবস্ক্রিপ্ট ২">x₂</button>
+                                        </div>
+                                        <!-- Fractions, Roots & Operators -->
+                                        <div class="flex items-center gap-1 pr-1.5 border-r border-violet-200 dark:border-violet-800">
+                                            <button type="button" onclick="insertMathCode('\\frac{a}{b}', 'wrap')" class="math-sym-btn font-mono" title="ভগ্নাংশ (Fraction)">a/b</button>
+                                            <button type="button" onclick="insertMathCode('\\sqrt{x}', 'wrap')" class="math-sym-btn" title="বর্গমূল (Square Root)">√x</button>
+                                            <button type="button" onclick="insertMathCode('\\pm', 'symbol')" class="math-sym-btn" title="প্লাস-মাইনাস">±</button>
+                                            <button type="button" onclick="insertMathCode('\\times', 'symbol')" class="math-sym-btn" title="গুণ">×</button>
+                                            <button type="button" onclick="insertMathCode('\\div', 'symbol')" class="math-sym-btn" title="ভাগ">÷</button>
+                                            <button type="button" onclick="insertMathCode('\\neq', 'symbol')" class="math-sym-btn" title="সমান নয়">≠</button>
+                                            <button type="button" onclick="insertMathCode('\\le', 'symbol')" class="math-sym-btn" title="ছোট বা সমান">≤</button>
+                                            <button type="button" onclick="insertMathCode('\\ge', 'symbol')" class="math-sym-btn" title="বড় বা সমান">≥</button>
+                                            <button type="button" onclick="insertMathCode('\\infty', 'symbol')" class="math-sym-btn" title="অসীম (Infinity)">∞</button>
+                                        </div>
+                                        <!-- Geometry -->
+                                        <div class="flex items-center gap-1 pr-1.5 border-r border-violet-200 dark:border-violet-800">
+                                            <button type="button" onclick="insertMathCode('\\triangle ', 'symbol')" class="math-sym-btn" title="ত্রিভুজ (Triangle)">△</button>
+                                            <button type="button" onclick="insertMathCode('\\angle ', 'symbol')" class="math-sym-btn" title="কোণ (Angle)">∠</button>
+                                            <button type="button" onclick="insertMathCode('\\perp ', 'symbol')" class="math-sym-btn" title="লম্ব (Perpendicular)">⊥</button>
+                                            <button type="button" onclick="insertMathCode('\\parallel ', 'symbol')" class="math-sym-btn" title="সমান্তরাল (Parallel)">∥</button>
+                                            <button type="button" onclick="insertMathCode('^\\circ', 'symbol')" class="math-sym-btn" title="ডিগ্রি (Degree)">°</button>
+                                            <button type="button" onclick="insertMathCode('\\pi', 'symbol')" class="math-sym-btn" title="পাই (Pi)">π</button>
+                                        </div>
+                                        <!-- Greek & Science -->
+                                        <div class="flex items-center gap-1">
+                                            <button type="button" onclick="insertMathCode('\\theta', 'symbol')" class="math-sym-btn" title="থিটা (Theta)">θ</button>
+                                            <button type="button" onclick="insertMathCode('\\alpha', 'symbol')" class="math-sym-btn" title="আলফা (Alpha)">α</button>
+                                            <button type="button" onclick="insertMathCode('\\beta', 'symbol')" class="math-sym-btn" title="বিটা (Beta)">β</button>
+                                            <button type="button" onclick="insertMathCode('\\lambda', 'symbol')" class="math-sym-btn" title="ল্যাম্বডা (Lambda)">λ</button>
+                                            <button type="button" onclick="insertMathCode('\\Omega', 'symbol')" class="math-sym-btn" title="ওহম (Omega)">Ω</button>
+                                            <button type="button" onclick="insertMathCode('$', 'dollar')" class="math-sym-btn font-mono font-bold" title="সমীকরণ ট্যাগ ($...$)">$...$</button>
+                                        </div>
+                                    </div>
+                                </div>
                                 </div>
 
                                 <!-- Bulk Question Container -->
@@ -616,7 +730,13 @@
                                     </div>
 
                                     <!-- Right: Status Badges & Help -->
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <div id="bulkMathPreviewToggleWrap" class="hidden items-center">
+                                            <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer select-none" title="সমীকরণ প্রিভিউ দেখুন বা বন্ধ করুন">
+                                                <input type="checkbox" id="bulkMathPreviewToggle" checked onchange="onBulkMathToggle()" class="size-3.5 rounded border-slate-300 dark:border-slate-700 text-violet-600 focus:ring-violet-500">
+                                                <span>সমীকরণ প্রিভিউ (KaTeX)</span>
+                                            </label>
+                                        </div>
                                         <div id="bulkStatsBadge"
                                             class="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                             <span id="bulkTotalParsedText">০ টি প্রশ্ন শনাক্ত</span>
@@ -665,7 +785,10 @@
                                             class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800">ব্যাখ্যা: ...</code>
                                         বা <code
                                             class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800">Explanation: ...</code>
-                                        লিখুন।
+                                        লিখুন।<br>
+                                        ৫. গণিত ও বিজ্ঞানের সমীকরণ লিখতে <code
+                                            class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono">$ ... $</code>
+                                        ব্যবহার করুন (যেমন: <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono">$x^2 + 5x = 0$</code>, <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono">$\\frac{a}{b}$</code> বা <code class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono">$\\sqrt{x}$</code>)।
                                     </p>
                                 </div>
 
@@ -855,6 +978,12 @@
                 <div class="flex items-center justify-between flex-wrap gap-1.5">
                     <label class="text-xs font-medium text-slate-500 dark:text-slate-400 ml-0.5">Question</label>
                     <div class="image-uploader-slot flex items-center gap-1.5 flex-wrap">
+                        <button type="button" onclick="toggleGlobalMathToolbar(true)"
+                            class="btn-row-fx-tool hidden inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 transition-all cursor-pointer"
+                            title="গণিত ও বিজ্ঞানের সমীকরণ টুলবার খুলুন">
+                            <span class="material-symbols-rounded text-sm">function</span>
+                            <span>সমীকরণ (fx)</span>
+                        </button>
                         <input type="hidden" name="qQuestionImage[]" class="image-url-input" value="">
                         <input type="file" accept="image/*" class="hidden image-file-input" onchange="handleStudioImageUpload(this)">
                         <button type="button" onclick="triggerStudioImageUpload(this)"
@@ -889,6 +1018,7 @@
                     <textarea name="qText[]" required placeholder="Question..."
                         class="w-full flex-1 p-2.5 sm:p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all leading-relaxed resize-y"
                         rows="2"></textarea>
+                    <div class="live-math-preview hidden w-full p-2 rounded-lg bg-violet-50/70 dark:bg-violet-950/30 border border-violet-200/80 dark:border-violet-800/50 text-xs text-slate-800 dark:text-slate-200 leading-relaxed overflow-x-auto"></div>
                 </div>
             </div>
 
@@ -1534,11 +1664,203 @@
             if (typeof loadTopicsForQuestionStudio === 'function') {
                 loadTopicsForQuestionStudio();
             }
+            if (typeof updateMathTierUI === 'function') {
+                updateMathTierUI(sName);
+            }
             closeAllSystemDropdowns();
             saveStudioDraft();
             updatePaperDetailsSummaryBadge();
         }
         window.selectGlobalSubjectDirect = selectGlobalSubjectDirect;
+
+        // ==========================================
+        // 3-TIER MATHEMATICAL EQUATION (fx) SYSTEM
+        // ==========================================
+        const MATH_TIER_KEYWORDS = {
+            TIER_1: [
+                'math', 'mathematics', 'higher math', 'physics', 'chemistry',
+                'finance', 'banking', 'accounting', 'economics', 'statistics', 'geography', 'science',
+                'গণিত', 'উচ্চতর গণিত', 'পদার্থ', 'রসায়ন', 'রসায়ন', 'ফিন্যান্স', 'হিসাববিজ্ঞান',
+                'অর্থনীতি', 'পরিসংখ্যান', 'ভূগোল', 'বিজ্ঞান'
+            ],
+            TIER_2: [
+                'ict', 'information technology', 'general science', 'business', 'agriculture', 'agricultural',
+                'তথ্য ও যোগাযোগ প্রযুক্তি', 'কৃষি শিক্ষা', 'ব্যবসায় উদ্যোগ', 'গার্হস্থ্য বিজ্ঞান'
+            ]
+        };
+
+        let _currentMathTier = 3;
+        let _isTier2MathActive = false;
+        window._lastFocusedStudioInput = null;
+
+        function detectSubjectMathTier(subjectName) {
+            if (!subjectName) return 3;
+            const s = String(subjectName).trim().toLowerCase();
+            if (MATH_TIER_KEYWORDS.TIER_1.some(k => s.includes(k.toLowerCase()))) return 1;
+            if (MATH_TIER_KEYWORDS.TIER_2.some(k => s.includes(k.toLowerCase()))) return 2;
+            return 3;
+        }
+        window.detectSubjectMathTier = detectSubjectMathTier;
+
+        function updateMathTierUI(subjectName) {
+            const tier = detectSubjectMathTier(subjectName);
+            _currentMathTier = tier;
+
+            const tier2Wrap = document.getElementById('tier2MathToggleWrap');
+            const globalMathBtnWrap = document.getElementById('globalMathToolbarWrap');
+            const globalTray = document.getElementById('globalMathTray');
+            const bulkMathToggleWrap = document.getElementById('bulkMathPreviewToggleWrap');
+            const rowFxButtons = document.querySelectorAll('.btn-row-fx-tool');
+
+            if (tier === 1) {
+                // TIER 1: Core Math/Science -> Always available
+                if (tier2Wrap) tier2Wrap.classList.add('hidden');
+                if (globalMathBtnWrap) globalMathBtnWrap.classList.remove('hidden');
+                if (bulkMathToggleWrap) bulkMathToggleWrap.classList.remove('hidden');
+                rowFxButtons.forEach(btn => btn.classList.remove('hidden'));
+            } else if (tier === 2) {
+                // TIER 2: Semi-Math -> Subtle toggle
+                if (tier2Wrap) tier2Wrap.classList.remove('hidden');
+                if (_isTier2MathActive) {
+                    if (globalMathBtnWrap) globalMathBtnWrap.classList.remove('hidden');
+                    if (bulkMathToggleWrap) bulkMathToggleWrap.classList.remove('hidden');
+                    rowFxButtons.forEach(btn => btn.classList.remove('hidden'));
+                } else {
+                    if (globalMathBtnWrap) globalMathBtnWrap.classList.add('hidden');
+                    if (globalTray) globalTray.classList.add('hidden');
+                    if (bulkMathToggleWrap) bulkMathToggleWrap.classList.add('hidden');
+                    rowFxButtons.forEach(btn => btn.classList.add('hidden'));
+                }
+            } else {
+                // TIER 3: Pure Humanities & Languages -> 100% hidden & clean
+                if (tier2Wrap) tier2Wrap.classList.add('hidden');
+                if (globalMathBtnWrap) globalMathBtnWrap.classList.add('hidden');
+                if (globalTray) globalTray.classList.add('hidden');
+                if (bulkMathToggleWrap) bulkMathToggleWrap.classList.add('hidden');
+                rowFxButtons.forEach(btn => btn.classList.add('hidden'));
+            }
+        }
+        window.updateMathTierUI = updateMathTierUI;
+
+        function onTier2MathToggle(checked) {
+            _isTier2MathActive = Boolean(checked);
+            const globalSub = document.getElementById('globalSubject')?.value || '';
+            updateMathTierUI(globalSub);
+            if (_isTier2MathActive) {
+                toggleGlobalMathToolbar(true);
+            }
+        }
+        window.onTier2MathToggle = onTier2MathToggle;
+
+        function toggleGlobalMathToolbar(forceState = null) {
+            const tray = document.getElementById('globalMathTray');
+            if (!tray) return;
+            const isOpen = !tray.classList.contains('hidden');
+            const shouldOpen = (forceState !== null) ? forceState : !isOpen;
+            if (shouldOpen) {
+                tray.classList.remove('hidden');
+            } else {
+                tray.classList.add('hidden');
+            }
+        }
+        window.toggleGlobalMathToolbar = toggleGlobalMathToolbar;
+
+        function onBulkMathToggle() {
+            if (typeof renderBulkPreviewCards === 'function') {
+                renderBulkPreviewCards();
+            }
+        }
+        window.onBulkMathToggle = onBulkMathToggle;
+
+        function insertMathCode(code, mode) {
+            let target = window._lastFocusedStudioInput;
+            if (!target || !document.body.contains(target)) {
+                target = document.querySelector('textarea[name="qText[]"]');
+                if (target) window._lastFocusedStudioInput = target;
+            }
+            if (!target) return;
+
+            const start = target.selectionStart || 0;
+            const end = target.selectionEnd || 0;
+            const val = target.value || '';
+            const selectedText = val.substring(start, end);
+
+            let insertion = code;
+            const beforeCursor = val.substring(0, start);
+            const afterCursor = val.substring(end);
+            const dollarMatches = beforeCursor.match(/\$/g);
+            const isInsideDollar = dollarMatches ? (dollarMatches.length % 2 === 1) : false;
+
+            if (mode === 'dollar') {
+                insertion = selectedText ? `$${selectedText}$` : `$$`;
+            } else if (mode === 'power' || mode === 'sub') {
+                if (isInsideDollar) {
+                    insertion = code;
+                } else {
+                    insertion = selectedText ? `$${selectedText}${code}$` : `$x${code}$`;
+                }
+            } else if (mode === 'wrap') {
+                if (isInsideDollar) {
+                    insertion = code;
+                } else {
+                    insertion = `$${code}$`;
+                }
+            } else { // symbol
+                if (isInsideDollar) {
+                    insertion = ` ${code} `;
+                } else {
+                    insertion = `$${code}$`;
+                }
+            }
+
+            target.value = beforeCursor + insertion + afterCursor;
+            const newPos = (mode === 'dollar' && !selectedText) ? (start + 1) : (start + insertion.length);
+            target.focus();
+            try {
+                target.setSelectionRange(newPos, newPos);
+            } catch (e) {}
+
+            target.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        window.insertMathCode = insertMathCode;
+
+        // Track last focused input inside question studio
+        document.addEventListener('focusin', (e) => {
+            const t = e.target;
+            if (t && (t.matches('textarea[name="qText[]"]') || t.matches('input[name="qOptions[]"]') || t.matches('textarea[name="qExplanation[]"]') || t.matches('textarea[name="qContext[]"]'))) {
+                window._lastFocusedStudioInput = t;
+            }
+        });
+
+        // Real-time live math equation preview on input
+        document.addEventListener('input', (e) => {
+            const t = e.target;
+            if (!t) return;
+            if (t.matches('textarea[name="qText[]"]') || t.matches('textarea[name="qExplanation[]"]')) {
+                const parentBox = t.closest('.studio-question-interactive-box') || t.parentElement;
+                if (!parentBox) return;
+                const previewEl = parentBox.querySelector('.live-math-preview');
+                if (!previewEl) return;
+
+                const textVal = (t.value || '').trim();
+                if (textVal && textVal.includes('$')) {
+                    const escText = (typeof escapeBulkHtml === 'function') ? escapeBulkHtml(textVal) : textVal;
+                    previewEl.innerHTML = `<span class="text-[10px] font-semibold text-violet-600 dark:text-violet-400 block mb-0.5">📐 লাইভ সমীকরণ প্রিভিউ:</span><div>${escText}</div>`;
+                    previewEl.classList.remove('hidden');
+                    if (typeof renderMathInElement === 'function') {
+                        renderMathInElement(previewEl, {
+                            delimiters: [
+                                { left: '$$', right: '$$', display: true },
+                                { left: '$', right: '$', display: false }
+                            ],
+                            throwOnError: false
+                        });
+                    }
+                } else {
+                    previewEl.classList.add('hidden');
+                }
+            }
+        });
 
         function togglePaperDetailsMobile(forceOpen = null) {
             const body = document.getElementById('paperDetailsBody');
@@ -2863,6 +3185,10 @@
             setInterval(saveStudioDraft, 10000);
 
             loadTopicsForQuestionStudio();
+            const initialSubVal = document.getElementById('globalSubject')?.value || '';
+            if (typeof updateMathTierUI === 'function') {
+                updateMathTierUI(initialSubVal);
+            }
 
             if (urlParams.get('tab') === 'bulk' || urlParams.get('entryMode') === 'bulk') {
                 switchStudioEntryMode('bulk');
@@ -3117,6 +3443,9 @@
                 container.appendChild(clone);
             }
             updateIndices();
+            if (typeof updateMathTierUI === 'function') {
+                updateMathTierUI(document.getElementById('globalSubject')?.value || '');
+            }
             saveStudioDraft();
         }
 
@@ -3313,6 +3642,9 @@
             const rows = document.querySelectorAll('.question-row');
             rows.forEach(r => applyRowBanglaUI(r, isGlobalBangla));
             updateIndices();
+            if (typeof updateMathTierUI === 'function') {
+                updateMathTierUI(document.getElementById('globalSubject')?.value || '');
+            }
             saveStudioDraft();
         }
         window.setGlobalBangla = setGlobalBangla;
@@ -3330,6 +3662,9 @@
             const newIsBangla = !currentIsBangla;
             applyRowBanglaUI(row, newIsBangla);
             updateIndices();
+            if (typeof updateMathTierUI === 'function') {
+                updateMathTierUI(document.getElementById('globalSubject')?.value || '');
+            }
             saveStudioDraft();
         }
         window.toggleRowBangla = toggleRowBangla;
@@ -3809,10 +4144,16 @@
                             </div>
                         ` : ''}
 
-                        <!-- Question Text Textarea -->
-                        <div>
+                        <!-- Question Text Textarea & Live Math Preview -->
+                        <div class="space-y-1.5">
                             <textarea rows="2" placeholder="প্রশ্ন..." oninput="updateBulkQText(${qIdx}, this.value); autoResizeBulkTextarea(this);"
                                 class="w-full p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all leading-relaxed resize-y min-h-[50px]">${escapeBulkHtml(q.qText || '')}</textarea>
+                            ${q.qText && q.qText.includes('$') ? `
+                                <div class="bulk-math-preview-pill p-2 rounded-lg bg-violet-50/70 dark:bg-violet-950/30 border border-violet-200/80 dark:border-violet-800/50 text-xs text-slate-800 dark:text-slate-200 leading-relaxed overflow-x-auto">
+                                    <span class="text-[10px] font-semibold text-violet-600 dark:text-violet-400 block mb-0.5">📐 সমীকরণ প্রিভিউ:</span>
+                                    <div class="bulk-math-content">${escapeBulkHtml(q.qText)}</div>
+                                </div>
+                            ` : ''}
                         </div>
 
                         ${q.statements && q.statements.length > 0 ? `
@@ -3862,6 +4203,18 @@
             });
 
             container.innerHTML = html;
+
+            const bulkMathToggle = document.getElementById('bulkMathPreviewToggle');
+            const shouldRenderBulkMath = bulkMathToggle ? bulkMathToggle.checked : true;
+            if (shouldRenderBulkMath && typeof renderMathInElement === 'function') {
+                renderMathInElement(container, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false }
+                    ],
+                    throwOnError: false
+                });
+            }
         }
 
         function updateBulkQText(qIdx, val) {
@@ -4179,6 +4532,9 @@ Correct Answer: B`;
             });
 
             updateIndices();
+            if (typeof updateMathTierUI === 'function') {
+                updateMathTierUI(document.getElementById('globalSubject')?.value || '');
+            }
             saveStudioDraft();
 
             if (!isSilent) {
