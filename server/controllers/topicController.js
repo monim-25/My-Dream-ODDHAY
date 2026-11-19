@@ -472,112 +472,32 @@ const seedDefaultTopicsIfEmpty = async () => {
         const count = await Topic.countDocuments();
         if (count > 0) return;
 
-        const defaultTopics = [
-            // Class 9 / 10 - Physics
-            {
-                name: 'স্কেলার ও ভেক্টর রাশি (Scalar & Vector Quantities)',
-                code: 'PHY-C2-T01',
-                classLevel: 'Class 9',
-                group: 'Science',
-                subject: 'Physics',
-                chapter: { number: 2, name: 'অধ্যায় ২: গতি (Motion)' },
-                difficulty: 'Easy',
-                keywords: ['scalar', 'vector', 'magnitude', 'direction'],
-                description: 'স্কেলার ও ভেক্টর রাশির মৌলিক ধারণা ও পার্থক্য',
-                order: 1
-            },
-            {
-                name: 'দূরত্ব ও সরণ (Distance & Displacement)',
-                code: 'PHY-C2-T02',
-                classLevel: 'Class 9',
-                group: 'Science',
-                subject: 'Physics',
-                chapter: { number: 2, name: 'অধ্যায় ২: গতি (Motion)' },
-                difficulty: 'Easy',
-                keywords: ['distance', 'displacement', 'motion'],
-                description: 'দূরত্ব ও সরণের পার্থক্য ও গাণিতিক প্রয়োগ',
-                order: 2
-            },
-            {
-                name: 'দ্রুতি ও বেগ (Speed & Velocity)',
-                code: 'PHY-C2-T03',
-                classLevel: 'Class 9',
-                group: 'Science',
-                subject: 'Physics',
-                chapter: { number: 2, name: 'অধ্যায় ২: গতি (Motion)' },
-                difficulty: 'Medium',
-                keywords: ['speed', 'velocity', 'instantaneous velocity'],
-                description: 'গড় দ্রুতি, গড় বেগ ও তাৎক্ষণিক বেগ নির্ণয়',
-                order: 3
-            },
-            {
-                name: 'ত্বরণ ও মন্দন (Acceleration & Deceleration)',
-                code: 'PHY-C2-T04',
-                classLevel: 'Class 9',
-                group: 'Science',
-                subject: 'Physics',
-                chapter: { number: 2, name: 'অধ্যায় ২: গতি (Motion)' },
-                difficulty: 'Medium',
-                keywords: ['acceleration', 'deceleration', 'uniform acceleration'],
-                description: 'সুষম ও অসম ত্বরণ এবং গতির সমীকরণ প্রতিপাদন',
-                order: 4
-            },
-            {
-                name: 'পড়ন্ত বস্তুর সূত্রাবলী (Laws of Falling Bodies)',
-                code: 'PHY-C2-T05',
-                classLevel: 'Class 9',
-                group: 'Science',
-                subject: 'Physics',
-                chapter: { number: 2, name: 'অধ্যায় ২: গতি (Motion)' },
-                difficulty: 'Hard',
-                keywords: ['gravity', 'free fall', 'galileo'],
-                description: 'গ্যালিলিওর সূত্র ও অভিকর্ষজ ত্বরণ সংক্রান্ত সমস্যা',
-                order: 5
-            },
-
-            // Chapter 3: বল (Force)
-            {
-                name: 'জড়তা ও নিউটনের ১ম সূত্র (Inertia & Newton\'s 1st Law)',
-                code: 'PHY-C3-T01',
-                classLevel: 'Class 9',
-                group: 'Science',
-                subject: 'Physics',
-                chapter: { number: 3, name: 'অধ্যায় ৩: বল (Force)' },
-                difficulty: 'Easy',
-                keywords: ['inertia', 'newton first law', 'mass'],
-                description: 'স্থিতিজড়তা ও গতিজড়তা সংক্রান্ত বাস্তব উদাহরণ',
-                order: 1
-            },
-            {
-                name: 'ভরবেগ ও নিউটনের ২য় সূত্র (Momentum & Newton\'s 2nd Law)',
-                code: 'PHY-C3-T02',
-                classLevel: 'Class 9',
-                group: 'Science',
-                subject: 'Physics',
-                chapter: { number: 3, name: 'অধ্যায় ৩: বল (Force)' },
-                difficulty: 'Medium',
-                keywords: ['momentum', 'f=ma', 'newton second law'],
-                description: 'F = ma সমীকরণ ও ভরবেগের পরিবর্তনের হার',
-                order: 2
-            },
-            {
-                name: 'নিউটনের ৩য় সূত্র ও ঘর্ষণ বল (Newton\'s 3rd Law & Friction)',
-                code: 'PHY-C3-T03',
-                classLevel: 'Class 9',
-                group: 'Science',
-                subject: 'Physics',
-                chapter: { number: 3, name: 'অধ্যায় ৩: বল (Force)' },
-                difficulty: 'Hard',
-                keywords: ['action reaction', 'friction', 'coefficient'],
-                description: 'ক্রিয়া-প্রতিক্রিয়া এবং ঘর্ষণ বলের প্রকারভেদ',
-                order: 3
-            }
-        ];
-
-        await Topic.insertMany(defaultTopics);
-        console.log('✅ Seeded default NCTB topics for ODDHAY');
+        const { seedMasterCurriculum } = require('../seeds/seedCurriculum');
+        if (typeof seedMasterCurriculum === 'function') {
+            console.log('🌱 Seeding initial NCTB master curriculum for ODDHAY...');
+            await seedMasterCurriculum({ wipeExisting: false });
+        }
     } catch (e) {
         console.warn('Topic seed warning:', e.message);
+    }
+};
+
+// Superadmin API endpoint to re-seed / reset NCTB Master Curriculum
+const seedMasterCurriculumApi = async (req, res) => {
+    try {
+        await connectDB();
+        const { seedMasterCurriculum } = require('../seeds/seedCurriculum');
+        const wipe = req.body.wipe !== false; // default true
+        const result = await seedMasterCurriculum({ wipeExisting: wipe });
+        clearTopicsApiCache();
+        return res.json({
+            success: true,
+            message: `NCTB মাস্টার কারিকুলাম সফলভাবে সংরক্ষিত হয়েছে (${result.count} টি টপিক)।`,
+            totalCount: result.count
+        });
+    } catch (err) {
+        console.error('seedMasterCurriculumApi error:', err);
+        return res.status(500).json({ success: false, error: err.message });
     }
 };
 
@@ -2498,5 +2418,6 @@ module.exports = {
     requestDeleteTopics,
     cancelDeleteRequest,
     approveDeletionRequest,
-    declineDeletionRequest
+    declineDeletionRequest,
+    seedMasterCurriculumApi
 };

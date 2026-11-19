@@ -5872,6 +5872,7 @@ router.get('/api/bank-metadata', superAdminProtect, async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 router.post('/topics', superAdminProtect, topicController.createTopic);
+router.post('/topics/seed-curriculum', superAdminProtect, topicController.seedMasterCurriculumApi);
 router.post('/topics/add-subject', superAdminProtect, topicController.addSubjectToClasses);
 router.post('/topics/copy-to-classes', superAdminProtect, topicController.copyTopicsToClasses);
 router.post('/topics/bulk', superAdminProtect, topicController.bulkCreateTopics);

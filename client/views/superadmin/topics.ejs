@@ -102,6 +102,14 @@
                                 <input type="text" id="topicSearchInput" onkeyup="filterTopicsClientSide(this.value)" placeholder="Search topics..." class="w-full h-8 pl-7 pr-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
                             </div>
 
+                            <!-- Reset/Seed NCTB Curriculum Button -->
+                            <button type="button" onclick="confirmResetNctbCurriculum(event)"
+                                    class="h-8 px-2.5 sm:px-3 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium flex items-center gap-1 shadow-xs transition-all shrink-0 whitespace-nowrap cursor-pointer"
+                                    title="NCTB মাস্টার কারিকুলাম পুনরায় লোড ও সিঙ্ক করুন">
+                                <span class="material-symbols-rounded text-[17px]">sync</span>
+                                <span class="hidden md:inline">Reset NCTB Curriculum</span>
+                            </button>
+
                             <!-- Add Topics Button -->
                             <button type="button" id="unifiedModalOpenBtn" onclick="openUnifiedModal('', 1, 'single', '<%= (selSegment !== 'all') ? selSegment : '' %>')"
                                     class="h-8 px-3 sm:px-3.5 rounded-md bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 shadow-xs transition-all shrink-0 whitespace-nowrap cursor-pointer">
@@ -1825,6 +1833,43 @@
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#039;');
+        }
+
+        async function confirmResetNctbCurriculum(e) {
+            const btn = e ? e.currentTarget : null;
+            const confirmed = confirm('আপনি কি নিশ্চিত যে সম্পূর্ণ NCTB মাস্টার কারিকুলাম পুনরায় লোড করতে চান?\n\nএটি অফিসিয়াল NCTB সিলেবাস অনুসারে সকল ক্লাস ও বিষয়ের চ্যাপ্টার এবং টপিকগুলো ডাটাবেজে রিসেট ও সিঙ্ক করবে।');
+            if (!confirmed) return;
+
+            const origContent = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span class="material-symbols-rounded animate-spin text-[17px]">refresh</span> Updating...';
+            }
+
+            try {
+                const res = await fetch('/superadmin/topics/seed-curriculum', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wipe: true })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message || 'NCTB কারিকুলাম সফলভাবে আপডেট হয়েছে!');
+                    window.location.reload();
+                } else {
+                    alert('ত্রুটি: ' + (data.error || 'Failed to seed curriculum'));
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = origContent;
+                    }
+                }
+            } catch (err) {
+                alert('নেটওয়ার্ক ত্রুটি: ' + err.message);
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = origContent;
+                }
+            }
         }
 
         function openUnifiedModal(chapterName = '', chapterNum = 1, defaultMode = 'single', prefillSegment = '') {
