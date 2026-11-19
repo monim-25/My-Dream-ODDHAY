@@ -969,6 +969,14 @@
                             <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Description</label>
                             <textarea id="singleTopicDesc" name="description" rows="2" placeholder="Topic description (optional)" class="w-full p-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y"></textarea>
                         </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400">Sub-topics (Optional - One per line)</label>
+                                <span class="text-[10px] text-slate-400">Per sub-topic one line</span>
+                            </div>
+                            <textarea id="superSingleSubTopics" name="singleSubTopics" rows="2.5" placeholder="Enter sub-topics (one per line)&#10;e.g.&#10;গতি ও স্থিতি&#10;ত্বরণ ও মন্দন&#10;গতির সমীকরণ" class="w-full p-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y font-sans leading-relaxed"></textarea>
+                        </div>
                     </div>
 
                     <!-- BULK TOPICS INPUT FIELDS -->
@@ -1232,8 +1240,11 @@
                 </div>
 
                 <div>
-                    <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Sub-topics (Comma or newline separated)</label>
-                    <textarea id="editTopicSubTopics" name="subTopics" rows="2" placeholder="e.g. গতি ও স্থিতি, ত্বরণ, বল" class="w-full p-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y"></textarea>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400">Sub-topics (One per line)</label>
+                        <span class="text-[10px] text-slate-400">Per sub-topic one line</span>
+                    </div>
+                    <textarea id="editTopicSubTopics" name="subTopics" rows="3" placeholder="Enter sub-topics (one per line)&#10;e.g.&#10;গতি ও স্থিতি&#10;ত্বরণ ও মন্দন&#10;গতির সমীকরণ" class="w-full p-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y font-sans leading-relaxed"></textarea>
                 </div>
 
                 <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -2096,12 +2107,18 @@
                 }
                 if (singleName) {
                     const existingSubs = (superStagedTopics[0] && superStagedTopics[0].subTopics) ? superStagedTopics[0].subTopics : [];
+                    const singleSubsText = document.getElementById('superSingleSubTopics')?.value.trim();
+                    let subsToUse = existingSubs;
+                    if (singleSubsText) {
+                        subsToUse = singleSubsText.split(/[\n]+/).map(s => s.trim()).filter(Boolean);
+                    }
                     superStagedTopics = [{
                         name: singleName,
                         code: document.getElementById('singleTopicCode')?.value.trim() || '',
                         difficulty: document.getElementById('singleTopicDifficulty')?.value || 'Medium',
+                        keywords: document.getElementById('singleTopicKeywords')?.value.trim() || '',
                         description: document.getElementById('singleTopicDesc')?.value.trim() || '',
-                        subTopics: existingSubs
+                        subTopics: subsToUse
                     }];
                 }
             } else {
@@ -2242,21 +2259,37 @@
 
                     <!-- Expandable Sub-topics Section -->
                     <div id="superSubtopicsPanel_${idx}" class="hidden p-3 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 space-y-2">
-                        <div class="flex items-center justify-between">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
                             <label class="text-[11px] font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
                                 <span class="material-symbols-rounded text-sm text-primary">subdirectory_arrow_right</span>
                                 <span>Sub-topics under "${escapeSuperHtml(t.name)}"</span>
                             </label>
-                            <span class="text-[10px] text-slate-400 font-normal">Press Enter to add</span>
+                            <!-- Single vs Bulk Input Mode Switcher -->
+                            <div class="inline-flex items-center p-0.5 rounded bg-slate-200/80 dark:bg-slate-800 text-[10px]">
+                                <button type="button" onclick="setSuperSubTopicInputMode(${idx}, 'single')" id="superSubModeBtn_single_${idx}" class="px-2 py-0.5 rounded font-medium transition-all bg-white dark:bg-slate-900 text-primary shadow-2xs">Single</button>
+                                <button type="button" onclick="setSuperSubTopicInputMode(${idx}, 'bulk')" id="superSubModeBtn_bulk_${idx}" class="px-2 py-0.5 rounded font-medium transition-all text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">Bulk (One per line)</button>
+                            </div>
                         </div>
                         
-                        <!-- Add Sub-topic Input & Button -->
-                        <div class="flex items-center gap-1.5">
+                        <!-- Single Mode Input -->
+                        <div id="superSubSingleBox_${idx}" class="flex items-center gap-1.5">
                             <input type="text" id="superNewSubTopicInput_${idx}" placeholder="e.g. গতি ও স্থিতি, ত্বরণ..." onkeydown="if(event.key==='Enter'){event.preventDefault(); addSuperadminSubTopic(${idx});}" class="flex-1 h-8 px-2.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
                             <button type="button" onclick="addSuperadminSubTopic(${idx})" class="h-8 px-3 rounded bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 transition-colors shrink-0">
                                 <span class="material-symbols-rounded text-sm">add</span>
                                 <span>Add</span>
                             </button>
+                        </div>
+
+                        <!-- Bulk Mode Input (One per line) -->
+                        <div id="superSubBulkBox_${idx}" class="space-y-1.5 hidden">
+                            <textarea id="superBulkSubTopicInput_${idx}" rows="3" placeholder="Enter sub-topics (one per line)...&#10;e.g.&#10;গতি ও স্থিতি&#10;ত্বরণ ও মন্দন&#10;গতির সমীকরণ" class="w-full p-2.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y font-sans leading-relaxed"></textarea>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] text-slate-400">One sub-topic per line (Paste multiple lines)</span>
+                                <button type="button" onclick="addSuperBulkSubTopics(${idx})" class="h-7 px-3 rounded bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1.5 transition-colors shadow-2xs">
+                                    <span class="material-symbols-rounded text-sm">playlist_add</span>
+                                    <span>Add All Sub-topics</span>
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Sub-topics List -->
@@ -2271,7 +2304,7 @@
 
         function renderSuperadminSubTopicsList(subTopics, topicIdx) {
             if (!Array.isArray(subTopics) || subTopics.length === 0) {
-                return '<p class="text-[11px] text-slate-400 italic py-1">No sub-topics added yet. Type a sub-topic above and click Add.</p>';
+                return '<p class="text-[11px] text-slate-400 italic py-1">No sub-topics added yet. Type a sub-topic above or use Bulk mode to add multiple.</p>';
             }
             return subTopics.map((st, sIdx) => `
                 <div class="flex items-center justify-between p-1.5 px-2.5 rounded bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs shadow-2xs">
@@ -2284,6 +2317,29 @@
                     </button>
                 </div>
             `).join('');
+        }
+
+        function setSuperSubTopicInputMode(idx, mode) {
+            const singleBox = document.getElementById(`superSubSingleBox_${idx}`);
+            const bulkBox = document.getElementById(`superSubBulkBox_${idx}`);
+            const singleBtn = document.getElementById(`superSubModeBtn_single_${idx}`);
+            const bulkBtn = document.getElementById(`superSubModeBtn_bulk_${idx}`);
+
+            if (mode === 'single') {
+                if (singleBox) singleBox.classList.remove('hidden');
+                if (bulkBox) bulkBox.classList.add('hidden');
+                if (singleBtn) singleBtn.className = 'px-2 py-0.5 rounded font-medium transition-all bg-white dark:bg-slate-900 text-primary shadow-2xs';
+                if (bulkBtn) bulkBtn.className = 'px-2 py-0.5 rounded font-medium transition-all text-slate-500 hover:text-slate-800 dark:hover:text-slate-200';
+                const input = document.getElementById(`superNewSubTopicInput_${idx}`);
+                if (input) setTimeout(() => input.focus(), 50);
+            } else {
+                if (bulkBox) bulkBox.classList.remove('hidden');
+                if (singleBox) singleBox.classList.add('hidden');
+                if (bulkBtn) bulkBtn.className = 'px-2 py-0.5 rounded font-medium transition-all bg-white dark:bg-slate-900 text-primary shadow-2xs';
+                if (singleBtn) singleBtn.className = 'px-2 py-0.5 rounded font-medium transition-all text-slate-500 hover:text-slate-800 dark:hover:text-slate-200';
+                const textarea = document.getElementById(`superBulkSubTopicInput_${idx}`);
+                if (textarea) setTimeout(() => textarea.focus(), 50);
+            }
         }
 
         function toggleSuperadminExpandTopic(idx) {
@@ -2305,20 +2361,7 @@
             }
         }
 
-        function addSuperadminSubTopic(idx) {
-            const input = document.getElementById(`superNewSubTopicInput_${idx}`);
-            if (!input) return;
-            const val = input.value.trim();
-            if (!val) return;
-
-            if (!Array.isArray(superStagedTopics[idx].subTopics)) {
-                superStagedTopics[idx].subTopics = [];
-            }
-            if (!superStagedTopics[idx].subTopics.includes(val)) {
-                superStagedTopics[idx].subTopics.push(val);
-            }
-            input.value = '';
-
+        function syncSuperStagedSubTopicsUI(idx) {
             const listEl = document.getElementById(`superSubtopicsList_${idx}`);
             if (listEl) {
                 listEl.innerHTML = renderSuperadminSubTopicsList(superStagedTopics[idx].subTopics, idx);
@@ -2329,22 +2372,60 @@
                 countEl.textContent = `${c} sub-topic${c === 1 ? '' : 's'}`;
                 countEl.className = `text-[10px] font-medium px-2 py-0.5 rounded ${c > 0 ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`;
             }
+            if (idx === 0) {
+                const singleSubEl = document.getElementById('superSingleSubTopics');
+                if (singleSubEl) {
+                    singleSubEl.value = (superStagedTopics[0].subTopics || []).join('\n');
+                }
+            }
+        }
+
+        function addSuperadminSubTopic(idx) {
+            const input = document.getElementById(`superNewSubTopicInput_${idx}`);
+            if (!input) return;
+            const rawVal = input.value.trim();
+            if (!rawVal) return;
+
+            if (!Array.isArray(superStagedTopics[idx].subTopics)) {
+                superStagedTopics[idx].subTopics = [];
+            }
+            const items = rawVal.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+            items.forEach(val => {
+                if (!superStagedTopics[idx].subTopics.includes(val)) {
+                    superStagedTopics[idx].subTopics.push(val);
+                }
+            });
+            input.value = '';
+
+            syncSuperStagedSubTopicsUI(idx);
             input.focus();
+        }
+
+        function addSuperBulkSubTopics(idx) {
+            const textarea = document.getElementById(`superBulkSubTopicInput_${idx}`);
+            if (!textarea) return;
+            const rawText = textarea.value.trim();
+            if (!rawText) return;
+
+            if (!Array.isArray(superStagedTopics[idx].subTopics)) {
+                superStagedTopics[idx].subTopics = [];
+            }
+            const lines = rawText.split('\n').map(s => s.trim()).filter(Boolean);
+            lines.forEach(line => {
+                if (!superStagedTopics[idx].subTopics.includes(line)) {
+                    superStagedTopics[idx].subTopics.push(line);
+                }
+            });
+            textarea.value = '';
+
+            syncSuperStagedSubTopicsUI(idx);
+            textarea.focus();
         }
 
         function removeSuperadminSubTopic(topicIdx, subIdx) {
             if (superStagedTopics[topicIdx] && Array.isArray(superStagedTopics[topicIdx].subTopics)) {
                 superStagedTopics[topicIdx].subTopics.splice(subIdx, 1);
-                const listEl = document.getElementById(`superSubtopicsList_${topicIdx}`);
-                if (listEl) {
-                    listEl.innerHTML = renderSuperadminSubTopicsList(superStagedTopics[topicIdx].subTopics, topicIdx);
-                }
-                const countEl = document.getElementById(`superStagedTopicCount_${topicIdx}`);
-                if (countEl) {
-                    const c = superStagedTopics[topicIdx].subTopics.length;
-                    countEl.textContent = `${c} sub-topic${c === 1 ? '' : 's'}`;
-                    countEl.className = `text-[10px] font-medium px-2 py-0.5 rounded ${c > 0 ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`;
-                }
+                syncSuperStagedSubTopicsUI(topicIdx);
             }
         }
 
@@ -2493,7 +2574,7 @@
             document.getElementById('editTopicOrder').value = order || 0;
             const subInput = document.getElementById('editTopicSubTopics');
             if (subInput) {
-                subInput.value = Array.isArray(subTopics) ? subTopics.join(', ') : (subTopics || '');
+                subInput.value = Array.isArray(subTopics) ? subTopics.join('\n') : (subTopics || '');
             }
             document.getElementById('editTopicModal').classList.remove('hidden');
         }

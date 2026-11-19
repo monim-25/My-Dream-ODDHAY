@@ -1048,6 +1048,14 @@
                             <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">Description (Optional)</label>
                             <textarea id="singleDescription" name="description" rows="2" placeholder="Brief topic overview" class="w-full p-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y"></textarea>
                         </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400">Sub-topics (Optional - One per line)</label>
+                                <span class="text-[10px] text-slate-400">Per sub-topic one line</span>
+                            </div>
+                            <textarea id="singleSubTopics" name="singleSubTopics" rows="2.5" placeholder="Enter sub-topics (one per line)&#10;e.g.&#10;গতি ও স্থিতি&#10;ত্বরণ ও মন্দন&#10;গতির সমীকরণ" class="w-full p-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y font-sans leading-relaxed"></textarea>
+                        </div>
                     </div>
 
                     <!-- BULK TOPICS MODE FIELDS -->
@@ -1756,12 +1764,17 @@
                 }
                 if (singleName) {
                     const existingSubs = (stagedTopics[0] && stagedTopics[0].subTopics) ? stagedTopics[0].subTopics : (editingSubTopics || []);
+                    const singleSubsText = document.getElementById('singleSubTopics')?.value.trim();
+                    let subsToUse = existingSubs;
+                    if (singleSubsText) {
+                        subsToUse = singleSubsText.split(/[\n]+/).map(s => s.trim()).filter(Boolean);
+                    }
                     stagedTopics = [{
                         name: singleName,
                         code: document.getElementById('singleTopicCode')?.value.trim() || '',
                         difficulty: document.getElementById('singleDifficulty')?.value || 'Medium',
                         description: document.getElementById('singleDescription')?.value.trim() || '',
-                        subTopics: existingSubs
+                        subTopics: subsToUse
                     }];
                 }
             } else {
@@ -1901,21 +1914,37 @@
 
                     <!-- Expandable Sub-topics Section -->
                     <div id="subtopicsPanel_${idx}" class="hidden p-3 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 space-y-2">
-                        <div class="flex items-center justify-between">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
                             <label class="text-[11px] font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1">
                                 <span class="material-symbols-rounded text-sm text-primary">subdirectory_arrow_right</span>
                                 <span>Sub-topics under "${escapeHtml(t.name)}"</span>
                             </label>
-                            <span class="text-[10px] text-slate-400 font-normal">Press Enter to add</span>
+                            <!-- Single vs Bulk Input Mode Switcher -->
+                            <div class="inline-flex items-center p-0.5 rounded bg-slate-200/80 dark:bg-slate-800 text-[10px]">
+                                <button type="button" onclick="setSubTopicInputMode(${idx}, 'single')" id="subModeBtn_single_${idx}" class="px-2 py-0.5 rounded font-medium transition-all bg-white dark:bg-slate-900 text-primary shadow-2xs">Single</button>
+                                <button type="button" onclick="setSubTopicInputMode(${idx}, 'bulk')" id="subModeBtn_bulk_${idx}" class="px-2 py-0.5 rounded font-medium transition-all text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">Bulk (One per line)</button>
+                            </div>
                         </div>
                         
-                        <!-- Add Sub-topic Input & Button -->
-                        <div class="flex items-center gap-1.5">
+                        <!-- Single Mode Input -->
+                        <div id="subSingleBox_${idx}" class="flex items-center gap-1.5">
                             <input type="text" id="newSubTopicInput_${idx}" placeholder="e.g. গতি ও স্থিতি, ত্বরণ..." onkeydown="if(event.key==='Enter'){event.preventDefault(); addSubTopicToStaged(${idx});}" class="flex-1 h-8 px-2.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary">
                             <button type="button" onclick="addSubTopicToStaged(${idx})" class="h-8 px-3 rounded bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1 transition-colors shrink-0">
                                 <span class="material-symbols-rounded text-sm">add</span>
                                 <span>Add</span>
                             </button>
+                        </div>
+
+                        <!-- Bulk Mode Input (One per line) -->
+                        <div id="subBulkBox_${idx}" class="space-y-1.5 hidden">
+                            <textarea id="bulkSubTopicInput_${idx}" rows="3" placeholder="Enter sub-topics (one per line)...&#10;e.g.&#10;গতি ও স্থিতি&#10;ত্বরণ ও মন্দন&#10;গতির সমীকরণ" class="w-full p-2.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y font-sans leading-relaxed"></textarea>
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] text-slate-400">One sub-topic per line (Paste multiple lines)</span>
+                                <button type="button" onclick="addBulkSubTopicsToStaged(${idx})" class="h-7 px-3 rounded bg-primary hover:bg-primary-dark text-white text-xs font-medium flex items-center gap-1.5 transition-colors shadow-2xs">
+                                    <span class="material-symbols-rounded text-sm">playlist_add</span>
+                                    <span>Add All Sub-topics</span>
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Sub-topics List -->
@@ -1930,7 +1959,7 @@
 
         function renderSubTopicsList(subTopics, topicIdx) {
             if (!Array.isArray(subTopics) || subTopics.length === 0) {
-                return '<p class="text-[11px] text-slate-400 italic py-1">No sub-topics added yet. Type a sub-topic above and click Add.</p>';
+                return '<p class="text-[11px] text-slate-400 italic py-1">No sub-topics added yet. Type a sub-topic above or use Bulk mode to add multiple.</p>';
             }
             return subTopics.map((st, sIdx) => `
                 <div class="flex items-center justify-between p-1.5 px-2.5 rounded bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-xs shadow-2xs">
@@ -1943,6 +1972,29 @@
                     </button>
                 </div>
             `).join('');
+        }
+
+        function setSubTopicInputMode(idx, mode) {
+            const singleBox = document.getElementById(`subSingleBox_${idx}`);
+            const bulkBox = document.getElementById(`subBulkBox_${idx}`);
+            const singleBtn = document.getElementById(`subModeBtn_single_${idx}`);
+            const bulkBtn = document.getElementById(`subModeBtn_bulk_${idx}`);
+
+            if (mode === 'single') {
+                if (singleBox) singleBox.classList.remove('hidden');
+                if (bulkBox) bulkBox.classList.add('hidden');
+                if (singleBtn) singleBtn.className = 'px-2 py-0.5 rounded font-medium transition-all bg-white dark:bg-slate-900 text-primary shadow-2xs';
+                if (bulkBtn) bulkBtn.className = 'px-2 py-0.5 rounded font-medium transition-all text-slate-500 hover:text-slate-800 dark:hover:text-slate-200';
+                const input = document.getElementById(`newSubTopicInput_${idx}`);
+                if (input) setTimeout(() => input.focus(), 50);
+            } else {
+                if (bulkBox) bulkBox.classList.remove('hidden');
+                if (singleBox) singleBox.classList.add('hidden');
+                if (bulkBtn) bulkBtn.className = 'px-2 py-0.5 rounded font-medium transition-all bg-white dark:bg-slate-900 text-primary shadow-2xs';
+                if (singleBtn) singleBtn.className = 'px-2 py-0.5 rounded font-medium transition-all text-slate-500 hover:text-slate-800 dark:hover:text-slate-200';
+                const textarea = document.getElementById(`bulkSubTopicInput_${idx}`);
+                if (textarea) setTimeout(() => textarea.focus(), 50);
+            }
         }
 
         function toggleExpandTopic(idx) {
@@ -1964,20 +2016,7 @@
             }
         }
 
-        function addSubTopicToStaged(idx) {
-            const input = document.getElementById(`newSubTopicInput_${idx}`);
-            if (!input) return;
-            const val = input.value.trim();
-            if (!val) return;
-
-            if (!Array.isArray(stagedTopics[idx].subTopics)) {
-                stagedTopics[idx].subTopics = [];
-            }
-            if (!stagedTopics[idx].subTopics.includes(val)) {
-                stagedTopics[idx].subTopics.push(val);
-            }
-            input.value = '';
-
+        function syncStagedSubTopicsUI(idx) {
             const listEl = document.getElementById(`subtopicsList_${idx}`);
             if (listEl) {
                 listEl.innerHTML = renderSubTopicsList(stagedTopics[idx].subTopics, idx);
@@ -1988,22 +2027,61 @@
                 countEl.textContent = `${c} sub-topic${c === 1 ? '' : 's'}`;
                 countEl.className = `text-[10px] font-medium px-2 py-0.5 rounded ${c > 0 ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`;
             }
+            if (idx === 0) {
+                const singleSubEl = document.getElementById('singleSubTopics');
+                if (singleSubEl) {
+                    singleSubEl.value = (stagedTopics[0].subTopics || []).join('\n');
+                }
+            }
+        }
+
+        function addSubTopicToStaged(idx) {
+            const input = document.getElementById(`newSubTopicInput_${idx}`);
+            if (!input) return;
+            const rawVal = input.value.trim();
+            if (!rawVal) return;
+
+            if (!Array.isArray(stagedTopics[idx].subTopics)) {
+                stagedTopics[idx].subTopics = [];
+            }
+            // Auto split if pasted with commas or newlines
+            const items = rawVal.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+            items.forEach(val => {
+                if (!stagedTopics[idx].subTopics.includes(val)) {
+                    stagedTopics[idx].subTopics.push(val);
+                }
+            });
+            input.value = '';
+
+            syncStagedSubTopicsUI(idx);
             input.focus();
+        }
+
+        function addBulkSubTopicsToStaged(idx) {
+            const textarea = document.getElementById(`bulkSubTopicInput_${idx}`);
+            if (!textarea) return;
+            const rawText = textarea.value.trim();
+            if (!rawText) return;
+
+            if (!Array.isArray(stagedTopics[idx].subTopics)) {
+                stagedTopics[idx].subTopics = [];
+            }
+            const lines = rawText.split('\n').map(s => s.trim()).filter(Boolean);
+            lines.forEach(line => {
+                if (!stagedTopics[idx].subTopics.includes(line)) {
+                    stagedTopics[idx].subTopics.push(line);
+                }
+            });
+            textarea.value = '';
+
+            syncStagedSubTopicsUI(idx);
+            textarea.focus();
         }
 
         function removeSubTopicFromStaged(topicIdx, subIdx) {
             if (stagedTopics[topicIdx] && Array.isArray(stagedTopics[topicIdx].subTopics)) {
                 stagedTopics[topicIdx].subTopics.splice(subIdx, 1);
-                const listEl = document.getElementById(`subtopicsList_${topicIdx}`);
-                if (listEl) {
-                    listEl.innerHTML = renderSubTopicsList(stagedTopics[topicIdx].subTopics, topicIdx);
-                }
-                const countEl = document.getElementById(`stagedTopicCount_${topicIdx}`);
-                if (countEl) {
-                    const c = stagedTopics[topicIdx].subTopics.length;
-                    countEl.textContent = `${c} sub-topic${c === 1 ? '' : 's'}`;
-                    countEl.className = `text-[10px] font-medium px-2 py-0.5 rounded ${c > 0 ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`;
-                }
+                syncStagedSubTopicsUI(topicIdx);
             }
         }
 
@@ -2146,6 +2224,9 @@
                 if (modalTitle) modalTitle.textContent = 'Edit Topic & Submit for Approval';
                 if (submitBtnText) submitBtnText.textContent = 'Submit for Approval';
                 if (modeTabs) modeTabs.classList.add('hidden');
+                if (document.getElementById('singleSubTopics')) {
+                    document.getElementById('singleSubTopics').value = editingSubTopics.join('\n');
+                }
                 if (defaultTopicName) {
                     stagedTopics = [{
                         name: defaultTopicName,
@@ -2160,6 +2241,9 @@
                 if (modalTitle) modalTitle.textContent = 'Add Topics';
                 if (submitBtnText) submitBtnText.textContent = 'Submit for Approval';
                 if (modeTabs) modeTabs.classList.remove('hidden');
+                if (document.getElementById('singleSubTopics')) {
+                    document.getElementById('singleSubTopics').value = '';
+                }
             }
 
             // Auto-check target classes based on linked curriculum (Class 9 & 10, Class 11 & 12)
