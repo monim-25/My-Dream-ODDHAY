@@ -586,20 +586,46 @@ const getTopicsPage = async (req, res) => {
             const chNum = (top.chapter && typeof top.chapter.number === 'number') ? top.chapter.number : 1;
             const isValidSeg = subjectHasSegments && top.segment && subjectSegments.some(s => s.toLowerCase() === top.segment.toLowerCase());
             const chSeg = isValidSeg ? top.segment : '';
-            if (!chaptersMap.has(chName)) {
-                chaptersMap.set(chName, {
+            const key = subjectHasSegments ? `${chSeg}___${chName}` : chName;
+            if (!chaptersMap.has(key)) {
+                chaptersMap.set(key, {
                     name: chName,
                     number: chNum,
                     segment: chSeg,
                     topics: []
                 });
-            } else if (!chaptersMap.get(chName).segment && chSeg) {
-                chaptersMap.get(chName).segment = chSeg;
+            } else if (!chaptersMap.get(key).segment && chSeg) {
+                chaptersMap.get(key).segment = chSeg;
             }
-            chaptersMap.get(chName).topics.push(top);
+            chaptersMap.get(key).topics.push(top);
         });
 
-        const chapters = Array.from(chaptersMap.values()).sort((a, b) => a.number - b.number);
+        let chapters = [];
+        if (subjectHasSegments) {
+            const segOrderMap = new Map();
+            (subjectSegments || []).forEach((s, idx) => segOrderMap.set(s.toLowerCase(), idx));
+            chapters = Array.from(chaptersMap.values()).sort((a, b) => {
+                const segOrderA = segOrderMap.has((a.segment || '').toLowerCase()) ? segOrderMap.get(a.segment.toLowerCase()) : 999;
+                const segOrderB = segOrderMap.has((b.segment || '').toLowerCase()) ? segOrderMap.get(b.segment.toLowerCase()) : 999;
+                if (segOrderA !== segOrderB) return segOrderA - segOrderB;
+                return a.number - b.number;
+            });
+        } else {
+            chapters = Array.from(chaptersMap.values()).sort((a, b) => a.number - b.number);
+        }
+
+        const segmentStats = {};
+        if (subjectHasSegments && Array.isArray(subjectSegments)) {
+            subjectSegments.forEach(seg => {
+                const segLower = seg.toLowerCase();
+                const segChaps = chapters.filter(c => (c.segment || '').toLowerCase() === segLower);
+                const segTopics = activeTopics.filter(t => (t.segment || '').toLowerCase() === segLower);
+                segmentStats[seg] = {
+                    chaptersCount: segChaps.length,
+                    topicsCount: segTopics.length
+                };
+            });
+        }
 
         // Archived Topics (History Bucket)
         const archivedTopics = await Topic.find({ isArchived: { $in: [true, 'true', 1] } }).sort({ updatedAt: -1 }).lean();
@@ -636,6 +662,7 @@ const getTopicsPage = async (req, res) => {
             availableSubjects,
             subjectHasSegments,
             subjectSegments: subjectSegments || [],
+            segmentStats: segmentStats || {},
             selectedSegment,
             chapters,
             activeTopics,
@@ -815,7 +842,8 @@ const getChaptersApi = async (req, res) => {
             if (t.chapter && t.chapter.name) {
                 const name = t.chapter.name.trim();
                 const num = (typeof t.chapter.number === 'number') ? t.chapter.number : (parseInt(t.chapter.number, 10) || 1);
-                const key = `${num}_${name.toLowerCase()}`;
+                const seg = t.segment || '';
+                const key = `${seg}_${num}_${name.toLowerCase()}`;
                 if (!chaptersMap.has(key)) {
                     chaptersMap.set(key, {
                         number: num,
@@ -1995,19 +2023,45 @@ const getTeacherTopicsPage = async (req, res) => {
                 const chNum = (top.chapter && typeof top.chapter.number === 'number') ? top.chapter.number : 1;
                 const isValidSeg = subjectHasSegments && top.segment && subjectSegments.some(s => s.toLowerCase() === top.segment.toLowerCase());
                 const chSeg = isValidSeg ? top.segment : '';
-                if (!chaptersMap.has(chName)) {
-                    chaptersMap.set(chName, {
+                const key = subjectHasSegments ? `${chSeg}___${chName}` : chName;
+                if (!chaptersMap.has(key)) {
+                    chaptersMap.set(key, {
                         name: chName,
                         number: chNum,
                         segment: chSeg,
                         topics: []
                     });
-                } else if (!chaptersMap.get(chName).segment && chSeg) {
-                    chaptersMap.get(chName).segment = chSeg;
+                } else if (!chaptersMap.get(key).segment && chSeg) {
+                    chaptersMap.get(key).segment = chSeg;
                 }
-                chaptersMap.get(chName).topics.push(top);
+                chaptersMap.get(key).topics.push(top);
             });
-            chapters = Array.from(chaptersMap.values()).sort((a, b) => a.number - b.number);
+
+            if (subjectHasSegments) {
+                const segOrderMap = new Map();
+                (subjectSegments || []).forEach((s, idx) => segOrderMap.set(s.toLowerCase(), idx));
+                chapters = Array.from(chaptersMap.values()).sort((a, b) => {
+                    const segOrderA = segOrderMap.has((a.segment || '').toLowerCase()) ? segOrderMap.get(a.segment.toLowerCase()) : 999;
+                    const segOrderB = segOrderMap.has((b.segment || '').toLowerCase()) ? segOrderMap.get(b.segment.toLowerCase()) : 999;
+                    if (segOrderA !== segOrderB) return segOrderA - segOrderB;
+                    return a.number - b.number;
+                });
+            } else {
+                chapters = Array.from(chaptersMap.values()).sort((a, b) => a.number - b.number);
+            }
+
+            const segmentStats = {};
+            if (subjectHasSegments && Array.isArray(subjectSegments)) {
+                subjectSegments.forEach(seg => {
+                    const segLower = seg.toLowerCase();
+                    const segChaps = chapters.filter(c => (c.segment || '').toLowerCase() === segLower);
+                    const segTopics = activeTopics.filter(t => (t.segment || '').toLowerCase() === segLower);
+                    segmentStats[seg] = {
+                        chaptersCount: segChaps.length,
+                        topicsCount: segTopics.length
+                    };
+                });
+            }
         }
 
         // 3. Query Teacher's Own Submitted Topics
@@ -2061,6 +2115,7 @@ const getTeacherTopicsPage = async (req, res) => {
             availableSubjects,
             subjectHasSegments,
             subjectSegments: subjectSegments || [],
+            segmentStats: segmentStats || {},
             selectedSegment,
             assignedClasses,
             assignedSubjects,
