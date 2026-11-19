@@ -57,6 +57,11 @@ const topicSchema = new mongoose.Schema({
         type: Number, 
         default: 0 
     },
+    isChapterPlaceholder: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
     isArchived: { 
         type: Boolean, 
         default: false 

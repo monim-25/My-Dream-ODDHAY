@@ -597,7 +597,9 @@ const getTopicsPage = async (req, res) => {
             } else if (!chaptersMap.get(key).segment && chSeg) {
                 chaptersMap.get(key).segment = chSeg;
             }
-            chaptersMap.get(key).topics.push(top);
+            if (!top.isChapterPlaceholder && top.name !== '__EMPTY_CHAPTER__') {
+                chaptersMap.get(key).topics.push(top);
+            }
         });
 
         let chapters = [];
@@ -665,7 +667,7 @@ const getTopicsPage = async (req, res) => {
             segmentStats: segmentStats || {},
             selectedSegment,
             chapters,
-            activeTopics,
+            activeTopics: (activeTopics || []).filter(t => !t.isChapterPlaceholder && t.name !== '__EMPTY_CHAPTER__'),
             archivedTopics,
             totalTopicCount,
             archivedTopicCount,
@@ -1070,6 +1072,12 @@ const createTopic = async (req, res) => {
                 createdTopics.push(newTopic);
             }
             await ensureSubjectInAcademicClass(cls, subject.trim(), group);
+            await Topic.deleteMany({
+                classLevel: new RegExp(`^${escapeRegex(cls)}$`, 'i'),
+                subject: new RegExp(`^${escapeRegex(subject)}$`, 'i'),
+                'chapter.name': new RegExp(`^${escapeRegex(chapterName)}$`, 'i'),
+                isChapterPlaceholder: true
+            }).catch(() => { });
         }
 
         // Ensure Subject folder and Chapter subfolder exist in Notes for these classes
@@ -1171,7 +1179,7 @@ const bulkCreateTopics = async (req, res) => {
             }));
         }
 
-        if (topicsToProcess.length === 0) {
+        if (topicsToProcess.length === 0 && !isChapterEdit) {
             return res.status(400).json({ success: false, error: 'Please enter at least one topic name' });
         }
 
@@ -1238,6 +1246,30 @@ const bulkCreateTopics = async (req, res) => {
                 }
             }
 
+            if (topicsToProcess.length === 0 && isChapterEdit) {
+                await Topic.findOneAndUpdate(
+                    {
+                        classLevel: cls,
+                        subject: subject.trim(),
+                        'chapter.name': chapterName.trim(),
+                        isChapterPlaceholder: true
+                    },
+                    {
+                        $set: {
+                            name: '__EMPTY_CHAPTER__',
+                            classLevel: cls,
+                            subject: subject.trim(),
+                            segment: topicSegment,
+                            chapter: { number: chNum, name: chapterName.trim() },
+                            status: 'approved',
+                            isArchived: false,
+                            isChapterPlaceholder: true
+                        }
+                    },
+                    { upsert: true, new: true }
+                );
+            }
+
             for (let i = 0; i < topicsToProcess.length; i++) {
                 const item = topicsToProcess[i];
                 const name = item.name;
@@ -1287,6 +1319,12 @@ const bulkCreateTopics = async (req, res) => {
                 }
             }
             await ensureSubjectInAcademicClass(cls, subject.trim(), group);
+            await Topic.deleteMany({
+                classLevel: new RegExp(`^${escapeRegex(cls)}$`, 'i'),
+                subject: new RegExp(`^${escapeRegex(subject)}$`, 'i'),
+                'chapter.name': new RegExp(`^${escapeRegex(chapterName)}$`, 'i'),
+                isChapterPlaceholder: true
+            }).catch(() => { });
         }
 
         // Ensure Subject folder and Chapter subfolder exist in Notes for these classes
@@ -1392,9 +1430,47 @@ const archiveTopic = async (req, res) => {
 
         if (!updated) return res.status(404).json({ success: false, error: 'Topic not found to archive' });
 
+        // Ensure chapter itself is NOT deleted if this was the last active topic
+        if (updated.chapter && updated.chapter.name) {
+            const chName = updated.chapter.name.trim();
+            const remainingActive = await Topic.countDocuments({
+                _id: { $ne: updated._id },
+                classLevel: updated.classLevel,
+                subject: updated.subject,
+                'chapter.name': new RegExp(`^${escapeRegex(chName)}$`, 'i'),
+                isArchived: { $nin: [true, 'true', 1] },
+                isChapterPlaceholder: { $ne: true }
+            });
+
+            if (remainingActive === 0) {
+                await Topic.findOneAndUpdate(
+                    {
+                        classLevel: updated.classLevel,
+                        subject: updated.subject,
+                        'chapter.name': chName,
+                        isChapterPlaceholder: true
+                    },
+                    {
+                        $set: {
+                            name: '__EMPTY_CHAPTER__',
+                            classLevel: updated.classLevel,
+                            subject: updated.subject,
+                            segment: updated.segment || '',
+                            chapter: { number: updated.chapter.number || 1, name: chName },
+                            status: 'approved',
+                            isArchived: false,
+                            isChapterPlaceholder: true
+                        }
+                    },
+                    { upsert: true, new: true }
+                );
+            }
+        }
+        clearTopicsApiCache();
+
         res.json({
             success: true,
-            message: `Topic "${updated.name}" moved to History Bucket`,
+            message: `Topic "${updated.name}" moved to History Bucket (chapter preserved)`,
             topic: updated
         });
     } catch (error) {
@@ -1447,9 +1523,46 @@ const permanentDeleteTopic = async (req, res) => {
         const deleted = await Topic.findByIdAndDelete(id);
         if (!deleted) return res.status(404).json({ success: false, error: 'Topic not found' });
 
+        // Ensure chapter itself is NOT deleted if this was the last active topic
+        if (deleted.chapter && deleted.chapter.name) {
+            const chName = deleted.chapter.name.trim();
+            const remainingActive = await Topic.countDocuments({
+                classLevel: deleted.classLevel,
+                subject: deleted.subject,
+                'chapter.name': new RegExp(`^${escapeRegex(chName)}$`, 'i'),
+                isArchived: { $nin: [true, 'true', 1] },
+                isChapterPlaceholder: { $ne: true }
+            });
+
+            if (remainingActive === 0) {
+                await Topic.findOneAndUpdate(
+                    {
+                        classLevel: deleted.classLevel,
+                        subject: deleted.subject,
+                        'chapter.name': chName,
+                        isChapterPlaceholder: true
+                    },
+                    {
+                        $set: {
+                            name: '__EMPTY_CHAPTER__',
+                            classLevel: deleted.classLevel,
+                            subject: deleted.subject,
+                            segment: deleted.segment || '',
+                            chapter: { number: deleted.chapter.number || 1, name: chName },
+                            status: 'approved',
+                            isArchived: false,
+                            isChapterPlaceholder: true
+                        }
+                    },
+                    { upsert: true, new: true }
+                );
+            }
+        }
+        clearTopicsApiCache();
+
         res.json({
             success: true,
-            message: 'Topic permanently deleted from database'
+            message: 'Topic permanently deleted from database (chapter preserved)'
         });
     } catch (error) {
         console.error('permanentDeleteTopic Error:', error);
@@ -1481,6 +1594,15 @@ const deleteChapter = async (req, res) => {
         };
 
         const result = await Topic.updateMany(filter, { $set: { isArchived: true } });
+        // Also remove any chapter placeholder since the chapter itself was deleted
+        await Topic.deleteMany({
+            classLevel: new RegExp(`^${escapedClass}$`, 'i'),
+            subject: new RegExp(`^${escapedSubject}$`, 'i'),
+            'chapter.name': new RegExp(`^${escapedChapter}$`, 'i'),
+            isChapterPlaceholder: true
+        });
+        clearTopicsApiCache();
+
         return res.json({
             success: true,
             message: `Chapter "${chapterName}" and ${result.modifiedCount} topic(s) moved to History Bucket`,
@@ -1614,6 +1736,7 @@ const bulkActionTopics = async (req, res) => {
 
         if (action === 'restore') {
             const result = await Topic.updateMany({ _id: { $in: validIds } }, { $set: { isArchived: false } });
+            clearTopicsApiCache();
             return res.json({
                 success: true,
                 message: `${result.modifiedCount} topic(s) restored to live syllabus`,
@@ -1621,10 +1744,50 @@ const bulkActionTopics = async (req, res) => {
             });
         } else {
             // Default: archive (move to History Bucket)
+            const topicsToArchive = await Topic.find({ _id: { $in: validIds } }).select('classLevel subject segment chapter').lean();
             const result = await Topic.updateMany({ _id: { $in: validIds } }, { $set: { isArchived: true } });
+
+            for (const t of topicsToArchive) {
+                if (t.chapter && t.chapter.name) {
+                    const chName = t.chapter.name.trim();
+                    const remainingActive = await Topic.countDocuments({
+                        classLevel: t.classLevel,
+                        subject: t.subject,
+                        'chapter.name': new RegExp(`^${escapeRegex(chName)}$`, 'i'),
+                        isArchived: { $nin: [true, 'true', 1] },
+                        isChapterPlaceholder: { $ne: true }
+                    });
+
+                    if (remainingActive === 0) {
+                        await Topic.findOneAndUpdate(
+                            {
+                                classLevel: t.classLevel,
+                                subject: t.subject,
+                                'chapter.name': chName,
+                                isChapterPlaceholder: true
+                            },
+                            {
+                                $set: {
+                                    name: '__EMPTY_CHAPTER__',
+                                    classLevel: t.classLevel,
+                                    subject: t.subject,
+                                    segment: t.segment || '',
+                                    chapter: { number: t.chapter.number || 1, name: chName },
+                                    status: 'approved',
+                                    isArchived: false,
+                                    isChapterPlaceholder: true
+                                }
+                            },
+                            { upsert: true, new: true }
+                        );
+                    }
+                }
+            }
+            clearTopicsApiCache();
+
             return res.json({
                 success: true,
-                message: `${result.modifiedCount} topic(s) moved to History Bucket`,
+                message: `${result.modifiedCount} topic(s) moved to History Bucket (chapters preserved)`,
                 count: result.modifiedCount
             });
         }
@@ -2035,7 +2198,9 @@ const getTeacherTopicsPage = async (req, res) => {
                 } else if (!chaptersMap.get(key).segment && chSeg) {
                     chaptersMap.get(key).segment = chSeg;
                 }
-                chaptersMap.get(key).topics.push(top);
+                if (!top.isChapterPlaceholder && top.name !== '__EMPTY_CHAPTER__') {
+                    chaptersMap.get(key).topics.push(top);
+                }
             });
 
             if (subjectHasSegments) {
@@ -2056,7 +2221,7 @@ const getTeacherTopicsPage = async (req, res) => {
                 subjectSegments.forEach(seg => {
                     const segLower = seg.toLowerCase();
                     const segChaps = chapters.filter(c => (c.segment || '').toLowerCase() === segLower);
-                    const segTopics = activeTopics.filter(t => (t.segment || '').toLowerCase() === segLower);
+                    const segTopics = activeTopics.filter(t => !t.isChapterPlaceholder && t.name !== '__EMPTY_CHAPTER__' && (t.segment || '').toLowerCase() === segLower);
                     segmentStats[seg] = {
                         chaptersCount: segChaps.length,
                         topicsCount: segTopics.length
@@ -2121,14 +2286,14 @@ const getTeacherTopicsPage = async (req, res) => {
             assignedClasses,
             assignedSubjects,
             chapters,
-            activeTopics,
+            activeTopics: (activeTopics || []).filter(t => !t.isChapterPlaceholder && t.name !== '__EMPTY_CHAPTER__'),
             mySubmissions,
             mySubmissionChapters,
             myPendingTopics,
             myRejectedTopics,
             myApprovedTopics,
             myDeletionRequests,
-            totalActiveCount: activeTopics.length,
+            totalActiveCount: (activeTopics || []).filter(t => !t.isChapterPlaceholder && t.name !== '__EMPTY_CHAPTER__').length,
             pendingCount: myPendingTopics.length,
             deletionRequestCount: myDeletionRequests.length,
             apiBase: '/teacher'
