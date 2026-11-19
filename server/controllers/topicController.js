@@ -916,18 +916,37 @@ const createTopic = async (req, res) => {
                 await existingTopic.save();
                 await ensureSubjectInAcademicClass(targetClasses[0], subject.trim(), group);
 
-                // Clone to other classes if multiple selected on edit
+                // Sync / Clone to other selected classes on edit (e.g., Class 9 & Class 10, or Class 11 & Class 12)
                 if (targetClasses.length > 1) {
                     for (let i = 1; i < targetClasses.length; i++) {
                         const extraCls = targetClasses[i];
-                        const dup = await Topic.findOne({
-                            name: new RegExp(`^${escapeRegex(name)}$`, 'i'),
-                            classLevel: new RegExp(`^${escapeRegex(extraCls)}$`, 'i'),
-                            subject: new RegExp(`^${escapeRegex(subject)}$`, 'i'),
-                            'chapter.name': new RegExp(`^${escapeRegex(chapterName)}$`, 'i'),
+                        let partnerTopic = await Topic.findOne({
+                            $or: [
+                                { _id: { $ne: existingTopic._id }, classLevel: new RegExp(`^${escapeRegex(extraCls)}$`, 'i'), subject: new RegExp(`^${escapeRegex(subject)}$`, 'i'), 'chapter.number': existingTopic.chapter?.number, name: new RegExp(`^${escapeRegex(existingTopic.name)}$`, 'i') },
+                                { _id: { $ne: existingTopic._id }, classLevel: new RegExp(`^${escapeRegex(extraCls)}$`, 'i'), subject: new RegExp(`^${escapeRegex(subject)}$`, 'i'), 'chapter.number': parseInt(chapterNumber, 10) || 1, name: new RegExp(`^${escapeRegex(name)}$`, 'i') }
+                            ],
                             isArchived: { $ne: true }
                         });
-                        if (!dup) {
+
+                        if (partnerTopic) {
+                            partnerTopic.name = name.trim();
+                            partnerTopic.code = code ? code.trim() : (partnerTopic.code || '');
+                            partnerTopic.segment = topicSegment || existingTopic.segment || partnerTopic.segment || '';
+                            partnerTopic.chapter = { number: parseInt(chapterNumber, 10) || 1, name: chapterName.trim() };
+                            partnerTopic.difficulty = ['Easy', 'Medium', 'Hard'].includes(difficulty) ? difficulty : (partnerTopic.difficulty || 'Medium');
+                            partnerTopic.keywords = keywordsArray;
+                            partnerTopic.description = description ? description.trim() : '';
+                            if (subTopicsArray.length > 0 || req.body.subTopics !== undefined) {
+                                partnerTopic.subTopics = subTopicsArray;
+                            }
+                            partnerTopic.order = parseInt(order, 10) || partnerTopic.order || 0;
+                            partnerTopic.group = await resolveGroupByClassAndSubject(extraCls, subject.trim(), group || partnerTopic.group);
+                            partnerTopic.submittedBy = isTeacher ? req.session.user._id : partnerTopic.submittedBy;
+                            partnerTopic.status = topicStatus;
+                            partnerTopic.rejectionReason = '';
+                            partnerTopic.updatedAt = new Date();
+                            await partnerTopic.save();
+                        } else {
                             await Topic.create({
                                 name: name.trim(),
                                 code: code ? code.trim() : '',
