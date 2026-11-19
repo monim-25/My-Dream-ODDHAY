@@ -8,7 +8,7 @@ const Question = require('../models/Question');
 const Topic = require('../models/Topic');
 const AcademicClass = require('../models/AcademicClass');
 const AIKnowledge = require('../models/AIKnowledge');
-const { detectSubjectRenames, cascadeSubjectRename, getAllAcademicFilters } = require('../utils/academicHelper');
+const { detectSubjectRenames, cascadeSubjectRename, cascadeClassRename, getAllAcademicFilters } = require('../utils/academicHelper');
 const { sendPaymentApprovalEmail, sendStaffInviteEmail, sendPasswordResetNotificationEmail } = require('../services/emailService');
 
 // Helper to log system activity
@@ -6100,6 +6100,15 @@ router.post('/academic-setup', adminProtect, async (req, res) => {
             }
 
             if (existingClass) {
+                const oldClassName = (existingClass.name || '').trim();
+                const newClassName = name.trim();
+
+                // 1. Detect and cascade Class Rename across all models and users
+                if (oldClassName && newClassName && oldClassName.toLowerCase() !== newClassName.toLowerCase()) {
+                    console.log(`[Admin Academic Setup] Class rename detected: "${oldClassName}" -> "${newClassName}"`);
+                    await cascadeClassRename(oldClassName, newClassName);
+                }
+
                 const detectedRenames = [];
 
                 // 1. Check common subjects

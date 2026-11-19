@@ -42,19 +42,21 @@ function normalizeClass(input) {
         return 'Class 12';
     }
 
-    // Match numbers 6 through 12
-    const numMatch = str.match(/\b(6|7|8|9|10|11|12)\b/);
-    if (numMatch) {
-        return `Class ${numMatch[1]}`;
+    // Exact number or 'class <num>'
+    const classNumMatch = str.match(/^class\s*(\d+)$/i);
+    if (classNumMatch) {
+        return `Class ${classNumMatch[1]}`;
+    }
+    const pureNumMatch = str.match(/^(\d+)$/);
+    if (pureNumMatch) {
+        return `Class ${pureNumMatch[1]}`;
     }
 
-    const simpleDigits = str.replace(/[^0-9]/g, '');
-    if (simpleDigits && parseInt(simpleDigits, 10) >= 6 && parseInt(simpleDigits, 10) <= 12) {
-        return `Class ${simpleDigits}`;
+    // Capitalize first letter of each word if all lowercase
+    if (str === lower) {
+        return str.replace(/\b\w/g, c => c.toUpperCase());
     }
-
-    // Capitalize first letter of each word
-    return str.replace(/\b\w/g, c => c.toUpperCase());
+    return str;
 }
 
 /**
@@ -320,21 +322,57 @@ async function cascadeSubjectRename(oldSubject, newSubject, className = null) {
     const cleanNew = newSubject.trim();
     const User = require('../models/User');
     const escapedOld = cleanOld.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const exactOldRegex = new RegExp(`^${escapedOld}$`, 'i');
+    const exactOldRegex = new RegExp(`^\\s*${escapedOld}\\s*$`, 'i');
 
     try {
+        console.log(`[Subject Rename] Cascading subject rename: "${cleanOld}" -> "${cleanNew}" (class: ${className || 'ALL'})...`);
+
+        // Check if other active classes also share this oldSubject
+        let isSharedSubject = false;
+        if (className) {
+            try {
+                const AcademicClass = require('../models/AcademicClass');
+                const otherClasses = await AcademicClass.find({
+                    name: { $ne: className },
+                    isArchived: { $ne: true },
+                    $or: [
+                        { subjects: exactOldRegex },
+                        { commonSubjects: exactOldRegex },
+                        { 'groups.subjects': exactOldRegex }
+                    ]
+                }).lean();
+                if (otherClasses.length > 0) isSharedSubject = true;
+            } catch (_) { }
+        }
+
         // 1. Update User records (Teachers and Students)
-        const users = await User.find({
+        const userQuery = {
             $or: [
                 { teachingSubjects: { $in: [cleanOld, exactOldRegex] } },
                 { teachingSubject: { $regex: new RegExp(escapedOld, 'i') } },
                 { subject: { $regex: new RegExp(escapedOld, 'i') } },
                 { subjects: { $in: [cleanOld, exactOldRegex] } }
             ]
-        });
+        };
+
+        const users = await User.find(userQuery);
 
         for (const u of users) {
             let modified = false;
+
+            // If subject is shared by other classes and teacher teaches multiple classes,
+            // check if teacher is assigned to this specific class
+            if (isSharedSubject && className) {
+                const teacherClasses = [
+                    ...(Array.isArray(u.assignedClasses) ? u.assignedClasses : []),
+                    ...(Array.isArray(u.classes) ? u.classes : []),
+                    ...(u.classLevel ? u.classLevel.split(/[,;/]+/).map(s => s.trim()) : [])
+                ].map(c => c.toLowerCase());
+
+                if (!teacherClasses.includes(className.toLowerCase())) {
+                    continue; // Skip teachers not assigned to this class
+                }
+            }
 
             // teachingSubjects array
             if (Array.isArray(u.teachingSubjects) && u.teachingSubjects.length > 0) {
@@ -397,42 +435,48 @@ async function cascadeSubjectRename(oldSubject, newSubject, className = null) {
             }
         }
 
-        // 2. Cascade across other academic collections
+        // 2. Cascade across academic collections
         const updateTasks = [];
+        const classFilter = (isSharedSubject && className) ? { classLevel: new RegExp(`^\\s*${className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*$`, 'i') } : {};
 
         try {
             const Question = require('../models/Question');
-            updateTasks.push(Question.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+            updateTasks.push(Question.updateMany({ ...classFilter, subject: exactOldRegex }, { $set: { subject: cleanNew } }));
         } catch (_) { }
 
         try {
             const QuestionBank = require('../models/QuestionBank');
-            updateTasks.push(QuestionBank.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+            updateTasks.push(QuestionBank.updateMany({ ...classFilter, subject: exactOldRegex }, { $set: { subject: cleanNew } }));
         } catch (_) { }
 
         try {
             const Quiz = require('../models/Quiz');
-            updateTasks.push(Quiz.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+            updateTasks.push(Quiz.updateMany({ ...classFilter, subject: exactOldRegex }, { $set: { subject: cleanNew } }));
         } catch (_) { }
 
         try {
             const Topic = require('../models/Topic');
-            updateTasks.push(Topic.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+            updateTasks.push(Topic.updateMany({ ...classFilter, subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+        } catch (_) { }
+
+        try {
+            const SubjectRule = require('../models/SubjectRule');
+            updateTasks.push(SubjectRule.updateMany({ subjectName: exactOldRegex }, { $set: { subjectName: cleanNew } }));
         } catch (_) { }
 
         try {
             const Note = require('../models/Note');
-            updateTasks.push(Note.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+            updateTasks.push(Note.updateMany({ ...classFilter, subject: exactOldRegex }, { $set: { subject: cleanNew } }));
         } catch (_) { }
 
         try {
             const Book = require('../models/Book');
-            updateTasks.push(Book.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+            updateTasks.push(Book.updateMany({ ...classFilter, subject: exactOldRegex }, { $set: { subject: cleanNew } }));
         } catch (_) { }
 
         try {
             const Folder = require('../models/Folder');
-            updateTasks.push(Folder.updateMany({ subject: exactOldRegex }, { $set: { subject: cleanNew } }));
+            updateTasks.push(Folder.updateMany({ ...classFilter, subject: exactOldRegex }, { $set: { subject: cleanNew } }));
         } catch (_) { }
 
         try {
@@ -453,9 +497,310 @@ async function cascadeSubjectRename(oldSubject, newSubject, className = null) {
             await Promise.allSettled(updateTasks);
         }
 
+        // Invalidate caches
+        try {
+            const { clearSubjectRulesCache } = require('./subjectRuleHelper');
+            clearSubjectRulesCache();
+        } catch (_) { }
+        try {
+            const { clearTopicsApiCache } = require('../controllers/topicController');
+            if (clearTopicsApiCache) clearTopicsApiCache();
+        } catch (_) { }
+
         console.log(`✅ Cascaded subject rename: "${cleanOld}" -> "${cleanNew}" across users and academic records.`);
     } catch (err) {
         console.error(`❌ Error cascading subject rename "${cleanOld}" -> "${cleanNew}":`, err);
+    }
+}
+
+/**
+ * Cascade class rename across Users (teachers, students) and all academic collections
+ */
+async function cascadeClassRename(oldClassName, newClassName) {
+    if (!oldClassName || !newClassName || oldClassName.trim().toLowerCase() === newClassName.trim().toLowerCase()) return;
+
+    const cleanOld = oldClassName.trim();
+    const cleanNew = newClassName.trim();
+    const User = require('../models/User');
+    const escapedOld = cleanOld.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const exactOldRegex = new RegExp(`^\\s*${escapedOld}\\s*$`, 'i');
+
+    try {
+        console.log(`[Class Rename] Cascading class rename: "${cleanOld}" -> "${cleanNew}" across all collections...`);
+
+        // 1. Update User records (Teachers and Students)
+        const users = await User.find({
+            $or: [
+                { classLevel: exactOldRegex },
+                { classLevel: { $regex: new RegExp(`(^|[,;/\\s]+)${escapedOld}([,;/\\s]+|$)`, 'i') } },
+                { assignedClasses: exactOldRegex },
+                { classes: exactOldRegex },
+                { 'teacher.assignedClasses': exactOldRegex },
+                { 'teacher.classLevel': exactOldRegex },
+                { 'student.classLevel': exactOldRegex }
+            ]
+        });
+
+        for (const u of users) {
+            let modified = false;
+
+            // assignedClasses array (Teachers)
+            if (Array.isArray(u.assignedClasses) && u.assignedClasses.length > 0) {
+                let changed = false;
+                const updatedAssigned = u.assignedClasses.map(c => {
+                    if (String(c || '').trim().toLowerCase() === cleanOld.toLowerCase()) {
+                        changed = true;
+                        return cleanNew;
+                    }
+                    return c;
+                });
+                if (changed) {
+                    u.assignedClasses = Array.from(new Set(updatedAssigned));
+                    modified = true;
+                }
+            }
+
+            // classes array (Teachers)
+            if (Array.isArray(u.classes) && u.classes.length > 0) {
+                let changed = false;
+                const updatedClasses = u.classes.map(c => {
+                    if (String(c || '').trim().toLowerCase() === cleanOld.toLowerCase()) {
+                        changed = true;
+                        return cleanNew;
+                    }
+                    return c;
+                });
+                if (changed) {
+                    u.classes = Array.from(new Set(updatedClasses));
+                    modified = true;
+                }
+            }
+
+            // classLevel string (Students or Teachers with comma-separated classes)
+            if (u.classLevel) {
+                if (u.classLevel.trim().toLowerCase() === cleanOld.toLowerCase()) {
+                    u.classLevel = cleanNew;
+                    modified = true;
+                } else if (u.classLevel.includes(',') || u.classLevel.includes(';') || u.classLevel.includes('/')) {
+                    const parts = u.classLevel.split(/[,;/]+/).map(p => p.trim());
+                    let partChanged = false;
+                    const newParts = parts.map(p => {
+                        if (p.toLowerCase() === cleanOld.toLowerCase()) {
+                            partChanged = true;
+                            return cleanNew;
+                        }
+                        return p;
+                    });
+                    if (partChanged) {
+                        u.classLevel = Array.from(new Set(newParts)).join(', ');
+                        modified = true;
+                    }
+                }
+            }
+
+            // Nested teacher object if exists
+            if (u.teacher) {
+                if (Array.isArray(u.teacher.assignedClasses)) {
+                    let changed = false;
+                    u.teacher.assignedClasses = u.teacher.assignedClasses.map(c => {
+                        if (String(c || '').trim().toLowerCase() === cleanOld.toLowerCase()) {
+                            changed = true;
+                            return cleanNew;
+                        }
+                        return c;
+                    });
+                    if (changed) {
+                        u.teacher.assignedClasses = Array.from(new Set(u.teacher.assignedClasses));
+                        modified = true;
+                    }
+                }
+                if (u.teacher.classLevel && u.teacher.classLevel.trim().toLowerCase() === cleanOld.toLowerCase()) {
+                    u.teacher.classLevel = cleanNew;
+                    modified = true;
+                }
+            }
+
+            // Nested student object if exists
+            if (u.student && u.student.classLevel && u.student.classLevel.trim().toLowerCase() === cleanOld.toLowerCase()) {
+                u.student.classLevel = cleanNew;
+                modified = true;
+            }
+
+            if (modified) {
+                await u.save().catch(err => console.error(`Error updating user ${u._id} class rename:`, err.message));
+            }
+        }
+
+        // 2. Cascade across academic collections
+        const updateTasks = [];
+
+        // Topic: classLevel string
+        try {
+            const Topic = require('../models/Topic');
+            updateTasks.push(Topic.updateMany(
+                { classLevel: exactOldRegex },
+                { $set: { classLevel: cleanNew } }
+            ));
+        } catch (_) { }
+
+        // Question: classLevel can be string or array
+        try {
+            const Question = require('../models/Question');
+            updateTasks.push(Question.updateMany(
+                { classLevel: { $type: 'string', $regex: exactOldRegex } },
+                { $set: { classLevel: cleanNew } }
+            ));
+            updateTasks.push(Question.updateMany(
+                { classLevel: { $type: 'array', $elemMatch: exactOldRegex } },
+                { $set: { 'classLevel.$[elem]': cleanNew } },
+                { arrayFilters: [{ 'elem': exactOldRegex }] }
+            ));
+        } catch (_) { }
+
+        // QuestionBank: classLevel array of strings
+        try {
+            const QuestionBank = require('../models/QuestionBank');
+            updateTasks.push(QuestionBank.updateMany(
+                { classLevel: exactOldRegex },
+                { $set: { 'classLevel.$[elem]': cleanNew } },
+                { arrayFilters: [{ 'elem': exactOldRegex }] }
+            ));
+        } catch (_) { }
+
+        // Quiz: classLevel string, classes array
+        try {
+            const Quiz = require('../models/Quiz');
+            updateTasks.push(Quiz.updateMany(
+                { classLevel: exactOldRegex },
+                { $set: { classLevel: cleanNew } }
+            ));
+            updateTasks.push(Quiz.updateMany(
+                { classes: exactOldRegex },
+                { $set: { 'classes.$[elem]': cleanNew } },
+                { arrayFilters: [{ 'elem': exactOldRegex }] }
+            ));
+        } catch (_) { }
+
+        // SubjectRule: classLevels array of strings
+        try {
+            const SubjectRule = require('../models/SubjectRule');
+            updateTasks.push(SubjectRule.updateMany(
+                { classLevels: exactOldRegex },
+                { $set: { 'classLevels.$[elem]': cleanNew } },
+                { arrayFilters: [{ 'elem': exactOldRegex }] }
+            ));
+        } catch (_) { }
+
+        // Course: classLevel array of strings, featuredForClasses array of strings
+        try {
+            const Course = require('../models/Course');
+            updateTasks.push(Course.updateMany(
+                { classLevel: exactOldRegex },
+                { $set: { 'classLevel.$[elem]': cleanNew } },
+                { arrayFilters: [{ 'elem': exactOldRegex }] }
+            ));
+            updateTasks.push(Course.updateMany(
+                { featuredForClasses: exactOldRegex },
+                { $set: { 'featuredForClasses.$[elem]': cleanNew } },
+                { arrayFilters: [{ 'elem': exactOldRegex }] }
+            ));
+        } catch (_) { }
+
+        // Note: classLevel can be array or string
+        try {
+            const Note = require('../models/Note');
+            updateTasks.push(Note.updateMany(
+                { classLevel: { $type: 'string', $regex: exactOldRegex } },
+                { $set: { classLevel: cleanNew } }
+            ));
+            updateTasks.push(Note.updateMany(
+                { classLevel: { $type: 'array', $elemMatch: exactOldRegex } },
+                { $set: { 'classLevel.$[elem]': cleanNew } },
+                { arrayFilters: [{ 'elem': exactOldRegex }] }
+            ));
+        } catch (_) { }
+
+        // Book: classLevel string
+        try {
+            const Book = require('../models/Book');
+            updateTasks.push(Book.updateMany(
+                { classLevel: exactOldRegex },
+                { $set: { classLevel: cleanNew } }
+            ));
+        } catch (_) { }
+
+        // Folder: classLevel string
+        try {
+            const Folder = require('../models/Folder');
+            updateTasks.push(Folder.updateMany(
+                { classLevel: exactOldRegex },
+                { $set: { classLevel: cleanNew } }
+            ));
+        } catch (_) { }
+
+        // AIKnowledge: classLevel string
+        try {
+            const AIKnowledge = require('../models/AIKnowledge');
+            updateTasks.push(AIKnowledge.updateMany(
+                { classLevel: exactOldRegex },
+                { $set: { classLevel: cleanNew } }
+            ));
+        } catch (_) { }
+
+        // AiConversation: classLevel string
+        try {
+            const AiConversation = require('../models/AiConversation');
+            updateTasks.push(AiConversation.updateMany(
+                { classLevel: exactOldRegex },
+                { $set: { classLevel: cleanNew } }
+            ));
+        } catch (_) { }
+
+        // VideoAsset: targetClass array of strings
+        try {
+            const VideoAsset = require('../models/VideoAsset');
+            updateTasks.push(VideoAsset.updateMany(
+                { targetClass: exactOldRegex },
+                { $set: { 'targetClass.$[elem]': cleanNew } },
+                { arrayFilters: [{ 'elem': exactOldRegex }] }
+            ));
+        } catch (_) { }
+
+        // Coupon: applicableClass string
+        try {
+            const Coupon = require('../models/Coupon');
+            updateTasks.push(Coupon.updateMany(
+                { applicableClass: exactOldRegex },
+                { $set: { applicableClass: cleanNew } }
+            ));
+        } catch (_) { }
+
+        // NotificationLog: classLevel string
+        try {
+            const NotificationLog = require('../models/NotificationLog');
+            updateTasks.push(NotificationLog.updateMany(
+                { classLevel: exactOldRegex },
+                { $set: { classLevel: cleanNew } }
+            ));
+        } catch (_) { }
+
+        if (updateTasks.length > 0) {
+            await Promise.allSettled(updateTasks);
+        }
+
+        // 3. Invalidate caches
+        try {
+            const { clearSubjectRulesCache } = require('./subjectRuleHelper');
+            clearSubjectRulesCache();
+        } catch (_) { }
+        try {
+            const { clearTopicsApiCache } = require('../controllers/topicController');
+            if (clearTopicsApiCache) clearTopicsApiCache();
+        } catch (_) { }
+
+        console.log(`✅ Cascaded class rename: "${cleanOld}" -> "${cleanNew}" across users and all collections successfully.`);
+    } catch (err) {
+        console.error(`❌ Error cascading class rename "${cleanOld}" -> "${cleanNew}":`, err);
     }
 }
 
@@ -484,7 +829,10 @@ async function getAllAcademicFilters() {
         Question.distinct('classLevel').catch(() => [])
     ]);
 
-    const classSet = new Set(defaultClasses);
+    const classSet = new Set();
+    if (!classDocs || classDocs.length === 0) {
+        defaultClasses.forEach(c => classSet.add(c));
+    }
     const addClass = (raw) => {
         if (!raw) return;
         const str = String(raw).trim();
@@ -574,6 +922,7 @@ module.exports = {
     stringSimilarity,
     detectSubjectRenames,
     cascadeSubjectRename,
+    cascadeClassRename,
     getAllAcademicFilters
 };
 

@@ -2661,5 +2661,6 @@ module.exports = {
     cancelDeleteRequest,
     approveDeletionRequest,
     declineDeletionRequest,
-    seedMasterCurriculumApi
+    seedMasterCurriculumApi,
+    clearTopicsApiCache
 };
