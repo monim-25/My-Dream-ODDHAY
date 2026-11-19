@@ -870,7 +870,7 @@
                             </span>
                             <div class="img-pos-selector flex items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400 border-l border-emerald-300 dark:border-emerald-700 pl-1.5">
                                 <span class="font-medium text-[10px]">অবস্থান:</span>
-                                <select onchange="this.closest('.standard-question-block').querySelector('.image-pos-input').value = this.value" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-[10.5px] font-medium outline-none">
+                                <select onchange="updateStudioQuestionImageLayout(this)" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-[10.5px] font-medium outline-none cursor-pointer">
                                     <option value="above" selected>⬆️ উপরে</option>
                                     <option value="below">⬇️ নিচে</option>
                                     <option value="left">⬅️ বামে</option>
@@ -881,14 +881,15 @@
                         </div>
                     </div>
                 </div>
-                <!-- Inline Image Thumbnail Preview (in place, small size) -->
-                <div class="studio-inline-img-preview hidden my-1.5 items-center gap-2">
-                    <img src="" class="max-h-24 sm:max-h-32 max-w-[180px] w-auto object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs cursor-pointer hover:opacity-90" onclick="openStudioLightbox(this)" title="ক্লিক করে বড় করে দেখুন">
-                    <span class="text-[10px] text-slate-400 italic">প্রশ্নে চিত্রটি এই আকারে থাকবে (ক্লিক করে বড় দেখা যাবে)</span>
+                <!-- Interactive layout container for image + textarea -->
+                <div class="studio-question-interactive-box flex flex-col gap-2 items-start mt-1">
+                    <div class="studio-inline-img-preview hidden shrink-0 inline-flex">
+                        <img src="" class="max-h-28 sm:max-h-36 max-w-[200px] w-auto object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs cursor-pointer hover:opacity-90" onclick="openStudioLightbox(this)" title="ক্লিক করে বড় করে দেখুন">
+                    </div>
+                    <textarea name="qText[]" required placeholder="Question..."
+                        class="w-full flex-1 p-2.5 sm:p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all leading-relaxed resize-y"
+                        rows="2"></textarea>
                 </div>
-                <textarea name="qText[]" required placeholder="Question..."
-                    class="w-full p-2.5 sm:p-3 rounded-lg bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-xs sm:text-sm font-normal text-slate-800 dark:text-slate-200 outline-none focus:border-primary transition-all leading-relaxed resize-none"
-                    rows="2"></textarea>
             </div>
 
             <!-- MCQ Options Area -->
@@ -4316,6 +4317,8 @@ Correct Answer: B`;
                         if (pImg) pImg.src = finalUrl;
                         inlinePreview.classList.remove('hidden');
                         inlinePreview.classList.add('flex');
+                        const posSelect = slot.querySelector('.img-pos-selector select');
+                        if (posSelect) updateStudioQuestionImageLayout(posSelect);
                     }
                 } else {
                     alert('Image upload failed: ' + (data.error || 'Server error'));
@@ -4336,6 +4339,34 @@ Correct Answer: B`;
             }
         }
         window.handleStudioImageUpload = handleStudioImageUpload;
+
+        function updateStudioQuestionImageLayout(selectEl) {
+            const block = selectEl.closest('.standard-question-block');
+            if (!block) return;
+            const pos = selectEl.value || 'above';
+            const hiddenPos = block.querySelector('.image-pos-input');
+            if (hiddenPos) hiddenPos.value = pos;
+
+            const box = block.querySelector('.studio-question-interactive-box');
+            const preview = block.querySelector('.studio-inline-img-preview');
+            const textarea = block.querySelector('textarea[name="qText[]"]');
+            if (!box || !preview || !textarea) return;
+
+            if (pos === 'above') {
+                box.className = 'studio-question-interactive-box flex flex-col gap-2 items-start mt-1';
+                box.insertBefore(preview, textarea);
+            } else if (pos === 'below') {
+                box.className = 'studio-question-interactive-box flex flex-col gap-2 items-start mt-1';
+                box.appendChild(preview);
+            } else if (pos === 'left') {
+                box.className = 'studio-question-interactive-box flex flex-row gap-2.5 items-start mt-1';
+                box.insertBefore(preview, textarea);
+            } else if (pos === 'right') {
+                box.className = 'studio-question-interactive-box flex flex-row-reverse gap-2.5 items-start justify-between mt-1';
+                box.insertBefore(preview, textarea);
+            }
+        }
+        window.updateStudioQuestionImageLayout = updateStudioQuestionImageLayout;
 
         function removeStudioImage(btn) {
             const slot = btn.closest('.image-uploader-slot');

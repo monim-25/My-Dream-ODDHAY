@@ -895,7 +895,7 @@
             const posSelectorHTML = isQuestionImg ? `
                 <div class="qimg-pos-box ${hasImg ? 'flex' : 'hidden'} items-center gap-1 text-[11px] text-slate-600 dark:text-slate-400 border-l border-emerald-300 dark:border-emerald-700 pl-1.5">
                     <span class="font-medium text-[10px]">অবস্থান:</span>
-                    <select id="${slotId}-pos" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-[10.5px] font-medium outline-none">
+                    <select id="${slotId}-pos" onchange="updateQuizEditorQuestionImageLayout('${slotId.replace('qimg-', '')}')" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-[10.5px] font-medium outline-none cursor-pointer">
                         <option value="above" ${safePos === 'above' ? 'selected' : ''}>⬆️ উপরে</option>
                         <option value="below" ${safePos === 'below' ? 'selected' : ''}>⬇️ নিচে</option>
                         <option value="left" ${safePos === 'left' ? 'selected' : ''}>⬅️ বামে</option>
@@ -948,9 +948,9 @@
             } else if (pos === 'below') {
                 return `<div class="flex flex-col gap-2.5 items-start">${textTag}${imgTag}</div>`;
             } else if (pos === 'left') {
-                return `<div class="flex flex-col sm:flex-row gap-3.5 items-start">${imgTag}${textTag}</div>`;
+                return `<div class="flex flex-row gap-3.5 items-start">${imgTag}${textTag}</div>`;
             } else if (pos === 'right') {
-                return `<div class="flex flex-col sm:flex-row-reverse gap-3.5 items-start justify-between">${imgTag}${textTag}</div>`;
+                return `<div class="flex flex-row-reverse gap-3.5 items-start justify-between">${imgTag}${textTag}</div>`;
             }
             return `<div class="flex flex-col gap-2.5 items-start">${imgTag}${textTag}</div>`;
         }
@@ -1029,6 +1029,17 @@
                         posBox.classList.remove('hidden');
                         posBox.classList.add('flex');
                     }
+                    if (slotId.startsWith('qimg-')) {
+                        const qid = slotId.replace('qimg-', '');
+                        const prevBox = document.getElementById(`qimg-preview-${qid}`);
+                        if (prevBox) {
+                            const pImg = prevBox.querySelector('img');
+                            if (pImg) pImg.src = finalUrl;
+                            prevBox.classList.remove('hidden');
+                            prevBox.classList.add('flex');
+                            updateQuizEditorQuestionImageLayout(qid);
+                        }
+                    }
                 } else {
                     alert('Image upload failed: ' + (data.error || 'Server error'));
                     if (btn) {
@@ -1070,8 +1081,48 @@
                 triggerBtn.disabled = false;
                 triggerBtn.innerHTML = `<span class="material-symbols-rounded text-sm">add_photo_alternate</span> <span>চিত্র যুক্ত করুন</span>`;
             }
+            if (slotId.startsWith('qimg-')) {
+                const qid = slotId.replace('qimg-', '');
+                const prevBox = document.getElementById(`qimg-preview-${qid}`);
+                if (prevBox) {
+                    prevBox.classList.add('hidden');
+                    prevBox.classList.remove('flex');
+                    const pImg = prevBox.querySelector('img');
+                    if (pImg) pImg.src = '';
+                }
+            }
         }
         window.removeEditorImage = removeEditorImage;
+
+        function updateQuizEditorQuestionImageLayout(qid) {
+            const posSelect = document.getElementById(`qimg-${qid}-pos`);
+            const pos = posSelect ? posSelect.value : 'above';
+            const box = document.getElementById(`qbox-${qid}`);
+            const preview = document.getElementById(`qimg-preview-${qid}`);
+            const textarea = document.getElementById(`qtext-${qid}`);
+            if (!box || !preview || !textarea) return;
+
+            if (pos === 'above') {
+                box.className = 'editor-question-interactive-box flex flex-col gap-2 items-start mt-1';
+                box.insertBefore(preview, textarea);
+            } else if (pos === 'below') {
+                box.className = 'editor-question-interactive-box flex flex-col gap-2 items-start mt-1';
+                box.appendChild(preview);
+            } else if (pos === 'left') {
+                box.className = 'editor-question-interactive-box flex flex-row gap-2.5 items-start mt-1';
+                box.insertBefore(preview, textarea);
+            } else if (pos === 'right') {
+                box.className = 'editor-question-interactive-box flex flex-row-reverse gap-2.5 items-start justify-between mt-1';
+                box.insertBefore(preview, textarea);
+            }
+
+            const card = document.getElementById(`q-${qid}`);
+            if (card) {
+                const type = card.getAttribute('data-type') || 'MCQ';
+                queueAutoSave(qid, type);
+            }
+        }
+        window.updateQuizEditorQuestionImageLayout = updateQuizEditorQuestionImageLayout;
 
         function isDummyOptText(val) {
             if (!val) return true;
@@ -1514,7 +1565,12 @@
                                 <label class="form-label">Question Text</label>
                                 ${renderEditorImageSlotHTML('qimg-' + qid, q.questionImage, 'প্রশ্নে চিত্র', q.questionImagePosition)}
                             </div>
-                            <textarea id="qtext-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...'}">${escapeEditorHtml(cleanQText)}</textarea>
+                            <div id="qbox-${qid}" class="editor-question-interactive-box flex ${q.questionImagePosition === 'left' ? 'flex-row' : (q.questionImagePosition === 'right' ? 'flex-row-reverse justify-between' : 'flex-col')} gap-2 items-start mt-1">
+                                <div id="qimg-preview-${qid}" class="${q.questionImage ? 'flex' : 'hidden'} shrink-0 inline-flex">
+                                    <img src="${escapeEditorHtml(q.questionImage || '')}" class="max-h-28 sm:max-h-36 max-w-[200px] w-auto object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs cursor-pointer hover:opacity-90" onclick="openQuizEditorLightbox(this.src)" title="ক্লিক করে বড় করে দেখুন">
+                                </div>
+                                <textarea id="qtext-${qid}" class="form-input w-full flex-1 resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...'}">${escapeEditorHtml(cleanQText)}</textarea>
+                            </div>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                             <div>
@@ -1565,7 +1621,12 @@
                                 <label class="form-label">Question Text</label>
                                 ${renderEditorImageSlotHTML('qimg-' + qid, q.questionImage, 'প্রশ্নে চিত্র', q.questionImagePosition)}
                             </div>
-                            <textarea id="qtext-${qid}" class="form-input w-full resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...'}">${escapeEditorHtml(cleanQText)}</textarea>
+                            <div id="qbox-${qid}" class="editor-question-interactive-box flex ${q.questionImagePosition === 'left' ? 'flex-row' : (q.questionImagePosition === 'right' ? 'flex-row-reverse justify-between' : 'flex-col')} gap-2 items-start mt-1">
+                                <div id="qimg-preview-${qid}" class="${q.questionImage ? 'flex' : 'hidden'} shrink-0 inline-flex">
+                                    <img src="${escapeEditorHtml(q.questionImage || '')}" class="max-h-28 sm:max-h-36 max-w-[200px] w-auto object-contain rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs cursor-pointer hover:opacity-90" onclick="openQuizEditorLightbox(this.src)" title="ক্লিক করে বড় করে দেখুন">
+                                </div>
+                                <textarea id="qtext-${qid}" class="form-input w-full flex-1 resize-y min-h-[60px] text-xs sm:text-sm lg:text-[15px]" rows="2" placeholder="${isQBangla ? 'প্রশ্ন লিখুন...' : 'Enter question text...'}">${escapeEditorHtml(cleanQText)}</textarea>
+                            </div>
                         </div>
                         <div>
                             <label class="form-label">Answer</label>
