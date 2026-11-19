@@ -1924,9 +1924,65 @@
             }
         });
 
-        // Universal Real-time live math equation preview on input for ANY field
-        function updateLiveMathPreviewForInput(inputEl) {
+        function isStudioMathInput(el) {
+            if (!el || !el.matches) return false;
+            return el.matches('textarea[name="qText[]"]') ||
+                   el.matches('input[name="qOptions[]"]') ||
+                   el.matches('textarea[name="qExplanation[]"]') ||
+                   el.matches('textarea[name="qContext[]"]') ||
+                   el.matches('textarea[name="qAnswer[]"]') ||
+                   el.matches('textarea[name="qSampleAnswer[]"]') ||
+                   el.matches('textarea[name^="qSubQ"]') ||
+                   el.matches('textarea[name^="qSubA"]') ||
+                   el.matches('textarea[name^="qSubS"]');
+        }
+        window.isStudioMathInput = isStudioMathInput;
+
+        function hideLiveMathPreview(inputEl) {
             if (!inputEl) return;
+            clearTimeout(inputEl._typingStopTimer);
+            clearTimeout(inputEl._mathHideTimer);
+            inputEl._isWriting = false;
+            const parent = inputEl.parentElement;
+            if (!parent) return;
+            const previewEl = parent.querySelector('.live-math-preview');
+            if (previewEl && !previewEl._isHovered) {
+                previewEl.classList.add('hidden');
+            }
+        }
+        window.hideLiveMathPreview = hideLiveMathPreview;
+
+        function ensureMathInputListeners(t) {
+            if (!t || t._mathListenersAttached) return;
+            t._mathListenersAttached = true;
+
+            // When mouse leaves input: if writing is paused/done, hide preview immediately
+            t.addEventListener('mouseleave', () => {
+                t._mouseLeft = true;
+                if (!t._isWriting) {
+                    hideLiveMathPreview(t);
+                } else {
+                    // If still marked as typing, wait until typing pause to hide
+                    clearTimeout(t._mathHideTimer);
+                    t._mathHideTimer = setTimeout(() => {
+                        if (t._mouseLeft) hideLiveMathPreview(t);
+                    }, 1000);
+                }
+            });
+
+            // When mouse moves over input: if it contains math, show preview
+            t.addEventListener('mouseenter', () => {
+                t._mouseLeft = false;
+                if (t.value && t.value.includes('$')) {
+                    updateLiveMathPreviewForInput(t, true);
+                }
+            });
+        }
+
+        // Universal Real-time live math equation preview on input for ANY field
+        function updateLiveMathPreviewForInput(inputEl, forceShow = true) {
+            if (!inputEl) return;
+            ensureMathInputListeners(inputEl);
             const textVal = (inputEl.value || '').trim();
             const parent = inputEl.parentElement;
             if (!parent) return;
@@ -1941,13 +1997,27 @@
 
             if (!previewEl) {
                 previewEl = document.createElement('div');
-                previewEl.className = 'live-math-preview mt-1 p-2 rounded-lg bg-violet-50/70 dark:bg-violet-950/30 border border-violet-200/80 dark:border-violet-800/50 text-xs text-slate-800 dark:text-slate-200 leading-relaxed overflow-x-auto';
+                previewEl.className = 'live-math-preview mt-1 p-2 rounded-lg bg-violet-50/70 dark:bg-violet-950/30 border border-violet-200/80 dark:border-violet-800/50 text-xs text-slate-800 dark:text-slate-200 leading-relaxed overflow-x-auto shadow-xs';
                 inputEl.insertAdjacentElement('afterend', previewEl);
+
+                previewEl.addEventListener('mouseenter', () => {
+                    previewEl._isHovered = true;
+                    clearTimeout(inputEl._mathHideTimer);
+                });
+                previewEl.addEventListener('mouseleave', () => {
+                    previewEl._isHovered = false;
+                    if (document.activeElement !== inputEl) {
+                        hideLiveMathPreview(inputEl);
+                    }
+                });
             }
 
             const escText = (typeof escapeBulkHtml === 'function') ? escapeBulkHtml(textVal) : textVal;
             previewEl.innerHTML = `<span class="text-[10px] font-semibold text-violet-600 dark:text-violet-400 block mb-0.5">📐 লাইভ সমীকরণ প্রিভিউ:</span><div>${escText}</div>`;
-            previewEl.classList.remove('hidden');
+
+            if (forceShow) {
+                previewEl.classList.remove('hidden');
+            }
 
             if (typeof renderMathInElement === 'function') {
                 renderMathInElement(previewEl, {
@@ -1961,21 +2031,60 @@
         }
         window.updateLiveMathPreviewForInput = updateLiveMathPreviewForInput;
 
+        // When user types in any studio math input
         document.addEventListener('input', (e) => {
             const t = e.target;
-            if (!t) return;
-            if (
-                t.matches('textarea[name="qText[]"]') ||
-                t.matches('input[name="qOptions[]"]') ||
-                t.matches('textarea[name="qExplanation[]"]') ||
-                t.matches('textarea[name="qContext[]"]') ||
-                t.matches('textarea[name="qAnswer[]"]') ||
-                t.matches('textarea[name="qSampleAnswer[]"]') ||
-                t.matches('textarea[name^="qSubQ"]') ||
-                t.matches('textarea[name^="qSubA"]') ||
-                t.matches('textarea[name^="qSubS"]')
-            ) {
-                updateLiveMathPreviewForInput(t);
+            if (!t || !isStudioMathInput(t)) return;
+
+            t._isWriting = true;
+            clearTimeout(t._typingStopTimer);
+            clearTimeout(t._mathHideTimer);
+
+            updateLiveMathPreviewForInput(t, true);
+
+            // Writing pause detector (1 second of typing pause = writing done)
+            t._typingStopTimer = setTimeout(() => {
+                t._isWriting = false;
+                if (t._mouseLeft) {
+                    hideLiveMathPreview(t);
+                }
+            }, 1000);
+
+            // Auto-hide when user stops typing for 3.5 seconds
+            t._mathHideTimer = setTimeout(() => {
+                hideLiveMathPreview(t);
+            }, 3500);
+        });
+
+        // When input gains focus
+        document.addEventListener('focusin', (e) => {
+            const t = e.target;
+            if (t && isStudioMathInput(t)) {
+                window._lastFocusedStudioInput = t;
+                ensureMathInputListeners(t);
+                if (t.value && t.value.includes('$')) {
+                    updateLiveMathPreviewForInput(t, true);
+                }
+            }
+        });
+
+        // When input loses focus (user moves to another input, tabs out, or clicks elsewhere)
+        document.addEventListener('focusout', (e) => {
+            const t = e.target;
+            if (!t || !isStudioMathInput(t)) return;
+            setTimeout(() => {
+                // If focus didn't move to another button inside the math tray
+                if (document.activeElement !== t && !document.activeElement?.closest('#globalMathTray')) {
+                    hideLiveMathPreview(t);
+                }
+            }, 150);
+        });
+
+        // Pointerdown / click anywhere outside the active input and its preview
+        document.addEventListener('pointerdown', (e) => {
+            const last = window._lastFocusedStudioInput;
+            if (last && !last.contains(e.target) && !e.target.closest('.live-math-preview') && !e.target.closest('#globalMathTray')) {
+                hideLiveMathPreview(last);
             }
         });
 
@@ -2273,10 +2382,13 @@
 
                 updateIndices();
 
-                // Restore live math equation previews across all inputs containing equations
+                // Initialize math input listeners and prepare previews (hidden until focused/hovered)
                 container.querySelectorAll('textarea, input[type="text"]').forEach(input => {
+                    if (typeof ensureMathInputListeners === 'function') {
+                        ensureMathInputListeners(input);
+                    }
                     if (input.value && input.value.includes('$') && typeof updateLiveMathPreviewForInput === 'function') {
-                        updateLiveMathPreviewForInput(input);
+                        updateLiveMathPreviewForInput(input, false);
                     }
                 });
 
