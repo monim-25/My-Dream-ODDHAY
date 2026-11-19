@@ -969,6 +969,21 @@ const createTopic = async (req, res) => {
                     }
                 }
 
+                if (isTeacher) {
+                    try {
+                        const pushNotificationService = require('../services/pushNotificationService');
+                        const teacherName = req.session.user ? req.session.user.name : 'Teacher';
+                        const notifPayload = {
+                            title: 'Topic Edited Awaiting Approval',
+                            body: `Teacher ${teacherName} edited "${name.trim()}" (${targetClasses.join(', ')} - ${subject}).`,
+                            url: '/superadmin/topics?tab=pending',
+                            type: 'system'
+                        };
+                        pushNotificationService.sendToRole('superadmin', notifPayload).catch(() => {});
+                        pushNotificationService.sendToRole('admin', notifPayload).catch(() => {});
+                    } catch (e) {}
+                }
+
                 return res.json({
                     success: true,
                     message: isTeacher ? `Topic "${existingTopic.name}" updated and resubmitted for Admin review!` : `Topic "${existingTopic.name}" updated successfully!`,
