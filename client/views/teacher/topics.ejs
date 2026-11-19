@@ -300,11 +300,11 @@
                                                         </button>
                                                     <% } %>
                                                     <% if (chUnrequestedTopics.length > 0) { %>
-                                                        <!-- Edit Chapter Name Button -->
+                                                        <!-- Edit Chapter & Manage Topics Button (Opens Full Form) -->
                                                         <button type="button" 
-                                                                onclick="openEditChapterModal(<%= JSON.stringify(ch.name) %>, <%= ch.number || 1 %>, <%= ch.topics.length %>)" 
+                                                                onclick="openChapterEditUnifiedModal(<%= JSON.stringify(ch.name) %>, <%= ch.number || 1 %>, <%= JSON.stringify((ch.topics || []).map(t => t.name)) %>, <%= JSON.stringify(ch.segment || '') %>)" 
                                                                 class="size-7 rounded hover:bg-amber-100 dark:hover:bg-amber-950/50 text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 flex items-center justify-center transition-colors shrink-0" 
-                                                                title="Edit Chapter Name & Number">
+                                                                title="Edit Chapter Name & Add/Manage Topics">
                                                             <span class="material-symbols-rounded text-base">edit</span>
                                                         </button>
 
@@ -932,6 +932,9 @@
             <form id="unifiedTopicForm" onsubmit="submitTeacherTopicForm(event)" class="space-y-3">
                 <input type="hidden" name="group" value="<%= selGroup %>">
                 <input type="hidden" name="topicId" id="unifiedTopicId" value="">
+                <input type="hidden" name="oldChapterName" id="unifiedOldChapterName" value="">
+                <input type="hidden" name="oldChapterNumber" id="unifiedOldChapterNumber" value="">
+                <input type="hidden" name="isChapterEdit" id="unifiedIsChapterEdit" value="false">
 
                 <!-- STEP 1 CONTAINER: TOPICS ENTRY -->
                 <div id="unifiedStep1Container" class="space-y-3">
@@ -1061,10 +1064,16 @@
                     <!-- BULK TOPICS MODE FIELDS -->
                     <div id="bulkTopicFields" class="space-y-3 hidden">
                         <div>
-                            <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400 block mb-1">
-                                Topic Names (One topic per line) *
-                            </label>
-                            <textarea id="bulkTopicList" name="topicList" rows="5" placeholder="Enter topic names here (one per line)..." class="w-full p-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y"></textarea>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                                    Topic Names (One topic per line) *
+                                </label>
+                                <button type="button" id="btnLoadChapterTopics" onclick="loadExistingChapterTopics()" class="text-[10px] text-primary hover:underline font-medium flex items-center gap-0.5 hidden">
+                                    <span class="material-symbols-rounded text-xs">playlist_add_check</span>
+                                    <span>Load Existing Topics (<span id="existingChapterTopicsCount">0</span>)</span>
+                                </button>
+                            </div>
+                            <textarea id="bulkTopicList" name="topicList" rows="5" placeholder="Enter topic names here (one per line)..." class="w-full p-2.5 rounded-md bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-normal outline-none focus:border-primary resize-y font-sans leading-relaxed"></textarea>
                         </div>
                     </div>
 
@@ -1756,10 +1765,19 @@
                 return false;
             }
 
+            const isChapterEdit = document.getElementById('unifiedIsChapterEdit')?.value === 'true';
+            const oldChName = document.getElementById('unifiedOldChapterName')?.value.trim();
+            const oldChNum = parseInt(document.getElementById('unifiedOldChapterNumber')?.value, 10);
+            const chapterChanged = oldChName && (oldChName.toLowerCase() !== chName.toLowerCase() || oldChNum !== chNum);
+
             if (currentModalMode === 'single') {
                 const singleName = document.getElementById('singleTopicName').value.trim();
                 if (!singleName && stagedTopics.length === 0) {
-                    Swal.fire('Topic Name Required', 'Please enter a Topic Name.', 'warning');
+                    if (isChapterEdit && chapterChanged) {
+                        saveChapterEditDirectly(targetClasses, subj, oldChName, chName, chNum);
+                        return false;
+                    }
+                    Swal.fire('Topic Name Required', 'Please enter a Topic Name or modify chapter details.', 'warning');
                     return false;
                 }
                 if (singleName) {
@@ -1780,6 +1798,10 @@
             } else {
                 const bulkText = document.getElementById('bulkTopicList').value.trim();
                 if (!bulkText && stagedTopics.length === 0) {
+                    if (isChapterEdit && chapterChanged) {
+                        saveChapterEditDirectly(targetClasses, subj, oldChName, chName, chNum);
+                        return false;
+                    }
                     Swal.fire('Topics Required', 'Please enter topic names (one per line).', 'warning');
                     return false;
                 }
@@ -2161,6 +2183,30 @@
                 payload.topics = stagedTopics;
             }
 
+            const isChapterEdit = document.getElementById('unifiedIsChapterEdit')?.value === 'true';
+            const oldChName = document.getElementById('unifiedOldChapterName')?.value.trim();
+            const oldChNum = parseInt(document.getElementById('unifiedOldChapterNumber')?.value, 10);
+            const chapterChanged = oldChName && (oldChName.toLowerCase() !== chapterName.toLowerCase() || oldChNum !== chapterNumber);
+
+            if (isChapterEdit && chapterChanged) {
+                try {
+                    await fetch(`${apiBase}/topics/chapter/edit`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        body: JSON.stringify({
+                            classLevel: currentClassLevel,
+                            classLevels: targetClasses,
+                            subject,
+                            oldChapterName: oldChName,
+                            newChapterName: chapterName,
+                            newChapterNumber: chapterNumber
+                        })
+                    });
+                } catch (e) {
+                    console.error('Failed to update chapter name before adding topics:', e);
+                }
+            }
+
             try {
                 Swal.fire({ title: 'Submitting Topics...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
                 const res = await fetch(endpoint, {
@@ -2246,6 +2292,12 @@
                 }
             }
 
+            if (document.getElementById('unifiedIsChapterEdit')) document.getElementById('unifiedIsChapterEdit').value = 'false';
+            if (document.getElementById('unifiedOldChapterName')) document.getElementById('unifiedOldChapterName').value = '';
+            if (document.getElementById('unifiedOldChapterNumber')) document.getElementById('unifiedOldChapterNumber').value = '';
+            const btnLoad = document.getElementById('btnLoadChapterTopics');
+            if (btnLoad) btnLoad.classList.add('hidden');
+
             // Auto-check target classes based on linked curriculum (Class 9 & 10, Class 11 & 12)
             const targetNorm = (currentClassLevel || '').trim().toLowerCase();
             const linkedClasses = (targetNorm === 'class 9' || targetNorm === 'class 10')
@@ -2278,6 +2330,89 @@
             await checkTeacherModalSegments(targetSeg);
 
             setTimeout(checkChapterConflict, 50);
+        }
+
+        let currentChapterExistingTopics = [];
+
+        function openChapterEditUnifiedModal(chName, chNumber, topicNames = [], segment = '') {
+            currentChapterExistingTopics = Array.isArray(topicNames) ? topicNames : [];
+
+            // Open the full unified modal
+            openUnifiedModal(chName, chNumber, '', currentSubject, '', [], segment);
+
+            // Mark as chapter edit mode
+            const isChEditInput = document.getElementById('unifiedIsChapterEdit');
+            if (isChEditInput) isChEditInput.value = 'true';
+            const oldNameInput = document.getElementById('unifiedOldChapterName');
+            if (oldNameInput) oldNameInput.value = chName;
+            const oldNumInput = document.getElementById('unifiedOldChapterNumber');
+            if (oldNumInput) oldNumInput.value = chNumber;
+
+            // Update title & subtitle
+            const modalTitle = document.getElementById('unifiedModalTitle');
+            if (modalTitle) modalTitle.textContent = `Edit Chapter: ${chName}`;
+            const modalSub = document.getElementById('unifiedModalSubtitle');
+            if (modalSub) modalSub.textContent = 'Edit chapter name/number or add topics using Single or Bulk tab.';
+
+            // Ensure Single vs Bulk tabs are visible
+            const modeTabs = document.getElementById('unifiedModeTabs');
+            if (modeTabs) modeTabs.classList.remove('hidden');
+
+            // Show Load Existing Topics button in Bulk mode if topics exist
+            const btnLoad = document.getElementById('btnLoadChapterTopics');
+            const countEl = document.getElementById('existingChapterTopicsCount');
+            if (btnLoad && countEl) {
+                if (currentChapterExistingTopics.length > 0) {
+                    btnLoad.classList.remove('hidden');
+                    countEl.textContent = currentChapterExistingTopics.length;
+                } else {
+                    btnLoad.classList.add('hidden');
+                }
+            }
+        }
+
+        function loadExistingChapterTopics() {
+            if (!currentChapterExistingTopics || currentChapterExistingTopics.length === 0) {
+                Swal.fire('Info', 'No existing topics found for this chapter.', 'info');
+                return;
+            }
+            const bulkList = document.getElementById('bulkTopicList');
+            if (!bulkList) return;
+            bulkList.value = currentChapterExistingTopics.join('\n');
+            bulkList.focus();
+        }
+
+        async function saveChapterEditDirectly(targetClasses, subject, oldChName, newChName, newChNum) {
+            try {
+                Swal.fire({ title: 'Updating Chapter...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const res = await fetch(`${apiBase}/topics/chapter/edit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({
+                        classLevel: currentClassLevel,
+                        classLevels: targetClasses,
+                        subject,
+                        oldChapterName: oldChName,
+                        newChapterName: newChName,
+                        newChapterNumber: newChNum
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    await Swal.fire({
+                        icon: 'success',
+                        title: 'Chapter Updated!',
+                        text: data.message || 'Chapter name updated successfully.',
+                        confirmButtonColor: '#137fec'
+                    });
+                    closeModal('unifiedTopicModal');
+                    window.location.reload();
+                } else {
+                    Swal.fire('Error', data.error || 'Failed to update chapter name', 'error');
+                }
+            } catch (err) {
+                Swal.fire('Error', err.message || 'Connection error', 'error');
+            }
         }
 
         async function checkTeacherModalSegments(prefillVal = '') {
