@@ -1824,41 +1824,76 @@
         }
         window.insertMathCode = insertMathCode;
 
-        // Track last focused input inside question studio
+        // Track last focused input inside question studio (Question, Options, Explanation, Short/Medium/Comprehension)
         document.addEventListener('focusin', (e) => {
             const t = e.target;
-            if (t && (t.matches('textarea[name="qText[]"]') || t.matches('input[name="qOptions[]"]') || t.matches('textarea[name="qExplanation[]"]') || t.matches('textarea[name="qContext[]"]'))) {
+            if (t && (
+                t.matches('textarea[name="qText[]"]') ||
+                t.matches('input[name="qOptions[]"]') ||
+                t.matches('textarea[name="qExplanation[]"]') ||
+                t.matches('textarea[name="qContext[]"]') ||
+                t.matches('textarea[name="qAnswer[]"]') ||
+                t.matches('textarea[name="qSampleAnswer[]"]') ||
+                t.matches('textarea[name^="qSubQ"]') ||
+                t.matches('textarea[name^="qSubA"]') ||
+                t.matches('textarea[name^="qSubS"]')
+            )) {
                 window._lastFocusedStudioInput = t;
             }
         });
 
-        // Real-time live math equation preview on input
+        // Universal Real-time live math equation preview on input for ANY field
+        function updateLiveMathPreviewForInput(inputEl) {
+            if (!inputEl) return;
+            const textVal = (inputEl.value || '').trim();
+            const parent = inputEl.parentElement;
+            if (!parent) return;
+
+            let previewEl = parent.querySelector('.live-math-preview');
+            const hasMath = textVal.includes('$');
+
+            if (!hasMath) {
+                if (previewEl) previewEl.classList.add('hidden');
+                return;
+            }
+
+            if (!previewEl) {
+                previewEl = document.createElement('div');
+                previewEl.className = 'live-math-preview mt-1 p-2 rounded-lg bg-violet-50/70 dark:bg-violet-950/30 border border-violet-200/80 dark:border-violet-800/50 text-xs text-slate-800 dark:text-slate-200 leading-relaxed overflow-x-auto';
+                inputEl.insertAdjacentElement('afterend', previewEl);
+            }
+
+            const escText = (typeof escapeBulkHtml === 'function') ? escapeBulkHtml(textVal) : textVal;
+            previewEl.innerHTML = `<span class="text-[10px] font-semibold text-violet-600 dark:text-violet-400 block mb-0.5">📐 লাইভ সমীকরণ প্রিভিউ:</span><div>${escText}</div>`;
+            previewEl.classList.remove('hidden');
+
+            if (typeof renderMathInElement === 'function') {
+                renderMathInElement(previewEl, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false }
+                    ],
+                    throwOnError: false
+                });
+            }
+        }
+        window.updateLiveMathPreviewForInput = updateLiveMathPreviewForInput;
+
         document.addEventListener('input', (e) => {
             const t = e.target;
             if (!t) return;
-            if (t.matches('textarea[name="qText[]"]') || t.matches('textarea[name="qExplanation[]"]')) {
-                const parentBox = t.closest('.studio-question-interactive-box') || t.parentElement;
-                if (!parentBox) return;
-                const previewEl = parentBox.querySelector('.live-math-preview');
-                if (!previewEl) return;
-
-                const textVal = (t.value || '').trim();
-                if (textVal && textVal.includes('$')) {
-                    const escText = (typeof escapeBulkHtml === 'function') ? escapeBulkHtml(textVal) : textVal;
-                    previewEl.innerHTML = `<span class="text-[10px] font-semibold text-violet-600 dark:text-violet-400 block mb-0.5">📐 লাইভ সমীকরণ প্রিভিউ:</span><div>${escText}</div>`;
-                    previewEl.classList.remove('hidden');
-                    if (typeof renderMathInElement === 'function') {
-                        renderMathInElement(previewEl, {
-                            delimiters: [
-                                { left: '$$', right: '$$', display: true },
-                                { left: '$', right: '$', display: false }
-                            ],
-                            throwOnError: false
-                        });
-                    }
-                } else {
-                    previewEl.classList.add('hidden');
-                }
+            if (
+                t.matches('textarea[name="qText[]"]') ||
+                t.matches('input[name="qOptions[]"]') ||
+                t.matches('textarea[name="qExplanation[]"]') ||
+                t.matches('textarea[name="qContext[]"]') ||
+                t.matches('textarea[name="qAnswer[]"]') ||
+                t.matches('textarea[name="qSampleAnswer[]"]') ||
+                t.matches('textarea[name^="qSubQ"]') ||
+                t.matches('textarea[name^="qSubA"]') ||
+                t.matches('textarea[name^="qSubS"]')
+            ) {
+                updateLiveMathPreviewForInput(t);
             }
         });
 
