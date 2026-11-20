@@ -80,7 +80,7 @@
         <main class="admin-main flex-1 bg-[#FFFFFF] dark:bg-[#020617] flex flex-col min-h-screen relative w-full">
             <%- include('header', { pageTitle: 'Syllabus & Topics Studio' }) %>
 
-            <div class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5 flex-1">
+            <div id="topicsMainContainer" class="content-scroll flex flex-col gap-0 p-0 border-l border-slate-200 dark:border-white/5 flex-1">
                 
                 <!-- 1. Sticky Action Bar with 2-Line Layout (Tabs & Actions on Line 1, Class & Subject Filters on Line 2) -->
                 <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/80 px-2.5 sm:px-4 py-2 sm:py-2.5 sticky top-0 z-30 shadow-xs">
@@ -883,6 +883,14 @@
                     <% } %>
                 </div>
 
+                <script id="raw-topics-context" type="application/json">
+                {
+                  "currentClassLevel": <%- JSON.stringify(selClass) %>,
+                  "currentSubject": <%- JSON.stringify(selSubject) %>,
+                  "selSegment": <%- JSON.stringify(selSegment) %>,
+                  "chapters": <%- JSON.stringify(safeChapters.map(c => ({ name: c.name, number: c.number, segment: c.segment || '' }))) %>
+                }
+                </script>
             </div>
         </main>
     </div>
@@ -1159,10 +1167,96 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         const apiBase = '<%= safeApiBase %>';
-        const currentClassLevel = '<%= selClass %>';
-        const currentSubject = '<%= selSubject %>';
+        let currentClassLevel = '<%= selClass %>';
+        let currentSubject = '<%= selSubject %>';
         let currentModalMode = 'single';
         let currentSubjectChapters = <%- JSON.stringify(safeChapters.map(c => ({ name: c.name, number: c.number, segment: c.segment || '' }))) %>;
+
+        let _isNavigatingTopics = false;
+        async function navigateTopics(url, pushState = true) {
+            if (_isNavigatingTopics) return;
+            _isNavigatingTopics = true;
+
+            const container = document.getElementById('topicsMainContainer');
+            if (container) {
+                container.style.transition = 'opacity 0.15s ease';
+                container.style.opacity = '0.4';
+                container.style.pointerEvents = 'none';
+            }
+
+            try {
+                const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                if (!res.ok) throw new Error('Network response not ok');
+                const html = await res.text();
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const newContent = doc.getElementById('topicsMainContainer');
+
+                if (newContent && container) {
+                    container.innerHTML = newContent.innerHTML;
+                    if (pushState) {
+                        history.pushState(null, '', url);
+                    }
+                    const rawContextEl = container.querySelector('#raw-topics-context');
+                    if (rawContextEl) {
+                        try {
+                            const ctx = JSON.parse(rawContextEl.textContent || '{}');
+                            if (ctx.currentClassLevel) currentClassLevel = ctx.currentClassLevel;
+                            if (ctx.currentSubject) currentSubject = ctx.currentSubject;
+                            if (Array.isArray(ctx.chapters)) {
+                                currentSubjectChapters = ctx.chapters;
+                                const dl = document.getElementById('existingChaptersList');
+                                if (dl) {
+                                    dl.innerHTML = '';
+                                    currentSubjectChapters.forEach(c => {
+                                        const opt = document.createElement('option');
+                                        opt.value = c.name;
+                                        opt.label = `Ch ${c.number}: ${c.name}`;
+                                        dl.appendChild(opt);
+                                    });
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Failed to parse raw topics context', e);
+                        }
+                    }
+
+                    if (typeof exitSelectionMode === 'function') exitSelectionMode();
+                    if (typeof clearSelectedSubmissions === 'function') clearSelectedSubmissions();
+
+                    const currentUrl = new URL(window.location.href);
+                    const activeTab = currentUrl.searchParams.get('tab');
+                    if (activeTab === 'submissions') {
+                        switchTeacherTab('submissions');
+                        const subStatus = currentUrl.searchParams.get('subStatus');
+                        if (subStatus && typeof filterSubmissions === 'function') {
+                            filterSubmissions(subStatus);
+                        }
+                    } else {
+                        switchTeacherTab('live');
+                    }
+
+                    if (typeof checkTeacherModalSegments === 'function') {
+                        checkTeacherModalSegments();
+                    }
+                } else {
+                    window.location.href = url;
+                }
+            } catch (err) {
+                console.error('Seamless topics navigation error, falling back:', err);
+                window.location.href = url;
+            } finally {
+                if (container) {
+                    container.style.opacity = '1';
+                    container.style.pointerEvents = '';
+                }
+                _isNavigatingTopics = false;
+            }
+        }
+        window.navigateTopics = navigateTopics;
+
+        window.addEventListener('popstate', () => {
+            navigateTopics(window.location.href, false);
+        });
 
         function getSelectedModalSubject() {
             const selectEl = document.getElementById('unifiedSubjectSelect');
@@ -1332,14 +1426,14 @@
             u.searchParams.set('classLevel', newClass);
             u.searchParams.delete('subject');
             u.searchParams.delete('group');
-            window.location.href = u.toString();
+            navigateTopics(u.toString());
         }
 
         function onGroupChange(newGroup) {
             const u = new URL(window.location.href);
             u.searchParams.set('group', newGroup);
             u.searchParams.delete('subject');
-            window.location.href = u.toString();
+            navigateTopics(u.toString());
         }
 
         function onSubjectChange(newSub) {
@@ -1347,7 +1441,7 @@
             u.searchParams.set('subject', newSub);
             u.searchParams.delete('group');
             u.searchParams.delete('segment');
-            window.location.href = u.toString();
+            navigateTopics(u.toString());
         }
 
         function onSegmentChange(newSeg) {
@@ -1357,7 +1451,7 @@
             } else {
                 u.searchParams.delete('segment');
             }
-            window.location.href = u.toString();
+            navigateTopics(u.toString());
         }
 
         async function openEditChapterModal(chapterName, chapterNumber, topicCount) {
@@ -1434,7 +1528,7 @@
                         text: data.message || 'Chapter name updated successfully.',
                         confirmButtonColor: '#137fec'
                     });
-                    window.location.reload();
+                    await navigateTopics(window.location.href);
                 } else {
                     Swal.fire('Error', data.error || 'Failed to update chapter name', 'error');
                 }
@@ -2258,14 +2352,15 @@
                 try { data = JSON.parse(text); } catch(e) { data = { error: text }; }
 
                 if (res.ok && data.success !== false) {
+                    closeModal('unifiedTopicModal');
                     await Swal.fire({ 
                         icon: 'success', 
                         title: 'Submitted for Approval!', 
                         text: data.message || 'Your topics and sub-topics have been sent to Admin for review.', 
                         confirmButtonColor: '#137fec' 
                     });
-                    closeModal('unifiedTopicModal');
-                    window.location.href = window.location.pathname + '?tab=submissions&subStatus=pending';
+                    const targetTabUrl = window.location.pathname + '?tab=submissions&subStatus=pending';
+                    await navigateTopics(targetTabUrl);
                 } else {
                     Swal.fire('Submission Error', data.error || 'Failed to submit topics', 'error');
                 }
@@ -2484,7 +2579,7 @@
                         confirmButtonColor: '#137fec'
                     });
                     closeModal('unifiedTopicModal');
-                    window.location.reload();
+                    await navigateTopics(window.location.href);
                 } else {
                     Swal.fire('Error', data.error || 'Failed to update chapter name', 'error');
                 }
@@ -2681,7 +2776,7 @@
                         await Swal.fire({ icon: 'success', title: 'Removed!', text: data.message, timer: 1200, showConfirmButton: false });
                         const u = new URL(window.location.href);
                         u.searchParams.set('tab', 'submissions');
-                        window.location.href = u.toString();
+                        await navigateTopics(u.toString());
                     } else {
                         Swal.fire('Error', data.error || 'Failed to remove', 'error');
                     }
@@ -2738,7 +2833,7 @@
                         });
                         const u = new URL(window.location.href);
                         u.searchParams.set('tab', 'submissions');
-                        window.location.href = u.toString();
+                        await navigateTopics(u.toString());
                     } else {
                         Swal.fire('Error', data.error || 'Failed to remove chapter submissions', 'error');
                     }
@@ -2796,7 +2891,8 @@
                         timer: 1800,
                         showConfirmButton: false
                     });
-                    window.location.reload();
+                    exitSelectionMode();
+                    await navigateTopics(window.location.href);
                 } else {
                     Swal.fire('ত্রুটি (Error)', data.error || 'অনুরোধ পাঠানো সম্ভব হয়নি।', 'error');
                 }
@@ -2839,7 +2935,8 @@
                         timer: 1200,
                         showConfirmButton: false
                     });
-                    window.location.reload();
+                    if (typeof exitSelectionMode === 'function') exitSelectionMode();
+                    await navigateTopics(window.location.href);
                 } else {
                     Swal.fire('Error', data.error || 'Failed to cancel deletion request', 'error');
                 }
@@ -3083,7 +3180,7 @@
                         });
                         const u = new URL(window.location.href);
                         u.searchParams.set('tab', 'submissions');
-                        window.location.href = u.toString();
+                        await navigateTopics(u.toString());
                     } else {
                         Swal.fire('Error', data.error || 'Failed to perform bulk action', 'error');
                     }
