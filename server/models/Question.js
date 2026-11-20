@@ -13,7 +13,7 @@ const questionSchema = new mongoose.Schema({
     options: [{ type: String }],
     correctAnswerIndex: { type: Number },
     correctAnswer: { type: String, default: '' },
-    questionType: { type: String, enum: ['MCQ', 'Short', 'Medium', 'Comprehension'], required: true },
+    questionType: { type: String, enum: ['MCQ', 'Short', 'Medium', 'Comprehension', 'Descriptive'], required: true },
     mcqSubtype: { type: String, enum: ['standard', 'multiple_completion', 'contextual'], default: 'standard' },
     statements: [{ type: String }], // Roman numeral statements for multiple completion MCQ (i, ii, iii)
     contextId: { type: String, default: '' }, // Groups multiple contextual MCQs sharing the same stimulus/context

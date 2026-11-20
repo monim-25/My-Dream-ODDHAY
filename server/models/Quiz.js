@@ -19,7 +19,7 @@ const quizSchema = new mongoose.Schema({
     language: { type: String, enum: ['en', 'bn'], default: 'en' },
     duration: { type: Number, default: 10 }, // Duration in minutes
     questions: [{
-        questionType: { type: String, enum: ['MCQ', 'Short', 'Medium', 'Comprehension'], default: 'MCQ' },
+        questionType: { type: String, enum: ['MCQ', 'Short', 'Medium', 'Comprehension', 'Descriptive'], default: 'MCQ' },
         mcqSubtype: { type: String, enum: ['standard', 'multiple_completion', 'contextual'], default: 'standard' },
         statements: [{ type: String }],
         contextId: { type: String, default: '' },

@@ -2812,7 +2812,8 @@ router.get('/question-bank/:id', teacherProtect, async (req, res) => {
             MCQ: questions.filter(q => q.questionType === 'MCQ').length,
             Short: questions.filter(q => q.questionType === 'Short').length,
             Medium: questions.filter(q => q.questionType === 'Medium').length,
-            Comprehension: questions.filter(q => q.questionType === 'Comprehension').length
+            Comprehension: questions.filter(q => q.questionType === 'Comprehension').length,
+            Descriptive: questions.filter(q => q.questionType === 'Descriptive').length
         };
 
         // Count real student buyers (for Paid banks) from Payment model
@@ -3334,11 +3335,12 @@ const handleBankQuestionCounts = async (req, res) => {
             year: finalYear
         });
 
-        const [mcqCount, shortCount, mediumCount, compCount] = await Promise.all([
+        const [mcqCount, shortCount, mediumCount, compCount, descCount] = await Promise.all([
             Question.countDocuments(queryForType('MCQ')),
             Question.countDocuments(queryForType('Short')),
             Question.countDocuments(queryForType('Medium')),
-            Question.countDocuments(queryForType('Comprehension'))
+            Question.countDocuments(queryForType('Comprehension')),
+            Question.countDocuments(queryForType('Descriptive'))
         ]);
 
         res.json({
@@ -3348,7 +3350,8 @@ const handleBankQuestionCounts = async (req, res) => {
                 Short: shortCount,
                 Medium: mediumCount,
                 Comprehension: compCount,
-                total: mcqCount + shortCount + mediumCount + compCount
+                Descriptive: descCount,
+                total: mcqCount + shortCount + mediumCount + compCount + descCount
             }
         });
     } catch (err) {
@@ -3497,7 +3500,8 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
         const shortCount = parseInt(req.body.shortCount) || 0;
         const mediumCount = parseInt(req.body.mediumCount) || 0;
         const comprehensionCount = parseInt(req.body.comprehensionCount) || 0;
-        const totalConfigured = mcqCount + shortCount + mediumCount + comprehensionCount;
+        const descriptiveCount = parseInt(req.body.descriptiveCount) || 0;
+        const totalConfigured = mcqCount + shortCount + mediumCount + comprehensionCount + descriptiveCount;
 
         if (!isBulkMode && totalConfigured <= 0) {
             const redirectUrl = (req.body.activeFlow === 'courses' && courseId)
@@ -3536,8 +3540,9 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
             const shorts = await pullQuestions('Short', parseInt(shortCount) || 0);
             const mediums = await pullQuestions('Medium', parseInt(mediumCount) || 0);
             const comps = await pullQuestions('Comprehension', parseInt(comprehensionCount) || 0);
+            const descs = await pullQuestions('Descriptive', parseInt(descriptiveCount) || 0);
 
-            const allQuestions = [...mcqs, ...shorts, ...mediums, ...comps];
+            const allQuestions = [...mcqs, ...shorts, ...mediums, ...comps, ...descs];
 
             if (allQuestions.length > 0) {
                 quizData.questions = allQuestions.map(bq => {
@@ -3682,6 +3687,21 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
                     correctAnswer: 0,
                     explanation: '',
                     questionType: 'Comprehension',
+                    isBangla: isBangla,
+                    language: lang,
+                    chapter: chapter || '',
+                    topic: topic || '',
+                    subTopic: subTopic || '',
+                    marks: 10
+                });
+            }
+            for (let i = 0; i < descriptiveCount; i++) {
+                quizData.questions.push({
+                    questionText: '',
+                    options: [],
+                    correctAnswer: '',
+                    explanation: '',
+                    questionType: 'Descriptive',
                     isBangla: isBangla,
                     language: lang,
                     chapter: chapter || '',
@@ -4600,7 +4620,8 @@ router.get('/question-details', teacherProtect, async (req, res) => {
                         mCQCount: { $sum: { $cond: [{ $eq: ['$questionType', 'MCQ'] }, 1, 0] } },
                         shortCount: { $sum: { $cond: [{ $eq: ['$questionType', 'Short'] }, 1, 0] } },
                         mediumCount: { $sum: { $cond: [{ $eq: ['$questionType', 'Medium'] }, 1, 0] } },
-                        compCount: { $sum: { $cond: [{ $eq: ['$questionType', 'Comprehension'] }, 1, 0] } }
+                        compCount: { $sum: { $cond: [{ $eq: ['$questionType', 'Comprehension'] }, 1, 0] } },
+                        descriptiveCount: { $sum: { $cond: [{ $eq: ['$questionType', 'Descriptive'] }, 1, 0] } }
                     }
                 }
             ]).then(res => res[0] || {})
@@ -4619,6 +4640,7 @@ router.get('/question-details', teacherProtect, async (req, res) => {
             shortCount: stats.shortCount || 0,
             mediumCount: stats.mediumCount || 0,
             compCount: stats.compCount || 0,
+            descriptiveCount: stats.descriptiveCount || 0,
             filters: {
                 page,
                 totalPages: Math.ceil(totalCount / limit) || 1,
@@ -4982,7 +5004,7 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
                 a4: isComprehension ? a4Val : '',
                 s4: isComprehension ? s4Val : '',
                 solution4: isComprehension ? s4Val : '',
-                marks: parseInt(qMarks[i] || (isComprehension ? 10 : 1)) || (isComprehension ? 10 : 1),
+                marks: parseInt(qMarks[i] || (isComprehension || type === 'Descriptive' ? 10 : 1)) || (isComprehension || type === 'Descriptive' ? 10 : 1),
                 segment: (body['qSegment[]']?.[i] || body.segment || topicSegmentMap.get(assignedTopic.toLowerCase()) || ''),
                 chapter: assignedChapter,
                 topic: assignedTopic,
@@ -6031,7 +6053,7 @@ router.get('/written-evaluations/:attemptId', teacherProtect, async (req, res) =
                     nonMcqUserAnswers[qIdx] ||
                     (attempt.userAnswers || [])[qIdx] || {};
             }
-            const defaultMark = (q.questionType === 'Medium') ? 2 : ((q.questionType === 'Comprehension') ? 7 : 1);
+            const defaultMark = (q.questionType === 'Medium') ? 2 : ((q.questionType === 'Comprehension' || q.questionType === 'Descriptive') ? 10 : 1);
             const qMaxMark = (typeof q.marks === 'number' && q.marks > 0) ? q.marks : (ua.maxMarks || defaultMark);
             return {
                 ...q,
@@ -6146,7 +6168,7 @@ router.post('/written-evaluations/:attemptId', teacherProtect, async (req, res) 
                 const qIdStr = ua.questionId ? ua.questionId.toString() : String(idx);
                 const qObj = qMap.get(qIdStr);
                 const isComprehension = (ua.questionType === 'Comprehension') || (qObj && qObj.questionType === 'Comprehension');
-                const defaultMark = (ua.questionType === 'Medium') ? 2 : (isComprehension ? 10 : 1);
+                const defaultMark = (ua.questionType === 'Medium') ? 2 : ((isComprehension || ua.questionType === 'Descriptive' || (qObj && qObj.questionType === 'Descriptive')) ? 10 : 1);
                 const maxM = (qObj && typeof qObj.marks === 'number' && qObj.marks > 0) ? qObj.marks : (ua.maxMarks || defaultMark);
 
                 ua.maxMarks = maxM;
