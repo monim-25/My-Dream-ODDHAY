@@ -506,15 +506,16 @@
                             </div>
 
                             <!-- Entry Mode Tabs: Standard Studio vs Smart Bulk Paste -->
+                            <% const currentTab = (typeof initialTab !== 'undefined' && initialTab === 'bulk') ? 'bulk' : 'studio'; %>
                             <div
                                 class="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl mb-3.5 max-w-fit shadow-2xs">
                                 <button type="button" id="tabStudioBtn" onclick="switchStudioEntryMode('studio')"
-                                    class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-xs transition-all cursor-pointer">
+                                    class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs <%= currentTab === 'studio' ? 'font-semibold bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-xs' : 'font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white' %> transition-all cursor-pointer">
                                     <span class="material-symbols-rounded text-[16px] text-primary">edit_note</span>
                                     <span>Standard Studio</span>
                                 </button>
                                 <button type="button" id="tabBulkBtn" onclick="switchStudioEntryMode('bulk')"
-                                    class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer">
+                                    class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs <%= currentTab === 'bulk' ? 'font-semibold bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-xs' : 'font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white' %> transition-all cursor-pointer">
                                     <span class="material-symbols-rounded text-[16px] text-amber-500">bolt</span>
                                     <span>Smart Bulk Paste</span>
                                     <span
@@ -523,7 +524,7 @@
                             </div>
 
                             <!-- STANDARD STUDIO VIEW -->
-                            <div id="standardStudioView" class="space-y-4">
+                            <div id="standardStudioView" class="space-y-4 <%= currentTab === 'bulk' ? 'hidden' : '' %>">
                                 <!-- Question Count & Metadata Info -->
                                 <div class="flex flex-wrap items-center justify-between gap-2 mb-3 px-0.5">
                                     <div class="flex items-center gap-2 flex-wrap">
@@ -719,7 +720,7 @@
                             <!-- END STANDARD STUDIO VIEW -->
 
                             <!-- SMART BULK PASTE STUDIO VIEW -->
-                            <div id="bulkPasteStudio" class="hidden space-y-4 animate-slide-up">
+                            <div id="bulkPasteStudio" class="<%= currentTab === 'bulk' ? '' : 'hidden' %> space-y-4 animate-slide-up">
                                 <!-- Bulk Toolbar Card -->
                                 <div
                                     class="bg-white dark:bg-[#0f172a] rounded-xl p-3.5 sm:p-4 border border-slate-200 dark:border-white/5 shadow-xs flex flex-wrap items-center justify-between gap-3">
@@ -3342,45 +3343,52 @@
                 restored = restoreStudioDraft();
             }
 
+            const isBulkInitial = (urlParams.get('tab') === 'bulk' || urlParams.get('entryMode') === 'bulk');
+
             // 4. If draft not restored, generate requested question slots from URL
             if (!restored) {
                 const container = document.getElementById('questionsContainer');
                 if (container) container.innerHTML = '';
 
-                const slotsParam = urlParams.get('slots');
-                if (slotsParam) {
-                    const pairs = slotsParam.split(',');
-                    let totalSlotsAdded = 0;
-                    pairs.forEach(pair => {
-                        const [tRaw, cStr] = pair.split(':');
-                        const c = parseInt(cStr) || 0;
-                        const t = (tRaw || '').trim();
-                        let normalizedType = 'MCQ';
-                        if (/^mcq/i.test(t)) normalizedType = 'MCQ';
-                        else if (/^short/i.test(t)) normalizedType = 'Short';
-                        else if (/^med/i.test(t)) normalizedType = 'Medium';
-                        else if (/^comp/i.test(t)) normalizedType = 'Comprehension';
-
-                        if (c > 0) {
-                            addQuestionRows(c, normalizedType);
-                            totalSlotsAdded += c;
-                        }
-                    });
-                    if (totalSlotsAdded === 0) {
-                        addQuestionRows(1, 'MCQ');
-                    }
+                if (isBulkInitial) {
+                    // In bulk mode, do NOT generate dummy question rows.
+                    // The user will paste questions and parse them cleanly.
                 } else {
-                    const initialCount = parseInt(urlParams.get('count')) || 1;
-                    const rawType = (urlParams.get('type') || 'MCQ').trim();
-                    let normalizedType = 'MCQ';
-                    if (/^short/i.test(rawType)) normalizedType = 'Short';
-                    else if (/^med/i.test(rawType)) normalizedType = 'Medium';
-                    else if (/^comp/i.test(rawType)) normalizedType = 'Comprehension';
+                    const slotsParam = urlParams.get('slots');
+                    if (slotsParam) {
+                        const pairs = slotsParam.split(',');
+                        let totalSlotsAdded = 0;
+                        pairs.forEach(pair => {
+                            const [tRaw, cStr] = pair.split(':');
+                            const c = parseInt(cStr) || 0;
+                            const t = (tRaw || '').trim();
+                            let normalizedType = 'MCQ';
+                            if (/^mcq/i.test(t)) normalizedType = 'MCQ';
+                            else if (/^short/i.test(t)) normalizedType = 'Short';
+                            else if (/^med/i.test(t)) normalizedType = 'Medium';
+                            else if (/^comp/i.test(t)) normalizedType = 'Comprehension';
 
-                    addQuestionRows(initialCount, normalizedType);
+                            if (c > 0) {
+                                addQuestionRows(c, normalizedType);
+                                totalSlotsAdded += c;
+                            }
+                        });
+                        if (totalSlotsAdded === 0) {
+                            addQuestionRows(1, 'MCQ');
+                        }
+                    } else {
+                        const initialCount = parseInt(urlParams.get('count')) || 1;
+                        const rawType = (urlParams.get('type') || 'MCQ').trim();
+                        let normalizedType = 'MCQ';
+                        if (/^short/i.test(rawType)) normalizedType = 'Short';
+                        else if (/^med/i.test(rawType)) normalizedType = 'Medium';
+                        else if (/^comp/i.test(rawType)) normalizedType = 'Comprehension';
+
+                        addQuestionRows(initialCount, normalizedType);
+                    }
+                    // Save initial layout immediately
+                    saveStudioDraft();
                 }
-                // Save initial layout immediately
-                saveStudioDraft();
             }
 
             let isSubmittingPaper = false;
@@ -4042,6 +4050,11 @@
                 }
                 if (tabBulk) {
                     tabBulk.className = 'flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer';
+                }
+
+                const container = document.getElementById('questionsContainer');
+                if (container && container.querySelectorAll('.question-row').length === 0) {
+                    addQuestionRows(1, 'MCQ');
                 }
             }
         }

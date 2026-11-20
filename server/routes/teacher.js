@@ -4637,7 +4637,8 @@ router.get('/add-question', teacherProtect, async (req, res) => {
             boards: activeBoards,
             years: activeYears,
             active: req.query.mode === 'archive' ? 'questions' : 'question-details',
-            mode: req.query.mode || 'standalone'
+            mode: req.query.mode || 'standalone',
+            initialTab: req.query.tab || req.query.entryMode || 'studio'
         });
     } catch (err) { res.status(500).send('Error loading page'); }
 });

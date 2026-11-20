@@ -1242,11 +1242,28 @@
 
             const isProceedBulk = (asBulk !== null) ? asBulk : _addPaperDefaultBulk;
 
-            const mcq = parseInt(document.getElementById('wizCountMCQ')?.value) || 0;
-            const shortQ = parseInt(document.getElementById('wizCountShort')?.value) || 0;
-            const med = parseInt(document.getElementById('wizCountMedium')?.value) || 0;
-            const comp = parseInt(document.getElementById('wizCountComprehension')?.value) || 0;
-            const total = mcq + shortQ + med + comp;
+            let slotsStr = '';
+            let total = 0;
+
+            if (!isProceedBulk) {
+                const mcq = parseInt(document.getElementById('wizCountMCQ')?.value) || 0;
+                const shortQ = parseInt(document.getElementById('wizCountShort')?.value) || 0;
+                const med = parseInt(document.getElementById('wizCountMedium')?.value) || 0;
+                const comp = parseInt(document.getElementById('wizCountComprehension')?.value) || 0;
+                total = mcq + shortQ + med + comp;
+
+                if (total <= 0) {
+                    Swal.fire({ icon: 'warning', title: 'Slots Required', text: 'Please enable and enter at least 1 question slot.', timer: 2500, showConfirmButton: false });
+                    return;
+                }
+
+                const slotsList = [];
+                if (mcq > 0) slotsList.push(`MCQ:${mcq}`);
+                if (shortQ > 0) slotsList.push(`Short:${shortQ}`);
+                if (med > 0) slotsList.push(`Medium:${med}`);
+                if (comp > 0) slotsList.push(`Comprehension:${comp}`);
+                slotsStr = slotsList.join(',');
+            }
 
             const fileInput = document.getElementById('wizFileInput');
             const hasFile = fileInput && fileInput.files && fileInput.files.length > 0;
@@ -1274,18 +1291,6 @@
 
             // Paper title is optional - if omitted, auto-generate default title
             const finalTopic = topic || `${board} ${year}`.trim() || 'Question Paper';
-
-            if (!isProceedBulk && total <= 0) {
-                Swal.fire({ icon: 'warning', title: 'Slots Required', text: 'Please enable and enter at least 1 question slot.', timer: 2500, showConfirmButton: false });
-                return;
-            }
-
-            const slotsList = [];
-            if (mcq > 0) slotsList.push(`MCQ:${mcq}`);
-            if (shortQ > 0) slotsList.push(`Short:${shortQ}`);
-            if (med > 0) slotsList.push(`Medium:${med}`);
-            if (comp > 0) slotsList.push(`Comprehension:${comp}`);
-            const slotsStr = slotsList.join(',');
 
             let fileUrl = '';
             let fileName = '';
@@ -1331,8 +1336,6 @@
                 subject: subject,
                 topic: finalTopic,
                 access: access,
-                slots: slotsStr,
-                count: total > 0 ? total : 10,
                 lang: lang,
                 isBangla: String(lang === 'bn'),
                 fresh: 'true'
@@ -1340,6 +1343,9 @@
 
             if (isProceedBulk) {
                 params.set('tab', 'bulk');
+            } else {
+                if (slotsStr) params.set('slots', slotsStr);
+                params.set('count', total > 0 ? String(total) : '1');
             }
 
             if (fileUrl) {
