@@ -42,8 +42,26 @@ async function resolveSubjectSegments(subjectName, classLevel = '') {
     }
 
     // Find rule matching subject
-    const matchingRules = rules.filter(r => (r.subjectName || '').trim().toLowerCase() === trimmedSubject);
+    let matchingRules = rules.filter(r => (r.subjectName || '').trim().toLowerCase() === trimmedSubject);
     if (matchingRules.length === 0) {
+        // Alias / fuzzy matching: e.g. 'bangla' or 'বাংলা' matches 'Bangla 1st Paper', 'বাংলা ১ম পত্র' etc.
+        if (trimmedSubject.includes('bangla') || trimmedSubject.includes('বাংলা') || trimmedSubject.includes('bengali')) {
+            matchingRules = rules.filter(r => {
+                const sub = (r.subjectName || '').trim().toLowerCase();
+                return sub.includes('bangla') || sub.includes('বাংলা') || sub.includes('bengali');
+            });
+        }
+    }
+
+    if (matchingRules.length === 0) {
+        // Built-in standard segments for Bangla if no custom rule exists
+        if (trimmedSubject.includes('bangla') || trimmedSubject.includes('বাংলা') || trimmedSubject.includes('bengali')) {
+            return {
+                hasSegments: true,
+                segments: ['গদ্য', 'পদ্য', 'উপন্যাস', 'নাটক', 'সহপাঠ', 'ব্যাকরণ', 'নির্মিতি'],
+                rule: null
+            };
+        }
         return { hasSegments: false, segments: [], rule: null };
     }
 
@@ -75,6 +93,24 @@ async function resolveSubjectSegments(subjectName, classLevel = '') {
             hasSegments: true,
             segments: generalRule.segments.filter(Boolean),
             rule: generalRule
+        };
+    }
+
+    // Fallback: Use any matching rule for this subject that has segments defined
+    const anyRuleWithSegments = matchingRules.find(r => r.hasSegments && Array.isArray(r.segments) && r.segments.length > 0);
+    if (anyRuleWithSegments) {
+        return {
+            hasSegments: true,
+            segments: anyRuleWithSegments.segments.filter(Boolean),
+            rule: anyRuleWithSegments
+        };
+    }
+
+    if (trimmedSubject.includes('bangla') || trimmedSubject.includes('বাংলা') || trimmedSubject.includes('bengali')) {
+        return {
+            hasSegments: true,
+            segments: ['গদ্য', 'পদ্য', 'উপন্যাস', 'নাটক', 'সহপাঠ', 'ব্যাকরণ', 'নির্মিতি'],
+            rule: null
         };
     }
 
