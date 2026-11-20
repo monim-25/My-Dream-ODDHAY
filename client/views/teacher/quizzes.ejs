@@ -53,7 +53,7 @@
                 <div class="bg-white dark:bg-[#0f172a] border-b border-slate-200 dark:border-slate-800/80 p-2 sm:p-2.5">
                     <div class="grid grid-cols-2 lg:grid-cols-4 gap-1.5 sm:gap-2">
                         <!-- Card 1: Total Exams -->
-                        <div class="p-1 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-2xs">
+                        <div onclick="applyFilter('type', 'all')" class="p-1 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-2xs cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-all">
                             <div class="p-2 sm:p-3 border border-slate-100 dark:border-white/5 rounded-md flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02] h-full">
                                 <div class="space-y-0.5 min-w-0">
                                     <p class="text-[10px] sm:text-[11px] font-medium text-blue-600 dark:text-blue-400 truncate">Total Exams</p>
@@ -66,7 +66,7 @@
                         </div>
 
                         <!-- Card 2: Model Tests -->
-                        <div onclick="window.location.href='?type=model'" class="p-1 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-2xs cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+                        <div onclick="applyFilter('type', 'model')" class="p-1 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-2xs cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-all">
                             <div class="p-2 sm:p-3 border border-slate-100 dark:border-white/5 rounded-md flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02] h-full">
                                 <div class="space-y-0.5 min-w-0">
                                     <p class="text-[10px] sm:text-[11px] font-medium text-amber-600 dark:text-amber-400 truncate">Model Tests</p>
@@ -79,7 +79,7 @@
                         </div>
 
                         <!-- Card 3: Course Exams -->
-                        <div onclick="window.location.href='?type=course'" class="p-1 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-2xs cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-all">
+                        <div onclick="applyFilter('type', 'course')" class="p-1 rounded-lg bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-2xs cursor-pointer hover:border-slate-300 dark:hover:border-slate-700 transition-all">
                             <div class="p-2 sm:p-3 border border-slate-100 dark:border-white/5 rounded-md flex items-center justify-between bg-slate-50/50 dark:bg-white/[0.02] h-full">
                                 <div class="space-y-0.5 min-w-0">
                                     <p class="text-[10px] sm:text-[11px] font-medium text-emerald-600 dark:text-emerald-400 truncate">Course Exams</p>
@@ -107,7 +107,7 @@
                 </div>
 
                 <!-- Exam Inventory (PERFECTLY ATTACHED WITH BORDER) -->
-                <div class="bg-white dark:bg-[#0f172a] border-0 flex flex-col relative rounded-none shadow-none">
+                <div id="quizzesContainer" class="bg-white dark:bg-[#0f172a] border-0 flex flex-col relative rounded-none shadow-none">
                     <!-- Filters: Mobile View (< sm) -->
                     <div class="sm:hidden sticky top-0 z-30 bg-white/95 dark:bg-[#0b1120]/95 backdrop-blur-md px-3 py-2 border-b border-slate-200 dark:border-slate-800 space-y-2">
                         <!-- Top Row: Compact Search + New Exam Button -->
@@ -803,7 +803,8 @@
             }
         });
 
-        function applyFilter(key, val) {
+        let _isNavigatingQuizzes = false;
+        async function applyFilter(key, val) {
             const params = new URLSearchParams(window.location.search);
             if (val === 'all' || !val) {
                 params.delete(key);
@@ -812,9 +813,84 @@
             }
             params.delete('page');
             const str = params.toString();
-            window.location.href = str ? ('?' + str) : window.location.pathname;
+            const targetUrl = str ? (window.location.pathname + '?' + str) : window.location.pathname;
+            await navigateQuizzes(targetUrl);
         }
         window.applyFilter = applyFilter;
+
+        async function navigateQuizzes(url, pushState = true) {
+            if (_isNavigatingQuizzes) return;
+            _isNavigatingQuizzes = true;
+
+            const container = document.getElementById('quizzesContainer');
+            if (container) {
+                container.style.transition = 'opacity 0.15s ease';
+                container.style.opacity = '0.4';
+                container.style.pointerEvents = 'none';
+            }
+
+            try {
+                const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                if (!res.ok) throw new Error('Network response not ok');
+                const html = await res.text();
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const newContent = doc.getElementById('quizzesContainer');
+
+                if (newContent && container) {
+                    container.innerHTML = newContent.innerHTML;
+                    if (pushState) {
+                        history.pushState(null, '', url);
+                    }
+                    selectedItems.clear();
+                    const bulkBar = document.getElementById('bulkActions');
+                    if (bulkBar) bulkBar.classList.add('hidden');
+                    const selectAll = document.getElementById('selectAllDesktop');
+                    if (selectAll) selectAll.checked = false;
+
+                    initQuizzesInteractions();
+                } else {
+                    window.location.href = url;
+                }
+            } catch (err) {
+                console.error('Seamless quizzes filter error, falling back:', err);
+                window.location.href = url;
+            } finally {
+                if (container) {
+                    container.style.opacity = '1';
+                    container.style.pointerEvents = '';
+                }
+                _isNavigatingQuizzes = false;
+            }
+        }
+
+        window.addEventListener('popstate', () => {
+            navigateQuizzes(window.location.href, false);
+        });
+
+        function initQuizzesInteractions() {
+            const container = document.getElementById('quizzesContainer');
+            if (!container) return;
+
+            container.querySelectorAll('form').forEach(form => {
+                form.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const input = form.querySelector('input[name="q"]');
+                    const qVal = input ? input.value.trim() : '';
+                    applyFilter('q', qVal);
+                });
+            });
+
+            container.querySelectorAll('a[href^="?"]').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    navigateQuizzes(window.location.pathname + link.getAttribute('href'));
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initQuizzesInteractions();
+        });
 
         function exportQuizzesToCSV() {
             const rows = [['Exam Title', 'Type', 'Course', 'Questions', 'Attempts', 'Duration']];
