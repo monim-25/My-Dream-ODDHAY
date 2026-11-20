@@ -2685,9 +2685,10 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
         ];
 
         const teacherObjId = new mongoose.Types.ObjectId(String(user._id));
+        const academicBoardYearController = require('../controllers/academicBoardYearController');
 
-        const [banks, totalCount, stats, userCourses, pendingCount, approvedCount, rejectedCount, dynamicYears, academicFilters] = await Promise.all([
-            QuestionBank.find(query).populate('addedBy', 'name profilePicture profileImage').populate('course', 'title _id').sort({ createdAt: -1 }).skip(skip).limit(limit),
+        const [banks, totalCount, stats, userCourses, dynamicYears, academicFilters, teacherContext, activeBoards, activeYears] = await Promise.all([
+            QuestionBank.find(query).populate('addedBy', 'name profilePicture profileImage').populate('course', 'title _id').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
             QuestionBank.countDocuments(query),
             QuestionBank.aggregate([
                 { $match: { addedBy: teacherObjId } },
@@ -2699,22 +2700,26 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
                         freeCount: { $sum: { $cond: [{ $eq: ['$accessType', 'Free'] }, 1, 0] } },
                         globalCount: { $sum: { $cond: [{ $not: ["$course"] }, 1, 0] } },
                         courseCount: { $sum: { $cond: ["$course", 1, 0] } },
+                        pendingCount: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, 1, 0] } },
+                        approvedCount: { $sum: { $cond: [{ $or: [{ $eq: ['$status', 'approved'] }, { $eq: [{ $ifNull: ['$status', null] }, null] }] }, 1, 0] } },
+                        rejectedCount: { $sum: { $cond: [{ $eq: ['$status', 'rejected'] }, 1, 0] } },
                         subjects: { $addToSet: '$subject' },
                         classes: { $addToSet: '$classLevel' },
                         boards: { $addToSet: '$board' }
                     }
                 }
             ]).then(res => res[0] || {}),
-            Course.find({ $or: [{ instructor: user._id }, { permittedTeachers: user._id }] }).select('title _id accessType subject classLevel'),
-            QuestionBank.countDocuments({ addedBy: user._id, status: 'pending' }),
-            QuestionBank.countDocuments({ addedBy: user._id, $or: [{ status: 'approved' }, { status: { $exists: false } }] }),
-            QuestionBank.countDocuments({ addedBy: user._id, status: 'rejected' }),
+            Course.find({ $or: [{ instructor: user._id }, { permittedTeachers: user._id }] }).select('title _id accessType subject classLevel').lean(),
             QuestionBank.distinct('year', { addedBy: user._id }),
-            getAllAcademicFilters()
+            getAllAcademicFilters(),
+            getTeacherAssignedContext(user._id),
+            academicBoardYearController.getActiveBoardNames(),
+            academicBoardYearController.getActiveYearStrings()
         ]);
 
-        // Strictly use teacher's assigned subjects & classes; fallback to academic filters only if none assigned
-        const teacherContext = await getTeacherAssignedContext(user._id);
+        const pendingCount = stats.pendingCount || 0;
+        const approvedCount = stats.approvedCount || 0;
+        const rejectedCount = stats.rejectedCount || 0;
         const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
         const teacherAssignedSubjectList = [...new Set([...(teacherContext.rawAssignedSubjects || []), ...courseSubjects])].filter(Boolean);
@@ -2734,12 +2739,6 @@ router.get('/question-bank', teacherProtect, async (req, res) => {
             ? sortClassList(teacherAssignedClassList)
             : sortClassList(academicFilters.classes || []);
         const yearList = Array.from(new Set((dynamicYears || []).map(y => String(y || '').trim()).filter(Boolean))).sort().reverse();
-
-        const academicBoardYearController = require('../controllers/academicBoardYearController');
-        const [activeBoards, activeYears] = await Promise.all([
-            academicBoardYearController.getActiveBoardNames(),
-            academicBoardYearController.getActiveYearStrings()
-        ]);
 
         // Calculate actual question counts from Question collection
         const bankIds = banks.map(b => b._id);
@@ -2914,15 +2913,17 @@ router.get('/quizzes', teacherProtect, async (req, res) => {
 
         let query = { addedBy: user._id };
 
-        const userCourses = await Course.find({
-            $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
-        }).select('title _id accessType subject classLevel');
+        const [userCourses, teacherContext] = await Promise.all([
+            Course.find({
+                $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
+            }).select('title _id accessType subject classLevel').lean(),
+            getTeacherAssignedContext(user._id)
+        ]);
 
-        const teacherContext = await getTeacherAssignedContext(user._id);
         const courseSubjects = userCourses.flatMap(c => Array.isArray(c.subject) ? c.subject : [c.subject]).filter(Boolean);
         const courseClasses = userCourses.flatMap(c => Array.isArray(c.classLevel) ? c.classLevel : [c.classLevel]).filter(Boolean);
-        const assignedSubjects = [...new Set([...courseSubjects, ...teacherContext.rawAssignedSubjects])].sort();
-        const assignedClasses = [...new Set([...courseClasses, ...teacherContext.rawAssignedClasses])].sort();
+        const assignedSubjects = [...new Set([...courseSubjects, ...(teacherContext.rawAssignedSubjects || [])])].sort();
+        const assignedClasses = [...new Set([...courseClasses, ...(teacherContext.rawAssignedClasses || [])])].sort();
 
         const { subject, classLevel, type, q } = req.query;
 
@@ -2930,7 +2931,7 @@ router.get('/quizzes', teacherProtect, async (req, res) => {
         if (subject && subject !== 'all') courseQuery.subject = subject;
         if (classLevel && classLevel !== 'all') courseQuery.classLevel = classLevel;
 
-        const courses = await Course.find(courseQuery).select('_id');
+        const courses = await Course.find(courseQuery).select('_id').lean();
         const courseIds = courses.map(c => c._id);
 
         if ((subject && subject !== 'all') || (classLevel && classLevel !== 'all')) {
@@ -2952,19 +2953,18 @@ router.get('/quizzes', teacherProtect, async (req, res) => {
             query.title = { $regex: q, $options: 'i' };
         }
 
-        const [quizzes, totalCount] = await Promise.all([
-            Quiz.find(query).populate('course').sort({ createdAt: -1 }).skip(skip).limit(limit),
-            Quiz.countDocuments(query)
+        const [quizzes, totalCount, modelTestCount, courseExamCount, questionStats] = await Promise.all([
+            Quiz.find(query).populate('course').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+            Quiz.countDocuments(query),
+            Quiz.countDocuments({ ...query, course: null }),
+            Quiz.countDocuments({ ...query, course: { $ne: null } }),
+            Quiz.aggregate([
+                { $match: query },
+                { $project: { qCount: { $size: { $ifNull: ['$questions', []] } } } },
+                { $group: { _id: null, total: { $sum: '$qCount' } } }
+            ])
         ]);
 
-        const modelTestCount = await Quiz.countDocuments({ ...query, course: null });
-        const courseExamCount = await Quiz.countDocuments({ ...query, course: { $ne: null } });
-
-        const questionStats = await Quiz.aggregate([
-            { $match: query },
-            { $unwind: '$questions' },
-            { $count: 'total' }
-        ]);
         const totalQuestions = questionStats.length > 0 ? questionStats[0].total : 0;
 
         const stats = {
@@ -3749,19 +3749,33 @@ router.post('/add-quiz', teacherProtect, async (req, res) => {
 });
 
 // Delete a quiz
-router.get('/quiz/:id/delete', teacherProtect, async (req, res) => {
+const handleDeleteQuiz = async (req, res) => {
     try {
         await connectDB();
         const quiz = await Quiz.findById(req.params.id);
-        if (!quiz) return res.status(404).send('Quiz not found');
+        if (!quiz) {
+            if (req.xhr || req.headers.accept?.includes('json')) return res.status(404).json({ success: false, error: 'Quiz not found' });
+            return res.status(404).send('Quiz not found');
+        }
         if (quiz.addedBy.toString() !== req.session.user._id.toString()) {
+            if (req.xhr || req.headers.accept?.includes('json')) return res.status(403).json({ success: false, error: 'Access denied' });
             return res.status(403).send('Access denied');
         }
 
         await Quiz.findByIdAndDelete(req.params.id);
+        if (req.xhr || req.headers.accept?.includes('json')) {
+            return res.json({ success: true, message: 'Quiz deleted' });
+        }
         res.redirect('/teacher/quizzes?success=Quiz deleted');
-    } catch (err) { res.status(500).send('Error deleting quiz'); }
-});
+    } catch (err) {
+        if (req.xhr || req.headers.accept?.includes('json')) return res.status(500).json({ success: false, error: err.message });
+        res.status(500).send('Error deleting quiz');
+    }
+};
+
+router.delete('/quiz/:id', teacherProtect, handleDeleteQuiz);
+router.post('/quiz/:id/delete', teacherProtect, handleDeleteQuiz);
+router.get('/quiz/:id/delete', teacherProtect, handleDeleteQuiz);
 
 // Bulk action for quizzes
 router.post('/quizzes/bulk-action', teacherProtect, async (req, res) => {
@@ -4182,16 +4196,34 @@ router.post('/add-question-bank', teacherProtect, (req, res, next) => {
     }
 });
 
-router.get('/question-bank/:id/delete', teacherProtect, async (req, res) => {
+const handleDeleteBank = async (req, res) => {
     try {
         await connectDB();
         const bank = await QuestionBank.findById(req.params.id);
-        if (!bank) return res.status(404).send('Not found');
-        if (bank.addedBy.toString() !== req.session.user._id.toString()) return res.status(403).send('Unauthorized');
+        if (!bank) {
+            if (req.xhr || req.headers.accept?.includes('json')) return res.status(404).json({ success: false, error: 'Not found' });
+            return res.status(404).send('Not found');
+        }
+        if (bank.addedBy.toString() !== req.session.user._id.toString()) {
+            if (req.xhr || req.headers.accept?.includes('json')) return res.status(403).json({ success: false, error: 'Unauthorized' });
+            return res.status(403).send('Unauthorized');
+        }
         await QuestionBank.findByIdAndDelete(req.params.id);
+        await Question.deleteMany({ bankId: req.params.id }).catch(() => {});
+
+        if (req.xhr || req.headers.accept?.includes('json')) {
+            return res.json({ success: true, message: 'Question bank deleted' });
+        }
         res.redirect('/teacher/question-bank?success=Bank deleted');
-    } catch (err) { res.status(500).send('Error deleting bank'); }
-});
+    } catch (err) {
+        if (req.xhr || req.headers.accept?.includes('json')) return res.status(500).json({ success: false, error: err.message });
+        res.status(500).send('Error deleting bank');
+    }
+};
+
+router.delete('/question-bank/:id', teacherProtect, handleDeleteBank);
+router.post('/question-bank/:id/delete', teacherProtect, handleDeleteBank);
+router.get('/question-bank/:id/delete', teacherProtect, handleDeleteBank);
 
 router.post('/question-bank/bulk-action', teacherProtect, async (req, res) => {
     try {
@@ -4331,6 +4363,7 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
             return res.redirect(`/teacher/edit-question-bank/${req.params.id}?error=No questions to update`);
         }
 
+        const bulkOps = [];
         for (let i = 0; i < questionIds.length; i++) {
             const qId = questionIds[i];
             const text = texts ? texts[i] : null;
@@ -4395,8 +4428,17 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
             }
 
             if (Object.keys(updateObj).length > 0) {
-                await Question.findByIdAndUpdate(qId, updateObj);
+                bulkOps.push({
+                    updateOne: {
+                        filter: { _id: qId },
+                        update: { $set: updateObj }
+                    }
+                });
             }
+        }
+
+        if (bulkOps.length > 0) {
+            await Question.bulkWrite(bulkOps);
         }
 
         if (bank.status !== 'approved') {
@@ -4406,6 +4448,10 @@ router.post('/question-bank/:id/bulk-update-questions', teacherProtect, async (r
         const msg = bank.status === 'approved'
             ? 'Questions updated successfully'
             : 'Questions updated and submitted for admin approval';
+
+        if (req.xhr || req.headers.accept?.includes('json')) {
+            return res.json({ success: true, message: msg });
+        }
 
         res.redirect(`/teacher/edit-question-bank/${req.params.id}?success=${encodeURIComponent(msg)}`);
     } catch (err) {
@@ -4480,7 +4526,7 @@ router.get('/question-details', teacherProtect, async (req, res) => {
         const [userCourses, teacherContext, academicFilters, activeBoards, activeYears, qSubjects, qClasses] = await Promise.all([
             Course.find({
                 $or: [{ instructor: user._id }, { permittedTeachers: user._id }]
-            }),
+            }).select('title _id accessType subject classLevel').lean(),
             getTeacherAssignedContext(user._id),
             getAllAcademicFilters(),
             academicBoardYearController.getActiveBoardNames(),
@@ -4544,7 +4590,7 @@ router.get('/question-details', teacherProtect, async (req, res) => {
         const query = andClauses.length === 1 ? andClauses[0] : { $and: andClauses };
 
         const [questions, totalCount, stats] = await Promise.all([
-            Question.find(query).populate('addedBy', 'name profileImage').sort({ createdAt: -1 }).skip(skip).limit(limit),
+            Question.find(query).populate('addedBy', 'name profileImage').sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
             Question.countDocuments(query),
             Question.aggregate([
                 { $match: { addedBy: new mongoose.Types.ObjectId(String(user._id)) } },
@@ -4965,12 +5011,20 @@ router.post('/add-question-full', teacherProtect, (req, res, next) => {
         // Log Activity
         await logActivity(req, 'BULK_CREATE', `Added ${savedQuestions.length} questions to ${targetBankId ? 'Bank' : 'Insights Hub'}`, 'Question');
 
-        // Redirect logic
-        if (mode === 'archive') {
-            res.redirect('/teacher/question-bank?success=' + savedQuestions.length + ' questions submitted for admin approval');
-        } else {
-            res.redirect('/teacher/question-details?success=' + savedQuestions.length + ' questions added successfully');
+        // Redirect or JSON response logic
+        const redirectUrl = mode === 'archive'
+            ? '/teacher/question-bank?success=' + encodeURIComponent(savedQuestions.length + ' questions submitted for admin approval')
+            : '/teacher/question-details?success=' + encodeURIComponent(savedQuestions.length + ' questions added successfully');
+
+        if (req.xhr || req.headers.accept?.includes('json')) {
+            return res.json({
+                success: true,
+                count: savedQuestions.length,
+                redirectUrl
+            });
         }
+
+        res.redirect(redirectUrl);
     } catch (err) {
         console.error('Add Question Full Error:', err);
         res.status(500).send('Error adding questions: ' + err.message);
@@ -5055,21 +5109,37 @@ router.post('/edit-question/:id', teacherProtect, async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.get('/question/:id/delete', teacherProtect, async (req, res) => {
+const handleDeleteQuestion = async (req, res) => {
     try {
         await connectDB();
         const q = await Question.findById(req.params.id);
-        if (!q) return res.status(404).send('Not found');
-        if (q.addedBy.toString() !== req.session.user._id.toString()) return res.status(403).send('Unauthorized');
+        if (!q) {
+            if (req.xhr || req.headers.accept?.includes('json')) return res.status(404).json({ success: false, error: 'Not found' });
+            return res.status(404).send('Not found');
+        }
+        if (q.addedBy.toString() !== req.session.user._id.toString()) {
+            if (req.xhr || req.headers.accept?.includes('json')) return res.status(403).json({ success: false, error: 'Unauthorized' });
+            return res.status(403).send('Unauthorized');
+        }
 
         if (q.bankId) {
-            await QuestionBank.findByIdAndUpdate(q.bankId, { $inc: { questionCount: -1 } });
+            await QuestionBank.findByIdAndUpdate(q.bankId, { $inc: { questionCount: -1 } }).catch(() => {});
         }
 
         await Question.findByIdAndDelete(req.params.id);
+        if (req.xhr || req.headers.accept?.includes('json')) {
+            return res.json({ success: true, message: 'Question deleted' });
+        }
         res.redirect('/teacher/question-details?success=Deleted');
-    } catch (err) { res.status(500).send('Error'); }
-});
+    } catch (err) {
+        if (req.xhr || req.headers.accept?.includes('json')) return res.status(500).json({ success: false, error: err.message });
+        res.status(500).send('Error');
+    }
+};
+
+router.delete('/question/:id', teacherProtect, handleDeleteQuestion);
+router.post('/question/:id/delete', teacherProtect, handleDeleteQuestion);
+router.get('/question/:id/delete', teacherProtect, handleDeleteQuestion);
 
 router.post('/question/bulk-action', teacherProtect, async (req, res) => {
     try {

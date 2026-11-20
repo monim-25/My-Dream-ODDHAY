@@ -594,6 +594,7 @@
                                     <tbody class="divide-y divide-slate-50 dark:divide-slate-800/50">
                                         <% questions.forEach(item=> { %>
                                             <tr class="question-row hover:bg-slate-50/50 dark:hover:bg-slate-800/10 transition-all cursor-pointer group"
+                                                data-bank-row="<%= item._id %>"
                                                 onclick="window.location.href='/teacher/question-bank/<%= item._id %>'">
                                                 <td class="pl-4 pr-1 py-3" onclick="event.stopPropagation()">
                                                     <input type="checkbox" name="itemSelect" value="<%= item._id %>"
@@ -1009,18 +1010,63 @@
         }
 
         async function handleBulkAction(action) {
-            const res = await Swal.fire({ title: 'Bulk Action', text: `Apply ${action} to ${selectedItems.size} items?`, icon: 'warning', showCancelButton: true, confirmButtonColor: '#137fec' });
+            const count = selectedItems.size;
+            if (count === 0) return;
+            const res = await Swal.fire({
+                title: 'Bulk Action',
+                text: `Apply ${action} to ${count} items?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f43f5e',
+                confirmButtonText: `Yes, ${action}`
+            });
             if (!res.isConfirmed) return;
+
+            const itemIds = Array.from(selectedItems);
+            const targets = [];
+            itemIds.forEach(id => {
+                document.querySelectorAll(`[data-bank-card="${id}"], [data-bank-row="${id}"]`).forEach(el => {
+                    targets.push(el);
+                    el.style.transition = 'all 0.25s ease';
+                    el.style.opacity = '0';
+                    el.style.transform = 'scale(0.95)';
+                });
+            });
+
             try {
                 const response = await fetch('/teacher/question-bank/bulk-action', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action, itemIds: Array.from(selectedItems) })
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ action, itemIds })
                 });
                 const data = await response.json();
-                if (data.success) location.reload();
-                else Swal.fire('Error', data.error || 'Failed', 'error');
-            } catch (err) { Swal.fire('Error', 'Network error', 'error'); }
+                if (data.success) {
+                    targets.forEach(el => el.remove());
+                    clearSelection();
+                    Swal.mixin({
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 2000,
+                        timerProgressBar: true
+                    }).fire({
+                        icon: 'success',
+                        title: `${count} items deleted`
+                    });
+                } else {
+                    targets.forEach(el => {
+                        el.style.opacity = '1';
+                        el.style.transform = 'scale(1)';
+                    });
+                    Swal.fire('Error', data.error || 'Failed', 'error');
+                }
+            } catch (err) {
+                targets.forEach(el => {
+                    el.style.opacity = '1';
+                    el.style.transform = 'scale(1)';
+                });
+                Swal.fire('Error', 'Network error', 'error');
+            }
         }
 
         async function deleteResource(id) {
@@ -1035,10 +1081,44 @@
                 });
 
                 if (res.isConfirmed) {
-                    window.location.href = `/teacher/question-bank/${id}/delete`;
+                    const targets = document.querySelectorAll(`[data-bank-card="${id}"], [data-bank-row="${id}"]`);
+                    targets.forEach(el => {
+                        el.style.transition = 'all 0.25s ease';
+                        el.style.opacity = '0';
+                        el.style.transform = 'scale(0.95)';
+                    });
+
+                    const response = await fetch(`/teacher/question-bank/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    const data = await response.json().catch(() => ({ success: response.ok }));
+
+                    if (data.success) {
+                        targets.forEach(el => el.remove());
+                        selectedItems.delete(id);
+                        updateBulkUI();
+                        Swal.mixin({
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 2000,
+                            timerProgressBar: true
+                        }).fire({
+                            icon: 'success',
+                            title: 'Archive deleted'
+                        });
+                    } else {
+                        targets.forEach(el => {
+                            el.style.opacity = '1';
+                            el.style.transform = 'scale(1)';
+                        });
+                        Swal.fire('Error', data.error || 'Failed to delete', 'error');
+                    }
                 }
             } catch (err) {
                 console.error('Deletion UI Error:', err);
+                Swal.fire('Error', 'Failed to connect to server', 'error');
             }
         }
 

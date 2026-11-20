@@ -3399,7 +3399,7 @@
                 form.addEventListener('change', () => {
                     saveStudioDraft();
                 });
-                form.addEventListener('submit', (e) => {
+                form.addEventListener('submit', async (e) => {
                     if (typeof validateBulkRequiredMetadata === 'function' && !validateBulkRequiredMetadata()) {
                         e.preventDefault();
                         e.stopPropagation();
@@ -3468,13 +3468,45 @@
                         s.disabled = false;
                     });
 
-                    // Save latest draft state right before submission
-                    saveStudioDraft();
+                    // Fast AJAX Submission with animated button feedback
+                    e.preventDefault();
                     isSubmittingPaper = true;
-                    setTimeout(() => {
-                        // Reset submitting flag if user stayed on page (e.g. form validation prevented submission)
-                        isSubmittingPaper = false;
-                    }, 2500);
+                    saveStudioDraft();
+
+                    const submitBtns = form.querySelectorAll('button[type="submit"]');
+                    submitBtns.forEach(btn => {
+                        btn.disabled = true;
+                        btn.innerHTML = '<span class="material-symbols-rounded animate-spin text-base">progress_activity</span><span>Saving...</span>';
+                    });
+
+                    try {
+                        const formData = new FormData(form);
+                        const res = await fetch(form.action, {
+                            method: 'POST',
+                            headers: { 'Accept': 'application/json' },
+                            body: formData
+                        });
+                        const data = await res.json().catch(() => ({ success: res.ok }));
+
+                        if (data.success && data.redirectUrl) {
+                            clearStudioDraft();
+                            window.location.href = data.redirectUrl;
+                        } else {
+                            submitBtns.forEach(btn => {
+                                btn.disabled = false;
+                                btn.innerHTML = '<span class="material-symbols-rounded text-[17px]">check</span><span>Save</span>';
+                            });
+                            isSubmittingPaper = false;
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Submission Failed',
+                                text: data.error || 'Failed to save questions. Please try again.'
+                            });
+                        }
+                    } catch (err) {
+                        console.error('Submission fetch error, falling back to form submit:', err);
+                        form.submit();
+                    }
                 });
             }
 

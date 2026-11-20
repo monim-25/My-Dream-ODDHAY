@@ -135,7 +135,7 @@
                                     <div class="pt-1">
                                         <label class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 ml-0.5 mb-1.5 block">Attached Paper PDF (Optional)</label>
                                         <% if (bank.fileUrl) { %>
-                                            <div class="mb-2 p-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20 flex items-center justify-between gap-2">
+                                            <div id="attachedFileContainer" class="mb-2 p-2 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200/60 dark:border-emerald-500/20 flex items-center justify-between gap-2">
                                                 <div class="flex items-center gap-2 overflow-hidden flex-1">
                                                     <span class="material-symbols-rounded text-emerald-600 dark:text-emerald-400 text-base shrink-0">check_circle</span>
                                                     <p class="text-[11px] font-medium truncate text-emerald-800 dark:text-emerald-300"><%= bank.fileUrl.split('/').pop() %></p>
@@ -195,7 +195,7 @@
                                             typeCounters[qType] = (typeCounters[qType] || 0) + 1;
                                             const typeIndex = typeCounters[qType];
                                     %>
-                                        <div class="q-card glass-panel p-3.5 sm:p-5 border border-slate-200/80 dark:border-slate-800 relative group/card" id="q-block-<%= i %>">
+                                        <div class="q-card glass-panel p-3.5 sm:p-5 border border-slate-200/80 dark:border-slate-800 relative group/card" id="q-block-<%= i %>" data-q-id="<%= q._id %>">
                                             <input type="hidden" name="questionIds[]" value="<%= q._id %>">
                                             
                                             <!-- Card Header -->
@@ -514,8 +514,51 @@
                 confirmButtonText: 'Yes, Delete',
                 cancelButtonText: 'Cancel'
             });
-            if (res.isConfirmed) {
-                window.location.href = `/teacher/question/${id}/delete?redirect=/teacher/edit-question-bank/<%= bank._id %>`;
+            if (!res.isConfirmed) return;
+
+            const card = document.querySelector(`[data-q-id="${id}"]`);
+            if (card) {
+                card.style.transition = 'all 0.25s ease';
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+            }
+
+            try {
+                const resp = await fetch(`/teacher/question/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Accept': 'application/json' }
+                });
+                const data = await resp.json().catch(() => ({ success: resp.ok }));
+                if (data.success) {
+                    if (card) card.remove();
+                    Swal.mixin({
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 2000,
+                        timerProgressBar: true
+                    }).fire({
+                        icon: 'success',
+                        title: 'Question deleted'
+                    });
+                } else {
+                    if (card) {
+                        card.style.opacity = '1';
+                        card.style.transform = 'scale(1)';
+                    }
+                    Swal.fire({
+                        title: 'Error',
+                        text: data.error || 'Failed to delete question',
+                        icon: 'error',
+                        confirmButtonColor: '#ef4444'
+                    });
+                }
+            } catch (err) {
+                if (card) {
+                    card.style.opacity = '1';
+                    card.style.transform = 'scale(1)';
+                }
+                Swal.fire('Error', 'Network error', 'error');
             }
         }
 
@@ -547,15 +590,22 @@
                     });
                     const data = await resp.json();
                     if (data.success) {
-                        await Swal.fire({
-                            title: 'Deleted!',
-                            text: 'The attachment has been removed successfully.',
-                            icon: 'success',
-                            confirmButtonColor: '#137fec',
-                            timer: 1500,
+                        const container = document.getElementById('attachedFileContainer');
+                        if (container) {
+                            container.style.transition = 'all 0.25s ease';
+                            container.style.opacity = '0';
+                            setTimeout(() => container.remove(), 250);
+                        }
+                        Swal.mixin({
+                            toast: true,
+                            position: 'top-end',
+                            showConfirmButton: false,
+                            timer: 2000,
                             timerProgressBar: true
+                        }).fire({
+                            icon: 'success',
+                            title: 'Attachment deleted'
                         });
-                        window.location.href = `/teacher/edit-question-bank/${bankId}?success=Attachment deleted`;
                     } else {
                         Swal.fire({
                             title: 'Error',
@@ -566,10 +616,67 @@
                     }
                 } catch (err) {
                     console.error('Delete attachment error:', err);
-                    window.location.href = `/teacher/question-bank/${bankId}/delete-file`;
+                    Swal.fire('Error', 'Network error while deleting attachment', 'error');
                 }
             }
         }
+
+        // Fast AJAX submission for Bulk Question Updates (Zero full page reload)
+        document.addEventListener('DOMContentLoaded', () => {
+            const bulkForm = document.getElementById('bulkQuestionForm');
+            if (bulkForm) {
+                bulkForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const submitBtn = bulkForm.querySelector('button[type="submit"]');
+                    const originalHtml = submitBtn ? submitBtn.innerHTML : '';
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<span class="material-symbols-rounded animate-spin text-base">progress_activity</span><span>Saving changes...</span>';
+                    }
+
+                    try {
+                        const formData = new FormData(bulkForm);
+                        const params = new URLSearchParams(formData);
+                        const res = await fetch(bulkForm.action, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/x-www-form-urlencoded',
+                                'Accept': 'application/json'
+                            },
+                            body: params.toString()
+                        });
+                        const data = await res.json().catch(() => ({ success: res.ok }));
+
+                        if (data.success) {
+                            Swal.mixin({
+                                toast: true,
+                                position: 'top-end',
+                                showConfirmButton: false,
+                                timer: 2500,
+                                timerProgressBar: true
+                            }).fire({
+                                icon: 'success',
+                                title: data.message || 'Questions updated successfully'
+                            });
+                            // Exit edit mode smoothly if active
+                            if (document.body.classList.contains('edit-mode')) {
+                                toggleEditMode();
+                            }
+                        } else {
+                            Swal.fire('Error', data.error || 'Failed to save changes', 'error');
+                        }
+                    } catch (err) {
+                        console.error('Save error:', err);
+                        Swal.fire('Error', 'Network error while saving', 'error');
+                    } finally {
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = originalHtml;
+                        }
+                    }
+                });
+            }
+        });
     </script>
 </body>
 </html>
