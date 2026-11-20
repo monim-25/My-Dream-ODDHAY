@@ -1034,6 +1034,7 @@
             });
 
             try {
+                if (window.showGlobalLoading) window.showGlobalLoading(`Applying ${action}...`);
                 const response = await fetch('/teacher/question-bank/bulk-action', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -1066,6 +1067,8 @@
                     el.style.transform = 'scale(1)';
                 });
                 Swal.fire('Error', 'Network error', 'error');
+            } finally {
+                if (window.hideGlobalLoading) window.hideGlobalLoading();
             }
         }
 
@@ -1081,6 +1084,7 @@
                 });
 
                 if (res.isConfirmed) {
+                    if (window.showGlobalLoading) window.showGlobalLoading('Deleting archive...');
                     const targets = document.querySelectorAll(`[data-bank-card="${id}"], [data-bank-row="${id}"]`);
                     targets.forEach(el => {
                         el.style.transition = 'all 0.25s ease';
@@ -1088,32 +1092,36 @@
                         el.style.transform = 'scale(0.95)';
                     });
 
-                    const response = await fetch(`/teacher/question-bank/${id}`, {
-                        method: 'DELETE',
-                        headers: { 'Accept': 'application/json' }
-                    });
-                    const data = await response.json().catch(() => ({ success: response.ok }));
+                    try {
+                        const response = await fetch(`/teacher/question-bank/${id}`, {
+                            method: 'DELETE',
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        const data = await response.json().catch(() => ({ success: response.ok }));
 
-                    if (data.success) {
-                        targets.forEach(el => el.remove());
-                        selectedItems.delete(id);
-                        updateBulkUI();
-                        Swal.mixin({
-                            toast: true,
-                            position: 'top-end',
-                            showConfirmButton: false,
-                            timer: 2000,
-                            timerProgressBar: true
-                        }).fire({
-                            icon: 'success',
-                            title: 'Archive deleted'
-                        });
-                    } else {
-                        targets.forEach(el => {
-                            el.style.opacity = '1';
-                            el.style.transform = 'scale(1)';
-                        });
-                        Swal.fire('Error', data.error || 'Failed to delete', 'error');
+                        if (data.success) {
+                            targets.forEach(el => el.remove());
+                            selectedItems.delete(id);
+                            updateBulkUI();
+                            Swal.mixin({
+                                toast: true,
+                                position: 'top-end',
+                                showConfirmButton: false,
+                                timer: 2000,
+                                timerProgressBar: true
+                            }).fire({
+                                icon: 'success',
+                                title: 'Archive deleted'
+                            });
+                        } else {
+                            targets.forEach(el => {
+                                el.style.opacity = '1';
+                                el.style.transform = 'scale(1)';
+                            });
+                            Swal.fire('Error', data.error || 'Failed to delete', 'error');
+                        }
+                    } finally {
+                        if (window.hideGlobalLoading) window.hideGlobalLoading();
                     }
                 }
             } catch (err) {
@@ -2175,6 +2183,7 @@
         async function navigateQuestionBank(url, pushState = true) {
             if (_isNavigatingFilter) return;
             _isNavigatingFilter = true;
+            if (window.showGlobalLoading) window.showGlobalLoading('Loading question bank...');
 
             const container = document.getElementById('questionBankContainer');
             if (container) {
@@ -2209,6 +2218,7 @@
                     container.style.opacity = '1';
                     container.style.pointerEvents = '';
                 }
+                if (window.hideGlobalLoading) window.hideGlobalLoading();
                 _isNavigatingFilter = false;
             }
         }
