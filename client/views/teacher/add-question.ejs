@@ -2563,10 +2563,7 @@
                 if (expText) expText.value = qData.explanation || '';
 
                 if (qData.mcqSubtype) {
-                    const targetBtn = qData.mcqSubtype === 'multiple_completion'
-                        ? row.querySelector('.subtype-btn-multiple')
-                        : (qData.mcqSubtype === 'contextual' ? row.querySelector('.subtype-btn-contextual') : row.querySelector('.subtype-btn-standard'));
-                    if (targetBtn) setRowMcqSubtype(targetBtn, qData.mcqSubtype);
+                    setRowMcqSubtype(row, qData.mcqSubtype, true);
 
                     if (qData.mcqSubtype === 'multiple_completion') {
                         const s1 = row.querySelector('input[name="qStatement1[]"]');
@@ -2575,14 +2572,18 @@
                         if (s1 && qData.statement1) s1.value = qData.statement1;
                         if (s2 && qData.statement2) s2.value = qData.statement2;
                         if (s3 && qData.statement3) s3.value = qData.statement3;
-                    } else if (qData.mcqSubtype === 'contextual') {
-                        const ctxIdInp = row.querySelector('.row-context-id');
-                        if (ctxIdInp && qData.contextId) ctxIdInp.value = qData.contextId;
-                        const ctxInstInp = row.querySelector('.row-context-instruction');
-                        if (ctxInstInp && qData.contextInstruction) ctxInstInp.value = qData.contextInstruction;
-                        const ctxTextarea = row.querySelector('.mcq-area textarea[name="qContext[]"]');
-                        if (ctxTextarea && qData.context) ctxTextarea.value = qData.context;
                     }
+                }
+
+                if (qData.context) {
+                    const ctxBox = row.querySelector('.row-mcq-contextual-box');
+                    if (ctxBox) ctxBox.classList.remove('hidden');
+                    const ctxTextarea = row.querySelector('.mcq-area textarea[name="qContext[]"], textarea[name="qContext[]"]');
+                    if (ctxTextarea) ctxTextarea.value = qData.context;
+                    const ctxInstInp = row.querySelector('.row-context-instruction');
+                    if (ctxInstInp && qData.contextInstruction) ctxInstInp.value = qData.contextInstruction;
+                    const ctxIdInp = row.querySelector('.row-context-id');
+                    if (ctxIdInp && qData.contextId) ctxIdInp.value = qData.contextId;
                 }
             } else if (qData.type === 'Comprehension') {
                 const ctxEl = row.querySelector('.comprehension-area textarea[name="qContext[]"]');
@@ -3781,10 +3782,7 @@
                 // Re-apply subtype UI (standard, multiple_completion, or contextual)
                 const subTypeInput = row.querySelector('.row-mcq-subtype');
                 const currentSubtype = subTypeInput ? subTypeInput.value : 'standard';
-                const subBtn = row.querySelector(`.subtype-btn-${currentSubtype === 'multiple_completion' ? 'multiple' : (currentSubtype === 'contextual' ? 'contextual' : 'standard')}`);
-                if (subBtn) {
-                    setRowMcqSubtype(subBtn, currentSubtype);
-                }
+                setRowMcqSubtype(row, currentSubtype, skipDraftSave);
             } else if (type === 'Comprehension') {
                 mcqAreas.forEach(el => el.classList.add('hidden'));
                 if (mcqOptions) mcqOptions.classList.add('hidden');
@@ -3819,8 +3817,11 @@
             }
         }
 
-        function setRowMcqSubtype(btn, subtype) {
-            const row = btn.closest('.question-row');
+        function setRowMcqSubtype(btnOrRow, subtype, skipDraftSave = false) {
+            if (!btnOrRow) return;
+            const row = (typeof btnOrRow.closest === 'function')
+                ? (btnOrRow.classList && btnOrRow.classList.contains('question-row') ? btnOrRow : (btnOrRow.closest('.question-row') || btnOrRow))
+                : btnOrRow;
             if (!row) return;
             const input = row.querySelector('.row-mcq-subtype');
             if (input) input.value = subtype;
@@ -3829,12 +3830,12 @@
             const btnMulti = row.querySelector('.subtype-btn-multiple');
             const btnCtx = row.querySelector('.subtype-btn-contextual');
 
-            const inactiveCls = 'px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer flex items-center gap-1';
-            const activeCls = 'px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white dark:bg-slate-800 text-primary shadow-xs transition-all cursor-pointer flex items-center gap-1';
+            const baseInactive = 'px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all cursor-pointer flex items-center gap-1';
+            const baseActive = 'px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white dark:bg-slate-800 text-primary shadow-xs transition-all cursor-pointer flex items-center gap-1';
 
-            if (btnStd) btnStd.className = (subtype === 'standard' ? activeCls : inactiveCls);
-            if (btnMulti) btnMulti.className = (subtype === 'multiple_completion' ? activeCls : inactiveCls);
-            if (btnCtx) btnCtx.className = (subtype === 'contextual' ? activeCls : inactiveCls);
+            if (btnStd) btnStd.className = `subtype-btn-standard ${subtype === 'standard' ? baseActive : baseInactive}`;
+            if (btnMulti) btnMulti.className = `subtype-btn-multiple ${subtype === 'multiple_completion' ? baseActive : baseInactive}`;
+            if (btnCtx) btnCtx.className = `subtype-btn-contextual ${subtype === 'contextual' ? baseActive : baseInactive}`;
 
             const multiBox = row.querySelector('.row-mcq-multiple-box');
             const closingPrompt = row.querySelector('.row-mcq-closing-prompt');
@@ -3849,7 +3850,8 @@
             if (subtype === 'multiple_completion') {
                 if (multiBox) multiBox.classList.remove('hidden');
                 if (closingPrompt) closingPrompt.classList.remove('hidden');
-                if (ctxBox && !ctxBox.querySelector('textarea[name="qContext[]"]')?.value.trim()) {
+                const hasCtxText = Boolean(ctxBox && ctxBox.querySelector('textarea[name="qContext[]"]')?.value.trim());
+                if (ctxBox && !hasCtxText) {
                     ctxBox.classList.add('hidden');
                 }
                 if (autoFillBtn) autoFillBtn.classList.remove('hidden');
@@ -3898,7 +3900,10 @@
             } else {
                 if (multiBox) multiBox.classList.add('hidden');
                 if (closingPrompt) closingPrompt.classList.add('hidden');
-                if (ctxBox) ctxBox.classList.add('hidden');
+                const hasCtxText = Boolean(ctxBox && ctxBox.querySelector('textarea[name="qContext[]"]')?.value.trim());
+                if (ctxBox && !hasCtxText) {
+                    ctxBox.classList.add('hidden');
+                }
                 if (autoFillBtn) autoFillBtn.classList.add('hidden');
                 if (addLinkedBtn) addLinkedBtn.classList.add('hidden');
                 if (qLabel) qLabel.innerText = 'Question';
@@ -3910,7 +3915,9 @@
                     optInputs.forEach(inp => inp.value = '');
                 }
             }
-            saveStudioDraft();
+            if (!skipDraftSave) {
+                saveStudioDraft();
+            }
         }
         window.setRowMcqSubtype = setRowMcqSubtype;
 
@@ -4027,12 +4034,7 @@
                 toggleTypeUI(row, qType, false, true);
 
                 if (qType === 'MCQ' && targetSubtype !== 'standard') {
-                    const targetBtn = targetSubtype === 'multiple_completion'
-                        ? row.querySelector('.subtype-btn-multiple')
-                        : row.querySelector('.subtype-btn-contextual');
-                    if (targetBtn) {
-                        setRowMcqSubtype(targetBtn, targetSubtype);
-                    }
+                    setRowMcqSubtype(row, targetSubtype, true);
                 }
 
                 syncRowHierarchy(row);
@@ -4600,15 +4602,15 @@
                 let contextInstruction = 'উদ্দীপকটি পড়ে নিচের প্রশ্নগুলোর উত্তর দিন';
                 let contextId = '';
 
-                // 1. Detect Roman numeral statements (i., ii., iii. or ⅰ., ⅱ., ⅲ. or I., II., III.)
+                // 1. Detect Roman numeral statements (i., ii., iii. or ⅰ., ⅱ., ⅲ. or I., II., III. or (1), (2), (3) or (১), (২), (৩))
                 const stmtMatches = [];
                 const nonStmtLines = [];
-                const romanSplitRegex = /(?=(?:^|[\s\t]+)(?:(?:i{1,3}|I{1,3}|[ⅰ-ⅲ])[\.\)]|\((?:i{1,3}|I{1,3}|[ⅰ-ⅲ])\))\s*)/i;
+                const romanSplitRegex = /(?=(?:^|[\s\t]+)(?:(?:i{1,3}|I{1,3}|[ⅰ-ⅲ])[\.\)]|\((?:i{1,3}|I{1,3}|[ⅰ-ⅲ]|[1-3]|[১-৩])\))\s*)/i;
                 qText.split('\n').forEach(ql => {
                     const parts = ql.split(romanSplitRegex).map(p => p.trim()).filter(Boolean);
                     let lineHadStmt = false;
                     parts.forEach(p => {
-                        const m = p.match(/^(?:(?:i{1,3}|I{1,3}|[ⅰ-ⅲ])[\.\)]|\((?:i{1,3}|I{1,3}|[ⅰ-ⅲ])\))\s*(.+)$/i);
+                        const m = p.match(/^(?:(?:i{1,3}|I{1,3}|[ⅰ-ⅲ])[\.\)]|\((?:i{1,3}|I{1,3}|[ⅰ-ⅲ]|[1-3]|[১-৩])\))\s*(.+)$/i);
                         if (m) {
                             stmtMatches.push(m[1].trim());
                             lineHadStmt = true;
@@ -4622,7 +4624,7 @@
                 if (stmtMatches.length >= 2) {
                     mcqSubtype = 'multiple_completion';
                     statements = stmtMatches;
-                    const cleanedNonStmtLines = nonStmtLines.filter(l => !/^(?:(?:উপরের\s+তথ্য(?:সমূহের|র)?\s+আলোকে\s+)?নিচের\s+কোনটি\s+সঠিক(?:\?|ঃ|:)?|কোনটি\s+সঠিক(?:\?|ঃ|:)?|Which\s+(?:of\s+the\s+following\s+is\s+)?correct\??)$/i.test(l.trim()));
+                    const cleanedNonStmtLines = nonStmtLines.filter(l => !/^(?:(?:(?:উপরের|উক্ত|প্রদত্ত)\s+)?তথ্য(?:সমূহের|র)?\s*(?:আলোকে|ভিত্তিতে)?\s*)?(?:নিচের\s+)?কোনটি\s+সঠিক(?:\?|ঃ|:)?|Which\s+(?:of\s+the\s+following\s+is\s+)?correct\??$/i.test(l.trim()));
                     qText = cleanedNonStmtLines.join('\n').trim();
                     if (!qText) {
                         qText = nonStmtLines.join('\n').trim();
@@ -5118,6 +5120,9 @@ Correct Answer: B`;
                 const clone = template.content.cloneNode(true);
                 const row = clone.querySelector('.question-row');
 
+                // Append row into container first so DOM queries and hierarchy work reliably
+                container.appendChild(clone);
+
                 toggleTypeUI(row, 'MCQ', false, true);
                 syncRowHierarchy(row);
 
@@ -5129,17 +5134,57 @@ Correct Answer: B`;
                 if (yearInput && defaultYear && !yearInput.value) yearInput.value = defaultYear;
 
                 // Set Question Text
-                const qTextarea = row.querySelector('textarea[name="qText[]"]');
+                const qTextarea = row.querySelector('.standard-question-block textarea[name="qText[]"]') || row.querySelector('textarea[name="qText[]"]');
                 if (qTextarea) qTextarea.value = q.qText || '';
 
-                // Set 4 Options
+                // Set Language UI
+                applyRowBanglaUI(row, q.isBangla);
+
+                // Transfer MCQ Subtype & Statements (Set subtype FIRST before populating options)
+                if (q.mcqSubtype === 'multiple_completion') {
+                    setRowMcqSubtype(row, 'multiple_completion', true);
+                    const stmtInputs = [
+                        row.querySelector('input[name="qStatement1[]"]'),
+                        row.querySelector('input[name="qStatement2[]"]'),
+                        row.querySelector('input[name="qStatement3[]"]')
+                    ];
+                    (q.statements || []).forEach((st, sIdx) => {
+                        if (stmtInputs[sIdx]) stmtInputs[sIdx].value = st || '';
+                    });
+                } else if (q.mcqSubtype === 'contextual' || q.context) {
+                    setRowMcqSubtype(row, 'contextual', true);
+                } else {
+                    setRowMcqSubtype(row, 'standard', true);
+                }
+
+                // Transfer Context Stimulus if present (applies to both contextual and multiple_completion)
+                if (q.context) {
+                    const ctxBox = row.querySelector('.row-mcq-contextual-box');
+                    if (ctxBox) ctxBox.classList.remove('hidden');
+                    const ctxTextarea = row.querySelector('textarea[name="qContext[]"]');
+                    if (ctxTextarea) ctxTextarea.value = q.context;
+                    const ctxInstInput = row.querySelector('.row-context-instruction');
+                    if (ctxInstInput && q.contextInstruction) ctxInstInput.value = q.contextInstruction;
+                    const ctxIdInput = row.querySelector('.row-context-id');
+                    if (ctxIdInput && q.contextId) ctxIdInput.value = q.contextId;
+                }
+
+                // Set 4 Options (MUST be done after setRowMcqSubtype so options are never cleared)
                 const optInputs = row.querySelectorAll('input[name="qOptions[]"]');
-                (q.options || []).forEach((opt, optIdx) => {
-                    if (optInputs[optIdx]) optInputs[optIdx].value = opt || '';
-                });
+                let finalOptions = (q.options && q.options.filter(Boolean).length >= 3) ? q.options : [];
+                if (finalOptions.length === 0 && q.mcqSubtype === 'multiple_completion') {
+                    finalOptions = q.isBangla
+                        ? ['i ও ii', 'i ও iii', 'ii ও iii', 'i, ii ও iii']
+                        : ['i and ii', 'i and iii', 'ii and iii', 'i, ii and iii'];
+                }
+                if (finalOptions.length > 0) {
+                    finalOptions.forEach((opt, optIdx) => {
+                        if (optInputs[optIdx]) optInputs[optIdx].value = opt || '';
+                    });
+                }
 
                 // Set Correct Answer
-                if (q.correctIndex >= 0) {
+                if (typeof q.correctIndex === 'number' && q.correctIndex >= 0) {
                     const correctInp = row.querySelector('.row-correct-input');
                     if (correctInp) correctInp.value = q.correctIndex;
 
@@ -5148,6 +5193,26 @@ Correct Answer: B`;
                         const labels = q.isBangla ? ['Option A (ক)', 'Option B (খ)', 'Option C (গ)', 'Option D (ঘ)'] : ['Option A', 'Option B', 'Option C', 'Option D'];
                         correctLabel.innerText = labels[q.correctIndex] || `Option ${q.correctIndex + 1}`;
                     }
+
+                    const menu = row.querySelector('.row-dropdown-menu');
+                    if (menu) {
+                        menu.querySelectorAll('[data-val]').forEach(opt => {
+                            const isSelected = opt.getAttribute('data-val') === String(q.correctIndex);
+                            if (isSelected) {
+                                opt.className = 'px-2.5 py-1.5 text-xs font-medium text-primary bg-primary/10 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                                if (!opt.querySelector('.check-icon')) {
+                                    const check = document.createElement('span');
+                                    check.className = 'material-symbols-rounded text-sm text-primary check-icon';
+                                    check.innerText = 'check';
+                                    opt.appendChild(check);
+                                }
+                            } else {
+                                opt.className = 'px-2.5 py-1.5 text-xs font-normal text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors';
+                                const c = opt.querySelector('.check-icon');
+                                if (c) c.remove();
+                            }
+                        });
+                    }
                 }
 
                 // Set Explanation
@@ -5155,50 +5220,6 @@ Correct Answer: B`;
                 if (expTextarea && q.explanation) {
                     expTextarea.value = q.explanation;
                 }
-
-                // Set Language UI
-                applyRowBanglaUI(row, q.isBangla);
-
-                // Transfer Context if present
-                if (q.context) {
-                    const ctxTextarea = row.querySelector('textarea[name="qContext[]"]');
-                    if (ctxTextarea) ctxTextarea.value = q.context;
-                    const ctxInstInput = row.querySelector('.row-context-instruction');
-                    if (ctxInstInput && q.contextInstruction) ctxInstInput.value = q.contextInstruction;
-                    const ctxIdInput = row.querySelector('.row-context-id');
-                    if (ctxIdInput && q.contextId) ctxIdInput.value = q.contextId;
-                    const ctxBox = row.querySelector('.row-mcq-contextual-box');
-                    if (ctxBox) ctxBox.classList.remove('hidden');
-                }
-
-                // Transfer MCQ Subtype & Statements / Context
-                if (q.mcqSubtype === 'multiple_completion' && q.statements && q.statements.length > 0) {
-                    const multiBtn = row.querySelector('.subtype-btn-multiple');
-                    if (multiBtn) setRowMcqSubtype(multiBtn, 'multiple_completion');
-                    const stmtInputs = [
-                        row.querySelector('input[name="qStatement1[]"]'),
-                        row.querySelector('input[name="qStatement2[]"]'),
-                        row.querySelector('input[name="qStatement3[]"]')
-                    ];
-                    q.statements.forEach((st, sIdx) => {
-                        if (stmtInputs[sIdx]) stmtInputs[sIdx].value = st;
-                    });
-                    if (q.context) {
-                        const ctxBox = row.querySelector('.row-mcq-contextual-box');
-                        if (ctxBox) ctxBox.classList.remove('hidden');
-                    }
-                } else if (q.mcqSubtype === 'contextual' || q.context) {
-                    const ctxBtn = row.querySelector('.subtype-btn-contextual');
-                    if (ctxBtn) setRowMcqSubtype(ctxBtn, 'contextual');
-                    const ctxTextarea = row.querySelector('textarea[name="qContext[]"]');
-                    if (ctxTextarea && q.context) ctxTextarea.value = q.context;
-                    const ctxInstInput = row.querySelector('.row-context-instruction');
-                    if (ctxInstInput && q.contextInstruction) ctxInstInput.value = q.contextInstruction;
-                    const ctxIdInput = row.querySelector('.row-context-id');
-                    if (ctxIdInput && q.contextId) ctxIdInput.value = q.contextId;
-                }
-
-                container.appendChild(clone);
             });
 
             updateIndices();
