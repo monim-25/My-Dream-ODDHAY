@@ -683,13 +683,23 @@
                                                         class="material-symbols-rounded text-sm text-slate-400 transition-transform duration-200 dropdown-arrow shrink-0">expand_more</span>
                                                 </button>
                                                 <div id="dropdown-menu-bulkAddType"
-                                                    class="hidden absolute bottom-full mb-1 sm:mb-0 sm:bottom-auto sm:top-full left-0 w-36 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 overflow-y-auto no-scrollbar">
-                                                    <div onclick="selectSystemOption('bulkAddType', 'MCQ', 'MCQ')"
+                                                    class="hidden absolute bottom-full mb-1 sm:mb-0 sm:bottom-auto sm:top-full left-0 w-48 sm:w-52 rounded-xl bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 shadow-xl py-1 z-50 overflow-y-auto no-scrollbar">
+                                                    <div onclick="selectSystemOption('bulkAddType', 'MCQ', 'সাধারণ MCQ')"
                                                         data-val="MCQ"
                                                         class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors bg-primary/10 text-primary font-medium">
-                                                        <span>MCQ</span>
+                                                        <span>সাধারণ MCQ</span>
                                                         <span
                                                             class="material-symbols-rounded text-sm text-primary check-icon">check</span>
+                                                    </div>
+                                                    <div onclick="selectSystemOption('bulkAddType', 'MCQ-Multiple', 'বহুপদী সমাপ্তিসূচক (MCQ)')"
+                                                        data-val="MCQ-Multiple"
+                                                        class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                                        <span>বহুপদী সমাপ্তিসূচক (MCQ)</span>
+                                                    </div>
+                                                    <div onclick="selectSystemOption('bulkAddType', 'MCQ-Contextual', 'অভিন্ন তথ্যভিত্তিক (MCQ)')"
+                                                        data-val="MCQ-Contextual"
+                                                        class="px-2.5 py-1.5 text-xs rounded-lg mx-1 flex items-center justify-between cursor-pointer transition-colors text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-normal">
+                                                        <span>অভিন্ন তথ্যভিত্তিক (MCQ)</span>
                                                     </div>
                                                     <div onclick="selectSystemOption('bulkAddType', 'Short', 'Short')"
                                                         data-val="Short"
@@ -3512,7 +3522,9 @@
                             const c = parseInt(cStr) || 0;
                             const t = (tRaw || '').trim();
                             let normalizedType = 'MCQ';
-                            if (/^mcq/i.test(t)) normalizedType = 'MCQ';
+                            if (/^mult/i.test(t) || t === 'MCQ-Multiple') normalizedType = 'MCQ-Multiple';
+                            else if (/^cont/i.test(t) || t === 'MCQ-Contextual') normalizedType = 'MCQ-Contextual';
+                            else if (/^mcq/i.test(t)) normalizedType = 'MCQ';
                             else if (/^short/i.test(t)) normalizedType = 'Short';
                             else if (/^med/i.test(t)) normalizedType = 'Medium';
                             else if (/^comp/i.test(t)) normalizedType = 'Comprehension';
@@ -3530,7 +3542,9 @@
                         const initialCount = parseInt(urlParams.get('count')) || 1;
                         const rawType = (urlParams.get('type') || 'MCQ').trim();
                         let normalizedType = 'MCQ';
-                        if (/^short/i.test(rawType)) normalizedType = 'Short';
+                        if (/^mult/i.test(rawType) || rawType === 'MCQ-Multiple') normalizedType = 'MCQ-Multiple';
+                        else if (/^cont/i.test(rawType) || rawType === 'MCQ-Contextual') normalizedType = 'MCQ-Contextual';
+                        else if (/^short/i.test(rawType)) normalizedType = 'Short';
                         else if (/^med/i.test(rawType)) normalizedType = 'Medium';
                         else if (/^comp/i.test(rawType)) normalizedType = 'Comprehension';
                         else if (/^desc/i.test(rawType)) normalizedType = 'Descriptive';
@@ -3848,9 +3862,9 @@
                     }
                 }
 
-                // Auto-fill standard NCTB options if options are empty or default
-                const shouldAutoFill = Array.from(optInputs).every(inp => !inp.value.trim() || ['Option A', 'Option B', 'Option C', 'Option D', 'অপশন ক', 'অপশন খ', 'অপশন গ', 'অপশন ঘ'].includes(inp.value.trim()));
-                if (shouldAutoFill && optInputs.length >= 4) {
+                // Auto-fill standard NCTB options if options are empty, default, or not roman format
+                const hasRomanOptions = Array.from(optInputs).some(inp => /(?:i{1,3}|[ⅰ-ⅲ]|[১-৩])/i.test(inp.value));
+                if (!hasRomanOptions && optInputs.length >= 4) {
                     if (isBangla) {
                         optInputs[0].value = 'i ও ii';
                         optInputs[1].value = 'i ও iii';
@@ -3987,7 +4001,19 @@
             const mode = urlParams.get('mode') || 'standalone';
 
             const num = count || parseInt(document.getElementById('bulkAddCount').value) || 1;
-            const qType = type || (document.getElementById('bulkAddType') ? document.getElementById('bulkAddType').value : 'MCQ');
+            const rawQType = type || (document.getElementById('bulkAddType') ? document.getElementById('bulkAddType').value : 'MCQ');
+
+            let qType = 'MCQ';
+            let targetSubtype = 'standard';
+            if (rawQType === 'MCQ-Multiple' || rawQType === 'multiple_completion' || /multiple/i.test(rawQType)) {
+                qType = 'MCQ';
+                targetSubtype = 'multiple_completion';
+            } else if (rawQType === 'MCQ-Contextual' || rawQType === 'contextual' || /context/i.test(rawQType)) {
+                qType = 'MCQ';
+                targetSubtype = 'contextual';
+            } else {
+                qType = rawQType;
+            }
 
             const defaultBoard = urlParams.get('board') || '';
             const defaultYear = urlParams.get('year') || '';
@@ -3999,6 +4025,16 @@
                 const row = clone.querySelector('.question-row');
 
                 toggleTypeUI(row, qType, false, true);
+
+                if (qType === 'MCQ' && targetSubtype !== 'standard') {
+                    const targetBtn = targetSubtype === 'multiple_completion'
+                        ? row.querySelector('.subtype-btn-multiple')
+                        : row.querySelector('.subtype-btn-contextual');
+                    if (targetBtn) {
+                        setRowMcqSubtype(targetBtn, targetSubtype);
+                    }
+                }
+
                 syncRowHierarchy(row);
 
                 if (mode !== 'archive') {
@@ -4590,6 +4626,16 @@
                     qText = cleanedNonStmtLines.join('\n').trim();
                     if (!qText) {
                         qText = nonStmtLines.join('\n').trim();
+                    }
+
+                    // For Multiple Completion, if options were not explicitly provided in the text or are incomplete, automatically supply the 4 standard NCTB options!
+                    const filledOpts = options.filter(o => (o || '').trim().length > 0);
+                    if (filledOpts.length < 3) {
+                        if (isBangla) {
+                            options = ['i ও ii', 'i ও iii', 'ii ও iii', 'i, ii ও iii'];
+                        } else {
+                            options = ['i and ii', 'i and iii', 'ii and iii', 'i, ii and iii'];
+                        }
                     }
                 }
 
