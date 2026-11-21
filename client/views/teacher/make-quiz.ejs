@@ -1633,6 +1633,48 @@
             const stimulusHeaderRegex = /^\s*(?:\[(?:উদ্দীপক|অনুচ্ছেদ|Stem|Context|Passage)\]|(?:উদ্দীপক|অনুচ্ছেদ|দৃশ্যকল্প|Stem|Context)\s*[:\-\–]|(?:নিচের\s+)?(?:উদ্দীপকটি|অনুচ্ছেদটি|দৃশ্যকল্পটি)\s+পড়ে)/i;
 
             const bnToEn = s => String(s).replace(/[০-৯]/g, d => '০১২৩৪৫৬৭৮৯'.indexOf(d));
+            const toBanglaNumber = num => String(num).replace(/[0-9]/g, d => '০১২৩৪৫৬৭৮৯'[d]);
+
+            function formatContextInstruction(numbers, isBangla = true, directiveWord = 'দাও') {
+                if (!numbers || numbers.length === 0) return '';
+                const sorted = [...new Set(numbers)].filter(n => typeof n === 'number' && !isNaN(n)).sort((a, b) => a - b);
+                if (sorted.length === 0) return '';
+
+                if (isBangla) {
+                    const bnNums = sorted.map(n => toBanglaNumber(n));
+                    let numStr = '';
+                    if (bnNums.length === 1) {
+                        numStr = `${bnNums[0]} নং`;
+                    } else if (bnNums.length === 2) {
+                        numStr = `${bnNums[0]} ও ${bnNums[1]} নং`;
+                    } else if (bnNums.length === 3) {
+                        numStr = `${bnNums[0]}, ${bnNums[1]} ও ${bnNums[2]} নং`;
+                    } else {
+                        const isContiguous = sorted.every((val, idx) => idx === 0 || val === sorted[idx - 1] + 1);
+                        if (isContiguous) {
+                            numStr = `${bnNums[0]} থেকে ${bnNums[bnNums.length - 1]} নং`;
+                        } else {
+                            numStr = `${bnNums.slice(0, -1).join(', ')} ও ${bnNums[bnNums.length - 1]} নং`;
+                        }
+                    }
+                    return `উদ্দীপকটি পড়ে ${numStr} প্রশ্নের উত্তর ${directiveWord}`;
+                } else {
+                    if (sorted.length === 1) {
+                        return `Read the following stimulus and answer question ${sorted[0]}:`;
+                    } else if (sorted.length === 2) {
+                        return `Read the following stimulus and answer questions ${sorted[0]} and ${sorted[1]}:`;
+                    } else if (sorted.length === 3) {
+                        return `Read the following stimulus and answer questions ${sorted[0]}, ${sorted[1]} and ${sorted[2]}:`;
+                    } else {
+                        const isContiguous = sorted.every((val, idx) => idx === 0 || val === sorted[idx - 1] + 1);
+                        if (isContiguous) {
+                            return `Read the following stimulus and answer questions ${sorted[0]} to ${sorted[sorted.length - 1]}:`;
+                        } else {
+                            return `Read the following stimulus and answer questions ${sorted.slice(0, -1).join(', ')} and ${sorted[sorted.length - 1]}:`;
+                        }
+                    }
+                }
+            }
 
             function extractRangeFromInstruction(text) {
                 const m = text.match(/([\d০-৯]+)\s*(?:[ও\-,–]|এবং|হতে|থেকে|to)\s*([\d০-৯]+)\s*নং/i);
@@ -1737,7 +1779,8 @@
                         context: cleanCtx || preamble.trim(),
                         contextInstruction: pInst,
                         range: range,
-                        remainingCount: range ? (range.end - range.start + 1) : 2
+                        remainingCount: range ? (range.end - range.start + 1) : 2,
+                        isNewPreamble: true
                     };
                 }
 
@@ -1887,14 +1930,23 @@
                     contextId = 'ctx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
                 } else if (activeSharedContext) {
                     let applies = false;
-                    if (activeSharedContext.range && qNum !== null) {
-                        applies = (qNum >= activeSharedContext.range.start && qNum <= activeSharedContext.range.end);
-                    } else if (activeSharedContext.remainingCount > 0) {
-                        applies = true;
-                        activeSharedContext.remainingCount--;
+                    if (activeSharedContext.remainingCount > 0) {
+                        if (activeSharedContext.range && qNum !== null) {
+                            if (qNum >= activeSharedContext.range.start && qNum <= activeSharedContext.range.end) {
+                                applies = true;
+                            } else if (activeSharedContext.isNewPreamble) {
+                                const count = activeSharedContext.range.end - activeSharedContext.range.start + 1;
+                                activeSharedContext.range = { start: qNum, end: qNum + count - 1 };
+                                applies = true;
+                            }
+                        } else {
+                            applies = true;
+                        }
                     }
 
                     if (applies) {
+                        activeSharedContext.remainingCount--;
+                        activeSharedContext.isNewPreamble = false;
                         if (mcqSubtype !== 'multiple_completion') {
                             mcqSubtype = 'contextual';
                         }
@@ -1909,6 +1961,7 @@
                 const isValid = (qText.trim().length > 0 && options.filter(o => o.trim().length > 0).length >= 3 && correctIndex >= 0);
 
                 parsed.push({
+                    qNum,
                     qText: qText.trim(),
                     mcqSubtype,
                     statements,
@@ -1921,6 +1974,49 @@
                     isBangla,
                     isValid
                 });
+            });
+
+            // Step 3: Auto-update contextInstruction for linked contextual questions according to exact question numbers!
+            const parsedContextGroups = {};
+            parsed.forEach((q, qIndex) => {
+                const effectiveNum = (q.qNum !== null && !isNaN(q.qNum)) ? q.qNum : (qIndex + 1);
+                if (q.context || q.contextId) {
+                    let key = q.contextId || ('txt_' + (q.context || '').substring(0, 50));
+                    if (!parsedContextGroups[key]) {
+                        parsedContextGroups[key] = {
+                            questions: [],
+                            numbers: [],
+                            isBangla: q.isBangla
+                        };
+                    }
+                    parsedContextGroups[key].questions.push(q);
+                    parsedContextGroups[key].numbers.push(effectiveNum);
+                }
+            });
+
+            const parsedTextMap = {};
+            Object.keys(parsedContextGroups).forEach(key => {
+                const grp = parsedContextGroups[key];
+                const sampleText = (grp.questions[0]?.context || '').trim();
+                if (sampleText && sampleText.length > 5) {
+                    if (parsedTextMap[sampleText] && parsedTextMap[sampleText] !== key) {
+                        const targetKey = parsedTextMap[sampleText];
+                        parsedContextGroups[targetKey].questions.push(...grp.questions);
+                        parsedContextGroups[targetKey].numbers.push(...grp.numbers);
+                        delete parsedContextGroups[key];
+                    } else {
+                        parsedTextMap[sampleText] = key;
+                    }
+                }
+            });
+
+            Object.values(parsedContextGroups).forEach(grp => {
+                if (grp.numbers.length > 0) {
+                    const updatedInst = formatContextInstruction(grp.numbers, grp.isBangla);
+                    grp.questions.forEach(q => {
+                        q.contextInstruction = updatedInst;
+                    });
+                }
             });
 
             return parsed;
